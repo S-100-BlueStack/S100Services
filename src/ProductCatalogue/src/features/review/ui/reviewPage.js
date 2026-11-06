@@ -5,6 +5,10 @@ import {
 import { createReviewBoard } from "./reviewBoard.js";
 import { restoreReviewProductListInteraction } from "./reviewProductListInteraction.js";
 import { createReviewSidebar } from "./reviewSidebar.js";
+import {
+  captureReviewPickerInteraction,
+  restoreReviewPickerInteraction,
+} from "./reviewPickerInteraction.js";
 import { restoreReviewWorkspaceContentInteraction } from "./reviewWorkspaceContentInteraction.js";
 
 export function renderReviewPage({
@@ -17,6 +21,11 @@ export function renderReviewPage({
   workspaceContentInteraction = null,
 }) {
   const page = getOrCreateReviewPage();
+  const previousBoard = page.querySelector(".pc-review-board");
+  const activeElement = document.activeElement;
+  const pickerInteraction = captureReviewPickerInteraction(page, activeElement);
+  const previousScrollLeft =
+    previousBoard?.querySelector(".pc-review-board__columns")?.scrollLeft ?? 0;
   const normalizedProductItems = normalizeReviewProductItems(productItems);
   const enabledDatasetNames = getEnabledReviewDatasetNames(normalizedProductItems);
 
@@ -32,8 +41,16 @@ export function renderReviewPage({
       products,
       loading,
       error,
+      previousBoard,
     })
   );
+  const columns = page.querySelector(".pc-review-board__columns");
+  if (columns) columns.scrollLeft = previousScrollLeft;
+  // A retained column keeps its actual controls; restore only a surviving node.
+  if (activeElement && page.contains(activeElement)) activeElement.focus?.({ preventScroll: true });
+  // Selection rerenders the sidebar before the picker handler has completed.
+  // Keep keyboard entry on the newly rendered input instead of the removed form.
+  restoreReviewPickerInteraction(page, pickerInteraction);
   restoreReviewProductListInteraction(productListInteraction, { page });
   restoreReviewWorkspaceContentInteraction(workspaceContentInteraction, { page });
 }

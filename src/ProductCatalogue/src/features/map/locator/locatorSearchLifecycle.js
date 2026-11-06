@@ -32,9 +32,11 @@ export function createLocatorSearchSession(
     resetProviderState();
   };
 
-  const clearAfterSuccessfulNavigation = () => {
+  const clearAfterSuccessfulNavigation = (termAtNavigationStart) => {
     scheduleAfterNavigation(() => {
       if (!active || !isCurrent()) return;
+      // A newer edit owns the Search field, even if the earlier map animation finishes later.
+      if (search.searchTerm !== termAtNavigationStart) return;
       clearTransientState();
     });
   };
@@ -42,6 +44,7 @@ export function createLocatorSearchSession(
   search.autoNavigateDisabled = false;
   search.goToOverride = createLocatorGoToOverride(() => active && isCurrent(), {
     fallbackZoomScale,
+    getSearchTerm: () => search.searchTerm,
     onNavigationComplete: clearAfterSuccessfulNavigation,
   });
 
@@ -59,18 +62,19 @@ export function createLocatorSearchSession(
 
 export function createLocatorGoToOverride(
   isNavigationAllowed,
-  { fallbackZoomScale, onNavigationComplete } = {}
+  { fallbackZoomScale, getSearchTerm, onNavigationComplete } = {}
 ) {
   return async (view, goToParams = {}) => {
     if (!isNavigationAllowed()) return;
     if (typeof view?.goTo !== "function") return;
 
+    const termAtNavigationStart = getSearchTerm?.();
     const target = applyFallbackScale(goToParams.target, fallbackZoomScale);
     const result = await view.goTo(target, goToParams.options);
 
     // Search owns result selection. Clear its completed UI only after native map
     // navigation has succeeded so clear() cannot interfere with selection/goTo.
-    if (isNavigationAllowed()) onNavigationComplete?.();
+    if (isNavigationAllowed()) onNavigationComplete?.(termAtNavigationStart);
     return result;
   };
 }

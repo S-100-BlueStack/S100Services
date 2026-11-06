@@ -1,4 +1,22 @@
 const refreshHandlers = new Set();
+const sourceStatusRefreshHandlers = new Set();
+
+// The Main-map source owner registers a handler; popup sessions only request
+// a reload and never mutate AOI-owned member statuses or map symbols.
+export function registerPopupSourceStatusRefreshHandler(handler) {
+  if (typeof handler !== "function") return () => {};
+  sourceStatusRefreshHandlers.add(handler);
+  return () => sourceStatusRefreshHandlers.delete(handler);
+}
+
+export async function requestPopupSourceStatusRefresh(observation) {
+  if (!String(observation?.sourceId ?? "").trim()) return [];
+  return Promise.allSettled(
+    [...sourceStatusRefreshHandlers].map((handler) =>
+      Promise.resolve().then(() => handler(observation))
+    )
+  );
+}
 
 export function registerPopupRefreshHandler({ datasetName, refresh }) {
   const normalizedDatasetName = normalizeDatasetName(datasetName);

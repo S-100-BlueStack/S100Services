@@ -24,6 +24,7 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
             foreach (var row in rows) {
                 row.ScanFromUtc = DateTime.SpecifyKind(row.ScanFromUtc, DateTimeKind.Utc);
                 row.DetectedAtUtc = DateTime.SpecifyKind(row.DetectedAtUtc, DateTimeKind.Utc);
+                if (row.BuiltAtUtc.HasValue) row.BuiltAtUtc = DateTime.SpecifyKind(row.BuiltAtUtc.Value, DateTimeKind.Utc);
                 result.Add(row.SourceDatasetName, row);
             }
         }
@@ -31,6 +32,161 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<string>> GetSourceNamesBeforeBaselineAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var names = await connection.QueryAsync<string>(new CommandDefinition(
+            "SELECT source_dataset_name FROM dbo.EncPackage WHERE scan_from_utc < @BaselineUtc;",
+            new { BaselineUtc = baselineUtc }, cancellationToken: cancellationToken));
+        return names.ToArray();
+    }
+
+    /// <inheritdoc/>
+    public async Task RebaseReplayAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) {
+        if (baselineUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("An import baseline must be normalized UTC.", nameof(baselineUtc));
+        using var connection = _connectionFactory.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE dbo.EncPackageReplay
+            SET scan_from_utc = CASE WHEN scan_from_utc < @BaselineUtc THEN @BaselineUtc ELSE scan_from_utc END,
+                last_snapshot_attempt_utc = CASE WHEN scan_from_utc < @BaselineUtc OR last_snapshot_attempt_utc < @BaselineUtc THEN NULL ELSE last_snapshot_attempt_utc END
+            WHERE scan_from_utc < @BaselineUtc OR last_snapshot_attempt_utc < @BaselineUtc;
+            """, new { BaselineUtc = baselineUtc }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
+    public async Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default) {
+        if (packageId == Guid.Empty) return null;
+        using var connection = _connectionFactory.Create();
+        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition(
+            $"{SelectHeaderSql} WHERE package_id = @PackageId;", new { PackageId = packageId }, cancellationToken: cancellationToken));
+        if (package?.BuiltAtUtc is { } builtAtUtc) package.BuiltAtUtc = DateTime.SpecifyKind(builtAtUtc, DateTimeKind.Utc);
+        return package;
+    }
+
+    /// <summary>One serializable transaction owns both track transitions, history and snapshot deletion.</summary>
+    public Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid expectedPackageId, string actor, DateTime nowUtc, CancellationToken cancellationToken = default) =>
+        TryDiscardPackageCoreAsync(expectedPackageId, actor, nowUtc, false, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<EncPackageDiscardResult> TryDiscardForRefreshAsync(Guid expectedPackageId, DateTime nowUtc, CancellationToken cancellationToken = default) =>
+        TryDiscardPackageCoreAsync(expectedPackageId, "system", nowUtc, true, cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<bool> CanRefreshAsync(Guid expectedPackageId, CancellationToken cancellationToken = default) =>
+        (await TryDiscardPackageCoreAsync(expectedPackageId, "system", DateTime.UtcNow, true, cancellationToken, inspectOnly: true)).Status == EncPackageDiscardStatus.Discarded;
+
+    /// <summary>Checks both members and delivery evidence before changing either track; refresh persists replay in the same commit.</summary>
+    private async Task<EncPackageDiscardResult> TryDiscardPackageCoreAsync(Guid expectedPackageId, string actor, DateTime nowUtc, bool preserveScanBound, CancellationToken cancellationToken, bool inspectOnly = false) {
+        if (expectedPackageId == Guid.Empty) throw new ArgumentException("A package identifier is required.", nameof(expectedPackageId));
+        if (nowUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("Discard requires UTC time.", nameof(nowUtc));
+        if (string.IsNullOrWhiteSpace(actor)) throw new ArgumentException("A discard actor is required.", nameof(actor));
+
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition(
+            $"{SelectHeaderSql} WITH (UPDLOCK, HOLDLOCK) WHERE package_id = @PackageId;",
+            new { PackageId = expectedPackageId }, transaction, cancellationToken: cancellationToken));
+        if (package is null) return new(EncPackageDiscardStatus.NotFound, []);
+
+        // A pending replay may contain edits newer than this snapshot. Without a durable
+        // per-source discard tombstone, deleting that replay or processing it blindly is unsafe.
+        // Fail closed until the newer source revision has been reconciled.
+        var pendingReplay = await connection.ExecuteScalarAsync<int>(new CommandDefinition("""
+            SELECT COUNT(1) FROM dbo.EncPackageReplay WITH (UPDLOCK, HOLDLOCK)
+            WHERE source_dataset_name = @SourceDatasetName;
+            """, new { package.SourceDatasetName }, transaction, cancellationToken: cancellationToken));
+        if (!preserveScanBound && pendingReplay != 0) return new(EncPackageDiscardStatus.Conflict, []);
+
+        var members = new (string DatasetName, ProductSpecification Specification, bool Discarded)[] {
+            (package.SourceDatasetName, ProductSpecification.S101, package.S101Discarded),
+            (package.S57DatasetName, ProductSpecification.S57, package.S57Discarded)
+        };
+        var candidates = new List<DiscardTrack>(2);
+        foreach (var member in members) {
+            var track = await connection.QuerySingleOrDefaultAsync<DiscardTrack>(new CommandDefinition("""
+                SELECT t.product_export_track_id AS Id, t.state AS State,
+                       t.candidate_previous_state AS PreviousState,
+                       t.candidate_edition AS Edition, t.candidate_update AS [Update],
+                       CONVERT(bit, CASE WHEN EXISTS (
+                           SELECT 1 FROM dbo.ProductExportTrackFreezeHold h WITH (UPDLOCK, HOLDLOCK) WHERE h.product_export_track_id = t.product_export_track_id
+                       ) THEN 1 ELSE 0 END) AS IsFrozen
+                FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK)
+                INNER JOIN dbo.Product p ON p.product_id = t.product_id
+                WHERE p.dataset_name = @DatasetName AND t.product_specification = @Specification;
+                """, new { member.DatasetName, Specification = member.Specification.ToString() }, transaction, cancellationToken: cancellationToken));
+            var neverStarted = preserveScanBound && track is not null &&
+                track.State is (ProductState.Idle or ProductState.ChangesDetected) &&
+                track.Edition is null && track.Update is null &&
+                (track.State == ProductState.ChangesDetected || track.PreviousState is null) &&
+                ProductCandidateRecovery.CanDiscard(ProductState.Error, track.PreviousState, null, null);
+            if (track is null || track.IsFrozen ||
+                (member.Discarded ? track.Edition.HasValue || track.Update.HasValue || track.PreviousState.HasValue ||
+                    track.State is not (ProductState.Idle or ProductState.ChangesDetected or ProductState.Error or ProductState.Rejected) :
+                    !neverStarted && !ProductCandidateRecovery.CanDiscard(track.State, track.PreviousState, track.Edition, track.Update)))
+                return new(EncPackageDiscardStatus.Conflict, []);
+            track.Discarded = member.Discarded;
+            track.DatasetName = member.DatasetName;
+            track.Specification = member.Specification;
+            candidates.Add(track);
+        }
+        foreach (var track in candidates.Where(value => !value.Discarded)) {
+            if (await ProductCandidateDeliveryGuard.IsBlockedAsync(connection, transaction, track.Id,
+                track.Edition, track.Update, track.State, cancellationToken))
+                return new(EncPackageDiscardStatus.Conflict, []);
+        }
+
+        if (inspectOnly) {
+            transaction.Commit();
+            return new(EncPackageDiscardStatus.Discarded, []);
+        }
+        var outputs = new List<EncPackageDiscardOutput>(2);
+        foreach (var track in candidates.Where(value => !value.Discarded)) {
+            var restored = ProductCandidateRecovery.RestoredState(track.PreviousState);
+            var restoredAt = nowUtc.AddTicks(1);
+            await connection.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO dbo.ProductStateHistory
+                    (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+                SELECT @CancelledHistory, product_export_track_id, @Cancelled,
+                       COALESCE(candidate_edition, published_edition), COALESCE(candidate_update, published_update),
+                       @Actor, @NowUtc FROM dbo.ProductExportTrack WHERE product_export_track_id = @TrackId;
+                UPDATE dbo.ProductExportTrack
+                SET state = @Restored, candidate_edition = NULL, candidate_update = NULL,
+                    candidate_previous_state = NULL, updated_at_utc = @RestoredAt
+                WHERE product_export_track_id = @TrackId;
+                INSERT INTO dbo.ProductStateHistory
+                    (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+                SELECT @RestoredHistory, product_export_track_id, @Restored, published_edition,
+                       published_update, @Actor, @RestoredAt FROM dbo.ProductExportTrack
+                WHERE product_export_track_id = @TrackId;
+                """, new { TrackId = track.Id, CancelledHistory = Guid.NewGuid(), Cancelled = ProductState.Cancelled,
+                    Restored = restored, RestoredHistory = Guid.NewGuid(), Actor = actor, NowUtc = nowUtc, RestoredAt = restoredAt }, transaction, cancellationToken: cancellationToken));
+            if (track.Edition.HasValue && track.Update.HasValue)
+                outputs.Add(new(track.DatasetName, track.Specification, track.Edition.Value, track.Update.Value));
+        }
+        var deleted = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM dbo.EncPackage WHERE package_id = @PackageId;",
+            new { PackageId = expectedPackageId }, transaction, cancellationToken: cancellationToken));
+        if (deleted != 1) throw new InvalidOperationException("The ENC package changed during discard.");
+        if (preserveScanBound)
+            await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
+        // Operator discard consumes this source revision; automatic refresh retains its cumulative baseline.
+        transaction.Commit();
+        return new(EncPackageDiscardStatus.Discarded, outputs);
+    }
+
+    private sealed class DiscardTrack {
+        public Guid Id { get; set; }
+        public string DatasetName { get; set; } = string.Empty;
+        public ProductSpecification Specification { get; set; }
+        public ProductState State { get; set; }
+        public ProductState? PreviousState { get; set; }
+        public int? Edition { get; set; }
+        public int? Update { get; set; }
+        public bool IsFrozen { get; set; }
+        public bool Discarded { get; set; }
+    }
+
     public async Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         return await connection.QuerySingleOrDefaultAsync<DateTime?>(new CommandDefinition("SELECT MIN(scan_from_utc) FROM dbo.EncPackageReplay;", cancellationToken: cancellationToken));
@@ -53,19 +209,159 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
-    public async Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) {
+    public async Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var rows = await connection.QueryAsync<SnapshotAttemptRow>(new CommandDefinition("""
+            SELECT source_dataset_name AS SourceDatasetName, last_snapshot_attempt_utc AS AttemptedThroughUtc
+            FROM dbo.EncPackageReplay WHERE last_snapshot_attempt_utc IS NOT NULL;
+            """, cancellationToken: cancellationToken));
+        return rows.ToDictionary(row => row.SourceDatasetName, row => DateTime.SpecifyKind(row.AttemptedThroughUtc, DateTimeKind.Utc), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc/>
+    public async Task MarkSnapshotAttemptAsync(string sourceDatasetName, DateTime scanFromUtc, DateTime attemptedThroughUtc, CancellationToken cancellationToken = default) {
+        if (string.IsNullOrWhiteSpace(sourceDatasetName) || scanFromUtc.Kind != DateTimeKind.Utc ||
+            attemptedThroughUtc.Kind != DateTimeKind.Utc || attemptedThroughUtc < scanFromUtc)
+            throw new ArgumentException("A failed snapshot requires a source identity and a normalized UTC inspection window.");
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        await UpsertReplayAsync(connection, transaction, sourceDatasetName, scanFromUtc, cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE dbo.EncPackageReplay
+            SET last_snapshot_attempt_utc = CASE
+                WHEN last_snapshot_attempt_utc IS NULL OR last_snapshot_attempt_utc < @AttemptedThroughUtc
+                THEN @AttemptedThroughUtc ELSE last_snapshot_attempt_utc END
+            WHERE source_dataset_name = @SourceDatasetName;
+            """, new { SourceDatasetName = sourceDatasetName, AttemptedThroughUtc = attemptedThroughUtc }, transaction, cancellationToken: cancellationToken));
+        transaction.Commit();
+    }
+
+    /// <inheritdoc/>
+    public async Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackageReplay WHERE source_dataset_name = @SourceDatasetName;", new { SourceDatasetName = sourceDatasetName }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
+    public async Task RetireReplayAsync(string sourceDatasetName, DateTime expectedScanFromUtc, CancellationToken cancellationToken = default) {
+        if (expectedScanFromUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Replay retirement requires a normalized UTC cursor.", nameof(expectedScanFromUtc));
+        using var connection = _connectionFactory.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            DELETE FROM dbo.EncPackageReplay
+            WHERE source_dataset_name = @SourceDatasetName AND scan_from_utc = @ExpectedScanFromUtc;
+            """, new { SourceDatasetName = sourceDatasetName, ExpectedScanFromUtc = expectedScanFromUtc }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
+    public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) => TryCreateCoreAsync(package, false, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<bool> TryCreatePendingAsync(EncPackage package, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(package);
+        if (package.Id == Guid.Empty || package.S101Discarded || package.S57Discarded ||
+            package.ScanFromUtc.Kind != DateTimeKind.Utc || package.DetectedAtUtc.Kind != DateTimeKind.Utc || package.ScanFromUtc > package.DetectedAtUtc)
+            throw new ArgumentException("A pending ENC package requires an exact identity, two members and a UTC source window.", nameof(package));
+        return TryCreateCoreAsync(package, true, cancellationToken);
+    }
+
+    /// <summary>Commits a new source snapshot together with both pending states and durable restart discovery.</summary>
+    private async Task<bool> TryCreateCoreAsync(EncPackage package, bool queueMembers, CancellationToken cancellationToken) {
         using var connection = _connectionFactory.Create();
         connection.Open();
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
         var affected = await connection.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO dbo.EncPackage (package_id, source_dataset_name, s57_dataset_name, scan_from_utc, detected_at_utc, dataset_yaml, summary_yaml, error_message)
-            SELECT @Id, @SourceDatasetName, @S57DatasetName, @ScanFromUtc, @DetectedAtUtc, @DatasetYaml, @SummaryYaml, @ErrorMessage
+            INSERT INTO dbo.EncPackage (package_id, source_dataset_name, s57_dataset_name, scan_from_utc, detected_at_utc, built_at_utc, dataset_yaml, summary_yaml, error_message)
+            SELECT @Id, @SourceDatasetName, @S57DatasetName, @ScanFromUtc, @DetectedAtUtc, COALESCE(@BuiltAtUtc, SYSUTCDATETIME()), @DatasetYaml, @SummaryYaml, @ErrorMessage
             WHERE NOT EXISTS (SELECT 1 FROM dbo.EncPackage WITH (UPDLOCK, HOLDLOCK) WHERE source_dataset_name = @SourceDatasetName);
             """, package, transaction, cancellationToken: cancellationToken));
-        if (affected == 1)
-            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackageReplay WHERE source_dataset_name = @SourceDatasetName;", new { package.SourceDatasetName }, transaction, cancellationToken: cancellationToken));
+        if (affected == 1 && queueMembers && !await QueueMissingMembersAsync(connection, transaction, package, package.DetectedAtUtc, cancellationToken, requireUnstarted: true))
+            return false;
+        if (affected == 1 && !queueMembers)
+            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackageReplay WHERE source_dataset_name = @SourceDatasetName AND scan_from_utc >= @ScanFromUtc;", new { package.SourceDatasetName, package.ScanFromUtc }, transaction, cancellationToken: cancellationToken));
         transaction.Commit();
         return affected == 1;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<string>> GetIncompleteSourceNamesAsync(CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var names = await connection.QueryAsync<string>(new CommandDefinition("""
+            SELECT ep.source_dataset_name FROM dbo.EncPackage ep
+            LEFT JOIN dbo.Product p101 ON p101.dataset_name = ep.source_dataset_name
+            LEFT JOIN dbo.ProductExportTrack t101 ON t101.product_id = p101.product_id AND t101.product_specification = 'S101'
+            LEFT JOIN dbo.Product p57 ON p57.dataset_name = ep.s57_dataset_name
+            LEFT JOIN dbo.ProductExportTrack t57 ON t57.product_id = p57.product_id AND t57.product_specification = 'S57'
+            WHERE (ep.s101_discarded = 0 AND (t101.product_export_track_id IS NULL OR t101.state IN (@Idle, @Pending, @Exporting, @Validating)))
+               OR (ep.s57_discarded = 0 AND (t57.product_export_track_id IS NULL OR t57.state IN (@Idle, @Pending, @Exporting, @Validating)));
+            """, new { Idle = ProductState.Idle, Pending = ProductState.ChangesDetected, Exporting = ProductState.Exporting, Validating = ProductState.Validating }, cancellationToken: cancellationToken));
+        return names.ToArray();
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> TryQueueMissingMembersAsync(Guid packageId, DateTime nowUtc, CancellationToken cancellationToken = default) {
+        if (packageId == Guid.Empty) throw new ArgumentException("An exact snapshot identifier is required.", nameof(packageId));
+        if (nowUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("ENC queueing requires UTC time.", nameof(nowUtc));
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition(
+            $"{SelectHeaderSql} WITH (UPDLOCK, HOLDLOCK) WHERE package_id = @PackageId;", new { PackageId = packageId }, transaction, cancellationToken: cancellationToken));
+        if (package is null || !await QueueMissingMembersAsync(connection, transaction, package, nowUtc, cancellationToken)) return false;
+        transaction.Commit();
+        return true;
+    }
+
+    /// <summary>Checks the entire pair before queueing an idle member; caller owns the package and both Product locks.</summary>
+    private static async Task<bool> QueueMissingMembersAsync(IDbConnection connection, IDbTransaction transaction, EncPackage package, DateTime nowUtc, CancellationToken cancellationToken, bool requireUnstarted = false) {
+        if (package.S101Discarded || package.S57Discarded) return false; // Explicit historical discards require operator reconciliation.
+        var rows = (await connection.QueryAsync<QueueTrack>(new CommandDefinition("""
+            SELECT t.product_export_track_id AS Id, t.state AS State, t.candidate_previous_state AS PreviousState,
+                   t.candidate_edition AS Edition, t.candidate_update AS [Update],
+                   t.published_edition AS PublishedEdition, t.published_update AS PublishedUpdate,
+                   CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.ProductExportTrackFreezeHold h WITH (UPDLOCK, HOLDLOCK)
+                       WHERE h.product_export_track_id = t.product_export_track_id) THEN 1 ELSE 0 END) AS IsFrozen
+            FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK) JOIN dbo.Product p ON p.product_id = t.product_id
+            WHERE (p.dataset_name = @S101 AND t.product_specification = 'S101')
+               OR (p.dataset_name = @S57 AND t.product_specification = 'S57')
+            ORDER BY CASE WHEN t.product_specification = 'S101' THEN 0 ELSE 1 END;
+            """, new { S101 = package.SourceDatasetName, S57 = package.S57DatasetName }, transaction, cancellationToken: cancellationToken))).ToArray();
+        if (rows.Length != 2) return false;
+        foreach (var track in rows) {
+            var unstarted = track.State is (ProductState.Idle or ProductState.ChangesDetected) && track.Edition is null && track.Update is null &&
+                (track.State == ProductState.ChangesDetected || track.PreviousState is null) &&
+                ProductCandidateRecovery.CanDiscard(ProductState.Error, track.PreviousState, null, null);
+            if (track.IsFrozen || requireUnstarted && !unstarted || (!unstarted && !ProductCandidateRecovery.CanDiscard(track.State, track.PreviousState, track.Edition, track.Update)) ||
+                await ProductCandidateDeliveryGuard.IsBlockedAsync(connection, transaction, track.Id, track.Edition, track.Update, track.State, cancellationToken))
+                return false;
+        }
+        foreach (var track in rows.Where(t => t.State is (ProductState.Idle or ProductState.ChangesDetected) && t.Edition is null && t.Update is null)) {
+            if (track.State == ProductState.ChangesDetected && track.PreviousState.HasValue) continue;
+            await connection.ExecuteAsync(new CommandDefinition("""
+                UPDATE dbo.ProductExportTrack SET state = @Pending,
+                    candidate_previous_state = COALESCE(candidate_previous_state, state), updated_at_utc = @NowUtc
+                WHERE product_export_track_id = @TrackId;
+                INSERT dbo.ProductStateHistory
+                    (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+                VALUES (@HistoryId, @TrackId, @Pending, @Edition, @Update, 'ENC package queue', @NowUtc);
+                """, new { TrackId = track.Id, Pending = ProductState.ChangesDetected, NowUtc = nowUtc,
+                    HistoryId = Guid.NewGuid(), Edition = track.PublishedEdition, Update = track.PublishedUpdate }, transaction, cancellationToken: cancellationToken));
+        }
+        if (rows.Any(t => t.State is (ProductState.Idle or ProductState.ChangesDetected) && t.Edition is null && t.Update is null))
+            await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
+        return true;
+    }
+
+    private sealed class QueueTrack {
+        public Guid Id { get; set; }
+        public ProductState State { get; set; }
+        public ProductState? PreviousState { get; set; }
+        public int? Edition { get; set; }
+        public int? Update { get; set; }
+        public int PublishedEdition { get; set; }
+        public int PublishedUpdate { get; set; }
+        public bool IsFrozen { get; set; }
     }
 
     /// <inheritdoc/>
@@ -77,49 +373,15 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
-    public async Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) {
-        if (specification is not (ProductSpecification.S57 or ProductSpecification.S101))
-            throw new ArgumentOutOfRangeException(nameof(specification));
-
-        using var connection = _connectionFactory.Create();
-        connection.Open();
-        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-        var where = specification == ProductSpecification.S57 ? "s57_dataset_name" : "source_dataset_name";
-        var flag = specification == ProductSpecification.S57 ? "s57_discarded" : "s101_discarded";
-        // The identifiers are selected exclusively from the two fixed enum cases above.
-        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition($"{SelectHeaderSql} WITH (UPDLOCK, HOLDLOCK) WHERE {where} = @DatasetName", new { DatasetName = datasetName }, transaction, cancellationToken: cancellationToken));
-        if (package is null)
-            throw new InvalidOperationException("No active ENC package contains this export.");
-
-        await connection.ExecuteAsync(new CommandDefinition($"UPDATE dbo.EncPackage SET {flag} = 1, error_message = NULL WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
-        if ((specification == ProductSpecification.S57 || package.S57Discarded) && (specification == ProductSpecification.S101 || package.S101Discarded)) {
-            if (preserveScanBound)
-                await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
-            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackage WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
-        }
-        transaction.Commit();
-    }
-
-    /// <inheritdoc/>
-    public async Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default) {
-        using var connection = _connectionFactory.Create();
-        connection.Open();
-        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-        var completed = await connection.QueryAsync<EncPackage>(new CommandDefinition($"""
-            {SelectHeaderSql} p WITH (UPDLOCK, HOLDLOCK)
-            WHERE (p.s57_discarded = 1 OR EXISTS (
-                SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product product ON product.product_id = t.product_id
-                WHERE product.dataset_name = p.s57_dataset_name AND t.product_specification = 'S57' AND t.state = 13))
-              AND (p.s101_discarded = 1 OR EXISTS (
-                SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product product ON product.product_id = t.product_id
-                WHERE product.dataset_name = p.source_dataset_name AND t.product_specification = 'S101' AND t.state = 13));
-            """, transaction: transaction, cancellationToken: cancellationToken));
-        foreach (var package in completed) {
-            await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.DetectedAtUtc, cancellationToken);
-            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackage WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
-        }
-        transaction.Commit();
-    }
+    /// <summary>Rejects legacy per-member discard calls; an ENC snapshot can only be discarded as a pair.</summary>
+    /// <param name="datasetName">The legacy member identity, retained for source compatibility.</param>
+    /// <param name="specification">The legacy product specification.</param>
+    /// <param name="cancellationToken">The legacy cancellation token; no database work is started.</param>
+    /// <param name="preserveScanBound">The legacy replay option; paired operations own replay handling.</param>
+    /// <returns>A faulted task without opening a database connection.</returns>
+    /// <exception cref="InvalidOperationException">Individual ENC export discard is unsupported.</exception>
+    public Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) =>
+        Task.FromException(new InvalidOperationException("An ENC export cannot be discarded individually. Discard the whole ENC package."));
 
     private static Task UpsertReplayAsync(IDbConnection connection, IDbTransaction transaction, string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
         UPDATE dbo.EncPackageReplay WITH (UPDLOCK, HOLDLOCK)
@@ -129,19 +391,33 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
             INSERT INTO dbo.EncPackageReplay (source_dataset_name, scan_from_utc) VALUES (@SourceDatasetName, @ScanFromUtc);
         """, new { SourceDatasetName = sourceDatasetName, ScanFromUtc = scanFromUtc }, transaction, cancellationToken: cancellationToken));
 
+    /// <summary>Reads lightweight snapshot metadata together with its independently persisted delivery Pause.</summary>
     private const string SelectHeaderSql = """
         SELECT package_id AS Id, source_dataset_name AS SourceDatasetName, s57_dataset_name AS S57DatasetName,
-               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc,
+               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, built_at_utc AS BuiltAtUtc,
                s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
-               error_message AS ErrorMessage FROM dbo.EncPackage
+               error_message AS ErrorMessage,
+               COALESCE((SELECT control.is_paused FROM dbo.EncPackageControl control
+                         WHERE control.source_dataset_name = dbo.EncPackage.source_dataset_name), CONVERT(bit, 0)) AS IsPaused
+        FROM dbo.EncPackage
         """;
 
+    /// <summary>Reads the source YAML and metadata together with the source's current delivery Pause.</summary>
     private const string SelectSql = """
         SELECT package_id AS Id, source_dataset_name AS SourceDatasetName, s57_dataset_name AS S57DatasetName,
-               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, dataset_yaml AS DatasetYaml,
+               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, built_at_utc AS BuiltAtUtc, dataset_yaml AS DatasetYaml,
                summary_yaml AS SummaryYaml, s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
-               error_message AS ErrorMessage FROM dbo.EncPackage
+               error_message AS ErrorMessage,
+               COALESCE((SELECT control.is_paused FROM dbo.EncPackageControl control
+                         WHERE control.source_dataset_name = dbo.EncPackage.source_dataset_name), CONVERT(bit, 0)) AS IsPaused
+        FROM dbo.EncPackage
         """;
+
+    private sealed class SnapshotAttemptRow
+    {
+        public string SourceDatasetName { get; set; } = string.Empty;
+        public DateTime AttemptedThroughUtc { get; set; }
+    }
 
     private sealed class ReplayRow
     {

@@ -258,3 +258,41 @@ function createLayer(id, attributesList) {
   });
   return layer;
 }
+
+describe("package-status filter migration", () => {
+  it("drops an old member-based status selection rather than applying it to the aggregate", () => {
+    const service = createAttributeFilterService({
+      getStatuses: () => [],
+      getUsages: () => [],
+    });
+    const oldSnapshot = {
+      version: 2,
+      sources: [
+        {
+          providerId: "s101",
+          fields: [{ fieldName: "status", mode: "values", values: ["15"] }],
+        },
+      ],
+    };
+    assert.equal(service.applyFilterSnapshot(oldSnapshot), true);
+    const graphic = { attributes: { workUnitStatus: { packageStatus: 4 } } };
+    const layer = { graphics: [graphic] };
+    graphic.layer = layer;
+    service.replaceProvider({
+      providerId: "s101",
+      sourceId: "s101",
+      generation: 1,
+      layers: [layer],
+      filterDefinitions: [
+        {
+          fieldName: "packageStatus",
+          readValues: (value) => [String(value.attributes.workUnitStatus.packageStatus)],
+        },
+      ],
+      useLookupOptions: true,
+    });
+    assert.equal(service.getSelectedValues("s101", "status"), null);
+    assert.equal(service.getSelectedValues("s101", "packageStatus"), null);
+    assert.equal(service.getLayerMetadata("s101").visibleCount, 1);
+  });
+});

@@ -40,7 +40,8 @@ public static class ExportOutputPath
     public static string GetCandidateDirectory(string outputRoot, string datasetName, ProductSpecification productSpecification, int edition, int update) {
         Validate(outputRoot, datasetName, edition, update);
 
-        // The S-101 compiler creates a dataset-name directory beneath the edition directory.
+        // The edition root owns staging input and index files; the compiler's
+        // exchange-set output is placed in a dataset-specific subdirectory.
         if (productSpecification == ProductSpecification.S101)
             return Path.Combine(outputRoot, datasetName, edition.ToString(CultureInfo.InvariantCulture));
 
@@ -48,7 +49,15 @@ public static class ExportOutputPath
     }
 
     /// <summary>
-    /// Gets the S-101 dataset-files directory produced by the compiler inside an edition exchange set.
+    /// Gets the S-101 exchange-set root emitted beneath the compiler's dataset-specific directory.
+    /// This is distinct from the edition directory containing staging YAML and index files.
+    /// </summary>
+    public static string GetS101ExchangeSetDirectory(string outputRoot, string datasetName, int edition, int update) {
+        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), datasetName, "S100_ROOT");
+    }
+
+    /// <summary>
+    /// Gets the S-101 dataset-files directory produced by the compiler inside its exchange set.
     /// </summary>
     /// <param name="outputRoot">The configured root export directory.</param>
     /// <param name="datasetName">The authoritative dataset name.</param>
@@ -56,8 +65,30 @@ public static class ExportOutputPath
     /// <param name="update">The candidate update number used for input validation.</param>
     /// <returns>The directory containing the S-101 <c>.000</c> and update files.</returns>
     public static string GetS101DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
-        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), datasetName, "S100_ROOT", "S-101", "DATASET_FILES");
+        return Path.Combine(GetS101ExchangeSetDirectory(outputRoot, datasetName, edition, update), "S-101", "DATASET_FILES");
     }
+
+    /// <summary>Finds the requested S-57 cell beneath its isolated compiler output directory.</summary>
+    /// <param name="outputRoot">The configured export root.</param>
+    /// <param name="datasetName">The S-57 target cell name resolved through ProductMapping.</param>
+    /// <param name="edition">The candidate edition number.</param>
+    /// <param name="update">The candidate update number identifying its isolated output.</param>
+    /// <returns>The directory containing the unique, non-empty base cell and any adjacent updates.</returns>
+    /// <exception cref="InvalidOperationException">The requested base cell is missing, empty or ambiguous.</exception>
+    /// <remarks>Supports flat and nested exchange-set layouts without selecting another cell or an older candidate.</remarks>
+    public static string GetS57DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
+        var candidateDirectory = GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S57, edition, update);
+        var baseFiles = Directory.Exists(candidateDirectory)
+            ? Directory.EnumerateFiles(candidateDirectory, "*.000", SearchOption.AllDirectories)
+                .Where(path => string.Equals(Path.GetFileNameWithoutExtension(path), datasetName, StringComparison.OrdinalIgnoreCase))
+                .Take(2).ToArray()
+            : Array.Empty<string>();
+        if (baseFiles.Length != 1 || new FileInfo(baseFiles[0]).Length == 0)
+            throw new InvalidOperationException($"The S-57 compiler output must contain one non-empty base dataset for '{datasetName}'.");
+
+        return Path.GetDirectoryName(baseFiles[0])!;
+    }
+
     private static void Validate(string outputRoot, string datasetName, int edition, int update) {
         if (string.IsNullOrWhiteSpace(outputRoot))
             throw new ArgumentException("An export output root is required.", nameof(outputRoot));

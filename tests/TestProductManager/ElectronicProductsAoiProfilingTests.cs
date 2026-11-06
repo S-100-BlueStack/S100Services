@@ -38,13 +38,29 @@ namespace TestProductCatalogueAPI
                 new Dictionary<string, string> { [s101Name] = "{\"rings\":[]}" },
                 new Dictionary<string, ElectronicProduct> { [s101Name] = s101, [s57Name] = s57 });
             using var cache = new MemoryCache(new MemoryCacheOptions());
+            var productManager = new FakeProductManager(products);
+            var workflows = new InMemoryProductRepository();
+            // Product detail uses a single lookup; the AOI-only recording repository
+            // intentionally rejects that method to enforce batch reads.
+            var detailController = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                productManager, workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
             var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
-                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), new InMemoryProductRepository()) {
+                productManager, new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), workflows) {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
             };
 
-            var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await controller.GetElectronicProduct(s101Name)).Value).Data!;
+            var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await detailController.GetElectronicProduct(s101Name)).Value).Data!;
             Assert.Empty(detail.Exports!);
+            Assert.NotNull(detail.Package);
+            var serialized = System.Text.Json.JsonSerializer.SerializeToElement(detail, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            Assert.False(serialized.TryGetProperty("edition", out _));
+            Assert.False(serialized.TryGetProperty("update", out _));
+            Assert.False(serialized.GetProperty("package").TryGetProperty("edition", out _));
+            Assert.False(serialized.GetProperty("package").TryGetProperty("update", out _));
+            Assert.Equal(3, serialized.GetProperty("s101").GetProperty("edition").GetInt32());
+            Assert.Equal(4, serialized.GetProperty("s57").GetProperty("edition").GetInt32());
             Assert.Equal(s57Name, detail.S57?.Name);
             Assert.Equal(4, detail.S57?.Edition);
             Assert.Equal(1, detail.S57?.Update);
@@ -61,6 +77,44 @@ namespace TestProductCatalogueAPI
             Assert.Equal(3, aoi.Attributes?.Package?.S101.CurrentEdition);
             Assert.Equal(2, aoi.Attributes?.Package?.S101.CurrentUpdate);
             Assert.Equal(new DateOnly(2026, 9, 20), aoi.Attributes?.Package?.S101.IssueDate);
+        }
+
+        [Fact]
+        public async Task TargetedEncStatusMatchesGlobalStatusWithoutGeometryOrArcGisBoundaryReads()
+        {
+            const string sourceName = "101DK001GSOUT";
+            var s57Name = $"57{sourceName}";
+            var productManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [sourceName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> {
+                    [sourceName] = CreateElectronicProduct(sourceName, 90_000, 1),
+                    [s57Name] = CreateElectronicProduct(s57Name, 90_000, 1, "S-57")
+                });
+            var workflows = new InMemoryProductRepository();
+            var s101 = await workflows.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 0, 0);
+            await workflows.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, 1, 0);
+            await workflows.SetStateAsync(s101.Id, ProductState.Error, "system", DateTime.UtcNow, "VALIDATION", "S-101 failed.");
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(productManager), workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var global = Assert.Single(Assert.IsType<List<AOIResponse>>(
+                Assert.IsType<OkObjectResult>(await controller.GetAllElectronicProductsAOI()).Value));
+            var result = Assert.IsType<ApiResponse<Attributes>>(
+                Assert.IsType<OkObjectResult>(await controller.GetElectronicProductPackageStatus(sourceName, CancellationToken.None)).Value);
+            Assert.Equal(global.Attributes?.Status, result.Data?.Status);
+            Assert.Equal(global.Attributes?.Package?.Status, result.Data?.Package?.Status);
+            Assert.Equal(global.Attributes?.Package?.S101.Status, result.Data?.Package?.S101.Status);
+            Assert.Equal(global.Attributes?.Package?.S57.Status, result.Data?.Package?.S57.Status);
+            var detailResult = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await controller.GetElectronicProduct(sourceName)).Value);
+            Assert.Equal(result.Data?.Package?.Status, detailResult.Data?.Package?.Status);
+            Assert.Equal(result.Data?.Status, detailResult.Data?.Status);
+            Assert.Equal(result.Data?.ErrorMessage, detailResult.Data?.ErrorMessage);
+            Assert.False(result.Data!.Package!.HasActivePackage);
+            Assert.Equal(0, productManager.TargetedBoundaryCallCount);
+            Assert.Equal(1, productManager.BulkAoiCallCount);
         }
 
         [Fact]
@@ -89,6 +143,7 @@ namespace TestProductCatalogueAPI
             Assert.Equal("S57", s57Export.Type);
             Assert.Equal(5, s57Export.Edition);
 
+            await workflows.SetStateAsync(s57.Id, ProductState.ReadyForDistribution, "operator", DateTime.UtcNow);
             await workflows.DiscardCandidateAsync(s57.Id, "operator", DateTime.UtcNow);
             var afterDiscard = await controller.GetElectronicProduct(sourceName);
             var discarded = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(afterDiscard).Value);
@@ -328,7 +383,7 @@ namespace TestProductCatalogueAPI
             Assert.Equal(datasetName, response.Data?.Attributes?.DatasetName);
             Assert.Equal("S57", response.Data?.Attributes?.ProductSpecification);
             Assert.Equal(ProductStatus.Error, response.Data?.Attributes?.Status);
-            Assert.Equal("Validation failed.", response.Data?.Attributes?.ErrorMessage);
+            Assert.Equal(PublicExportError.GenericMessage, response.Data?.Attributes?.ErrorMessage);
             Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
             Assert.Equal(1, electronicProductManager.TargetedBoundaryCallCount);
             Assert.Equal(1, repository.BatchCallCount);

@@ -11,13 +11,14 @@ describe("attributeFilterConfig", () => {
   it("only exposes the approved main map filters", () => {
     assert.deepEqual(
       getAttributeFilterFieldDefinitions().map((definition) => definition.fieldName),
-      ["displayScale", "status", "usageBand"]
+      ["displayScale", "status", "packageStatus", "usageBand"]
     );
   });
 
   it("normalizes display scale, status, and usage band aliases", () => {
     assert.equal(getCanonicalAttributeFilterFieldName("DisplayScale"), "displayScale");
     assert.equal(getCanonicalAttributeFilterFieldName("Status"), "status");
+    assert.equal(getCanonicalAttributeFilterFieldName("PackageStatus"), "packageStatus");
     assert.equal(getCanonicalAttributeFilterFieldName("UsageBand"), "usageBand");
   });
 
@@ -30,6 +31,7 @@ describe("attributeFilterConfig", () => {
   it("uses product-facing filter labels", () => {
     assert.equal(getAttributeFilterFieldLabel("DisplayScale"), "Display scale");
     assert.equal(getAttributeFilterFieldLabel("Status"), "Status");
+    assert.equal(getAttributeFilterFieldLabel("PackageStatus"), "Package status");
     assert.equal(getAttributeFilterFieldLabel("UsageBand"), "Usage band");
   });
 });

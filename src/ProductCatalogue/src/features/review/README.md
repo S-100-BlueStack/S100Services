@@ -45,6 +45,19 @@ Workspace resolution is not tied to Main-map enabled-source localStorage and doe
 dataset-name conventions. Backend identity conflicts, malformed targeted responses and unavailable
 deployment-configured sources fail closed rather than falling through another source.
 
+## DSA-08 direct-route startup and picker ownership
+
+An explicit Analyze/Review route composition starts its targeted, source-aware Product resolution
+without waiting for the lightweight `GET electronicproducts` picker catalogue. The picker owns
+its independent loading/error state; a late response only updates the picker and does not
+reselect Products, replace canonical package identities or hide an active workspace load.
+
+Route replacements and existing Product refreshes use the targeted resolver as the authority.
+New picker additions must wait while the catalogue is loading; after it loads, the existing
+catalogue validation still applies. If the catalogue fails, typed-name fallback continues to
+use the source-aware resolver and may show a real resolution failure, never a synthetic success.
+Catalog completion after page teardown is ignored. No global request timeout is introduced.
+
 ## FI-036 compact sidebar presentation
 
 The route already identifies Product Review, so the sidebar omits the repeated visible workspace
@@ -64,6 +77,13 @@ Product composition, content toggles, targeted source resolution, automatic fres
 independent content failures.
 
 ## FI-041 Product-list interaction preservation
+
+REG-03 picker input preservation: when the sidebar is synchronously reconstructed while
+its Product picker input is active, Review retains the in-progress text, caret range
+and keyboard focus on the replacement input without scrolling. A suggestion selection
+continues to transfer focus but does not revive an obsolete query. Focus outside the
+picker is never redirected to it. Analyze's already accepted picker behavior remains
+unchanged.
 
 Per-Product History, IC-ENC, and Validation toggles still update the authoritative Review state and
 rerender the board and sidebar. Before that specific synchronous render, Review captures the Product
@@ -108,15 +128,19 @@ scroll offset and return focus to the initiating workspace control without delay
 ## FI-037 content layout and states
 
 History cards use their natural content height up to a viewport-aware `clamp(240px, 50dvh, 500px)`
-maximum. History keeps the only intentional content-card scroller after that bound; short histories no
-longer reserve a fixed-height region. IC-ENC and Internal validation bodies render at natural height,
-and the Product-column content container owns vertical overflow for those cards.
+maximum. Short histories no longer reserve a fixed-height region. Internal validation cards with more
+than five available artifacts now have their own viewport-aware maximum height and a keyboard-focusable
+inner scrollbar; shorter lists and unavailable/failed/empty states keep their natural height. IC-ENC
+cards remain at natural height. The Product-column content container continues to own vertical overflow
+for other content.
 
 Each content-card header remains the state discriminator: `Unavailable`, `Failed`, an empty count, or
 an available content count. The body adds one concise message for states without content instead of a
 second heading/message pair. IC-ENC remains unavailable without inventing a report contract. Validation
 request failures retain their safe error text, and available diagnostic artifacts retain their download
 links. These presentation rules do not add a loader or refresh lifecycle.
+
+Long Internal validation lists retain accessible region names by referencing their visible card headings rather than producing hover tooltips. Available artifact downloads use `calcite-link` with the existing URLs and filename hints. History scrolling is unchanged.
 
 Future report cards should use the same pattern.
 
@@ -145,7 +169,7 @@ synchronization, and temporary legacy-path compatibility. Content toggles remain
 
 ## FI-039 incremental reconciliation
 
-Status: **Implemented; manual verification pending**.
+Status: **Accepted** at `1a77af904ec1a41726bcec357b72610c74e793ca` (FI-039 manual acceptance).
 
 `core/reviewProductSession.js` now owns the single authoritative Review data generation. The page
 coordinator supplies the latest Product items and receives render snapshots; it has no separate full
@@ -192,3 +216,70 @@ disable, full Refresh, changed-only freshness, removal/re-add, overlapping refre
 replacement, teardown and out-of-order completions using deferred promises. Page-event tests exercise
 the actual coordinator with explicit browser/API test boundaries. See
 [the implementation and manual verification record](../../../docs/fi-039-incremental-review.md).
+
+## F6C package-aware Review
+
+Status: **F6C v2 accepted** at `906a7e2dd4527408dcb6617b644fc49edbc326c5` (developer-reported). The earlier `462776d5aef68cf71cb784506c580b82c97f1dcc` commit is the historical F6C implementation baseline, not the current repository baseline.
+
+`reviewProductSession.js` remains the sole content/publication owner. Its composition version guards
+async canonicalization inside that same session; no page generation counter, member session or
+freshness timer is introduced. Before list, route, records or freshness priming are committed,
+`resolveReviewComposition()` uses F6A's `resolveWorkUnit()` and shared resolution-claim reconciliation.
+Either mapped member resolves to the canonical representative. Complete proof replaces an earlier
+failed alias at its first logical occurrence; conflicting complete claims fail closed. Independent
+Products keep their relative order. Pending additions retain their requested composition and share
+in-flight resolution reads. Removal and package disable revoke operation ownership at input time.
+
+The session retains resolved proofs only for composition/alias reuse. Full generations and targeted
+loads resolve current ownership; a failed resolution cannot authorize an ordinary package fallback.
+The flat picker catalog validates the requested name. A canonical representative already proven by
+an S-57 entry is not rejected later merely because only that alias appeared in the catalog. An alias
+cannot re-add or reactivate an already selected package.
+
+Each package record uses `workUnit.identityKey` and a signature of ordered member identities,
+source/Product keys and authoritative specifications. A complete outer payload contains S-101 first,
+S-57 second, with exact ProductContexts, current member metadata and independent content states.
+Member detail reads run after FI-022 priming and optional member work, immediately before
+publication, and validate both concrete mappings. F6A's request-local
+`assertCurrent()` checks the source snapshot before and after optional content reads. Structural
+failure, changed identity/mapping or source replacement cannot publish a half-package. A rejected
+targeted replacement retains the last complete members, displays a separate refresh failure and
+returns false to FI-022 so that its revision remains unacknowledged. Full Refresh keeps its existing
+full-generation semantics, clearing payloads and rebuilding currently selected enabled records.
+
+History and artifacts use the existing capability-gated APIs with each member's own context. Optional
+failures remain per member and content type; IC-ENC stays Unavailable without a backend request.
+The shared `products/domain/packageValidationArtifacts.js` contains the unchanged F6B ownership
+algorithm. Analyze retains its original import through a compatibility re-export. Review filters the
+normalized combined response before member publication using both exact concrete name and
+ProductSpecification, preserves original secure owner download URLs and historical revisions, and
+shows a warning for omitted missing/ambiguous ownership. Ordinary artifacts remain unfiltered.
+
+The board renders one outer column and two vertical member sections with one package-level content
+selection. Existing defaults, workspace intent, individual overrides, indeterminate bulk controls and
+disabled composition stay in the existing domain layer. Async publications capture fresh FI-041
+snapshots immediately before rendering; they never restore a snapshot retained across an await.
+Unchanged columns retain their application-owned DOM, History disclosures and scroll state, and the
+board restores horizontal scroll and surviving control focus. Member sections inherit theme tokens
+and use the same card height/overflow states; no private ArcGIS/Calcite internals are accessed.
+
+The v2 presentation correction groups each member title and unchanged summary in an application-owned
+`pc-review-member__header` using `--pc-surface-alt`. Compact member content header strips use a softer
+mix of existing surface tokens, with the same 10px horizontal inset as the member header and content
+states. Ordinary Product headers, controls, focus rules and scroll owners remain unchanged.
+
+One canonical representative is observed by FI-022. Both member operation notifications request the
+existing coalesced monitor check rather than creating separate package refreshes. Changed-only loads
+run under one record operation and publish the full member payload atomically. Removing/re-adding,
+disable, full refresh, route replacement and destroy invalidate stale package member results.
+
+Registry-owned package navigation enables Analyze, Review and the separate floating History
+workflow (F6D). The Main-map Tools menu and Product Collection preserve capability-gated
+navigation; Collection retains its current shape and Analyze/Review-only destinations.
+Review does not own popup mutations, export or scheduling. The older F6C v1/v2 delivery
+reports are retained in Git history, while the current member presentation, identity,
+request lifecycle and focus/scroll contracts are maintained in this README.
+
+## FI-043 selection visibility
+
+The Review sidebar displays accepted local Product selections immediately while the existing Product session resolves canonical work units and loads content. Pending rows are provisional UI composition, not synthetic successful backend payloads. Previous canonical content overrides and workspace-wide content intent must survive alias resolution, intermediate interactions, superseded requests and Refresh. The picker remains keyboard-usable after a selection-triggered render.

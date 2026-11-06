@@ -1,12 +1,26 @@
 import { projectMemberStatusRenderState } from "../../dataSources/domain/memberStatusRenderingProjection.js";
-import { getCorrectionSymbol, getMixedCorrectionSymbol } from "./correctionSymbols.js";
+import {
+  getCorrectionSymbol,
+  getMixedCorrectionSymbol,
+  getPackageCorrectionSymbol,
+} from "./correctionSymbols.js";
 
+// The package strategy never derives colors from export candidate states.
+export const WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION = Object.freeze({
+  type: "work-unit-package-status",
+});
+
+// Retained for isolated legacy rendering contracts; no runtime source opts into it.
 export const WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION = Object.freeze({
   type: "work-unit-member-status",
 });
 
 export function resolveCorrectionSymbol({ attributes, geometry, symbolization } = {}) {
   const representativeStatus = attributes?.status;
+
+  if (supportsPackageStatusSymbolization(symbolization, geometry)) {
+    return getPackageCorrectionSymbol(attributes?.workUnitStatus?.packageStatus);
+  }
 
   if (!supportsMemberStatusSymbolization(symbolization, geometry)) {
     return getCorrectionSymbol(representativeStatus);
@@ -25,6 +39,7 @@ export function resolveCorrectionSymbol({ attributes, geometry, symbolization } 
 }
 
 export function canResolveCorrectionSymbol({ attributes, geometry, symbolization } = {}) {
+  if (supportsPackageStatusSymbolization(symbolization, geometry)) return true;
   if (attributes?.status !== undefined && attributes?.status !== null) {
     return true;
   }
@@ -58,6 +73,13 @@ export function areCorrectionSymbolsEquivalent(left, right) {
   } catch {
     return false;
   }
+}
+
+function supportsPackageStatusSymbolization(symbolization, geometry) {
+  return (
+    symbolization?.type === WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION.type &&
+    String(geometry?.type ?? "").toLowerCase() === "polygon"
+  );
 }
 
 function supportsMemberStatusSymbolization(symbolization, geometry) {

@@ -79,6 +79,8 @@ namespace ProductCatalogueAPI
                 .Bind(configuration.GetSection(SendToIcEncOptions.SectionName))
                 .ValidateOnStart();
             services.AddSingleton<ISendToIcEncJobService, HangfireSendToIcEncJobService>();
+            services.AddTransient<IIcEncDeliveryRepository, IcEncDeliveryRepository>();
+            services.AddTransient<IIcEncTransport, IcEncFtpsTransport>();
             services.AddTransient<UploadSingularProductJob>();
         }
     }

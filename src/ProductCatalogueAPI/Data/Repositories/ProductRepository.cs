@@ -271,14 +271,39 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     public async Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         var affected = await connection.ExecuteAsync(new CommandDefinition("""
-            UPDATE dbo.ProductExportTrack
-            SET candidate_previous_state = state,
+            UPDATE t
+            SET candidate_previous_state = CASE
+                    WHEN state = @ChangesDetected AND candidate_previous_state IS NOT NULL THEN
+                        CASE WHEN candidate_previous_state IN (@Error, @Rejected) THEN @Idle ELSE candidate_previous_state END
+                    WHEN state IN (@Error, @Rejected) THEN
+                        CASE WHEN candidate_previous_state IS NULL OR candidate_previous_state IN (@Error, @Rejected)
+                            THEN @Idle ELSE candidate_previous_state END
+                    ELSE state END,
                 state = @State,
                 candidate_edition = @CandidateEdition,
                 candidate_update = @CandidateUpdate,
                 updated_at_utc = @OccurredAtUtc
-            WHERE product_export_track_id = @TrackId
-              AND state NOT IN (@Frozen, @InTransit, @Exporting, @Validating);
+            FROM dbo.ProductExportTrack t
+            WHERE t.product_export_track_id = @TrackId
+              AND t.state NOT IN (@Frozen, @InTransit, @Exporting, @Validating, @Ready, @Accepted, @Rejected)
+              AND NOT EXISTS (
+                  SELECT 1 FROM dbo.ProductExportTrackFreezeHold WITH (UPDLOCK, HOLDLOCK)
+                  WHERE product_export_track_id = @TrackId
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM dbo.ProductIcEncDelivery d WITH (UPDLOCK, HOLDLOCK)
+                  INNER JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                  WHERE d.product_export_track_id = t.product_export_track_id
+                    AND t.candidate_edition IS NOT NULL AND t.candidate_update IS NOT NULL
+                    AND r.edition_number = t.candidate_edition AND r.update_number = t.candidate_update
+                    AND d.status <> 'NotDelivered'
+                    AND NOT (d.status = 'Rejected' AND t.state = @Rejected)
+                    AND r.product_revision_id = (SELECT TOP (1) current_revision.product_revision_id
+                        FROM dbo.ProductRevision current_revision
+                        WHERE current_revision.product_export_track_id = t.product_export_track_id
+                          AND current_revision.edition_number = t.candidate_edition AND current_revision.update_number = t.candidate_update
+                        ORDER BY current_revision.created_at_utc DESC, current_revision.product_revision_id DESC)
+              );
 
             IF @@ROWCOUNT = 1
                 INSERT INTO dbo.ProductStateHistory
@@ -296,7 +321,13 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
                 Frozen = ProductState.Frozen,
                 InTransit = ProductState.InTransit,
                 Exporting = ProductState.Exporting,
-                Validating = ProductState.Validating
+                Validating = ProductState.Validating,
+                Ready = ProductState.ReadyForDistribution,
+                Accepted = ProductState.AcceptedForDistribution,
+                Error = ProductState.Error,
+                Rejected = ProductState.Rejected,
+                ChangesDetected = ProductState.ChangesDetected,
+                Idle = ProductState.Idle
             }, cancellationToken: cancellationToken));
 
         if (affected == 0)
@@ -322,6 +353,130 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
+    public async Task<bool> TryFailInterruptedPackageExportAsync(Guid expectedPackageId, Guid expectedTrackId,
+        string datasetName, ProductSpecification specification, ProductState expectedState,
+        DateTime expectedUpdatedAtUtc, int candidateEdition, int candidateUpdate,
+        DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        if (expectedPackageId == Guid.Empty || expectedTrackId == Guid.Empty || string.IsNullOrWhiteSpace(datasetName))
+            throw new ArgumentException("An exact ENC package, Product track and dataset are required.");
+        if (specification is not (ProductSpecification.S101 or ProductSpecification.S57) ||
+            expectedState is not (ProductState.Exporting or ProductState.Validating) ||
+            candidateEdition < 0 || candidateUpdate < 0 ||
+            expectedUpdatedAtUtc == default || occurredAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Interrupted export recovery requires an exact in-progress candidate and UTC timestamps.");
+
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        // The scan and both Product locks must be held by the caller. SQL also
+        // verifies snapshot ownership, state, candidate version and timestamp.
+        // Bind datetime2(7) explicitly; a SqlDateTime conversion would round
+        // the expected timestamp and produce a false compare-and-set conflict.
+        var parameters = new DynamicParameters(new {
+            TrackId = expectedTrackId,
+            PackageId = expectedPackageId,
+            DatasetName = datasetName.Trim(),
+            Specification = specification.ToString(),
+            ExpectedState = expectedState,
+            CandidateEdition = candidateEdition,
+            CandidateUpdate = candidateUpdate,
+            Error = ProductState.Error,
+            ErrorCode = "ENC_EXPORT_INTERRUPTED",
+            Message = "The candidate build was interrupted. Discard it before another package is created.",
+            HistoryId = Guid.NewGuid()
+        });
+        parameters.Add("ExpectedUpdatedAtUtc", expectedUpdatedAtUtc, DbType.DateTime2);
+        parameters.Add("OccurredAtUtc", occurredAtUtc, DbType.DateTime2);
+        var recovered = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            DECLARE @Affected int = 0;
+            DECLARE @PackageOwned bit = 0;
+            -- Follow package-discard lock ordering: package first, then Product track.
+            SELECT @PackageOwned = 1
+            FROM dbo.EncPackage WITH (UPDLOCK, HOLDLOCK)
+            WHERE package_id = @PackageId
+              AND ((@Specification = 'S101' AND source_dataset_name = @DatasetName AND s101_discarded = 0)
+                OR (@Specification = 'S57' AND s57_dataset_name = @DatasetName AND s57_discarded = 0));
+            IF @PackageOwned = 1
+            BEGIN
+                UPDATE t
+                   SET state = @Error, updated_at_utc = @OccurredAtUtc
+                FROM dbo.ProductExportTrack AS t WITH (UPDLOCK, HOLDLOCK)
+                INNER JOIN dbo.Product AS p ON p.product_id = t.product_id
+                WHERE t.product_export_track_id = @TrackId
+                  AND p.dataset_name = @DatasetName
+                  AND t.product_specification = @Specification
+                  AND t.state = @ExpectedState
+                  AND t.updated_at_utc = @ExpectedUpdatedAtUtc
+                  AND t.candidate_edition = @CandidateEdition
+                  AND t.candidate_update = @CandidateUpdate
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.ProductExportTrackFreezeHold WITH (UPDLOCK, HOLDLOCK)
+                      WHERE product_export_track_id = t.product_export_track_id
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.ProductIcEncDelivery AS d WITH (UPDLOCK, HOLDLOCK)
+                      INNER JOIN dbo.ProductRevision AS r ON r.product_revision_id = d.product_revision_id
+                      WHERE d.product_export_track_id = t.product_export_track_id
+                        AND r.edition_number = t.candidate_edition
+                        AND r.update_number = t.candidate_update
+                        AND d.status <> 'NotDelivered'
+                        AND r.product_revision_id = (SELECT TOP (1) current_revision.product_revision_id
+                            FROM dbo.ProductRevision current_revision WITH (UPDLOCK, HOLDLOCK)
+                            WHERE current_revision.product_export_track_id = t.product_export_track_id
+                              AND current_revision.edition_number = t.candidate_edition AND current_revision.update_number = t.candidate_update
+                            ORDER BY current_revision.created_at_utc DESC, current_revision.product_revision_id DESC)
+                  );
+                SET @Affected = @@ROWCOUNT;
+            END;
+            IF @Affected = 1
+            BEGIN
+                UPDATE dbo.EncPackage
+                SET error_message = COALESCE(error_message, @Message)
+                WHERE package_id = @PackageId;
+                IF @@ROWCOUNT <> 1
+                    THROW 51001, 'The ENC package changed during interrupted export recovery.', 1;
+                INSERT INTO dbo.ProductStateHistory
+                    (product_state_history_id, product_export_track_id, state, edition_number, update_number,
+                     owner, occurred_at_utc, error_code, error_message)
+                VALUES
+                    (@HistoryId, @TrackId, @Error, @CandidateEdition, @CandidateUpdate,
+                     'system', @OccurredAtUtc, @ErrorCode, @Message);
+            END;
+            SELECT CAST(@Affected AS bit);
+            """, parameters, transaction, cancellationToken: cancellationToken));
+        transaction.Commit();
+        return recovered;
+    }
+
+    /// <inheritdoc/>
+    public async Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        var historyId = Guid.NewGuid();
+        // The ready state and its immutable identity must commit together. A guessed
+        // latest row could belong to another operation or independent product track.
+        var insertedId = await connection.QuerySingleAsync<Guid>(new CommandDefinition("""
+            UPDATE dbo.ProductExportTrack
+            SET state = @Ready, updated_at_utc = @OccurredAtUtc
+            WHERE product_export_track_id = @TrackId AND state = @Validating
+              AND candidate_edition IS NOT NULL AND candidate_update IS NOT NULL;
+            IF @@ROWCOUNT <> 1
+                THROW 51080, 'The export completion state is not eligible.', 1;
+
+            INSERT INTO dbo.ProductStateHistory
+                (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+            OUTPUT INSERTED.product_state_history_id
+            SELECT @HistoryId, product_export_track_id, @Ready, candidate_edition, candidate_update, @Owner, @OccurredAtUtc
+            FROM dbo.ProductExportTrack WHERE product_export_track_id = @TrackId;
+            """, new { TrackId = trackId, HistoryId = historyId, Ready = ProductState.ReadyForDistribution,
+                Validating = ProductState.Validating, Owner = owner, OccurredAtUtc = occurredAtUtc },
+            transaction, cancellationToken: cancellationToken));
+        transaction.Commit();
+        return insertedId;
+    }
+
+    /// <inheritdoc/>
     public async Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         connection.Open();
@@ -330,16 +485,22 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         var candidate = await connection.QuerySingleOrDefaultAsync<CandidateCancellationState>(new CommandDefinition("""
             SELECT state AS State, candidate_previous_state AS PreviousState,
                    candidate_edition AS CandidateEdition,
-                   candidate_update AS CandidateUpdate
-            FROM dbo.ProductExportTrack WITH (UPDLOCK, HOLDLOCK)
+                   candidate_update AS CandidateUpdate,
+                   CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.ProductExportTrackFreezeHold h WITH (UPDLOCK, HOLDLOCK)
+                       WHERE h.product_export_track_id = t.product_export_track_id) THEN 1 ELSE 0 END) AS IsFrozen
+            FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK)
             WHERE product_export_track_id = @TrackId;
             """, new { TrackId = trackId }, transaction, cancellationToken: cancellationToken));
 
-        if (candidate is null || candidate.CandidateEdition.HasValue != candidate.CandidateUpdate.HasValue ||
-            !candidate.CandidateEdition.HasValue && candidate.State is not (ProductState.Error or ProductState.Rejected))
-            throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
+        if (candidate is null || candidate.IsFrozen || !ProductCandidateRecovery.CanDiscard(candidate.State, candidate.PreviousState,
+            candidate.CandidateEdition, candidate.CandidateUpdate))
+            throw new InvalidOperationException("The product track has no eligible unsent candidate to discard.");
 
-        var previousState = candidate.PreviousState ?? ProductState.Idle;
+        if (await ProductCandidateDeliveryGuard.IsBlockedAsync(connection, transaction, trackId,
+            candidate.CandidateEdition, candidate.CandidateUpdate, candidate.State, cancellationToken))
+            throw new InvalidOperationException("The Product candidate has a protected delivery and cannot be discarded.");
+
+        var previousState = ProductCandidateRecovery.RestoredState(candidate.PreviousState);
         var restoredAtUtc = occurredAtUtc.AddTicks(1);
 
         await connection.ExecuteAsync(new CommandDefinition("""
@@ -627,6 +788,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
 
     private sealed class CandidateCancellationState
     {
+        public bool IsFrozen { get; set; }
         public ProductState State { get; set; }
         public ProductState? PreviousState { get; set; }
         public int? CandidateEdition { get; set; }
@@ -713,10 +875,72 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     }
 
     /// <inheritdoc/>
-    public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.CandidatePreviousState = track.State; track.State = ProductState.Exporting; track.CandidateEdition = candidateEdition; track.CandidateUpdate = candidateUpdate; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
+    public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.IsManuallyFrozen || track.State is ProductState.Frozen or ProductState.InTransit or
+                ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or
+                ProductState.AcceptedForDistribution or ProductState.Rejected)
+                throw new InvalidOperationException("The export track is not eligible for another candidate.");
+            track.CandidatePreviousState = ProductCandidateRecovery.PreviousStateForReplacement(track.State, track.CandidatePreviousState);
+            track.State = ProductState.Exporting;
+            track.CandidateEdition = candidateEdition;
+            track.CandidateUpdate = candidateUpdate;
+            track.UpdatedAtUtc = occurredAtUtc;
+        }
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc/>
     public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = state; track.UpdatedAtUtc = occurredAtUtc; track.ErrorCode = errorCode; track.ErrorMessage = errorMessage; } return Task.CompletedTask; }
+
+    /// <inheritdoc/>
+    public Task<bool> TryFailInterruptedPackageExportAsync(Guid expectedPackageId, Guid expectedTrackId,
+        string datasetName, ProductSpecification specification, ProductState expectedState,
+        DateTime expectedUpdatedAtUtc, int candidateEdition, int candidateUpdate,
+        DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate) {
+            if (expectedPackageId == Guid.Empty || expectedTrackId == Guid.Empty ||
+                specification is not (ProductSpecification.S101 or ProductSpecification.S57) ||
+                expectedState is not (ProductState.Exporting or ProductState.Validating) || occurredAtUtc.Kind != DateTimeKind.Utc)
+                throw new ArgumentException("Interrupted export recovery requires an exact package and in-progress track.");
+            var track = _tracks.Values.FirstOrDefault(current => current.Id == expectedTrackId);
+            if (track is null || !string.Equals(track.DatasetName, datasetName, StringComparison.OrdinalIgnoreCase) ||
+                track.ProductSpecification != specification || track.State != expectedState ||
+                track.UpdatedAtUtc != expectedUpdatedAtUtc || track.CandidateEdition != candidateEdition ||
+                track.CandidateUpdate != candidateUpdate || track.IsManuallyFrozen)
+                return Task.FromResult(false);
+            // In-memory track storage has no ENC package table. The caller checks
+            // the package identity; SQL enforces that guard in the same transaction.
+            track.State = ProductState.Error;
+            track.UpdatedAtUtc = occurredAtUtc;
+            track.ErrorCode = "ENC_EXPORT_INTERRUPTED";
+            track.ErrorMessage = "The candidate build was interrupted. Discard it before another package is created.";
+            return Task.FromResult(true);
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.State != ProductState.Validating || track.CandidateEdition is null || track.CandidateUpdate is null)
+                throw new InvalidOperationException("The export completion state is not eligible.");
+            var historyId = Guid.NewGuid();
+            track.State = ProductState.ReadyForDistribution;
+            track.UpdatedAtUtc = occurredAtUtc;
+            foreach (var current in _products.Where(row => row.Name == track.DatasetName &&
+                NormalizeProductSpecification(row.ProductSpecification) == track.ProductSpecification.ToString() && row.Date_to == MaxDate))
+                current.Date_to = occurredAtUtc;
+            _products.Add(new ProductRecord { Id = historyId, Name = track.DatasetName,
+                ProductSpecification = track.ProductSpecification.ToString(), State = track.State,
+                EditionNo = track.CandidateEdition.Value, UpdateNo = track.CandidateUpdate.Value,
+                Owner = owner, Date_From = occurredAtUtc, Date_to = MaxDate });
+            return Task.FromResult(historyId);
+        }
+    }
 
     /// <inheritdoc/>
     public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
@@ -748,10 +972,9 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         lock (_gate) {
             var track = FindTrack(trackId);
-            if (track.CandidateEdition.HasValue != track.CandidateUpdate.HasValue ||
-                !track.CandidateEdition.HasValue && track.State is not (ProductState.Error or ProductState.Rejected))
-                throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
-            track.State = track.CandidatePreviousState ?? ProductState.Idle;
+            if (track.IsManuallyFrozen || !ProductCandidateRecovery.CanDiscard(track.State, track.CandidatePreviousState, track.CandidateEdition, track.CandidateUpdate))
+                throw new InvalidOperationException("The product track has no eligible unsent candidate to discard.");
+            track.State = ProductCandidateRecovery.RestoredState(track.CandidatePreviousState);
             track.CandidateEdition = null;
             track.CandidateUpdate = null;
             track.CandidatePreviousState = null;

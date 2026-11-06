@@ -6,7 +6,7 @@ using ProductCatalogueAPI.Services.Jobs;
 
 namespace ProductCatalogueAPI.Controllers
 {
-    [AllowAnonymous]
+    [Authorize("productmanager:access")]
     [ApiController]
     [Route("jobs")]
     public sealed class JobsController(IJobStatusService jobStatusService) : ControllerBase

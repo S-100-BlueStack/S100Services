@@ -291,6 +291,11 @@ export function createWorkspaceFreshnessMonitor({
   return {
     prime,
     primeAdditional,
+    // A consumer whose initial detail read failed must recover even if the
+    // observed revision has not changed since priming.
+    requireRefresh: () => {
+      if (!disposed) recoveryRefreshRequired = true;
+    },
     retain,
     check,
     start,

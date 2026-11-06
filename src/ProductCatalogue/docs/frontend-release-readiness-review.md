@@ -4,6 +4,18 @@ Review baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`
 
 This review focuses on Product Catalogue frontend readiness for controlled user testing. It identifies release risks, backend dependencies, smoke-test findings, and follow-up hardening work.
 
+## October 2026 demo-readiness addendum
+
+**Current planning baseline:** `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26). The original review and its 2026-07-16 smoke results remain historical evidence for the **older** baseline shown above. They do not prove that today's frontend and backend have passed a complete new release test. Use the dedicated [demo-readiness plan](demo-readiness-plan.md) for current acceptance.
+
+- FI-027 Product search is now persistently visible in the Main-map navbar, and Locator opens an independent geographic search. The follow-up Locator light-mode hover correction was committed at the current baseline. Verify navbar keyboard/hover/light/dark behavior in the demo environment.
+- FI-029 now renders one unified, icon-only Pause/Resume, Discard, Send/Accept and Tools action row. The owner manually inspected the available ENC packages and reported no apparent UI regressions; the implementation was committed at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`. The historical Freeze/Export/Cancel Export checklist below does **not** describe the current popup. Ordinary/non-package mutation dispatch remains disabled without a verified source-owned contract; Send/Accept availability must be read from the current backend/demo documentation, not inferred from this historic review.
+- FI-043 still needs consolidated post-FI-027/FI-029 Introduction verification on Main map, Dashboard, Analyze and Review. Do not report it as completed solely because older route flows passed a smoke test.
+- Report-link functionality, backend-defined capabilities and source relationships remain subject to their established contracts. Demo scripts must not treat unavailable operations or placeholder content as successful workflows.
+- `npm run check`, real browser smoke, light/dark keyboard/focus checks and deployment/server smoke are distinct evidence categories. Record commit, environment, pass/fail, skipped steps and backend constraints for each.
+
+**Current release decision:** _Not yet certified for a new demo release._ No new P0 defect is asserted here, but an end-to-end demo smoke and FI-043 pass must be recorded before calling this baseline demo-ready. Preserve the former review below as a dated snapshot, not today's acceptance statement.
+
 ## Decision
 
 The frontend has passed a comprehensive smoke test and is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. No frontend defects or P0 blockers were identified in the tested flows.

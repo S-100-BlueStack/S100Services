@@ -79,10 +79,19 @@ function createMemoryStorage(initial = {}) {
 function createMapAdapter() {
   const rendered = new Map();
   const discarded = [];
+  const targetedPublications = [];
   let candidateNumber = 0;
   return {
     rendered,
     discarded,
+    targetedPublications,
+    publishProductStatus({ source, datasetName, attributes, isCurrent }) {
+      if (!isCurrent()) return { published: false, reason: "superseded" };
+      const layers = rendered.get(source.id)?.layers ?? [];
+      if (!layers.length) return { published: false, reason: "missing-graphic" };
+      targetedPublications.push({ sourceId: source.id, datasetName, attributes });
+      return { published: true, changed: true, layers };
+    },
     async prepareSource({ source, generation, normalized }) {
       candidateNumber += 1;
       return {
@@ -119,6 +128,8 @@ function createMapAdapter() {
 function createHarness({
   enabledSourceIds = [],
   loadSource,
+  loadTargetedStatus,
+  normalizeTargetedStatus,
   registry = createDataSourceRegistry({
     configuredSourceIds: ["paper-charts", "s102"],
     isDevelopment: true,
@@ -139,6 +150,8 @@ function createHarness({
       })),
     normalizeSource: async (payload, source) => ({ payload, sourceId: source.id }),
     mapAdapter,
+    loadTargetedStatus,
+    normalizeTargetedStatus,
     lifecycle: {
       emit(name, detail) {
         lifecycleEvents.push({ name, detail });
@@ -740,4 +753,214 @@ test("production initialization cleans retired fixture selection from a previous
     enabledSourceIds: [],
   });
   assert.deepEqual(harness.controller.getActiveSourceIds(), []);
+});
+
+test("targeted Product status publishes through source lifecycle without loading all AOIs", async () => {
+  const sourceId = "s101";
+  const calls = [];
+  const h = createHarness({
+    registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+    loadSource: async () => {
+      calls.push("AOI");
+      return [];
+    },
+    loadTargetedStatus: async (_source, datasetName) => {
+      calls.push(`status:${datasetName}`);
+      return { status: 1 };
+    },
+    normalizeTargetedStatus: (value) => value,
+  });
+  await h.controller.activateSource(sourceId);
+  const previousGeneration = h.controller.getState(sourceId).generation;
+  const result = await h.controller.refreshProductStatus(sourceId, "PRIMARY");
+  assert.equal(result.success, true);
+  assert.equal(result.changed, true);
+  assert.deepEqual(calls, ["AOI", "status:PRIMARY"]);
+  assert.equal(h.mapAdapter.targetedPublications.length, 1);
+  assert.equal(h.controller.getState(sourceId).generation, previousGeneration + 1);
+  assert.equal(h.lifecycleEvents.at(-1).name, "refreshed");
+  assert.equal(h.lifecycleEvents.at(-1).detail.reason, "targeted-product-status");
+  h.controller.destroy();
+});
+
+test("targeted status read is superseded by a full source reload", async () => {
+  const pending = deferred();
+  const sourceId = "s101";
+  const h = createHarness({
+    registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+    loadTargetedStatus: () => pending.promise,
+    normalizeTargetedStatus: (value) => value,
+  });
+  await h.controller.activateSource(sourceId);
+  const older = h.controller.refreshProductStatus(sourceId, "PRIMARY");
+  await h.controller.activateSource(sourceId);
+  pending.resolve({ status: 15 });
+  assert.equal((await older).stale, true);
+  assert.equal(h.mapAdapter.targetedPublications.length, 0);
+  h.controller.destroy();
+});
+
+test("targeted status read cannot reactivate disabled source or publish after disable", async () => {
+  const pending = deferred();
+  const sourceId = "s101";
+  const h = createHarness({
+    registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+    loadTargetedStatus: () => pending.promise,
+    normalizeTargetedStatus: (value) => value,
+  });
+  await h.controller.activateSource(sourceId);
+  const older = h.controller.refreshProductStatus(sourceId, "PRIMARY");
+  await h.controller.deactivateSource(sourceId);
+  pending.resolve({ status: 15 });
+  assert.equal((await older).stale, true);
+  assert.equal(h.mapAdapter.targetedPublications.length, 0);
+  assert.equal(h.controller.getState(sourceId).enabled, false);
+  h.controller.destroy();
+});
+
+test("consecutive targeted status transitions retain source ownership without a full AOI reload", async () => {
+  const sourceId = "s101";
+  const read = [];
+  let nextStatus = 9;
+  const h = createHarness({
+    registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+    loadSource: async () => {
+      read.push("AOI");
+      return [];
+    },
+    loadTargetedStatus: async () => {
+      read.push(`status:${nextStatus}`);
+      return { status: nextStatus };
+    },
+    normalizeTargetedStatus: (value) => value,
+  });
+  try {
+    await h.controller.activateSource(sourceId);
+    const initialGeneration = h.controller.getState(sourceId).generation;
+    for (const [index, status] of [9, 15, 1].entries()) {
+      nextStatus = status;
+      const result = await h.controller.refreshProductStatus(sourceId, "PRIMARY");
+      assert.equal(
+        result.success,
+        true,
+        `Transition ${index + 1} was rejected: ${JSON.stringify(result)}`
+      );
+      assert.equal(result.changed, true);
+      assert.equal(h.controller.getState(sourceId).generation, initialGeneration + index + 1);
+      assert.equal(h.mapAdapter.targetedPublications.at(-1).attributes.status, status);
+    }
+    assert.deepEqual(read, ["AOI", "status:9", "status:15", "status:1"]);
+    assert.equal(h.mapAdapter.targetedPublications.length, 3);
+    assert.equal(h.lifecycleEvents.filter((event) => event.name === "refreshed").length, 3);
+  } finally {
+    h.controller.destroy();
+  }
+});
+
+for (const completionOrder of [
+  ["A", "B"],
+  ["B", "A"],
+]) {
+  test(`concurrent targeted statuses preserve both Products and source generation (${completionOrder.join(" then ")})`, async () => {
+    const sourceId = "s101";
+    const reads = new Map([
+      ["A", deferred()],
+      ["B", deferred()],
+    ]);
+    const h = createHarness({
+      registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+      loadTargetedStatus: (_source, datasetName) => reads.get(datasetName).promise,
+      normalizeTargetedStatus: (value) => value,
+    });
+    try {
+      await h.controller.activateSource(sourceId);
+      const initialGeneration = h.controller.getState(sourceId).generation;
+      const a = h.controller.refreshProductStatus(sourceId, "A");
+      const b = h.controller.refreshProductStatus(sourceId, "B");
+      for (const name of completionOrder) {
+        reads.get(name).resolve({ status: name });
+        // Wait for the status owner to publish before the next completion.
+        await (name === "A" ? a : b);
+      }
+      assert.deepEqual(await Promise.all([a, b]), [
+        { sourceId, success: true, changed: true },
+        { sourceId, success: true, changed: true },
+      ]);
+      assert.deepEqual(
+        h.mapAdapter.targetedPublications.map(({ datasetName }) => datasetName),
+        completionOrder
+      );
+      assert.equal(h.controller.getState(sourceId).generation, initialGeneration + 2);
+      assert.equal(
+        h.lifecycleEvents.filter((event) => event.detail.reason === "targeted-product-status")
+          .length,
+        2
+      );
+    } finally {
+      h.controller.destroy();
+    }
+  });
+}
+
+for (const operation of ["disable", "reset", "replace", "destroy"]) {
+  test(`concurrent Product status requests cannot publish after ${operation}`, async () => {
+    const sourceId = "s101";
+    const reads = new Map([
+      ["A", deferred()],
+      ["B", deferred()],
+    ]);
+    const h = createHarness({
+      registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+      loadTargetedStatus: (_source, datasetName) => reads.get(datasetName).promise,
+      normalizeTargetedStatus: (value) => value,
+    });
+    try {
+      await h.controller.activateSource(sourceId);
+      const a = h.controller.refreshProductStatus(sourceId, "A");
+      const b = h.controller.refreshProductStatus(sourceId, "B");
+      if (operation === "disable") await h.controller.deactivateSource(sourceId);
+      if (operation === "reset") await h.controller.resetToDefaults();
+      if (operation === "replace") await h.controller.activateSource(sourceId);
+      if (operation === "destroy") h.controller.destroy();
+      reads.get("B").resolve({ status: 2 });
+      reads.get("A").resolve({ status: 1 });
+      assert.equal((await a).stale, true);
+      assert.equal((await b).stale, true);
+      assert.equal(h.mapAdapter.targetedPublications.length, 0);
+    } finally {
+      h.controller.destroy();
+    }
+  });
+}
+
+test("targeted failures after another Product publishes remain failures, not stale results", async () => {
+  const sourceId = "s101";
+  const aRead = deferred();
+  const bRead = deferred();
+  const h = createHarness({
+    registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+    loadTargetedStatus: (_source, name) => (name === "A" ? aRead.promise : bRead.promise),
+    normalizeTargetedStatus: (value) => value,
+  });
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    await h.controller.activateSource(sourceId);
+    const a = h.controller.refreshProductStatus(sourceId, "A");
+    const b = h.controller.refreshProductStatus(sourceId, "B");
+    bRead.resolve({ status: 2 });
+    assert.equal((await b).success, true);
+    aRead.reject(new Error("Status unavailable"));
+    const result = await a;
+    assert.equal(result.success, false);
+    assert.equal(result.stale, undefined);
+    assert.match(result.error.message, /Status unavailable/);
+    assert.deepEqual(
+      h.mapAdapter.targetedPublications.map((p) => p.datasetName),
+      ["B"]
+    );
+  } finally {
+    console.warn = originalWarn;
+    h.controller.destroy();
+  }
 });

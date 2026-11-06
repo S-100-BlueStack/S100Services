@@ -92,6 +92,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
     <div class="pc-onboarding-popover__meta"></div>
     <h2 id="pc-onboarding-step-title" class="pc-onboarding-popover__title"></h2>
     <p id="pc-onboarding-step-description" class="pc-onboarding-popover__description"></p>
+    <p class="pc-onboarding-popover__requirement" role="status" hidden></p>
     <div class="pc-onboarding-popover__actions">
       <span class="pc-onboarding-popover__spacer"></span>
       <button type="button" class="pc-onboarding-button pc-onboarding-button--secondary" data-action="back">Back</button>
@@ -122,6 +123,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
       nextDisabled = false,
       nextLabel = null,
       nextTitle = null,
+      requirementMessage = null,
       focusNext = true,
     }) {
       popover.dataset.stepId = step.id;
@@ -133,8 +135,8 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
       const backButton = popover.querySelector("[data-action='back']");
       const nextButton = popover.querySelector("[data-action='next']");
       backButton.disabled = index === 0;
-      nextButton.disabled = Boolean(nextDisabled);
       nextButton.textContent = nextLabel || (index === count - 1 ? "Finish" : "Next");
+      updateRequirement(popover, { nextDisabled, requirementMessage });
 
       if (nextTitle) {
         nextButton.title = nextTitle;
@@ -150,9 +152,14 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
         step,
       });
 
-      if (focusNext && !nextButton.disabled) {
-        nextButton.focus({ preventScroll: true });
+      if (focusNext) {
+        (nextButton.disabled ? popover.querySelector("[data-action='back']") : nextButton).focus({
+          preventScroll: true,
+        });
       }
+    },
+    updateNext({ nextDisabled, requirementMessage }) {
+      updateRequirement(popover, { nextDisabled, requirementMessage });
     },
     containsFocus() {
       return popover.contains(document.activeElement);
@@ -537,4 +544,12 @@ function getApplicationContentTop() {
 function getAction(event) {
   const target = event.target;
   return target instanceof Element ? target.closest("[data-action]")?.dataset.action : null;
+}
+
+function updateRequirement(popover, { nextDisabled, requirementMessage }) {
+  const next = popover.querySelector("[data-action='next']");
+  const message = popover.querySelector(".pc-onboarding-popover__requirement");
+  next.disabled = Boolean(nextDisabled);
+  message.hidden = !requirementMessage;
+  message.textContent = requirementMessage ?? "";
 }

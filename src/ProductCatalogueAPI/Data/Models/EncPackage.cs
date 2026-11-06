@@ -20,6 +20,10 @@ public sealed class EncPackage
     public DateTime ScanFromUtc { get; set; }
     /// <summary>Gets or sets the timestamp of the source scan that created this snapshot.</summary>
     public DateTime DetectedAtUtc { get; set; }
+    /// <summary>The UTC creation time of this shared snapshot; null only when an older package has no recorded build time.</summary>
+    public DateTime? BuiltAtUtc { get; set; }
+    /// <summary>Gets the source's current delivery Pause policy, projected from EncPackageControl without changing candidate states.</summary>
+    public bool IsPaused { get; set; }
     /// <summary>Gets or sets the YAML snapshot shared by both encoders.</summary>
     public string DatasetYaml { get; set; } = string.Empty;
     /// <summary>Gets or sets the YAML summary of the edits that triggered this package.</summary>
@@ -31,3 +35,10 @@ public sealed class EncPackage
     /// <summary>Gets or sets a package-level failure that requires acknowledgement.</summary>
     public string? ErrorMessage { get; set; }
 }
+
+/// <summary>Only these exact pre-send outputs may be cleaned up after the SQL transaction.</summary>
+public sealed record EncPackageDiscardOutput(string DatasetName, ProductSpecification Specification, int Edition, int Update);
+
+public enum EncPackageDiscardStatus { Discarded, NotFound, Conflict }
+
+public sealed record EncPackageDiscardResult(EncPackageDiscardStatus Status, IReadOnlyList<EncPackageDiscardOutput> Outputs);

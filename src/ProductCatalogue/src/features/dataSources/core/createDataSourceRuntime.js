@@ -8,7 +8,11 @@ import { createDataSourceController } from "../services/dataSourceController.js"
 import { createDataSourceDerivedStateCoordinator } from "../services/dataSourceDerivedStateCoordinator.js";
 import { createDataSourceLifecycle } from "../services/dataSourceLifecycle.js";
 import { createDataSourceLoader } from "../services/dataSourceLoader.js";
-import { normalizeDataSourcePayload } from "../services/dataSourceNormalizer.js";
+import { createTargetedProductStatusLoader } from "../services/targetedProductStatusLoader.js";
+import {
+  normalizeDataSourcePayload,
+  normalizeTargetedElectronicStatus,
+} from "../services/dataSourceNormalizer.js";
 import { createDataSourceProductStateCoordinator } from "../services/dataSourceProductStateCoordinator.js";
 import { initDataSourcePanel } from "../ui/dataSourcePanel.js";
 
@@ -35,6 +39,8 @@ export function createDataSourceRuntime({
     persistence,
     loadSource: createDataSourceLoader(),
     normalizeSource: normalizeDataSourcePayload,
+    loadTargetedStatus: createTargetedProductStatusLoader(),
+    normalizeTargetedStatus: normalizeTargetedElectronicStatus,
     mapAdapter,
     lifecycle,
     noticeError,

@@ -1,4 +1,6 @@
-﻿using System.IO.Compression;
+﻿using ProductCatalogueAPI.Data.Models;
+using System.Diagnostics;
+using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -11,50 +13,55 @@ namespace ProductCatalogueAPI.Services.SevenCs
     {
         private readonly HttpClient client;
         private readonly ILogger<SevenCsService> _logger;
+        private readonly Func<CancellationToken, Task> waitBeforeStatusPoll;
 
-        public SevenCsService(ILogger<SevenCsService> logger) {
+        public SevenCsService(ILogger<SevenCsService> logger)
+            : this(logger, new HttpClient(), cancellationToken => Task.Delay(500, cancellationToken)) {
+        }
+
+        internal SevenCsService(ILogger<SevenCsService> logger, HttpClient httpClient, Func<CancellationToken, Task> waitBeforeStatusPoll) {
             _logger = logger;
-            client = new HttpClient() {
-                BaseAddress = new Uri(@"https://sevencs.gst.dk:43222/api/"),
-            };
+            client = httpClient;
+            this.waitBeforeStatusPoll = waitBeforeStatusPoll;
+            client.BaseAddress ??= new Uri(@"https://sevencs.gst.dk:43222/api/");
+            // Large cells can take arbitrarily long; the caller's token controls cancellation.
+            client.Timeout = Timeout.InfiniteTimeSpan;
             client.DefaultRequestHeaders.Add("Accept-version", "1.5");
         }
 
-        /// <summary>Validates a dataset based on the publicationJob id.
-        /// <para>
-        /// Looks for publicationJobs in '\\nas.gst.dk\ncps\production\indigo\Jobs'. <br />
-        /// Estimated run time per dataset: 10-12 seconds.
-        /// </para>
-        /// </summary>
-        /// <returns>
-        /// ValidateDatasetResult.Success - if there are no errors. <br />
-        /// ValidateDatasetResult.HasCriticalErrors -  if there are critical errors <br />
-        /// ValidateDatasetResult.IncorrectEdition -  if ShallowIsolatedDangersUpdatedBathy occurs in an update <br />
-        /// ValidateDatasetResult.FailedToValidate -  if validation failed for any reason
-        /// </returns>
-        public async Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
-            // Build path
-            var datasetPath = ExportOutputPath.GetS101DatasetFilesDirectory(outputPath, datasetName, edition, update);
+        /// <summary>Uploads and validates one generated S-101 candidate.</summary>
+        /// <remarks>Waits without a validation deadline until analysis completes, fails, or the caller cancels.</remarks>
+        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) =>
+            ValidateDatasetAsync(datasetName, ProductSpecification.S101, edition, update, outputPath, cancellationToken);
 
+        /// <inheritdoc/>
+        public async Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, ProductSpecification productSpecification, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
             cancellationToken.ThrowIfCancellationRequested();
+            var datasetPath = productSpecification switch {
+                ProductSpecification.S101 => ExportOutputPath.GetS101DatasetFilesDirectory(outputPath, datasetName, edition, update),
+                ProductSpecification.S57 => ExportOutputPath.GetS57DatasetFilesDirectory(outputPath, datasetName, edition, update),
+                _ => throw new NotSupportedException($"SevenCs validation is not supported for {productSpecification}.")
+            };
 
             _logger.LogInformation("SevenCs dataset validation begun. path: {path}", datasetPath);
 
             var uuid = Guid.NewGuid();
 
-            // Figure out DSNM
-            var dsnm = Directory.GetFiles(datasetPath, "*.000").Select(f => Path.GetFileNameWithoutExtension(f)).SingleOrDefault();
+            // Only this target cell belongs to the candidate; similarly prefixed cells are unrelated.
+            var baseFile = Directory.EnumerateFiles(datasetPath, "*.000")
+                .SingleOrDefault(file => string.Equals(Path.GetFileNameWithoutExtension(file), datasetName, StringComparison.OrdinalIgnoreCase));
+            if (baseFile is null || new FileInfo(baseFile).Length == 0)
+                throw new InvalidOperationException($"Could not find a non-empty base dataset for '{datasetName}'.");
+            var dsnm = Path.GetFileNameWithoutExtension(baseFile);
 
             _logger.LogInformation(".000 file detected. DSNM: {dsnm}", dsnm);
-            if (string.IsNullOrEmpty(dsnm))
-                throw new NullReferenceException($"Could not find .000 file in path: {datasetPath}");
 
             var directoryName = $"{dsnm}-{uuid}";
             var lastFile = "";
-            var isAuthorized = await GetIsAuthorized();
+            var isAuthorized = await GetIsAuthorized(cancellationToken);
 
             if (!isAuthorized)
-                await Authorize();
+                await Authorize(cancellationToken);
 
             var uploadedFiles = new List<RequestObj>();
 
@@ -67,18 +74,16 @@ namespace ProductCatalogueAPI.Services.SevenCs
                 .Where(file => {
                     var fileName = Path.GetFileName(file);
                     var extension = Path.GetExtension(fileName);
-                    return fileName.StartsWith(dsnm, StringComparison.CurrentCultureIgnoreCase) && pattern.IsMatch(extension);
+                    return string.Equals(Path.GetFileNameWithoutExtension(fileName), dsnm, StringComparison.OrdinalIgnoreCase) && pattern.IsMatch(extension);
                 })
                 .OrderBy(file => {
                     var ext = Path.GetExtension(file).TrimStart('.'); // Remove the dot
                     return int.TryParse(ext, out int num) ? num : int.MaxValue;
-                });
+                }).ToArray();
 
             // Upload each file in the correct order
             foreach (var file in orderedFiles) {
                 var fileName = Path.GetFileName(file);
-
-                var fileNameNoExtension = fileName.Split(".").FirstOrDefault()!;
 
                 var requestObj = new RequestObj() {
                     DatasetName = fileName,
@@ -86,36 +91,34 @@ namespace ProductCatalogueAPI.Services.SevenCs
                 };
 
                 // Upload file
-                var uploaded = await UploadFile(requestObj, datasetPath);
+                var uploaded = await UploadFile(requestObj, datasetPath, cancellationToken);
 
-                if (uploaded)
-                    uploadedFiles.Add(requestObj);
-                else {
+                if (!uploaded) {
                     // Wait one second and retry once more
                     await Task.Delay(1000, cancellationToken);
 
-                    var reUpload = await UploadFile(requestObj, datasetPath);
+                    var reUpload = await UploadFile(requestObj, datasetPath, cancellationToken);
 
                     if (!reUpload)
                         throw new Exception($"Could not upload file: {fileName}. Folderpath: {datasetPath}. FilesToUpload: {orderedFiles.Count()}");
                 }
 
-                // Retrieve the newest update for retrieving the summary
-                lastFile = dsnm + Path.GetExtension(file);
+                // A successful retry must also be included in the analysis request.
+                uploadedFiles.Add(requestObj);
+                // Retrieve the newest update for retrieving the summary.
+                lastFile = fileName;
             }
 
             if (uploadedFiles.Count == 0)
                 throw new Exception("No files was uploaded to the SevenCs API");
 
             // Add files to analyzer queue
-            await StartAnalysis(directoryName, [.. uploadedFiles.Select(e => e.DatasetName)]);
+            await StartAnalysis(directoryName, [.. uploadedFiles.Select(e => e.DatasetName)], cancellationToken);
 
-            var analyzed = await GetDatasetStatus(directoryName, lastFile, DatasetStatus.Analyzed);
-
-            if (!analyzed) throw new Exception($"Dataset was unable to be analyzed. Dataset: {dsnm}. LastFile: {lastFile}. DirectoryName: {directoryName}");
+            await WaitForAnalysisAsync(directoryName, lastFile, cancellationToken);
 
             // Retrieve summary for the newest update
-            var summary = await GetAnalysisSummary(directoryName, lastFile);
+            var summary = await GetAnalysisSummary(directoryName, lastFile, cancellationToken);
 
             // set DSNM
             summary.DSNM = dsnm;
@@ -167,7 +170,7 @@ namespace ProductCatalogueAPI.Services.SevenCs
 
             return new SevenCsValidationResult(summary, diagnostics);
         }
-        private async Task Authorize() {
+        private async Task Authorize(CancellationToken cancellationToken) {
             var token = Environment.GetEnvironmentVariable("productcatalogue_7cs_credentials");
             if (string.IsNullOrEmpty(token)) {
                 throw new Exception("Could not find environment variable for 'productcatalogue_7cs_credentials'");
@@ -181,9 +184,9 @@ namespace ProductCatalogueAPI.Services.SevenCs
                 password = credentials[1]
             };
 
-            var response = await client.PostAsJsonAsync("sign-in", obj);
+            using var response = await client.PostAsJsonAsync("sign-in", obj, cancellationToken);
 
-            var bearerToken = await response.Content.ReadAsStringAsync() ?? string.Empty;
+            var bearerToken = await response.Content.ReadAsStringAsync(cancellationToken) ?? string.Empty;
 
             if (!response.IsSuccessStatusCode || string.IsNullOrEmpty(bearerToken)) {
                 throw new Exception($"Could not get bearertoken for SevenCs api. status code: {response.StatusCode}");
@@ -191,41 +194,41 @@ namespace ProductCatalogueAPI.Services.SevenCs
 
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
         }
-        private async Task<bool> GetIsAuthorized() {
+        private async Task<bool> GetIsAuthorized(CancellationToken cancellationToken) {
             try {
-                var response = await client.GetAsync("test/expert-user");
+                using var response = await client.GetAsync("test/expert-user", cancellationToken);
 
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception) {
+            catch (Exception ex) when (ex is not OperationCanceledException) {
                 return false;
             }
         }
-        private async Task<bool> UploadFile(RequestObj requestObj, string folderPath) {
+        private async Task<bool> UploadFile(RequestObj requestObj, string folderPath, CancellationToken cancellationToken) {
             var file = new FileInfo(Path.Combine(folderPath, requestObj.DatasetName));
 
             using var content = new MultipartFormDataContent();
 
             // Read the file's binary content
-            var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(file.FullName));
+            var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(file.FullName, cancellationToken));
             fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-            var multipartContent = new MultipartFormDataContent
+            using var multipartContent = new MultipartFormDataContent
             {
                 // Add the file binary content
                 { fileContent, "file", file.Name },
                 { new StringContent(requestObj.DirectoryName), "directory-name" }
             };
 
-            var response = await client.PutAsync("dataset", multipartContent);
+            using var response = await client.PutAsync("dataset", multipartContent, cancellationToken);
 
             _logger.LogInformation($"File {file.Name} uploaded with status code: {response.StatusCode}");
 
             return response.IsSuccessStatusCode;
 
         }
-        private async Task<bool> StartAnalysis(string directoryName, string[] datasets) {
-            var form = new MultipartFormDataContent
+        private async Task StartAnalysis(string directoryName, string[] datasets, CancellationToken cancellationToken) {
+            using var form = new MultipartFormDataContent
                 {
                     { new StringContent(directoryName), "directory-name" },
                 };
@@ -234,37 +237,48 @@ namespace ProductCatalogueAPI.Services.SevenCs
                 form.Add(new StringContent(val), "dataset-name");
             }
 
-            var response = await client.PostAsync("analyze", form);
-
-            return response.IsSuccessStatusCode;
+            using var response = await client.PostAsync("analyze", form, cancellationToken);
+            response.EnsureSuccessStatusCode();
         }
-        private async Task<bool> GetDatasetStatus(string directoryName, string datasetName, DatasetStatus expectedStatus = DatasetStatus.Uploaded) {
-            int i = 1;
-            int maxAttemps = 120;    // Arbitrary. How long should the worst case scenario take? ~ 1minute per dataset
-            while (maxAttemps >= i) {
-                var dict = new Dictionary<string, string>()
-                {
-                    {"directory-name", directoryName},
-                    {"dataset-name", datasetName}
-                };
+        internal async Task WaitForAnalysisAsync(string directoryName, string datasetName, CancellationToken cancellationToken) {
+            var queryParams = CreateQueryParameters(new Dictionary<string, string> {
+                { "directory-name", directoryName },
+                { "dataset-name", datasetName },
+            });
+            var elapsed = Stopwatch.StartNew();
+            DatasetStatus? previousStatus = null;
 
-                var queryParams = CreateQueryParameters(dict);
+            while (true) {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var response = await client.GetAsync("dataset-status" + queryParams, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                var statusText = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim().Trim('"');
+                if (!Enum.TryParse<DatasetStatus>(statusText, true, out var status) || !Enum.IsDefined(typeof(DatasetStatus), status))
+                    throw new InvalidOperationException($"SevenCs returned an unknown analysis status. DatasetName: {datasetName}. DirectoryName: {directoryName}. Status: {statusText}");
 
-                var response = await client.GetAsync("dataset-status" + queryParams);
+                if (status != previousStatus) {
+                    _logger.LogInformation("SevenCs analysis status. DatasetName: {DatasetName}. DirectoryName: {DirectoryName}. Status: {Status}. ElapsedSeconds: {ElapsedSeconds}.",
+                        datasetName, directoryName, status, elapsed.Elapsed.TotalSeconds);
+                    previousStatus = status;
+                }
 
-                var content = await response.Content.ReadAsStringAsync();
+                switch (status) {
+                    case DatasetStatus.Analyzed:
+                        return;
+                    case DatasetStatus.FailedToAnalyze:
+                    case DatasetStatus.ProductSpecificationNotLicensed:
+                        throw new InvalidOperationException($"SevenCs analysis failed. DatasetName: {datasetName}. DirectoryName: {directoryName}. Status: {status}.");
+                    case DatasetStatus.Uploaded:
+                    case DatasetStatus.PendingAnalysis:
+                    case DatasetStatus.BeingAnalyzed:
+                        break;
+                }
 
-                if (response.IsSuccessStatusCode && content.Trim('\"').Equals(expectedStatus.ToString(), StringComparison.CurrentCultureIgnoreCase))
-                    return true;
-
-                i++;
-
-                // Hold your horses - avoid Timeout from API
-                await Task.Delay(500);
+                // Space out status requests without imposing a deadline on the analysis.
+                await waitBeforeStatusPoll(cancellationToken);
             }
-            return false;
         }
-        private async Task<SummaryResponse> GetAnalysisSummary(string directoryName, string datasetName) {
+        private async Task<SummaryResponse> GetAnalysisSummary(string directoryName, string datasetName, CancellationToken cancellationToken) {
             var dict = new Dictionary<string, string>()
             {
                 {"directory-name", directoryName},
@@ -272,11 +286,11 @@ namespace ProductCatalogueAPI.Services.SevenCs
             };
 
             var queryParams = CreateQueryParameters(dict);
-            var response = await client.GetAsync("analysis-summary" + queryParams);
+            using var response = await client.GetAsync("analysis-summary" + queryParams, cancellationToken);
 
             response.EnsureSuccessStatusCode();
 
-            var summary = await response.Content.ReadFromJsonAsync<SummaryResponse>();
+            var summary = await response.Content.ReadFromJsonAsync<SummaryResponse>(cancellationToken: cancellationToken);
             return summary ?? throw new InvalidOperationException("SevenCs returned an empty analysis summary.");
         }
         private async Task<SevenCsDiagnosticArtifact> GetAnalyzerLogfile(string datasetName, string directory, string folder, CancellationToken cancellationToken) {

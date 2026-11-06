@@ -15,13 +15,13 @@ function createLayer(attributes) {
   return { graphic, layer };
 }
 
-test("package source opts in while simple source remains scalar", () => {
+test("packages filter only by aggregate status and ordinary products remain scalar", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   const pkg = registry.byId.get("s101");
   const simple = registry.byId.get("paper-charts");
+  assert.equal(pkg.filtering.definitions[0].fieldName, "packageStatus");
   assert.equal(typeof pkg.filtering.definitions[0].readValues, "function");
   assert.deepEqual(simple.filtering.definitions, ["status", "displayScale", "usageBand"]);
-  assert.equal(pkg.workUnit.kind, "package");
 
   const filterService = createAttributeFilterService({
     getStatuses: () => [],
@@ -29,47 +29,59 @@ test("package source opts in while simple source remains scalar", () => {
   });
   const searchIndex = createSourceAwareProductSearchIndex();
   const listeners = new Map();
-  const lifecycle = {
-    subscribe(event, handler) {
-      listeners.set(event, handler);
-      return () => listeners.delete(event);
-    },
-  };
   const coordinator = createDataSourceDerivedStateCoordinator({
-    lifecycle,
+    lifecycle: {
+      subscribe(event, handler) {
+        listeners.set(event, handler);
+        return () => listeners.delete(event);
+      },
+    },
     filterService,
     productSearchIndex: searchIndex,
   });
-  const baseline = createLayer({ datasetName: "P1", productKey: "P1", status: "R" });
+  const original = createLayer({
+    datasetName: "P1",
+    productKey: "P1",
+    status: 11,
+    workUnitStatus: {
+      packageStatus: 4,
+      workflowStatus: 11,
+      members: [
+        { key: "s101", status: 15 },
+        { key: "s57", status: 11 },
+      ],
+    },
+  });
   listeners.get("activated")({
     source: pkg,
     sourceId: pkg.id,
     generation: 1,
-    layers: [baseline.layer],
+    layers: [original.layer],
   });
-  assert.equal(
-    filterService.getValuesForField(pkg.id, "status").find((entry) => entry.value === "R").count,
-    1
-  );
-  assert.equal(filterService.getLayerMetadata(pkg.id).totalCount, 1);
+  const values = () =>
+    Object.fromEntries(
+      filterService
+        .getValuesForField(pkg.id, "packageStatus")
+        .map(({ value, count }) => [value, count])
+    );
+  assert.equal(values()["4"], 1);
+  assert.equal(filterService.getValuesForField(pkg.id, "status").length, 0);
   assert.equal(searchIndex.getEntries().length, 1);
-  filterService.setFilter(
-    pkg.id,
-    "status",
-    ["R"],
-    filterService.getValuesForField(pkg.id, "status").length
-  );
-  assert.equal(filterService.matchesGraphic(baseline.graphic, baseline.layer), true);
 
-  const enriched = createLayer({
-    datasetName: "P1",
-    productKey: "P1",
-    status: "R",
+  filterService.setFilter(pkg.id, "packageStatus", ["4"], 5);
+  assert.equal(filterService.matchesGraphic(original.graphic, original.layer), true);
+  filterService.setFilter(pkg.id, "packageStatus", ["2"], 5);
+  assert.equal(filterService.matchesGraphic(original.graphic, original.layer), false);
+
+  const changedMembers = createLayer({
+    ...original.graphic.attributes,
+    status: 15,
     workUnitStatus: {
-      workflowStatus: "W",
+      packageStatus: 4,
+      workflowStatus: 15,
       members: [
-        { key: "arbitrary-one", status: "M" },
-        { key: "arbitrary-two", status: "M" },
+        { key: "s101", status: 2 },
+        { key: "s57", status: 2 },
       ],
     },
   });
@@ -77,36 +89,28 @@ test("package source opts in while simple source remains scalar", () => {
     source: pkg,
     sourceId: pkg.id,
     generation: 2,
-    layers: [enriched.layer],
+    layers: [changedMembers.layer],
   });
-  assert.equal(
-    filterService.getValuesForField(pkg.id, "status").find((entry) => entry.value === "M").count,
-    1
-  );
-  filterService.setFilter(
-    pkg.id,
-    "status",
-    ["M"],
-    filterService.getValuesForField(pkg.id, "status").length
-  );
-  assert.equal(filterService.getLayerMetadata(pkg.id).visibleCount, 1);
-  assert.equal(searchIndex.getEntries().length, 1);
-  filterService.setFilter(
-    pkg.id,
-    "status",
-    ["W"],
-    filterService.getValuesForField(pkg.id, "status").length
-  );
-  assert.equal(filterService.getLayerMetadata(pkg.id).visibleCount, 1);
+  assert.equal(values()["4"], 1);
+  assert.equal(filterService.matchesGraphic(changedMembers.graphic, changedMembers.layer), false);
+  filterService.setFilter(pkg.id, "packageStatus", ["4"], 5);
+  assert.equal(filterService.matchesGraphic(changedMembers.graphic, changedMembers.layer), true);
+
+  const unknown = createLayer({ datasetName: "P1", productKey: "P1", status: 15 });
+  listeners.get("refreshed")({
+    source: pkg,
+    sourceId: pkg.id,
+    generation: 3,
+    layers: [unknown.layer],
+  });
+  assert.equal(filterService.matchesGraphic(unknown.graphic, unknown.layer), false);
+  assert.equal(values().unknown, 1);
 
   const ordinary = createLayer({
     datasetName: "S1",
     productKey: "S1",
-    status: "R",
-    workUnitStatus: {
-      workflowStatus: "W",
-      members: [{ key: "arbitrary", status: "M" }],
-    },
+    status: 11,
+    workUnitStatus: { packageStatus: 4, members: [{ status: 15 }] },
   });
   listeners.get("activated")({
     source: simple,
@@ -114,13 +118,10 @@ test("package source opts in while simple source remains scalar", () => {
     generation: 1,
     layers: [ordinary.layer],
   });
-  assert.equal(
-    filterService.getValuesForField(simple.id, "status").some((entry) => entry.value === "M"),
-    false
+  assert.deepEqual(
+    filterService.getValuesForField(simple.id, "status").map(({ value, count }) => [value, count]),
+    [["11", 1]]
   );
-  assert.equal(
-    filterService.getValuesForField(simple.id, "status").find((entry) => entry.value === "R").count,
-    1
-  );
+  assert.equal(filterService.getValuesForField(simple.id, "packageStatus").length, 0);
   coordinator.destroy();
 });

@@ -1,4 +1,8 @@
-import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
+import {
+  packageStatusColorConfig,
+  statusColorConfig,
+} from "../../../shared/config/colorsConfig.js";
+import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
 
 const DEFAULT_FILL_ALPHA = 0.15;
 const DEFAULT_OUTLINE_ALPHA = 0.7;
@@ -27,6 +31,23 @@ export function getCorrectionSymbol(status, { fillAlpha = DEFAULT_FILL_ALPHA } =
     outline: {
       color: withAlpha(cfg.outline, DEFAULT_OUTLINE_ALPHA),
       width: 1,
+    },
+  };
+}
+
+export function getPackageCorrectionSymbol(status) {
+  const value = normalizeEncPackageStatus(status);
+  const cfg = packageStatusColorConfig[value];
+
+  // Do not show missing/unsupported backend status as Idle. A dashed neutral
+  // outline makes an unclassified Package distinguishable from a known state.
+  return {
+    type: "simple-fill",
+    color: cfg?.fill ?? "rgba(85, 85, 85, 0.08)",
+    outline: {
+      color: cfg?.outline ?? "rgba(85, 85, 85, 0.95)",
+      width: 1.5,
+      ...(cfg ? {} : { style: "dash" }),
     },
   };
 }

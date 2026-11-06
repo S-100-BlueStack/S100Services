@@ -6,7 +6,8 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 export function initMainMapSearchControls() {
   const header = document.getElementById("header");
-  if (!header || !document.body) return createNoopSearchControls();
+  const headerActions = header?.querySelector(".header-right");
+  if (!headerActions) return createNoopSearchControls();
 
   document.getElementById(SEARCH_CONTROLS_ID)?.remove();
   document.getElementById(PRODUCT_SEARCH_HOST_ID)?.remove();
@@ -25,30 +26,23 @@ export function initMainMapSearchControls() {
   locatorHost.className = "main-map-locator main-map-search-controls__locator";
 
   host.append(productSearchHost, locatorHost);
-  document.body.appendChild(host);
+  headerActions.prepend(host);
+  header.classList.add("has-main-map-search");
 
   const locatorLayout = createLocatorLayoutTransitionController({
     host,
     transitionTarget: locatorHost,
     prefersReducedMotion: () => window.matchMedia?.(REDUCED_MOTION_QUERY)?.matches === true,
   });
-  const updatePosition = () => {
-    const headerBottom = document.getElementById("header")?.getBoundingClientRect().bottom ?? 0;
-    host.style.setProperty("--main-map-search-controls-top", `${Math.max(8, headerBottom + 10)}px`);
-  };
-
-  updatePosition();
-  window.addEventListener("resize", updatePosition);
-
   return {
     host,
     productSearchHost,
     locatorHost,
     setLocatorOpen: locatorLayout.setOpen,
     destroy() {
-      window.removeEventListener("resize", updatePosition);
       locatorLayout.destroy();
       host.remove();
+      header.classList.remove("has-main-map-search");
     },
   };
 }

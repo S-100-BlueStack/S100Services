@@ -1,4 +1,5 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
+import "@esri/calcite-components/components/calcite-link";
 import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
   getEnabledAnalyzeDatasetNames,
@@ -19,6 +20,12 @@ export function renderAnalyzeSidebar({
   const panel = getOrCreateAnalyzePanel();
   const calcitePanel = panel.querySelector("calcite-panel");
   const content = panel.querySelector(".analyze-sidebar__content");
+  const pickerHadFocus =
+    content.contains(document.activeElement) &&
+    Boolean(document.activeElement.closest?.(".pc-product-picker"));
+  const activePicker = pickerHadFocus ? document.activeElement.closest(".pc-product-picker") : null;
+  const pickerDraft = activePicker?.querySelector(".pc-product-picker__input")?.value ?? "";
+  const pickerInputFocused = document.activeElement?.matches?.(".pc-product-picker__input");
   const normalizedDatasetItems = normalizeAnalyzeDatasetItems(datasetItems ?? datasetNames);
   const enabledDatasetNames =
     datasetNames === undefined
@@ -32,6 +39,15 @@ export function renderAnalyzeSidebar({
       ? createLoadingState(enabledDatasetNames)
       : createProductsContent(products, normalizedDatasetItems)
   );
+  // The picker dispatches selection before its click/submit handler returns.
+  // Restore focus to its replacement, not to the detached input or option.
+  if (pickerHadFocus) {
+    const replacement = content.querySelector(".pc-product-picker__input");
+    if (replacement) {
+      replacement.value = pickerDraft;
+      if (pickerInputFocused) replacement.focus({ preventScroll: true });
+    }
+  }
 }
 
 function getOrCreateAnalyzePanel() {
@@ -306,7 +322,8 @@ function createProductCard(product) {
 
   const status = document.createElement("span");
   status.className = "analyze-product-card__status";
-  status.textContent = getStatusName(product.status);
+  status.textContent =
+    product.workUnit?.kind === "package" ? "ENC package" : getStatusName(product.status);
 
   summary.appendChild(title);
   summary.appendChild(status);
@@ -321,6 +338,18 @@ function createProductCard(product) {
         message: product.loadError ?? `Workspace data for ${product.datasetName} is unavailable.`,
       })
     );
+    card.append(summary, content);
+    return card;
+  }
+
+  if (product.members) {
+    for (const member of product.members) {
+      const section = createProductCard(member);
+      section.classList.add("analyze-package-member");
+      section.querySelector(".analyze-product-card__title").textContent =
+        `${member.memberLabel} · ${member.datasetName}`;
+      content.appendChild(section);
+    }
     card.append(summary, content);
     return card;
   }
@@ -396,6 +425,8 @@ function createXmlBlock(xml, availability = null) {
   return details;
 }
 
+let nextValidationScrollLabelId = 0;
+
 function createInternalValidationReportsBlock(reports = [], availability = null) {
   const details = document.createElement("details");
   details.className = "analyze-internal-validation";
@@ -410,6 +441,13 @@ function createInternalValidationReportsBlock(reports = [], availability = null)
 
   const content = document.createElement("div");
   content.className = "analyze-internal-validation__content";
+  if (validReports.length > 1) {
+    content.classList.add("analyze-internal-validation__content--scrollable", "pc-scrollbar");
+    content.setAttribute("role", "region");
+    summary.id = `pc-analyze-validation-scroll-label-${++nextValidationScrollLabelId}`;
+    content.setAttribute("aria-labelledby", summary.id);
+    content.tabIndex = 0;
+  }
   if (!hasReports) {
     content.appendChild(
       createInternalValidationStateMessage({
@@ -466,7 +504,7 @@ function createInternalValidationReport(report, index) {
     content.appendChild(summaryText);
   }
   if (report.url) {
-    const link = document.createElement("a");
+    const link = document.createElement("calcite-link");
     link.href = report.url;
     link.textContent = "Download validation file";
     link.download = report.title || "";

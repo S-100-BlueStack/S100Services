@@ -38,15 +38,18 @@ namespace ProductCatalogueAPI.Jobs
             ArgumentNullException.ThrowIfNull(request);
             ValidateRequest(request);
 
-            return CreateSharedParameters(
+            var parameters = CreateSharedParameters(
                 request.DatasetName,
-                ExportOperationContract.ToPublicValue(request.OperationType),
-                request.ProductSpecification,
+                request.BuildPackage ? "NewExport" : ExportOperationContract.ToPublicValue(request.OperationType),
+                request.BuildPackage ? "S101/S57" : request.ProductSpecification,
                 request.ExpectedEdition,
                 request.ExpectedUpdate,
                 request.CorrelationId,
                 request.CreatedAtUtc
-            );
+            ).ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
+            parameters[ExportJobParameterNames.OperationId] = request.OperationId == Guid.Empty
+                ? Guid.NewGuid() : request.OperationId;
+            return parameters;
         }
 
         public static IReadOnlyDictionary<string, object?> CreateParameters(
@@ -64,7 +67,7 @@ namespace ProductCatalogueAPI.Jobs
                 request.CorrelationId,
                 request.CreatedAtUtc
             ).ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
-            parameters[ExportJobParameterNames.Mode] = SendToIcEncContract.SimulationMode;
+            parameters[ExportJobParameterNames.Mode] = request.Mode.ToString();
             parameters[ExportJobParameterNames.DeliveryStatus] = SendToIcEncContract.NotDeliveredStatus;
 
             return parameters;
@@ -117,9 +120,10 @@ namespace ProductCatalogueAPI.Jobs
         private static void ValidateRequest(SendToIcEncJobRequest request) {
             ValidateSharedRequest(request.DatasetName, request.CorrelationId);
 
-            if (request.Mode != SendToIcEncMode.Simulation) {
+            if (request.Mode is not (SendToIcEncMode.Simulation or SendToIcEncMode.Live) ||
+                request.Mode == SendToIcEncMode.Live && request.ProductSpecification is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
-                    "Send to IC-ENC jobs must use the Simulation mode."
+                    "Send to IC-ENC jobs must use a supported mode and live product specification."
                 );
             }
         }

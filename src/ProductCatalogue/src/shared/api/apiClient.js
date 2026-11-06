@@ -37,12 +37,18 @@ async function parseResponse(response) {
 
   let data = null;
 
-  try {
-    if (response.status !== 204) {
+  if (response.status !== 204) {
+    if (response.ok) {
+      // Successful responses must not hide a failed body read as valid empty data.
       data = isJson ? await response.json() : await response.text();
+    } else {
+      // Error bodies are optional: preserve the HTTP failure when parsing also fails.
+      try {
+        data = isJson ? await response.json() : await response.text();
+      } catch {
+        data = null;
+      }
     }
-  } catch {
-    data = null;
   }
 
   if (response.ok) {
@@ -78,7 +84,11 @@ export async function apiRequest(path, options = {}) {
       },
     });
 
-    return await parseResponse(response);
+    const result = await parseResponse(response);
+    if (abortContext.wasAborted()) {
+      throw new Error("The request was cancelled while reading its response.");
+    }
+    return result;
   } catch (error) {
     return {
       success: false,

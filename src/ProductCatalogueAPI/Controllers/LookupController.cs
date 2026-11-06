@@ -10,8 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace ProductCatalogueAPI.Controllers
 {
-    [AllowAnonymous]
-    // [Authorize("productmanager:access")]
+    [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
     public class LookupController(IOptionsMonitor<SendToIcEncOptions> sendToIcEncOptions) : ControllerBase

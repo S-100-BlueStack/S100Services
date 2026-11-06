@@ -47,6 +47,48 @@ public class ProductHistorySqlContractTests
         Assert.Contains("Id = @Id AND OperationId = @OperationId AND FinalizedAtUtc IS NULL", Assert.Single(connection.Commands).Sql);
     }
 
+    [Fact]
+    public async Task ExportCompletionReturnsTheInsertedIdentityInsideOneTransaction() {
+        using var connection = new RecordingConnection();
+        var exactId = Guid.NewGuid();
+        connection.QueryResults.Columns.Add("product_state_history_id", typeof(Guid));
+        connection.QueryResults.Rows.Add(exactId);
+        var repository = new ProductRepository(new RecordingFactory(connection));
+        var result = await repository.CompleteExportWithHistoryAsync(Guid.NewGuid(), "test", DateTime.UtcNow);
+        Assert.Equal(exactId, result);
+        var command = Assert.Single(connection.Commands);
+        Assert.True(command.HasTransaction);
+        Assert.Contains("OUTPUT INSERTED.product_state_history_id", command.Sql);
+        Assert.Contains("state = @Validating", command.Sql);
+        Assert.Contains("IF @@ROWCOUNT <> 1", command.Sql);
+        Assert.Equal(1, connection.Commits);
+    }
+
+    [Fact]
+    public async Task RecoveryChecksExactStateProductTargetAndVersionWithoutLatestRowInference() {
+        using var connection = new RecordingConnection();
+        var fixture = new HistoryRecoveryFixture();
+        var terminal = ProductCatalogueAPI.Services.History.ProductHistoryTerminal.Success(fixture.Request, fixture.Context.JobId, fixture.Result());
+        connection.QueryResults.Columns.Add("Id", typeof(Guid));
+        connection.QueryResults.Columns.Add("DatasetName", typeof(string));
+        connection.QueryResults.Columns.Add("ExportTarget", typeof(string));
+        connection.QueryResults.Columns.Add("State", typeof(int));
+        connection.QueryResults.Columns.Add("Edition", typeof(int));
+        connection.QueryResults.Columns.Add("Update", typeof(int));
+        connection.QueryResults.Rows.Add(fixture.StateId, "101dk001", "S101", (int)ProductState.ReadyForDistribution, 5, 0);
+        var repository = new ProductHistoryRecoveryRepository(new RecordingFactory(connection));
+        Assert.True(await repository.HasExactCompletionAsync(terminal));
+        Assert.False(await repository.HasExactCompletionAsync(terminal with { DatasetName = "OTHER" }));
+        Assert.False(await repository.HasExactCompletionAsync(terminal with { ExportTarget = "S57" }));
+        Assert.False(await repository.HasExactCompletionAsync(terminal with { ResultEdition = 6 }));
+        var command = connection.Commands[0];
+        Assert.Equal(fixture.StateId, command.Parameters["StateRecordId"]);
+        Assert.Contains("h.product_state_history_id = @StateRecordId", command.Sql);
+        Assert.Contains("e.OperationId <> @OperationId", command.Sql);
+        Assert.DoesNotContain("TOP", command.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("occurred_at_utc", command.Sql);
+    }
+
     private sealed class RecordingFactory(RecordingConnection connection) : DbConnectionFactory(new ConfigurationBuilder().Build())
     {
         public override IDbConnection Create() => connection;
@@ -56,6 +98,7 @@ public class ProductHistorySqlContractTests
 
     private sealed class RecordingConnection : DbConnection
     {
+        internal int Commits { get; set; }
         internal List<CapturedCommand> Commands { get; } = [];
         internal DataTable QueryResults { get; } = new();
         [AllowNull]
@@ -75,7 +118,7 @@ public class ProductHistorySqlContractTests
     {
         public override IsolationLevel IsolationLevel => IsolationLevel.ReadCommitted;
         protected override DbConnection DbConnection => connection;
-        public override void Commit() { }
+        public override void Commit() { connection.Commits++; }
         public override void Rollback() { }
     }
 

@@ -16,16 +16,17 @@ namespace TestProductCatalogueAPI;
 public sealed class ExportAsyncControllerTests
 {
     [Fact]
-    public async Task NewEditionInfersS101FromTheCatalogueProduct() {
+    public async Task NewExportQueuesTheS101Package() {
         var jobs = new RecordingJobService();
         var controller = CreateController(jobs);
 
-        var result = await controller.NewEdition("101DK001", CancellationToken.None);
+        var result = await controller.NewExport("101DK001", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("101DK001", jobs.Request!.DatasetName);
         Assert.Equal("S101", jobs.Request.ProductSpecification);
         Assert.Equal(ExportOperationType.ExportEdition, jobs.Request.OperationType);
+        Assert.True(jobs.Request.BuildPackage);
     }
 
     [Fact]
@@ -33,12 +34,13 @@ public sealed class ExportAsyncControllerTests
         var jobs = new RecordingJobService();
         var controller = CreateController(jobs, edition: 0, update: 0);
 
-        var result = await controller.NewEdition("101DK001", CancellationToken.None);
+        var result = await controller.NewExport("101DK001", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal(ExportOperationType.NewDataset, jobs.Request!.OperationType);
         Assert.Equal(0, jobs.Request.ExpectedEdition);
         Assert.Equal(0, jobs.Request.ExpectedUpdate);
+        Assert.True(jobs.Request.BuildPackage);
     }
 
     [Fact]
@@ -55,15 +57,14 @@ public sealed class ExportAsyncControllerTests
     }
 
     [Fact]
-    public async Task S57JobUsesTheS57ProductNamedByTheCaller() {
+    public async Task NewExportRejectsAnS57ProductName() {
         var jobs = new RecordingJobService();
         var controller = CreateController(jobs);
 
-        var result = await controller.NewEdition("DK3BIDQE", CancellationToken.None);
+        var result = await controller.NewExport("DK3BIDQE", CancellationToken.None);
 
-        Assert.IsType<AcceptedResult>(result);
-        Assert.Equal("DK3BIDQE", jobs.Request!.DatasetName);
-        Assert.Equal("S57", jobs.Request.ProductSpecification);
+        Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.Null(jobs.Request);
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public sealed class ExportAsyncControllerTests
         var controller = CreateController(jobs);
         controller.HttpContext.Request.QueryString = new QueryString("?exportTarget=S57");
 
-        var result = await controller.NewEdition("101DK001", CancellationToken.None);
+        var result = await controller.NewExport("101DK001", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("S101", jobs.Request!.ProductSpecification);
@@ -101,6 +102,8 @@ public sealed class ExportAsyncControllerTests
     private sealed class FakeElectronicProductManager(int edition, int update) : IElectronicProductManager
     {
         public string OutputFolder => string.Empty;
+        public IReadOnlyList<S100FC.S128.FeatureTypes.ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) =>
+            [new() { datasetName = "DK3BIDQE", productSpecification = new() { name = "S-57" } }];
         public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, edition, update));
         public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

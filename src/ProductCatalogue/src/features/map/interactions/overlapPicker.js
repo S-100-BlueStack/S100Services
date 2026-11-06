@@ -1,7 +1,7 @@
 import { getAllLayers } from "../core/layerRegistry.js";
 import { layerSupportsCapability } from "../config/layerDefinitions.js";
-import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
+import { resolveGraphicStatusPresentation } from "../symbology/graphicStatusPresentation.js";
 import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
 import {
   bindProductKeyboardActivation,
@@ -13,7 +13,7 @@ import { bindDirectSelectionShortcutHint } from "./directSelectionShortcutHint.j
 
 let activeClickCleanup = null;
 
-export function bindOverlapPicker(view, { hoverManager } = {}) {
+export function bindOverlapPicker(view, { hoverManager, onInteractionStart } = {}) {
   activeClickCleanup?.();
   activeClickCleanup = null;
 
@@ -23,6 +23,7 @@ export function bindOverlapPicker(view, { hoverManager } = {}) {
   const interactionSession = createProductClickSession();
 
   const clickHandle = view.on("click", (event) => {
+    onInteractionStart?.();
     const isCurrent = interactionSession.begin();
     void handleProductClick({
       event,
@@ -39,7 +40,10 @@ export function bindOverlapPicker(view, { hoverManager } = {}) {
 
   const cleanupKeyboardActivation = bindProductKeyboardActivation({
     view,
-    beginInteraction: () => interactionSession.begin(),
+    beginInteraction: () => {
+      onInteractionStart?.();
+      return interactionSession.begin();
+    },
     getInteractiveLayers,
     getHighlightedIdentity: () => hoverManager?.getHighlightedGraphicIdentity?.() ?? null,
     openGraphic: (options) => openGraphicPopup(view, options),
@@ -129,7 +133,8 @@ function createOverlapPickerContent({ graphics, onSelect }) {
 
     const statusMarker = document.createElement("span");
     statusMarker.className = "overlap-picker__status-marker";
-    statusMarker.style.backgroundColor = getStatusColor(graphic.attributes?.status, "outline");
+    statusMarker.style.backgroundColor =
+      resolveGraphicStatusPresentation(graphic).colors?.outline ?? "rgba(0, 0, 0, 0.65)";
 
     const textContainer = document.createElement("div");
     textContainer.className = "overlap-picker__content";
@@ -176,9 +181,12 @@ function getGraphicTitle(graphic) {
 function getGraphicSubtitle(graphic) {
   const attributes = graphic.attributes ?? {};
   const values = [];
+  const presentation = resolveGraphicStatusPresentation(graphic);
 
-  if (attributes.status !== undefined && attributes.status !== null) {
-    values.push(`Status: ${formatStatusDisplayValue(attributes.status)}`);
+  if (presentation.isPackage) {
+    values.push(`Package status: ${presentation.label}`);
+  } else if (presentation.status !== undefined && presentation.status !== null) {
+    values.push(`Status: ${formatStatusDisplayValue(presentation.status)}`);
   }
 
   if (attributes.edition !== undefined && attributes.edition !== null) {
@@ -214,46 +222,9 @@ function closePopup(view) {
   view.popup?.close?.();
 }
 
-function getStatusColor(status, colorType = "outline", alphaOverride = null) {
-  const cfg = statusColorConfig[status];
-  const color = cfg?.[colorType] ?? cfg?.outline ?? cfg?.fill;
-
-  if (!color) {
-    return alphaOverride === null ? "rgba(0, 0, 0, 0.65)" : `rgba(0, 0, 0, ${alphaOverride})`;
-  }
-
-  if (Array.isArray(color)) {
-    const alpha = alphaOverride ?? color[3] ?? 1;
-
-    return `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`;
-  }
-
-  if (typeof color === "string" && alphaOverride !== null) {
-    return withCssAlpha(color, alphaOverride);
-  }
-
-  return color;
-}
-
-function withCssAlpha(color, alpha) {
-  const rgbaMatch = color.match(/^rgba?\(([^)]+)\)$/i);
-
-  if (!rgbaMatch) {
-    return color;
-  }
-
-  const parts = rgbaMatch[1].split(",").map((part) => part.trim());
-
-  if (parts.length < 3) {
-    return color;
-  }
-
-  return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
-}
-
 function compareGraphicsForPicker(a, b) {
-  const statusA = Number(a.attributes?.status ?? 999);
-  const statusB = Number(b.attributes?.status ?? 999);
+  const statusA = Number(resolveGraphicStatusPresentation(a).status ?? 999);
+  const statusB = Number(resolveGraphicStatusPresentation(b).status ?? 999);
 
   if (statusA !== statusB) {
     return statusA - statusB;

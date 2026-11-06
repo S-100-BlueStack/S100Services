@@ -1,6 +1,6 @@
-import { readWorkUnitStatusFilterValues } from "../domain/workUnitStatusProjection.js";
+import { readEncPackageStatusFilterValues } from "../domain/encPackageStatus.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "../../map/filters/attributeFilterConfig.js";
-import { WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
+import { WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
 import { createElectronicExportConfiguration } from "../../products/domain/electronicProductContract.js";
 export const DATA_SOURCE_AVAILABILITY = Object.freeze({
   AVAILABLE: "available",
@@ -104,6 +104,7 @@ export function createDataSourceRegistry({
       freezeSupported: false,
       enabledInSchema1: false,
       mainMapSelectable: false,
+      workUnitSourceId: DATA_SOURCE_IDS.S101,
     }),
     createElectronicSource({
       id: DATA_SOURCE_IDS.S101,
@@ -116,10 +117,20 @@ export function createDataSourceRegistry({
       workUnit: {
         kind: "package",
         primaryMemberKey: "s101",
-        navigationCapabilities: { analyze: false, review: false, history: false },
+        navigationCapabilities: { analyze: true, review: true, history: true },
         members: [
-          { key: "s101", label: "S-101", exportStandard: "S100" },
-          { key: "s57", label: "S-57", exportStandard: "S57" },
+          {
+            key: "s101",
+            label: "S-101",
+            exportStandard: "S100",
+            sourceId: DATA_SOURCE_IDS.S101,
+          },
+          {
+            key: "s57",
+            label: "S-57",
+            exportStandard: "S57",
+            sourceId: DATA_SOURCE_IDS.S57,
+          },
         ],
       },
     }),
@@ -194,6 +205,7 @@ function createElectronicSource({
   enabledInSchema1,
   mainMapSelectable = true,
   workUnit = null,
+  workUnitSourceId = null,
 }) {
   const enabledByConfiguration = isConfigured(id, configuredIds);
   return {
@@ -205,6 +217,10 @@ function createElectronicSource({
     userSelectable: mainMapSelectable,
     defaultEnabled: mainMapSelectable,
     workUnit,
+    targetedStatus:
+      workUnit?.kind === "package"
+        ? { type: "electronic-package-status", path: "electronicproducts" }
+        : null,
     loader: workUnit
       ? {
           type: "http-json",
@@ -248,7 +264,7 @@ function createElectronicSource({
           supportsOverlapPicker: true,
           supportsProductSearch: true,
         },
-        ...(workUnit ? { symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } : {}),
+        ...(workUnit ? { symbolization: WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION } : {}),
       },
     ],
     capabilities: {
@@ -289,17 +305,20 @@ function createElectronicSource({
       supported: true,
       providerType: "registry-source",
       resolution: "targeted-product-aoi",
+      ...(workUnitSourceId ? { workUnitSourceId } : {}),
     },
     filtering: {
       supported: true,
       definitions: workUnit
         ? [
-            { fieldName: "status", readValues: readWorkUnitStatusFilterValues },
+            { fieldName: "packageStatus", readValues: readEncPackageStatusFilterValues },
             "displayScale",
             "usageBand",
           ]
         : ["status", "displayScale", "usageBand"],
-      defaultExcludedValues: ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
+      defaultExcludedValues: workUnit
+        ? [{ fieldName: "packageStatus", values: ["0"] }]
+        : ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
       useLookupOptions: true,
     },
     search: DEFAULT_PRODUCT_SEARCH,

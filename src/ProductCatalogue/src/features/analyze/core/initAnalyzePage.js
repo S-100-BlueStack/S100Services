@@ -1,6 +1,7 @@
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { createMap } from "../../map/core/createMap.js";
 import { createView } from "../../map/core/createView.js";
+import { initBasemapExperience } from "../../map/basemaps/initBasemapExperience.js";
 import { createHoverManager } from "../../map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
@@ -21,7 +22,12 @@ import {
   removeAnalyzeDatasetItem,
   toggleAnalyzeDatasetItem,
 } from "../domain/analyzeDatasetList.js";
-import { fetchAnalyzeProducts } from "../api/analyzeApi.js";
+import {
+  canonicalizeAnalyzeItems,
+  retainAcceptedAnalyzePackages,
+  mergeAnalyzeRefresh,
+} from "../domain/analyzeWorkUnits.js";
+import { fetchAnalyzeProducts, resolveAnalyzeWorkUnits } from "../api/analyzeApi.js";
 import { createAnalyzeLayers } from "../map/createAnalyzeLayers.js";
 import { zoomToGraphicsExtent } from "../map/zoomToGraphics.js";
 import {
@@ -54,9 +60,69 @@ export async function initAnalyzePage({ datasetNames }) {
 
   const map = createMap();
   const view = createView(map);
+  const basemapExperience = initBasemapExperience(view);
   const hoverManager = createHoverManager(view);
+  // Pending replacements belong to the page from the public map.add boundary.
+  // Layer construction stays off-map; published staging remains cancellable
+  // while its layer views register. Existing request IDs decide authority.
+  const pendingPackageReplacements = new Set();
+  const cancelPendingPackageReplacements = () => {
+    for (const replacement of pendingPackageReplacements) replacement.cancel();
+  };
+  const createPackageReplacement = () => {
+    const ownedLayers = new Set();
+    const publishedLayers = new Set();
+    let cancelled = false;
+    const replacement = {
+      map: {
+        add(layer) {
+          if (!cancelled) ownedLayers.add(layer);
+        },
+        remove(layer) {
+          ownedLayers.delete(layer);
+          if (publishedLayers.delete(layer)) {
+            hoverManager.unregisterLayer(layer);
+            map.remove(layer);
+          }
+        },
+      },
+      publish() {
+        if (cancelled) return false;
+        for (const layer of ownedLayers) {
+          // Own the live layer before publishing, including a throwing add.
+          publishedLayers.add(layer);
+          map.add(layer);
+        }
+        return !cancelled;
+      },
+      cancel() {
+        cancelled = true;
+        for (const layer of publishedLayers) {
+          hoverManager.unregisterLayer(layer);
+          map.remove(layer);
+        }
+        publishedLayers.clear();
+        ownedLayers.clear();
+        pendingPackageReplacements.delete(replacement);
+      },
+      commit() {
+        pendingPackageReplacements.delete(replacement);
+        publishedLayers.clear();
+        ownedLayers.clear();
+      },
+    };
+    pendingPackageReplacements.add(replacement);
+    return replacement;
+  };
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
-  const renderSidebar = ({ loading = false } = {}) => {
+  const renderSidebar = ({ loading = false, preserveProductFocus = false } = {}) => {
+    const panel = preserveProductFocus ? document.getElementById("analyze-sidebar-panel") : null;
+    const activeElement = document.activeElement;
+    const focusedDatasetControl = panel
+      ?.querySelector(".analyze-dataset-list")
+      ?.contains(activeElement)
+      ? activeElement?.getAttribute?.("aria-label")
+      : null;
     renderAnalyzeSidebar({
       datasetItems,
       datasetNames: getEnabledAnalyzeDatasetNames(datasetItems),
@@ -64,11 +130,21 @@ export async function initAnalyzePage({ datasetNames }) {
       loading,
       productCatalog,
     });
+    if (focusedDatasetControl) {
+      const replacement = [
+        ...(panel?.querySelectorAll(
+          ".analyze-dataset-list input[aria-label], .analyze-dataset-list button[aria-label]"
+        ) ?? []),
+      ].find((control) => control.getAttribute("aria-label") === focusedDatasetControl);
+      replacement?.focus({ preventScroll: true });
+    }
   };
   const loadProductCatalogForPicker = async () => {
     const requestId = ++productCatalogRequestId;
     productCatalog = createProductCatalogState({ loading: true });
-    renderSidebar({ loading: enabledDatasetNames.length > 0 && currentProducts.length === 0 });
+    renderSidebar({
+      loading: activeWorkspaceLoadRequestId !== null && currentProducts.length === 0,
+    });
 
     try {
       const products = await fetchProductCatalog();
@@ -87,23 +163,43 @@ export async function initAnalyzePage({ datasetNames }) {
       });
     }
 
-    renderSidebar({ loading: false });
+    // Picker completion must not hide data or steal focus from a Product control.
+    renderSidebar({
+      loading: activeWorkspaceLoadRequestId !== null && currentProducts.length === 0,
+      preserveProductFocus: true,
+    });
   };
   const loadAnalyzeDatasetItems = async (
     nextDatasetItems,
-    { updateUrl = true, showLoader = true } = {}
+    { updateUrl = true, showLoader = true, skipCatalogValidation = false } = {}
   ) => {
     const requestId = ++loadRequestId;
+    cancelPendingPackageReplacements();
     activeWorkspaceLoadRequestId = requestId;
-    const validatedDatasetItems = validateAnalyzeDatasetItems(nextDatasetItems);
+    const validatedDatasetItems = skipCatalogValidation
+      ? { items: normalizeAnalyzeDatasetItems(nextDatasetItems), unknown: [], alreadySelected: [] }
+      : validateAnalyzeDatasetItems(nextDatasetItems);
+    // Publish selection at input time; resolution and content requests remain
+    // generation-owned and may only replace this provisional list if current.
     datasetItems = validatedDatasetItems.items;
+    renderSidebar({ loading: getEnabledAnalyzeDatasetNames(datasetItems).length > 0 });
+    const resolutions = await resolveAnalyzeWorkUnits(
+      getEnabledAnalyzeDatasetNames(validatedDatasetItems.items)
+    );
+    if (requestId !== loadRequestId) return;
+    datasetItems = canonicalizeAnalyzeItems(validatedDatasetItems.items, [
+      ...currentProducts,
+      ...resolutions.map((resolution) => ({
+        datasetName: resolution.product?.datasetName ?? resolution.requestedDatasetName,
+        workUnit: resolution.workUnit,
+      })),
+    ]);
     notifyRejectedCatalogProducts(validatedDatasetItems);
     const enabledNextDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
+    const acceptedProducts = currentProducts;
     // The Analyze route represents the active load set. Disabled names are local
     // UI composition state so users can pause products without losing the list.
-    if (updateUrl) {
-      setAnalyzeRouteUrl(enabledNextDatasetNames);
-    }
+    setAnalyzeRouteUrl(enabledNextDatasetNames, { replace: !updateUrl });
 
     document.title = createAnalyzeDocumentTitle(enabledNextDatasetNames);
     // Close stale popups before replacing analyze layers. ArcGIS popups can otherwise
@@ -159,7 +255,12 @@ export async function initAnalyzePage({ datasetNames }) {
 
       await ensureLookupsLoaded();
 
-      const products = await fetchAnalyzeProducts(enabledNextDatasetNames);
+      // Identity resolution precedes freshness priming. Read member metadata again after
+      // the seed so a revision observed during resolution cannot mask an older snapshot.
+      const products = retainAcceptedAnalyzePackages(
+        await fetchAnalyzeProducts(enabledNextDatasetNames, { resolutions, reuseDetails: false }),
+        acceptedProducts
+      );
 
       if (requestId !== loadRequestId) {
         return;
@@ -185,14 +286,14 @@ export async function initAnalyzePage({ datasetNames }) {
       });
 
       if (requestId !== loadRequestId) {
-        hoverManager.clear();
+        layers.forEach((layer) => hoverManager.unregisterLayer(layer));
         removeLayers(map, layers);
         return;
       }
       await registerHoverLayers(hoverManager, layers);
 
       if (requestId !== loadRequestId) {
-        hoverManager.clear();
+        layers.forEach((layer) => hoverManager.unregisterLayer(layer));
         removeLayers(map, layers);
         return;
       }
@@ -248,7 +349,11 @@ export async function initAnalyzePage({ datasetNames }) {
     }
   };
   const loadAnalyzeDatasetNames = async (nextDatasetNames, options = {}) => {
-    await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(nextDatasetNames), options);
+    await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(nextDatasetNames), {
+      ...options,
+      // URL composition is resolved against authoritative source identity, not a picker list.
+      skipCatalogValidation: true,
+    });
   };
 
   const refreshAnalyzeProducts = async (datasetNamesToRefresh) => {
@@ -267,7 +372,9 @@ export async function initAnalyzePage({ datasetNames }) {
     }
 
     const refreshRequestId = ++targetedRefreshRequestId;
+    cancelPendingPackageReplacements();
     const workspaceLoadRequestId = loadRequestId;
+    let pendingReplacement = null;
     try {
       await ensureLookupsLoaded();
       const products = await fetchAnalyzeProducts(refreshNames);
@@ -288,14 +395,54 @@ export async function initAnalyzePage({ datasetNames }) {
         return false;
       }
 
-      currentProducts = mergeProductsByDatasetName(
-        currentProducts,
-        refreshedProducts,
-        enabledNames
+      const nextProducts = mergeAnalyzeRefresh(currentProducts, refreshedProducts, enabledNames);
+      const refreshedPackages = refreshedProducts.filter((product) => product.members);
+      if (!refreshedPackages.length) {
+        currentProducts = nextProducts;
+        renderSidebar({ loading: false });
+        return refreshedProducts.every((product) => product.workspaceLoadState === "loaded");
+      }
+      const refreshedPackageKeys = new Set(
+        refreshedPackages.map((product) => product.workUnit.identityKey)
       );
+      const replacedLayers = currentLayers.filter((layer) =>
+        refreshedPackageKeys.has(layer.appAnalyzeWorkUnitKey)
+      );
+      pendingReplacement = createPackageReplacement();
+      const layers = await createAnalyzeLayers(pendingReplacement.map, refreshedPackages);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        pendingReplacement.cancel();
+        return false;
+      }
+      if (!pendingReplacement.publish()) return false;
+      await registerHoverLayers(hoverManager, layers);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        pendingReplacement.cancel();
+        return false;
+      }
+      // Only the replaced package layers can invalidate their popup/hover state.
+      // A simple Product keeps its original Graphic even if its sidebar refresh failed.
+      if (replacedLayers.includes(view.popup?.selectedFeature?.layer)) closePopup(view);
+      replacedLayers.forEach((layer) => hoverManager.unregisterLayer(layer));
+      removeLayers(map, replacedLayers);
+      currentLayers = currentLayers
+        .filter((layer) => !replacedLayers.includes(layer))
+        .concat(layers);
+      pendingReplacement.commit();
+      pendingReplacement = null;
+      currentProducts = nextProducts;
       renderSidebar({ loading: false });
-      return true;
+      return refreshedProducts.every((product) => product.workspaceLoadState === "loaded");
     } catch (error) {
+      pendingReplacement?.cancel();
       if (
         refreshRequestId !== targetedRefreshRequestId ||
         workspaceLoadRequestId !== loadRequestId
@@ -314,6 +461,10 @@ export async function initAnalyzePage({ datasetNames }) {
     );
 
     if (nextDatasetNames.length === 0) {
+      return;
+    }
+    if (productCatalog.loading) {
+      noticeWarning("Product catalog loading", "Wait for the catalog before adding products.");
       return;
     }
     const validation = validateCatalogProductNames(nextDatasetNames, {
@@ -366,7 +517,12 @@ export async function initAnalyzePage({ datasetNames }) {
   };
 
   const handleAnalyzeDatasetSubmit = async (event) => {
-    await loadAnalyzeDatasetNames(event.detail?.datasetNames ?? [], {
+    if (productCatalog.loading) {
+      noticeWarning("Product catalog loading", "Wait for the catalog before adding products.");
+      return;
+    }
+    // Submit is a picker-owned replacement, unlike an explicit URL composition.
+    await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(event.detail?.datasetNames ?? []), {
       updateUrl: true,
     });
   };
@@ -401,7 +557,7 @@ export async function initAnalyzePage({ datasetNames }) {
   document.addEventListener("pc-analyze-refresh", handleAnalyzeRefresh);
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
-  cleanupKeyboardClose = bindAnalyzeKeyboardClose(view);
+  cleanupKeyboardClose = bindAnalyzeKeyboardClose(view, basemapExperience);
   await view.when();
   // The bootstrap loader covers initial page and map setup. Hide it before
   // data loading starts so the delayed Analyze loader can decide whether a
@@ -415,8 +571,12 @@ export async function initAnalyzePage({ datasetNames }) {
     loading: false,
     productCatalog,
   });
-  await loadProductCatalogForPicker();
-  await loadAnalyzeDatasetItems(datasetItems, { updateUrl: false });
+  // Picker and route data have independent owners; a pending catalogue cannot block the route.
+  void loadProductCatalogForPicker();
+  await loadAnalyzeDatasetItems(datasetItems, {
+    updateUrl: false,
+    skipCatalogValidation: true,
+  });
   freshnessMonitor.start();
   const handlePopState = async () => {
     const route = getCurrentRoute();
@@ -427,6 +587,7 @@ export async function initAnalyzePage({ datasetNames }) {
   return {
     map,
     view,
+    basemapSettings: basemapExperience.settings,
     get products() {
       return currentProducts;
     },
@@ -437,6 +598,7 @@ export async function initAnalyzePage({ datasetNames }) {
     destroy() {
       loadRequestId += 1;
       targetedRefreshRequestId += 1;
+      cancelPendingPackageReplacements();
       activeWorkspaceLoadRequestId = null;
       productCatalogRequestId += 1;
       document.removeEventListener("pc-analyze-dataset-add", handleAnalyzeDatasetAdd);
@@ -453,11 +615,13 @@ export async function initAnalyzePage({ datasetNames }) {
       cleanupKeyboardClose = null;
       closePopup(view);
       cleanupPopupHoverSync?.();
+      basemapExperience.destroy();
       activeLoaderProgress?.cleanup();
       activeLoaderProgress = null;
       cleanupViewPadding?.();
       cleanupViewPadding = null;
       hoverManager.clear();
+      currentLayers.forEach((layer) => hoverManager.unregisterLayer(layer));
       removeLayers(map, currentLayers);
       currentLayers = [];
       currentProducts = [];
@@ -479,7 +643,12 @@ export async function initAnalyzePage({ datasetNames }) {
       productCatalog.products,
       normalizedItems.map((item) => item.name)
     );
-    const validKeys = new Set(validation.valid.map((name) => name.toUpperCase()));
+    const validKeys = new Set([
+      ...validation.valid.map((name) => name.toUpperCase()),
+      // A route Product already accepted by source-aware resolution is not invalidated
+      // by a later, potentially partial picker catalogue.
+      ...datasetItems.map((item) => item.name.toUpperCase()),
+    ]);
 
     return {
       ...validation,
@@ -488,6 +657,9 @@ export async function initAnalyzePage({ datasetNames }) {
   }
 
   function validateCatalogProductNames(productNames, { excludedProductNames = [] } = {}) {
+    if (productCatalog.loading) {
+      return { valid: [], unknown: [], alreadySelected: [] };
+    }
     if (!canValidateCatalog(productCatalog)) {
       return {
         valid: normalizeDatasetNames(productNames),
@@ -568,23 +740,6 @@ function normalizeDatasetKey(datasetName) {
     .toUpperCase();
 }
 
-function mergeProductsByDatasetName(currentProducts, refreshedProducts, enabledDatasetNames) {
-  const currentByDatasetName = new Map(
-    currentProducts.map((product) => [normalizeDatasetKey(product?.datasetName), product])
-  );
-
-  for (const product of refreshedProducts) {
-    const key = normalizeDatasetKey(product?.datasetName);
-    if (key) {
-      currentByDatasetName.set(key, product);
-    }
-  }
-
-  return enabledDatasetNames
-    .map((datasetName) => currentByDatasetName.get(normalizeDatasetKey(datasetName)))
-    .filter(Boolean);
-}
-
 async function loadLookupsSafely() {
   const results = await Promise.allSettled([loadStatuses()]);
   for (const result of results) {
@@ -661,12 +816,16 @@ function closePopup(view) {
   view.popup?.close?.();
 }
 
-function bindAnalyzeKeyboardClose(view) {
+function bindAnalyzeKeyboardClose(view, basemapExperience) {
   const handleKeydown = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) {
       return;
     }
 
+    if (basemapExperience?.close?.()) {
+      event.preventDefault();
+      return;
+    }
     if (!view?.popup?.visible) {
       return;
     }

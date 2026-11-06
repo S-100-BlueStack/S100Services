@@ -5,20 +5,80 @@ namespace ProductCatalogueAPI.Data.Repositories;
 /// <summary>Persists one active package per S-101 AOI and any source scan that must be replayed.</summary>
 public interface IEncPackageRepository
 {
+    /// <summary>Finds snapshots whose cumulative source window crosses a newly configured import boundary.</summary>
+    /// <param name="baselineUtc">The exclusive UTC import cutoff.</param>
+    /// <param name="cancellationToken">Cancels the system-database read.</param>
+    /// <returns>Source names requiring guarded paired discard before another archive scan.</returns>
+    Task<IReadOnlyList<string>> GetSourceNamesBeforeBaselineAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Import baseline reconciliation is unavailable.");
+
+    /// <summary>Clamps durable replay windows and invalidates retry gates computed from a pre-import comparison boundary.</summary>
+    /// <param name="baselineUtc">The exclusive UTC import cutoff; no archive rows are deleted.</param>
+    /// <param name="cancellationToken">Cancels the system-database update.</param>
+    Task RebaseReplayAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Import replay rebasing is unavailable.");
+
+    /// <summary>Gets one exact current snapshot without loading its YAML.</summary>
+    Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default);
+    /// <summary>Atomically discards both unsent member candidates for the exact snapshot.</summary>
+    Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid expectedPackageId, string actor, DateTime nowUtc, CancellationToken cancellationToken = default);
+    /// <summary>Atomically discards both eligible members and retains the cumulative source baseline for automatic replacement.</summary>
+    /// <param name="expectedPackageId">The exact snapshot whose members must both remain eligible.</param>
+    /// <param name="nowUtc">The UTC instant recorded in immutable discard history.</param>
+    /// <param name="cancellationToken">Cancels before the SQL transaction commits.</param>
+    /// <returns>The committed discard and output identities, or a conflict without changing either member.</returns>
+    Task<EncPackageDiscardResult> TryDiscardForRefreshAsync(Guid expectedPackageId, DateTime nowUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This repository cannot atomically replace an ENC package.");
+    /// <summary>Checks the same paired state and exact-delivery guards before replay can be consumed, including empty replay.</summary>
+    /// <param name="expectedPackageId">The active snapshot inspected while the caller holds both Product locks.</param>
+    /// <param name="cancellationToken">Cancels the eligibility read.</param>
+    /// <returns>Whether both members can be refreshed; a missing snapshot is ineligible.</returns>
+    Task<bool> CanRefreshAsync(Guid expectedPackageId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This repository cannot verify ENC refresh eligibility.");
     /// <summary>Gets active packages for a set of S-101 AOIs in one SQL read.</summary>
     Task<IReadOnlyDictionary<string, EncPackage>> GetActiveAsync(IEnumerable<string> sourceDatasetNames, CancellationToken cancellationToken = default, bool includeSourceYaml = true);
     /// <summary>Gets the oldest pending scan bound for edits observed while a package was locked or after acceptance.</summary>
     Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default);
     /// <summary>Gets the per-AOI replay bounds to avoid rebuilding unrelated packages from old edits.</summary>
     Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default);
+    /// <summary>Gets the exact archive cutoffs already attempted by failed shared snapshot builds.</summary>
+    Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Durable ENC snapshot attempt checkpoints are unavailable.");
+    /// <summary>Atomically retains the cumulative replay baseline and the last failed build's inspected UTC cutoff.</summary>
+    Task MarkSnapshotAttemptAsync(string sourceDatasetName, DateTime scanFromUtc, DateTime attemptedThroughUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Durable ENC snapshot attempt checkpoints are unavailable.");
     /// <summary>Retains source edits while a manual hold or unrelated candidate blocks package creation.</summary>
     Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default);
+    /// <summary>Clears a replay bound after all edits in its window have no net product change.</summary>
+    Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default);
+    /// <summary>Retires only the inspected replay cursor; a concurrently queued older cursor remains durable.</summary>
+    /// <param name="sourceDatasetName">The S-101 source inspected successfully.</param>
+    /// <param name="expectedScanFromUtc">The exact inspected cursor, or the baseline retained by a committed replacement.</param>
+    /// <param name="cancellationToken">Cancels cleanup without consuming pending replay.</param>
+    Task RetireReplayAsync(string sourceDatasetName, DateTime expectedScanFromUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This repository cannot safely retire an inspected ENC replay cursor.");
     /// <summary>Creates a package and clears its replay cursor atomically; returns false if one already exists.</summary>
     Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default);
+    /// <summary>Atomically persists the snapshot, queues both member tracks and retains replay before either encoder starts.</summary>
+    /// <param name="package">The shared immutable source snapshot; both mapped tracks must already exist and be eligible.</param>
+    /// <param name="cancellationToken">Cancels the whole reservation before commit.</param>
+    /// <returns>False if another active snapshot already owns this source.</returns>
+    Task<bool> TryCreatePendingAsync(EncPackage package, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Atomic paired ENC queueing is unavailable.");
+    /// <summary>Finds active packages with missing, idle, queued or interrupted members, even without source edits or replay.</summary>
+    /// <param name="cancellationToken">Cancels discovery without changing package state.</param>
+    /// <returns>Distinct source identities whose unfinished members require inspection.</returns>
+    Task<IReadOnlyList<string>> GetIncompleteSourceNamesAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Incomplete ENC discovery is unavailable.");
+    /// <summary>Queues only missing builds in an exact existing snapshot, protecting both member states and delivery evidence.</summary>
+    /// <param name="packageId">The snapshot inspected while both Product locks are held.</param>
+    /// <param name="nowUtc">The UTC history and recovery timestamp.</param>
+    /// <param name="cancellationToken">Cancels queueing before its atomic commit.</param>
+    /// <returns>False if either member is held, submitted, missing or otherwise ineligible.</returns>
+    Task<bool> TryQueueMissingMembersAsync(Guid packageId, DateTime nowUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("ENC member queue recovery is unavailable.");
     /// <summary>Records a package failure without losing its source YAML or rollback boundary.</summary>
     Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default);
-    /// <summary>Marks a candidate discarded; only an automatic package refresh replays its scan bound.</summary>
+    /// <summary>Rejects legacy per-member discard; callers must use the guarded paired package discard transaction.</summary>
     Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false);
-    /// <summary>Releases packages whose non-discarded tracks have all reached an accepted terminal state.</summary>
-    Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default);
 }

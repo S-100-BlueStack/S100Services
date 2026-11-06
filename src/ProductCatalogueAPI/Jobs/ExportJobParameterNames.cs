@@ -11,6 +11,8 @@ namespace ProductCatalogueAPI.Jobs
         public const string ExpectedUpdate = "ProductManagerExpectedUpdate";
         public const string CorrelationId = "ProductManagerCorrelationId";
         public const string CreatedAtUtc = "ProductManagerCreatedAtUtc";
+        public const string OperationId = "ProductManagerOperationId";
+        public const string HistoryTerminal = "ProductManagerHistoryTerminalV1";
         public const string ExecutionStarted = "ProductManagerExecutionStarted";
         public const string Mode = "ProductManagerMode";
         public const string OperationOutcome = "ProductManagerOperationOutcome";
@@ -25,6 +27,8 @@ namespace ProductCatalogueAPI.Jobs
 
     public static class ExportJobContract
     {
+        public const string HistoryUnavailableCode = "PRODUCT_HISTORY_UNAVAILABLE";
+        public const string HistoryUnavailableMessage = "Product History could not be recorded. The operation was not started.";
         public const string QueuedStatus = "Queued";
         public const string RunningStatus = "Running";
         public const string SucceededStatus = "Succeeded";
@@ -75,6 +79,15 @@ namespace ProductCatalogueAPI.Jobs
         public const string UnsupportedModeCode = "SEND_TO_ICENC_MODE_UNAVAILABLE";
         public const string UnsupportedModeMessage = "The configured Send to IC-ENC mode is unavailable.";
         public const string SimulationMode = "Simulation";
+        public const string LiveMode = "Live";
+        public const string DeliveredOutcome = "DeliveredToIcEnc";
+        public const string DeliveredStatus = "AwaitingAcknowledgement";
+        public const string UncertainStatus = "DeliveryUncertain";
+        public const string DeliveredCode = "SEND_DELIVERED";
+        public const string DeliveredMessage = "Exchange set delivered to IC-ENC. Awaiting acknowledgement.";
+        public const string DeliveryUncertainCode = "SEND_DELIVERY_UNCERTAIN";
+        public const string DeliveryUncertainMessage = "Delivery outcome is uncertain. Check the IC-ENC intake and the delivery record before taking further action.";
+        public const string LiveAcceptedMessage = "IC-ENC delivery was queued.";
         public const string SimulationCompletedOutcome = "SimulationCompleted";
         public const string NotDeliveredStatus = "NotDelivered";
         public const string AcceptedMessage = "IC-ENC send simulation was accepted. No data will be delivered.";
@@ -83,12 +96,12 @@ namespace ProductCatalogueAPI.Jobs
         public const string ConfigurationChangedCode = "SEND_TO_ICENC_CONFIGURATION_CHANGED";
         public const string ConfigurationChangedMessage = "The Send to IC-ENC configuration changed before the simulation started.";
         public const string InvalidStateCode = "SEND_TO_ICENC_PRODUCT_STATE_INVALID";
-        public const string InvalidStateStartMessage = "The product must be Exported before an IC-ENC send simulation can start.";
-        public const string InvalidStateJobMessage = "The product state changed before the IC-ENC send simulation started.";
+        public const string InvalidStateStartMessage = "The product must have a ready candidate before a live IC-ENC send can start.";
+        public const string InvalidStateJobMessage = "The candidate is no longer ready for IC-ENC delivery.";
         public const string SevenCsValidationFailedCode = "SEVENCS_VALIDATION_FAILED";
         public const string ManualValidationOverrideAcceptedMessage = "IC-ENC send simulation was manually allowed despite SevenCs validation findings. No data will be delivered.";
         public const string SetupFailedCode = "SEND_SIMULATION_SETUP_FAILED";
-        public const string SetupFailedMessage = "The IC-ENC send simulation could not be prepared.";
+        public const string SetupFailedMessage = "The IC-ENC send could not be prepared.";
         public const string FailedCode = "SEND_SIMULATION_FAILED";
         public const string FailedMessage = "The IC-ENC send simulation could not be completed.";
     }

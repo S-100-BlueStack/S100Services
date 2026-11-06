@@ -1,5 +1,6 @@
 using Hangfire;
-using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
+using Microsoft.AspNetCore.Authentication.Negotiate;
+using Asp.Versioning;
 using Microsoft.Extensions.Hosting;
 using ProductCatalogueAPI.Filters;
 using ProductCatalogueAPI.Hosting;
@@ -9,13 +10,18 @@ using S100FC.S128;
 using Serilog;
 using Serilog.Events;
 using System.Reflection;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace ProductCatalogueAPI
 {
+    /// <summary>Hosts the HTTP API or its isolated background worker.</summary>
     public class Program
     {
         private const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff}| [{Level:u3}] [{MachineName}] [{SourceContext}] {Message:lj} {NewLine}{Exception}";
 
+        /// <summary>Starts the configured process role with Windows authentication for API requests.</summary>
+        /// <param name="args">Command-line configuration forwarded to the selected host.</param>
         [STAThread]
         public static async Task Main(string[] args) {
             var processRole = ResolveProcessRole(args);
@@ -27,14 +33,22 @@ namespace ProductCatalogueAPI
                     try { Console.Title = "Product Catalogue Worker"; }
                     catch (IOException) { /* A service process may have no console to rename. */ }
                 }
+
                 await RunWorkerAsync(args, processProfile);
                 return;
+            }
+            else if (processRole == ProductCatalogueProcessRole.Api) {
+                if (Environment.UserInteractive) {
+                    try { Console.Title = "Product Catalogue API"; }
+                    catch (IOException) { /* A service process may have no console to rename. */ }
+                }
             }
 
             var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
             var central_logpath = Environment.GetEnvironmentVariable("log_path");
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
+                .Enrich.WithProperty("SourceContext", "ProductCatalogue")
                 .MinimumLevel.Information()
                 .WriteTo.Console()
                 .WriteTo.File(
@@ -57,6 +71,7 @@ namespace ProductCatalogueAPI
                     .MinimumLevel.Override("Hangfire.SqlServer.SqlServerObjectsInstaller", LogEventLevel.Warning)
                     .Enrich.FromLogContext()
                     .Enrich.WithProperty("MachineName", Environment.MachineName)
+                    .Enrich.WithProperty("SourceContext", "ProductCatalogue")
                     .WriteTo.Console(outputTemplate: outputTemplate, restrictedToMinimumLevel: LogEventLevel.Verbose)
                     .WriteTo.File(
                         path: "Logs/ProductManagerAPI.log",
@@ -115,48 +130,16 @@ namespace ProductCatalogueAPI
                     });
             });
 #endif
-            #region Authorization. Disabled for now..
-
-            ////  Windows SSO
-            //builder.Services.AddHttpContextAccessor();
-            //builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
-
-            //var path = builder.Configuration["Policies"];
-            //if (string.IsNullOrEmpty(path))
-            //    Log.Error("No path configured for authorization groups file! Please set 'Policies' in appsettings.json to point to a valid JSON file containing group policies.");
-
-            //var json = File.ReadAllText(path!);
-            //var groupPolicies = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
-            //    ReadCommentHandling = JsonCommentHandling.Skip,
-            //    AllowTrailingCommas = true
-            //}) ?? [];
-
-            //builder.Services.AddAuthorization(options => {
-
-            //    options.FallbackPolicy = options.DefaultPolicy;
-            //    foreach (var policy in groupPolicies) {
-            //        options.AddPolicy(policy.Key, p => {
-            //            switch (policy.Key) {
-            //                case "productmanager:distribute":
-            //                    p.RequireClaim(ClaimTypes.PrimarySid, policy.Value);
-            //                    break;
-            //                case "productmanager:access":
-            //                case "productmanager:manage":
-            //                    p.RequireClaim("http://schemas.microsoft.com/ws/2008/06/identity/claims/groupsid", policy.Value);
-            //                    break;
-            //                default:
-            //                    throw new Exception($"Unknown authorization policy: {policy.Key}");
-            //            }
-            //        });
-            //    }
-            //});
-            //Log.Information("Authorization policies configured");
-            #endregion
+            // API authentication is separate from the background Worker's service identity.
+            ConfigureWindowsSso(builder.Services, builder.Configuration);
+            // Preserve the legacy versioning error envelope for existing API clients.
+            builder.Services.AddErrorObjects();
             builder.Services.AddApiVersioning(options => {
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.DefaultApiVersion = new ApiVersion(1, 0);
                 options.ReportApiVersions = true;
-            });
+                options.ApiVersionReader = new QueryStringApiVersionReader();
+            }).AddMvc();
 
             builder.Services.AddRouting(options => {
                 options.LowercaseUrls = true;
@@ -194,24 +177,19 @@ namespace ProductCatalogueAPI
             //}
 
             var app = builder.Build();
+            CheckJavaToolOptions();
             DetectProductChangesRecurringJob.Reconcile(
                 detectionState,
                 app.Services,
                 app.Services.GetRequiredService<ILogger<DetectProductChangesJob>>()
             );
 
-            app.UseHangfireDashboard("/dashboard", new DashboardOptions {
-                //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
-            });
-
             // The enabled DPC schedule builds ENC packages; legacy summary processing stays unscheduled.
 
             app.UseExceptionHandler();
             // Configure the HTTP request pipeline.
-            app.UseSwagger();
-            app.UseSwaggerUI(e => e.RoutePrefix = "swagger");
-
             app.UseHttpsRedirection();
+            app.UseRouting();
 #if DEBUG
             app.UseCors("AllowFrontend");
 #endif
@@ -219,6 +197,11 @@ namespace ProductCatalogueAPI
             app.UseAuthentication();
             app.UseAuthorization();
 
+            // Middleware endpoints must run after SSO; Swagger uses the access fallback.
+            app.UseSwagger();
+            app.UseSwaggerUI(e => e.RoutePrefix = "swagger");
+            // Retain Hangfire's existing local-request restriction as well as requiring manage.
+            app.MapHangfireDashboard("/dashboard").RequireAuthorization("productmanager:manage");
             app.MapControllers();
             app.Use(async (context, next) => {
                 if (context.Request.Path == "/") {
@@ -237,14 +220,14 @@ namespace ProductCatalogueAPI
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
-                .AllowAnonymous();
+                .RequireAuthorization("productmanager:access");
 
                 app.MapGet("/mock/s102", () => {
                     return GetMockGeoJson("s102.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
-                .AllowAnonymous();
+                .RequireAuthorization("productmanager:access");
             }
             //if (app.Environment.IsDevelopment() && 1 == 2) {
             //    using var scope = app.Services.CreateScope();
@@ -261,6 +244,50 @@ namespace ProductCatalogueAPI
             app.Run();
         }
 
+        /// <summary>Restores Negotiate SSO and the configured SID-based API policies.</summary>
+        /// <param name="services">The API host's services; the background Worker does not register HTTP authentication.</param>
+        /// <param name="configuration">Contains the existing Policies path to the external SID policy JSON file.</param>
+        /// <exception cref="InvalidOperationException">The policy path or any required policy is missing, empty or unknown.</exception>
+        /// <exception cref="IOException">The configured policy file cannot be read.</exception>
+        /// <exception cref="JsonException">The configured policy file is not a valid policy dictionary.</exception>
+        internal static void ConfigureWindowsSso(IServiceCollection services, IConfiguration configuration) {
+            var path = configuration["Policies"];
+            if (string.IsNullOrWhiteSpace(path))
+                throw new InvalidOperationException("Configure 'Policies' with the path to the Windows SID authorization policy JSON file.");
+
+            var json = File.ReadAllText(path);
+            var groupPolicies = JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            }) ?? throw new InvalidOperationException("The Windows SID authorization policy file must contain a policy dictionary.");
+            string[] requiredPolicies = ["productmanager:access", "productmanager:manage", "productmanager:distribute"];
+            foreach (var policyName in requiredPolicies) {
+                if (!groupPolicies.TryGetValue(policyName, out var sids) || sids is null || sids.Length == 0 || sids.Any(string.IsNullOrWhiteSpace))
+                    throw new InvalidOperationException($"Authorization policy '{policyName}' must contain at least one non-empty SID.");
+            }
+            foreach (var policyName in groupPolicies.Keys) {
+                if (!requiredPolicies.Contains(policyName, StringComparer.Ordinal))
+                    throw new InvalidOperationException($"Unknown authorization policy: {policyName}");
+            }
+
+            services.AddHttpContextAccessor();
+            services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
+            services.AddAuthorization(options => {
+                foreach (var policy in groupPolicies) {
+                    options.AddPolicy(policy.Key, p => {
+                        p.RequireAuthenticatedUser();
+                        var claimType = policy.Key == "productmanager:distribute"
+                            ? ClaimTypes.PrimarySid
+                            : ClaimTypes.GroupSid;
+                        p.RequireClaim(claimType, policy.Value);
+                    });
+                }
+                // Unannotated routes still require the baseline application access policy.
+                options.FallbackPolicy = options.GetPolicy("productmanager:access");
+            });
+            Log.Information("Windows SSO authorization policies configured");
+        }
+
         private static async Task RunWorkerAsync(
             string[] args,
             ProductCatalogueProcessProfile processProfile
@@ -269,6 +296,7 @@ namespace ProductCatalogueAPI
                 .MinimumLevel.Information()
                 .Enrich.FromLogContext()
                 .Enrich.WithProperty("MachineName", Environment.MachineName)
+                .Enrich.WithProperty("SourceContext", "ProductCatalogue")
                 .WriteTo.Console(outputTemplate: outputTemplate)
                 .WriteTo.File(
                     path: Path.Combine(AppContext.BaseDirectory, "Logs", "ProductManagerWorker.log"),
@@ -296,6 +324,7 @@ namespace ProductCatalogueAPI
             }
 
             Log.Logger = loggerConfiguration.CreateLogger();
+            CheckJavaToolOptions();
 
             var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings {
                 Args = args,
@@ -322,6 +351,12 @@ namespace ProductCatalogueAPI
                 processProfile.HangfireWorkerCount
             );
             await host.RunAsync();
+        }
+
+        /// <summary>Reports missing inherited Java options without modifying the environment or blocking startup.</summary>
+        private static void CheckJavaToolOptions() {
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("JAVA_TOOL_OPTIONS")))
+                Log.ForContext<Program>().Warning("JAVA_TOOL_OPTIONS is not set in this process. Export tools will inherit no Java options from this variable.");
         }
 
         private static ProductCatalogueProcessRole ResolveProcessRole(string[] args) {

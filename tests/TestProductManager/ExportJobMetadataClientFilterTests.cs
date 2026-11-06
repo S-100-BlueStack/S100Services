@@ -5,6 +5,23 @@ namespace TestProductCatalogueAPI;
 
 public sealed class ExportJobMetadataClientFilterTests
 {
+    [Fact]
+    public void OperationIdentitySurvivesMetadataCreationAndDiffersFromCorrelation() {
+        var operationId = Guid.NewGuid();
+        var request = new ExportOperationJobRequest("101DK001", ExportOperationType.ExportEdition, "S101", 4, 2, "correlation", DateTimeOffset.UtcNow, operationId);
+        var parameters = ExportJobMetadataClientFilter.CreateParameters(request);
+        Assert.Equal(operationId, parameters[ExportJobParameterNames.OperationId]);
+        Assert.Equal(operationId, ExportJobMetadataClientFilter.CreateParameters(request)[ExportJobParameterNames.OperationId]);
+        Assert.Equal("correlation", parameters[ExportJobParameterNames.CorrelationId]);
+    }
+
+    [Fact]
+    public void LegacyRequestGetsAnApplicationGeneratedOperationParameterAtCreation() {
+        var request = new ExportOperationJobRequest("101DK001", ExportOperationType.ExportEdition, "S101", 4, 2, "correlation", DateTimeOffset.UtcNow);
+        var operationId = Assert.IsType<Guid>(ExportJobMetadataClientFilter.CreateParameters(request)[ExportJobParameterNames.OperationId]);
+        Assert.NotEqual(Guid.Empty, operationId);
+    }
+
     [Theory]
     [InlineData(ExportOperationType.ExportEdition, "S101")]
     [InlineData(ExportOperationType.ExportUpdate, "S57")]

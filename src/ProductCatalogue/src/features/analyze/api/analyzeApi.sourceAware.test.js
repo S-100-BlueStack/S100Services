@@ -253,7 +253,9 @@ test("Analyze resolves S-102 by authoritative datasetName and mixed routes keep 
   };
 
   const [s102Only] = await fetchAnalyzeProducts(["102DK0041149E"], {
-    workspaceProductService,
+    workspaceWorkUnitService: {
+      resolveWorkUnit: (name) => workspaceProductService.resolveProduct(name),
+    },
     get,
   });
   assert.equal(calls.length, 0);
@@ -264,7 +266,9 @@ test("Analyze resolves S-102 by authoritative datasetName and mixed routes keep 
   assert.equal(s102Only.sourceFeature.properties.datasetName, "102DK0041149E");
 
   const mixed = await fetchAnalyzeProducts(["101DK0041149E", "102DK0041149E"], {
-    workspaceProductService,
+    workspaceWorkUnitService: {
+      resolveWorkUnit: (name) => workspaceProductService.resolveProduct(name),
+    },
     get,
   });
   assert.deepEqual(calls, [

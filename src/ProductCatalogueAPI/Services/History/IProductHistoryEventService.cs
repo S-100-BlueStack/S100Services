@@ -17,7 +17,7 @@ public sealed record ProductHistoryEventCompletion(
     Guid? StateRecordId = null,
     IReadOnlyDictionary<string, string?>? OperationMetadata = null);
 
-/// <summary>Unconnected lifecycle foundation; Product jobs do not call this in Batch 1.</summary>
+/// <summary>Durable audit lifecycle shared by manual Export producers and terminal reconciliation.</summary>
 public interface IProductHistoryEventService
 {
     Task<Guid> CreatePendingAsync(ProductHistoryEventStart input);

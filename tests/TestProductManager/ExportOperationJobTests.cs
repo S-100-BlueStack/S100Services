@@ -3,6 +3,7 @@ using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using System.Collections;
@@ -32,7 +33,7 @@ public sealed class ExportOperationJobTests
             new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 0, 0))),
             new FakeLockService(),
             operations,
-            NullLogger<ExportOperationJob>.Instance
+            NullLogger<ExportOperationJob>.Instance, CreateHistory(operations)
         );
 
         await job.ExecuteAsync(Request(ExportOperationType.NewDataset, 0, 0), context, CancellationToken.None);
@@ -54,7 +55,7 @@ public sealed class ExportOperationJobTests
     [Fact]
     public async Task StalePublicVersionStopsBeforeWorkflowMutation() {
         var operations = new RecordingOperations();
-        var job = new ExportOperationJob(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 5, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance);
+        var job = new ExportOperationJob(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 5, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance, CreateHistory(operations));
 
         await Assert.ThrowsAsync<ExportOperationJobException>(() => job.ExecuteAsync(Request(ExportOperationType.ExportEdition), new FakeExecutionContext(), CancellationToken.None));
 
@@ -84,11 +85,58 @@ public sealed class ExportOperationJobTests
         Assert.Null(context.Get<string>(ExportJobParameterNames.ResultCode));
     }
 
-    private static ExportOperationJob CreateJob(RecordingOperations operations) => new(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance);
+    [Fact]
+    public async Task ActualJobRequeueProducesOneEventAndOneBusinessCall() {
+        var operations = new RecordingOperations();
+        var fixture = new HistoryRecoveryFixture();
+        fixture.Store.StateId = operations.StateId;
+        var job = new ExportOperationJob(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))),
+            fixture.Locks, operations, NullLogger<ExportOperationJob>.Instance, fixture.Producer);
+        var context = new FakeExecutionContext();
+        var request = Request(ExportOperationType.ExportEdition) with { OperationId = Guid.NewGuid() };
+        await job.ExecuteAsync(request, context, CancellationToken.None);
+        await job.ExecuteAsync(request, context, CancellationToken.None);
+        Assert.Equal(1, operations.ExportCalls);
+        Assert.Equal(operations.StateId, Assert.Single(fixture.Store.Rows).StateRecordId);
+        Assert.Equal(ProductHistoryEventContract.Succeeded, fixture.Store.Rows[0].Outcome);
+    }
+
+    [Fact]
+    public async Task ActualJobVersionRejectionCreatesSafeFailedEventWithoutExecution() {
+        var operations = new RecordingOperations();
+        var fixture = new HistoryRecoveryFixture();
+        var job = new ExportOperationJob(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 99, 2))),
+            fixture.Locks, operations, NullLogger<ExportOperationJob>.Instance, fixture.Producer);
+        await Assert.ThrowsAsync<ExportOperationJobException>(() => job.ExecuteAsync(Request(ExportOperationType.ExportEdition), new FakeExecutionContext(), CancellationToken.None));
+        var row = Assert.Single(fixture.Store.Rows);
+        Assert.Equal(ProductHistoryEventContract.Failed, row.Outcome);
+        Assert.Null(row.ExecutionStartedAtUtc);
+        Assert.Equal(0, operations.ExportCalls);
+    }
+
+    [Fact]
+    public async Task ActualDiscardNeverCreatesAnExportOrRollbackAuditEvent() {
+        var operations = new RecordingOperations();
+        var fixture = new HistoryRecoveryFixture();
+        var job = new ExportOperationJob(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))),
+            fixture.Locks, operations, NullLogger<ExportOperationJob>.Instance, fixture.Producer);
+        await job.ExecuteAsync(Request(ExportOperationType.Discard), new FakeExecutionContext(), CancellationToken.None);
+        Assert.Empty(fixture.Store.Rows);
+        Assert.Equal(1, operations.DiscardCalls);
+    }
+
+    private static IProductExportHistory CreateHistory(RecordingOperations operations) {
+        var fixture = new HistoryRecoveryFixture();
+        fixture.Store.StateId = operations.StateId;
+        return fixture.Producer;
+    }
+
+    private static ExportOperationJob CreateJob(RecordingOperations operations) => new(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance, CreateHistory(operations));
     private static ExportOperationJobRequest Request(ExportOperationType operationType, int edition = 4, int update = 2) => new("101DK001", operationType, "S101", edition, update, "correlation", DateTimeOffset.Parse("2026-08-10T20:00:00Z"));
 
     private sealed class RecordingOperations : IExportOperationService
     {
+        public Guid StateId { get; } = Guid.NewGuid();
         public int ExportCalls { get; private set; }
         public int DiscardCalls { get; private set; }
         public ExportRevisionType? LastRevisionType { get; private set; }
@@ -99,7 +147,9 @@ public sealed class ExportOperationJobTests
             LastRevisionType = revisionType;
             CancelDuringExport?.Cancel();
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
+            return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage) {
+                StateRecordId = StateId, DatasetName = datasetName, ExportTarget = "S101", ResultEdition = 5, ResultUpdate = 0
+            });
         }
         public Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null, bool preservePackageScanBound = false) { beforeMutation?.Invoke(); DiscardCalls++; return Task.FromResult(new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, ExportOperationContract.DiscardCompletedMessage)); }

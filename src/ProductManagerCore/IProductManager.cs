@@ -9,6 +9,17 @@ namespace S100FC.ProductCatalogue
         int? Update
     );
 
+    /// <summary>Pairs the shared YAML snapshot with changed source features actually selected for its topology.</summary>
+    public sealed record VerifiedExportSnapshot(YAML.Dataset Dataset, IReadOnlyCollection<string> IncludedChangedFeatureIds)
+    {
+        // Exact redundant metadata surfaces omitted from the feature collection.
+        // Remains empty for managers which do not implement metadata normalization.
+        public IReadOnlyList<string> SuppressedMetadataSurfaces { get; init; } = [];
+    }
+
+    /// <summary>Contains the accepted versions and the immutable source snapshot to publish together in S-128.</summary>
+    public sealed record EncPackagePublication(Guid PackageId, string S57DatasetName, int S57Edition, int S57Update, string S101DatasetName, int S101Edition, int S101Update, DateTime DetectedAtUtc, string DatasetYaml, byte[] CompilerIndex, byte[] CatalogueSignature);
+
     public sealed class ProductDataIntegrityException(
         string datasetName,
         int exactMatchCount
@@ -48,12 +59,18 @@ namespace S100FC.ProductCatalogue
         /// <param name="cancellationToken">Signals cancellation before dispatch and between substantial snapshot-processing phases. An ArcGIS call already in progress cannot be interrupted unless that API supports cancellation.</param>
         /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
         Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
+        /// <summary>Reports which edited features belong to the actual export selection; implementations must not guess.</summary>
+        Task<VerifiedExportSnapshot> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This product manager cannot verify the ENC export selection.");
         Task<Dictionary<string, string>> GetDatasetAOIs();
         Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification);
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
         Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
+        /// <summary>Returns net archive changes between an exclusive UTC cursor and an inclusive, fixed UTC cutoff.</summary>
+        Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc, DateTime throughUtc) =>
+            throw new NotSupportedException("This product manager does not support bounded UTC archive scans.");
         ElectronicProduct? ElectronicProduct(string name);
         ElectronicProduct? ElectronicProduct(string name, string productSpecification);
         /// <summary>
@@ -77,6 +94,9 @@ namespace S100FC.ProductCatalogue
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);
         Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml);
+        /// <summary>Atomically publishes both accepted ENC versions and their shared YAML attachment; repeating the same package is safe.</summary>
+        Task PublishAcceptedEncPackageAsync(EncPackagePublication publication, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This product manager does not support publishing accepted ENC packages.");
         //Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, int? optimumDisplayScale, string ProductMapping);
 
         string OutputFolder { get; }

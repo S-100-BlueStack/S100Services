@@ -34,6 +34,10 @@ public static class BackendRegistrations
         services.AddScoped<IProductRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IProductWorkflowRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IEncPackageRepository, EncPackageRepository>();
+        services.AddScoped<IEncPackageControlRepository, EncPackageControlRepository>();
+        services.AddScoped<IEncPackageActionService, EncPackageActionService>();
+        services.AddScoped<IEncPackageAcknowledgementRepository, EncPackageAcknowledgementRepository>();
+        services.AddScoped<IIcEncAcknowledgementService, IcEncAcknowledgementService>();
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
         services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
         services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
@@ -70,14 +74,25 @@ public static class BackendRegistrations
         services.AddSingleton<IExportEngine>(provider => new IsoIec8211ExportEngine(
             provider.GetRequiredService<ILogger<IsoIec8211ExportEngine>>(),
             configuration["ArtifactsPath"] ?? throw new InvalidOperationException("ArtifactsPath is not configured."),
-            S100CompilerConfiguration.ResolveExecutablePath(configuration)
+            S100CompilerConfiguration.ResolveExecutablePath(configuration),
+            ExportToolConfiguration.ResolveMapperExecutablePath(configuration),
+            ExportToolConfiguration.ResolveS57ExecutablePath(configuration)
         ));
         services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
         services.AddSingleton<IExportEngine, GmlExportEngine>();
         services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();
         services.AddSingleton<ISevenCsService, SevenCsService>();
+        services.AddScoped<IProductExportHistory, ProductExportHistory>();
+        services.AddScoped<IProductHistoryRecoveryRepository, ProductHistoryRecoveryRepository>();
+        services.AddSingleton<IProductHistoryJobReader>(_ => new ProductHistoryJobReader(JobStorage.Current));
+        services.AddScoped<ProductHistoryReconciliation>();
+        services.AddTransient<ProductHistoryReconciliationJob>();
+        services.AddHostedService<ProductHistoryReconciliationRegistration>();
         services.AddScoped<IExportOperationService, ExportOperationService>();
         services.AddScoped<IEncPackageDetectionService, EncPackageDetectionService>();
+        services.AddScoped<IEncPackageFinalizationService, EncPackageFinalizationService>();
+        services.AddTransient<FinalizeEncPackageJob>();
+        services.AddTransient<DiscardEncPackageJob>();
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<DetectProductChangesJob>();
 

@@ -23,6 +23,19 @@ public sealed class EncPackageDetectionEligibilityTests
         Assert.Equal(blocked, EncPackageDetectionService.IsRefreshBlocked(track));
     }
 
+    [Theory]
+    [InlineData(ProductState.Error, true)]
+    [InlineData(ProductState.Rejected, true)]
+    [InlineData(ProductState.ReadyForDistribution, true)]
+    [InlineData(ProductState.Idle, false)]
+    public void StandaloneFinalProductBlocksAutomaticPackageAdoption(ProductState state, bool expected) {
+        var s101 = new ProductExportTrackRecord { State = state };
+        var s57 = new ProductExportTrackRecord { State = ProductState.Idle };
+        Assert.Equal(expected, EncPackageDetectionService.HasUnownedFinalCandidate(null, s101, s57));
+        Assert.False(EncPackageDetectionService.HasUnownedFinalCandidate(
+            new EncPackage { SourceDatasetName = "101DK001" }, s101, s57));
+    }
+
     [Fact]
     public void ManualHoldBlocksRefreshEvenWhenTheCandidateFailed() {
         var track = new ProductExportTrackRecord { State = ProductState.Error, IsManuallyFrozen = true };
@@ -37,17 +50,42 @@ public sealed class EncPackageDetectionEligibilityTests
             ["feature-1"] = new() { Code = "BCNLAT", EditDate = detectedAtUtc.AddSeconds(-2) }
         };
 
-        Assert.False(EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc, detectedAtUtc.AddMinutes(10)));
+        Assert.False(EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc));
         changes["feature-1"].EditDate = detectedAtUtc.AddSeconds(2);
-        Assert.True(EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc, detectedAtUtc.AddMinutes(-1)));
+        Assert.True(EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc));
     }
 
     [Fact]
-    public void ArchiveRowsWithoutTimeUseTheScanWatermark() {
+    public void ArchiveRowsWithoutTimeCannotTriggerDestructiveRefresh() {
         var detectedAtUtc = new DateTime(2026, 10, 2, 8, 0, 0, DateTimeKind.Utc);
         var changes = new Dictionary<string, ArchiveRow> { ["feature-1"] = new() { Code = "BCNLAT" } };
 
-        Assert.False(EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc, detectedAtUtc.AddMinutes(-1)));
-        Assert.True(EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc, detectedAtUtc.AddMinutes(1)));
+        Assert.Throws<InvalidOperationException>(() => EncPackageDetectionService.HasNewEdits(changes, detectedAtUtc));
+    }
+
+    [Fact]
+    public void ArchiveDateWithOffsetIsComparedInUtc() {
+        var editUtc = new DateTime(2026, 10, 6, 9, 34, 0, DateTimeKind.Utc);
+        var archiveValue = new DateTimeOffset(2026, 10, 6, 11, 34, 0, TimeSpan.FromHours(2));
+
+        Assert.Equal(editUtc, ProductManagerGDB.ReadArchiveUtc(archiveValue));
+        Assert.Equal(DateTimeKind.Utc, ProductManagerGDB.ReadArchiveUtc(editUtc)!.Value.Kind);
+    }
+
+    [Theory]
+    [InlineData(2026, 1, 6, 13, 47, 12, 47)]
+    [InlineData(2026, 10, 6, 13, 47, 11, 47)]
+    public void CopenhagenArchiveWallTimeFollowsDaylightSaving(int year, int month, int day, int hour, int minute, int utcHour, int utcMinute) {
+        var wallTime = new DateTime(year, month, day, hour, minute, 13, DateTimeKind.Unspecified);
+        var actualUtc = new DateTime(year, month, day, utcHour, utcMinute, 13, DateTimeKind.Utc);
+
+        Assert.Equal(actualUtc, ProductManagerGDB.ReadArchiveUtc(wallTime));
+        Assert.Equal(actualUtc, ProductManagerGDB.ReadArchiveUtc(actualUtc));
+    }
+
+    [Fact]
+    public void AmbiguousCopenhagenArchiveWallTimeDoesNotAdvanceTheWatermark() {
+        var ambiguous = new DateTime(2026, 10, 25, 2, 30, 0, DateTimeKind.Unspecified);
+        Assert.Throws<InvalidOperationException>(() => ProductManagerGDB.ReadArchiveUtc(ambiguous));
     }
 }

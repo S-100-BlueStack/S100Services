@@ -11,10 +11,12 @@ namespace ProductCatalogueAPI.Services.Export;
 /// <param name="logger">Receives compiler diagnostics without exposing internal paths to API callers.</param>
 /// <param name="artifactsPath">Contains the feature catalogue and S-57 mapping pipeline.</param>
 /// <param name="s100CompilerExecutablePath">The configured S-101 compiler executable.</param>
-public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath, string s100CompilerExecutablePath = S100CompilerConfiguration.CompatibilityDefaultExecutablePath) : IExportEngine
+/// <param name="s100MapperExecutablePath">The configured S-101 to S-57 mapper executable.</param>
+/// <param name="s57CompilerExecutablePath">The configured S-57 compiler executable.</param>
+public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath, string s100CompilerExecutablePath = S100CompilerConfiguration.CompatibilityDefaultExecutablePath, string s100MapperExecutablePath = ExportToolConfiguration.DefaultMapperExecutablePath, string s57CompilerExecutablePath = ExportToolConfiguration.DefaultS57ExecutablePath) : IExportEngine
 {
-    private const string S100MapperPath = @"C:\Program Files\s100mapper\s100mapper.exe";
-    private const string S57CompilerPath = @"C:\Program Files\s57compiler\s57compiler.exe";
+    private readonly string _s100MapperExecutablePath = s100MapperExecutablePath;
+    private readonly string _s57CompilerExecutablePath = s57CompilerExecutablePath;
     private readonly ILogger<IsoIec8211ExportEngine> _logger = logger;
     private readonly string _artifactsPath = artifactsPath;
     private readonly string _s100CompilerExecutablePath = s100CompilerExecutablePath;
@@ -77,23 +79,38 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
         await RunProcessAsync(compilerExecutablePath, arguments, outputDirectory, request.DatasetName, cancellationToken, isS100Compiler: true);
 
-        //var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
-        //var datasetPath = Path.Combine(request.OutputRoot, request.DatasetName, request.Edition.ToString(), request.DatasetName, "S100_ROOT");
-        var datasetPath = Path.Combine(request.OutputRoot, request.DatasetName, request.Edition.ToString(), request.DatasetName, "S100_ROOT", "S-101", "DATASET_FILES", $"{request.DatasetName}.{request.Update:000}");
+        return await ReadS101ExportResultAsync(request, compilerIndexPath, previousIndexPath, cancellationToken);
+    }
+
+    /// <summary>Reads the S-101 exchange set from the compiler's dataset-specific output layout.</summary>
+    /// <remarks>Separated from process execution so output validation and archiving can be regression-tested without a compiler.</remarks>
+    internal static async Task<ExportEngineResult> ReadS101ExportResultAsync(ExportEngineRequest request, string compilerIndexPath, string previousIndexPath, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
+        var datasetFilesDirectory = ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
+        var datasetPath = Path.Combine(datasetFilesDirectory, $"{request.DatasetName}.{request.Update:000}");
         var datasetFile = new FileInfo(datasetPath);
         if (!datasetFile.Exists || datasetFile.Length == 0)
-            _logger.LogError("The S-101 compiler created a empty or non-existant dataset for '{DatasetName}'.", request.DatasetName); //throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
+            throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
+        // An update must not archive only its .NNN while the existing edition's
+        // .000 remains in an older compiler layout outside this exchange set.
+        if (request.Update > 0) {
+            var baseDataset = new FileInfo(Path.Combine(datasetFilesDirectory, $"{request.DatasetName}.000"));
+            if (!baseDataset.Exists || baseDataset.Length == 0)
+                throw new InvalidOperationException($"The S-101 exchange set is missing a non-empty base dataset for '{request.DatasetName}'.");
+        }
 
-        var outputDatasetDirectory = Path.Combine(outputDirectory, request.DatasetName);
+        var s100Root = ExportOutputPath.GetS101ExchangeSetDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
+        var signaturePath = Path.Combine(s100Root, "CATALOG.SIGN");
         var index = await File.ReadAllBytesAsync(compilerIndexPath, cancellationToken);
-        var signaturePath = Path.Combine(outputDatasetDirectory, "S100_ROOT", "CATALOG.SIGN");
         var signature = await File.ReadAllBytesAsync(signaturePath, cancellationToken);
-        var exchangeSet = await CreateZipAsync(outputDatasetDirectory, cancellationToken);
+        // Only S100_ROOT belongs in the exchange set; staging YAML and compiler indexes are separate artifacts.
+        var exchangeSet = await CreateZipAsync(s100Root, cancellationToken, "S100_ROOT");
         File.Delete(compilerIndexPath);
         if (File.Exists(previousIndexPath))
             File.Delete(previousIndexPath);
 
-        return new ExportEngineResult(outputDatasetDirectory, [
+        return new ExportEngineResult(outputDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.CompilerIndex, Path.GetFileName(compilerIndexPath), "text/plain", index),
             new ExportEngineArtifact(ProductArtifactKind.CatalogueSignature, Path.GetFileName(signaturePath), "application/octet-stream", signature),
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
@@ -102,11 +119,11 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
     private async Task<ExportEngineResult> ExportS57Async(ExportEngineRequest request, CancellationToken cancellationToken) {
         ValidateRequest(request);
-        var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
+        var outputDirectory = Path.GetFullPath(ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update));
         PrepareOutputDirectory(request, outputDirectory);
 
         var featureCatalogue = Path.Combine(_artifactsPath, "101_FC_2.0.0.xml");
-        var pipeline = Path.Combine(_artifactsPath, "pipeline-S101-S57.yaml");
+        var pipeline = Path.GetFullPath(Path.Combine(_artifactsPath, "pipeline-S101-S57.yaml"));
         if (!File.Exists(featureCatalogue) || !File.Exists(pipeline))
             throw new FileNotFoundException("The S-57 mapping pipeline artifacts were not found.");
 
@@ -118,10 +135,15 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
         await File.WriteAllTextAsync(s101Yaml, request.DatasetYaml, Encoding.UTF8, cancellationToken);
 
         var mapperArguments = $"\"{s101Yaml}\" \"{s57Yaml}\" --fc \"{Path.GetFullPath(featureCatalogue)}\" --pipeline \"{pipeline}\"";
-        await RunProcessAsync(S100MapperPath, mapperArguments, outputDirectory, request.DatasetName, cancellationToken);
+        // The pipeline includes relative rule files, so the mapper must start beside it.
+        await RunProcessAsync(_s100MapperExecutablePath, mapperArguments, Path.GetDirectoryName(pipeline)!, request.DatasetName, cancellationToken);
+        if (!File.Exists(s57Yaml) || new FileInfo(s57Yaml).Length == 0)
+            throw new InvalidOperationException($"The S-57 mapper did not create a non-empty YAML file for '{request.DatasetName}'.");
 
-        // This preserves the command contract of the existing S-57 compiler integration.
-        await RunProcessAsync(S57CompilerPath, $"\"{true}\" s57", outputDirectory, request.DatasetName, cancellationToken);
+        // The compiler takes the mapped S-57 YAML path and the output directory.
+        await RunProcessAsync(_s57CompilerExecutablePath, $"\"{s57Yaml}\" \"{outputDirectory}\"", outputDirectory, request.DatasetName, cancellationToken);
+        // Use the same cell identity and layout check as SevenCs validation.
+        _ = ExportOutputPath.GetS57DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
         var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
         return new ExportEngineResult(outputDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
@@ -177,36 +199,36 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
             throw new FileNotFoundException("The configured export compiler was not found.", executable);
         }
 
-        _logger.LogInformation("Starting export compiler {CompilerName} for {DatasetName}.", Path.GetFileName(executable), datasetName);
+        ExportToolDiagnostics.LogBeforeLaunch(_logger, executable, datasetName);
         var startInfo = new ProcessStartInfo {
             FileName = executable,
             Arguments = arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
+            RedirectStandardOutput = false,
             RedirectStandardError = true
         };
 
         using var process = StartCompilerProcessSafely(startInfo, datasetName, isS100Compiler);
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
         var error = await standardError;
-        _ = await standardOutput;
 
         if (process.ExitCode != 0) {
-            _logger.LogError("Export compiler {CompilerName} failed for {DatasetName} with exit code {ExitCode}. Error: {CompilerError}", Path.GetFileName(executable), datasetName, process.ExitCode, error);
+            _logger.LogError("Export compiler {CompilerName} failed for {DatasetName} with exit code {ExitCode}. Stderr: {CompilerError}.", Path.GetFileName(executable), datasetName, process.ExitCode, error);
             throw new InvalidOperationException($"The export compiler failed for '{datasetName}' with exit code {process.ExitCode}.");
         }
     }
 
-    private static async Task<byte[]> CreateZipAsync(string directory, CancellationToken cancellationToken) {
+    private static async Task<byte[]> CreateZipAsync(string directory, CancellationToken cancellationToken, string? entryPrefix = null) {
         await using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true)) {
             foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)) {
                 cancellationToken.ThrowIfCancellationRequested();
-                var entry = archive.CreateEntry(Path.GetRelativePath(directory, file), CompressionLevel.Optimal);
+                var relativePath = Path.GetRelativePath(directory, file);
+                var entryName = entryPrefix is null ? relativePath : $"{entryPrefix}/{relativePath.Replace(Path.DirectorySeparatorChar, '/')}";
+                var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
                 await using var entryStream = entry.Open();
                 await using var fileStream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
                 await fileStream.CopyToAsync(entryStream, cancellationToken);

@@ -1,4 +1,6 @@
+import { getStatusName } from "../../data/stores/statusStore.js";
 import "@esri/calcite-components/components/calcite-icon";
+import "@esri/calcite-components/components/calcite-link";
 import {
   createProductHistoryBanner,
   createProductHistoryStateMessage,
@@ -15,7 +17,16 @@ import {
   getReviewIcEncPresentation,
   getReviewValidationPresentation,
 } from "./reviewContentPresentation.js";
-export function createReviewBoard({ productItems, enabledDatasetNames, products, loading, error }) {
+let nextValidationScrollLabelId = 0;
+
+export function createReviewBoard({
+  productItems,
+  enabledDatasetNames,
+  products,
+  loading,
+  error,
+  previousBoard = null,
+}) {
   const board = document.createElement("section");
   board.className = "pc-review-board";
   board.setAttribute("aria-label", "Review board");
@@ -47,15 +58,27 @@ export function createReviewBoard({ productItems, enabledDatasetNames, products,
   );
   const enabledProductItems = productItems.filter((productItem) => productItem.enabled);
 
+  const previousColumns = new Map(
+    [...(previousBoard?.querySelectorAll(".pc-review-column") ?? [])].map((column) => [
+      column.dataset.reviewDatasetKey,
+      column,
+    ])
+  );
   for (const productItem of enabledProductItems) {
-    columns.appendChild(
-      createProductReviewColumn(
-        productItem,
-        productsByDatasetName.get(normalizeKey(productItem.datasetName)) ?? {
-          datasetName: productItem.datasetName,
-        }
-      )
-    );
+    const product = productsByDatasetName.get(normalizeKey(productItem.datasetName)) ?? {
+      datasetName: productItem.datasetName,
+    };
+    const previous = previousColumns.get(productItem.id);
+    const selection = JSON.stringify(productItem.contentTypes);
+    // Keep unrelated History disclosure/scroll state under the existing DOM owner.
+    const column =
+      previous?.reviewRenderProduct === product && previous.reviewRenderSelection === selection
+        ? previous
+        : createProductReviewColumn(productItem, product);
+    column.dataset.reviewDatasetKey = productItem.id;
+    column.reviewRenderProduct = product;
+    column.reviewRenderSelection = selection;
+    columns.appendChild(column);
   }
   board.appendChild(columns);
 
@@ -103,8 +126,22 @@ function createProductReviewColumn(productItem, product) {
     return column;
   }
 
-  for (const contentType of getEnabledReviewContentTypes(productItem)) {
-    content.appendChild(createReviewContentCard(product, contentType));
+  if (product.refreshError) {
+    content.appendChild(
+      createProductHistoryStateMessage({
+        title: "Package refresh failed",
+        message: product.refreshError,
+      })
+    );
+  }
+  if (product.workUnit?.kind === "package" && product.members?.length === 2) {
+    for (const member of product.members) {
+      content.appendChild(createPackageMemberSection(productItem, member));
+    }
+  } else {
+    for (const contentType of getEnabledReviewContentTypes(productItem)) {
+      content.appendChild(createReviewContentCard(product, contentType));
+    }
   }
   if (!content.hasChildNodes()) {
     content.appendChild(
@@ -118,6 +155,31 @@ function createProductReviewColumn(productItem, product) {
   column.append(header, content);
 
   return column;
+}
+
+function createPackageMemberSection(productItem, member) {
+  const section = document.createElement("section");
+  section.className = "pc-review-member";
+  section.dataset.reviewMemberKey = member.memberKey;
+  section.setAttribute("aria-label", `${member.memberLabel} ${member.datasetName}`);
+  const header = document.createElement("header");
+  header.className = "pc-review-member__header";
+  const heading = document.createElement("h3");
+  heading.className = "pc-review-member__title";
+  heading.textContent = `${member.memberLabel} · ${member.datasetName}`;
+  const metadata = document.createElement("p");
+  metadata.className = "pc-review-member__meta";
+  const status =
+    member.status === null || member.status === undefined
+      ? "Unknown"
+      : (getStatusName(member.status) ?? String(member.status));
+  metadata.textContent = `${member.sourceLabel} · Status: ${status} · Edition: ${member.edition ?? "-"} · Update: ${member.update ?? "-"}`;
+  header.append(heading, metadata);
+  section.appendChild(header);
+  const types = getEnabledReviewContentTypes(productItem);
+  for (const type of types) section.appendChild(createReviewContentCard(member, type));
+  if (!types.length) section.appendChild(createContentStateMessage("No review content selected."));
+  return section;
 }
 
 function createColumnMeta(productItem) {
@@ -156,9 +218,19 @@ function createReviewContentCard(product, contentType) {
       title: "Internal validation",
       status: presentation.status,
     });
+    if (product.artifactWarning)
+      card.body.appendChild(createContentStateMessage(product.artifactWarning));
     if (presentation.state !== REVIEW_CONTENT_PRESENTATION_STATE.CONTENT) {
       card.body.appendChild(createContentStateMessage(presentation.message));
       return card.root;
+    }
+    if (artifacts.length > 5) {
+      card.root.classList.add("pc-review-content-card--validation-bounded");
+      card.body.classList.add("pc-review-content-card__body--scrollable", "pc-scrollbar");
+      card.body.setAttribute("role", "region");
+      card.titleElement.id = `pc-review-validation-scroll-label-${++nextValidationScrollLabelId}`;
+      card.body.setAttribute("aria-labelledby", card.titleElement.id);
+      card.body.tabIndex = 0;
     }
     for (const artifact of artifacts) {
       card.body.appendChild(createValidationArtifactRow(artifact));
@@ -248,6 +320,7 @@ function createContentCardShell({ product, contentType, title, status }) {
   return {
     root: card,
     header,
+    titleElement,
     body,
   };
 }
@@ -262,7 +335,7 @@ function createContentStateMessage(message) {
 function createValidationArtifactRow(artifact) {
   const row = document.createElement("p");
   row.className = "pc-review-content-card__artifact";
-  const link = document.createElement("a");
+  const link = document.createElement("calcite-link");
   link.href = artifact.url;
   link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
   link.download = artifact.fileName || "";

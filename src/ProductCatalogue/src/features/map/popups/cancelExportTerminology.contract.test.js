@@ -8,7 +8,7 @@ async function readSource(path) {
   return readFile(new URL(path, projectRoot), "utf8");
 }
 
-test("Cancel Export presentation uses the normalized CancelExport wire contract", async () => {
+test("retired Cancel Export popup action leaves the normalized backend wire contract intact", async () => {
   const [
     actionConfig,
     productActions,
@@ -27,10 +27,8 @@ test("Cancel Export presentation uses the normalized CancelExport wire contract"
     readSource("src/shared/ui/tooltips/globalHelpTooltips.js"),
   ]);
 
-  assert.match(
-    actionConfig,
-    /id: "rollback",[\s\S]*label: operationIsRunning \? "Canceling export\.\.\." : "Cancel Export",[\s\S]*icon: "x-circle"/
-  );
+  assert.doesNotMatch(actionConfig, /id: "rollback"/);
+  assert.match(actionConfig, /createPopupWorkflowActions/);
   assert.match(productActions, /title: `Cancel Export \${datasetName}`/);
   assert.match(
     productActions,
@@ -55,5 +53,5 @@ test("Cancel Export presentation uses the normalized CancelExport wire contract"
   assert.match(productJob, /ROLLBACK: "CancelExport"/);
   assert.match(operationState, /ROLLBACK: "rollback"/);
   assert.match(operationState, /\[PRODUCT_OPERATION_TYPE\.ROLLBACK\]: "Cancel Export"/);
-  assert.match(tooltips, /rollback: "Cancel the current export for this product\."/);
+  assert.match(tooltips, /rollback: "Cancel export"/);
 });

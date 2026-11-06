@@ -48,3 +48,12 @@ test("restores the complete last-successful presentation after temporary refresh
   applyLastUpdatedPresentation(element, snapshot);
   assert.deepEqual(readLastUpdatedPresentation(element), successful);
 });
+
+test("last refresh presentation survives the global tooltip's native title removal", () => {
+  const element = new FakeElement();
+  const successful = createLastUpdatedPresentation(new Date(2026, 8, 16, 14, 35));
+  applyLastUpdatedPresentation(element, successful);
+  element.setAttribute("data-app-original-title", element.getAttribute("title"));
+  element.removeAttribute("title");
+  assert.deepEqual(readLastUpdatedPresentation(element), successful);
+});

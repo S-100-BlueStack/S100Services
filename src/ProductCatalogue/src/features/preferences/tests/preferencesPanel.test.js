@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import {
+  BASEMAP_SELECTION_STORAGE_KEY,
+  createBasemapSettings,
+} from "../../map/basemaps/basemapSettings.js";
 
 // Exercise application-owned DOM contracts without loading ArcGIS or Calcite internals.
 class TestElement extends EventTarget {
@@ -234,11 +238,16 @@ test("Theme switch uses icon endpoints, the Theme owner and keeps focus", () => 
   control.checked = true;
   panel.dispatchEvent(event("calciteSwitchChange", control));
   assert.equal(theme.module.getCurrentTheme(), "dark");
+  assert.equal(document.body.classList.contains("calcite-mode-dark"), true);
+  assert.equal(document.documentElement.style.colorScheme, "dark");
   assert.equal(control.checked, true);
   assert.equal(document.activeElement, control);
   control.checked = false;
   panel.dispatchEvent(event("calciteSwitchChange", control));
   assert.equal(theme.module.getCurrentTheme(), "light");
+  assert.equal(document.body.classList.contains("calcite-mode-dark"), false);
+  assert.equal(document.body.classList.contains("calcite-mode-light"), true);
+  assert.equal(document.documentElement.style.colorScheme, "light");
   assert.equal(control.checked, false);
   assert.equal(document.activeElement, control);
   api.updateContext({ themeView: null });
@@ -456,3 +465,63 @@ for (const routeName of ["analyze", "review", "dashboard"]) {
     }
   });
 }
+
+test("Analyze Preferences controls basemap Auto-save and theme-default reset without stealing focus", async () => {
+  persistence.setPreferencePersistenceEnabled("basemap", true);
+  localStorage.removeItem(BASEMAP_SELECTION_STORAGE_KEY);
+  theme.module.applyTheme("light");
+  const settings = createBasemapSettings({
+    storage: localStorage,
+    themeMode: theme.module.getCurrentTheme(),
+    canPersist: () => persistence.isPreferencePersistenceEnabled("basemap"),
+    onPersistenceChanged: (callback) =>
+      persistence.onPreferencePersistenceChanged(({ key, enabled }) => {
+        if (key === "basemap") callback(enabled);
+      }),
+  });
+  const themeHandle = theme.module.onThemeChanged((mode) => settings.setThemeMode(mode));
+  const { api, panel } = mount({ basemapSettings: settings }, "analyze");
+  try {
+    assert.equal(panel.querySelector("#preferences-scale-hiding"), null);
+    assert.ok(panel.querySelector('[data-preference-persistence-key="basemap"]'));
+    assert.equal(
+      panel.querySelector("#preferences-basemap-status").textContent,
+      "Automatic: Topographic"
+    );
+    settings.setValue("oceans");
+    assert.equal(panel.querySelector("#preferences-basemap-status").textContent, "Custom: Oceans");
+    const autoSave = panel.querySelector('[data-preference-persistence-key="basemap"]');
+    autoSave.focus();
+    autoSave.checked = false;
+    panel.dispatchEvent(event("calciteSwitchChange", autoSave));
+    await Promise.resolve();
+    assert.equal(document.activeElement, autoSave);
+    assert.equal(localStorage.getItem(BASEMAP_SELECTION_STORAGE_KEY), null);
+    assert.equal(settings.getValue(), "oceans");
+    theme.module.applyTheme("dark");
+    assert.equal(settings.getValue(), "oceans", "theme cannot override a manual choice");
+    const reset = click(panel, "reset-basemap");
+    assert.equal(settings.getValue(), "dark-gray-vector");
+    assert.equal(
+      panel.querySelector("#preferences-basemap-status").textContent,
+      "Automatic: Dark Gray"
+    );
+    assert.equal(document.activeElement, reset);
+    autoSave.checked = true;
+    panel.dispatchEvent(event("calciteSwitchChange", autoSave));
+    await Promise.resolve();
+    settings.setValue("oceans");
+    assert.ok(localStorage.getItem(BASEMAP_SELECTION_STORAGE_KEY));
+    click(panel, "reset-all");
+    assert.equal(settings.isCustom(), false);
+    assert.equal(settings.getValue(), "topo-vector");
+    assert.equal(theme.module.getCurrentTheme(), "light");
+    assert.equal(persistence.isPreferencePersistenceEnabled("basemap"), true);
+  } finally {
+    api.destroy();
+    themeHandle.remove();
+    settings.destroy();
+    localStorage.removeItem(BASEMAP_SELECTION_STORAGE_KEY);
+    persistence.setPreferencePersistenceEnabled("basemap", true);
+  }
+});

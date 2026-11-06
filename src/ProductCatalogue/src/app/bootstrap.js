@@ -56,6 +56,9 @@ async function bootstrapMainRoute() {
       import("./loadInitialData.js"),
     ]);
     const app = initMap();
+    ui.onboarding.setMapView(app.view, {
+      resolvePopupCollectionButton: app.getPopupCollectionButton,
+    });
     initRefreshControls(app);
     initializeTheme(app.view);
 
@@ -144,7 +147,10 @@ async function bootstrapAnalyzeRoute(route) {
     });
 
     initializeTheme(app.view);
-    ui.preferencesPanel.updateContext({ themeView: app.view });
+    ui.preferencesPanel.updateContext({
+      themeView: app.view,
+      basemapSettings: app.basemapSettings,
+    });
     hideLoader();
     ui.onboarding.setRouteReady();
   } catch (error) {

@@ -1,35 +1,47 @@
 # Popup actions
 
-Package foundation baseline: `355c0596cea30df059ee729835f3fc3565ff1ea0`.
-See the [package foundation](../../../../docs/enc-package-frontend-foundation.md) for current scope.
-See the [normalized contract review](../../../../docs/normalized-workflow-frontend-adaptation.md).
+The current shared popup-action presentation is FI-029, committed at
+`dbc1466400d18b92d5589d8d7392bd27ae6be86c`. Historical package foundation
+and normalized workflow notes describe earlier integration stages; where those notes
+conflict with FI-029, this README and the current source-owned contracts take priority.
+See [demo readiness](../../../../docs/demo-readiness-plan.md) for verification limits.
 
 Popup actions are implemented as a custom DOM action bar instead of Esri `view.popup.actions`.
 FI-011C keeps the established action lifecycle while resolving every selected Product through a
 source-aware Product context before rendering or dispatching an action.
 
-The action UI provides:
+The visible action bar provides one four-slot row for every resolved Product:
+Pause/Resume, Discard, Send/Accept and Tools. Source-owned verified action state
+controls authorization; unsupported mutations are shown disabled with explanatory
+application-owned help. Source-aware Product context is revalidated before any
+supported dispatch. Tools exposes only supported destinations.
 
-- capability-specific action visibility;
-- a flat `Export...` menu with `Edition` and `Update` leaves;
-- leaf-level export loading state for implemented operations;
-- visible disabled placeholders with action-specific availability reasons;
-- shared action availability rules and backend-authoritative Product-operation blocking.
+The older Freeze/Send/Export/Cancel Export descriptors, state machines and API
+contracts remain in the codebase for compatibility, but are **not** a second visible
+popup action row. Their existence does not authorize these workflow actions.
 
 ## File responsibilities
 
 - `features/products/domain/productContext.js` resolves a Graphic into the central source-aware
   Product context and owns the explicit compatibility-AOI adapter.
-- `popupActionConfig.js` creates action descriptors from Product context, Product state, active jobs,
-  and export state.
-- `features/products/domain/productActionAvailability.js` is the domain-level source of truth for
-  action visibility and availability.
+- `popupWorkflowActions.js` defines the shared four-slot workflow action descriptors and
+  availability semantics.
+- `popupActionConfig.js` resolves the current Product context and applies verified source-owned
+  workflow availability/dispatch; unsupported actions remain disabled.
+- `packageActionSession.js` owns verified ENC-package action reads and dispatch, with current
+  package identity and session/generation checks. It is not a standalone Product fallback.
+- `features/products/domain/productActionAvailability.js` remains the legacy domain capability
+  boundary for the retained non-workflow operation contracts; it is not an authorization bypass.
 - `popupProductActions.js` owns confirmation, API calls, notices, operation lifecycle, and post-action
   refresh for implemented capability-gated operations.
 - `popupExportState.js` tracks popup-local export leaf state by deterministic Product identity.
 - `popupActionDom.js` creates and reconciles top-level action button DOM.
-- `popupActionDropdown.js` creates the dropdown, disabled tooltip, keyboard, focus, Escape, and
-  outside-click behavior.
+- `popupActionHelp.js` binds popup-scoped hover/focus and Escape behavior to the shared
+  `shared/ui/tooltips/helpTooltip.js` visual tooltip. The global delegated helper
+  excludes popup-owned `data-popup-help` controls.
+- `popupActionHelpText.js` keeps action descriptions short without changing authorization.
+- `popupActionDropdown.js` creates the dropdown, keyboard, focus, Escape, and outside-click
+  behavior; `popupActionHelp.js` owns its short tooltips.
 - `createPopup.js` renders electronic Product popup content and subscribes to export and
   Product-operation state.
 - `features/dataSources/map/createDataSourcePopup.js` selects the electronic popup for backend-refresh
@@ -71,19 +83,27 @@ The S57 AOI contract remains available for deferred workspace compatibility.
 
 ## Current action status
 
-The Main-map ENC-package popup retains Product Collection but exposes no Analyze or History
-navigation; its empty Tools group is omitted. Work-unit navigation capabilities restrict the resolved
-Main-map context without changing direct product-based workspace resolution. Package-aware
-Analyze/Review/History navigation is deferred. Mutation capabilities and manual Export configuration
-remain disabled until a package-safe backend contract exists.
+The accepted F7A presentation is retained by FI-029: 40px, square, icon-only controls,
+public Calcite icon scale `m`, a single non-wrapping row, application-owned hover/focus
+help and no competing native `title` tooltip. Send and Accept share one stable slot,
+never appearing simultaneously. Product Collection remains in the popup header.
 
-Simple electronic/compatibility Products expose capability-gated actions:
+For an ENC package, live Pause/Resume and Discard are available **only** when the
+current backend package action snapshot and session authorize them. Send/Accept
+remain disabled in ordinary/production operation; a separately configured, explicitly
+local development simulation may present them but makes no backend mutation.
+For a standalone or synthetic Product without a verified workflow action contract,
+the mutation controls remain disabled. Analyze, Review and floating History navigation
+is capability-gated under Tools. No package-specific session may be used as a fallback
+for an unrelated source.
 
-- `Freeze` / `Unfreeze`;
-- `Send to IC-ENC`;
-- `Cancel Export`;
-- `Analyze` and `History` through `Tools`;
-- `Export...`.
+FI-029 supersedes the old simple-Product action list: all resolved Products expose the
+same F7A-style Pause/Resume, Discard, Send/Accept and Tools row. For simple and mock
+Products the current source contracts do not provide the verified action snapshot
+required to enable mutation controls; those controls remain visible and disabled.
+The existing Freeze/Send/Export/Cancel Export backend contracts remain intact but are
+not used as substitutes for this workflow. Tools exposes source-supported destinations,
+including Review when the Product context permits it.
 
 Synthetic Paper Charts and S-102 definitions are retained only for explicit source-boundary tests.
 They are no longer runtime-selectable or workspace-available. Their existing fail-closed ProductContext
@@ -100,18 +120,13 @@ Unknown Product context or unknown capability fails closed and renders no backen
 Product-search selection uses the same resolution and availability path and cannot bypass these
 checks.
 
-## Simplified Export menu
+## Retained legacy Export contract (not displayed by FI-029)
 
-The visible popup structure is:
-
-```text
-Export...
-  Edition
-  Update
-```
-
-There are no visible `All`, `S57`, `S100`, `S101`, `Paper Charts`, or `S-102` menu groups. Backend
-wire targets remain independent from labels and operation kinds.
+Before FI-029, the separate popup action menu displayed `Export...` with `Edition`
+and `Update` leaves. That menu is **not** part of the accepted four-slot popup UI.
+The following direct API routes and internal dispatch contracts remain documented
+for maintenance/regression purposes only; they must not be re-enabled in the popup,
+used to implement Pause/Discard/Send, or treated as supported for an unrelated source.
 
 ### Electronic Products
 
@@ -216,7 +231,7 @@ Main-map package contexts expose a declarative `workUnit` with a primary member 
 members (`key`, `label`, `exportStandard`). `popupProductMetadata.js` projects one column per member;
 `createPopup.js` remains an arbitrary-column table renderer. For ENC-package the order is S-101,
 then S-57. Related normalized `exportMetadata` supplies current candidate values when present.
-Only the primary member may fall back to selected Graphic/main attributes. Missing S-57 metadata
+Both members use normalized current Product metadata. Missing member metadata
 stays empty; no version, status, error, membership identity or package workflow state is inferred.
 Simple/workspace contexts retain their existing single-column projection.
 
@@ -235,8 +250,9 @@ cleanup removes the overlay and its global listeners. No private Calcite/ArcGIS 
 Package capabilities hide Freeze/Unfreeze, Send, Cancel Export and manual Edition/Update Export.
 No package action calls the single-product backend. Read refresh and Collection retain the
 existing source-aware behavior. Package-originated Analyze/Review/History navigation is disabled
-until the later package-aware workspace/history phase. Pause/Resume, Discard, Send/Accept, scheduling, multi-level status
-filters, mixed-status hatching and the package backend read/action contracts are deferred.
+until the later package-aware workspace/history phase. Pause/Resume, Discard, Send/Accept, scheduling and package mutation contracts remain deferred.
+F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
+facet counts are active; F5 does not change their semantics.
 
 ## Export state
 
@@ -436,3 +452,254 @@ Unknown Hangfire states remain pending and are logged; they are not automaticall
 The current frontend contract does not depend on the Hangfire worker running inside ProductCatalogueAPI. A later migration to the shared Hangfire API/worker application can retain the start, status and active-job HTTP contracts, provided the shared worker can execute the Product Catalogue job assembly and access the required ArcGIS, compiler, connection-file and filesystem dependencies.
 
 An external worker migration must be coordinated with the planned atomic operation-registry work. The current local dataset lock and Hangfire monitoring lookup are not sufficient as a final distributed ownership model across independently deployed workers.
+
+## Current Package status and error presentation (2026-11)
+
+The Main-map package popup renders a dedicated **Package status** row from the current source
+Graphic's normalized `workUnitStatus.packageStatus` (backend `Attributes.Package.Status`).
+`Ready` is the aggregate status, distinct from the S-101/S-57 Export Candidate state
+`ReadyForDistribution`. The two-member Product metadata table remains in registry order; its
+Status row contains the ProductState label and, when backend provides an error message,
+the same application-owned hover/focus/click detail trigger previously placed in an additional
+**Error message** row. The additional row is removed. Package-status Error shows the aggregate
+`Attributes.ErrorMessage` using the same trigger; member errors use current `Package.S101` /
+`Package.S57` ErrorMessage or the matching active export overlay.
+
+Only the source AOI/targeted-status refresh updates the map-owned aggregate, members, symbols and
+filters. Product-detail freshness does not rewrite map-owned status. An absent or unsupported
+aggregate status renders **Unknown** and an unclassified neutral map symbol, not Idle. When the
+aggregate is known, the old ProductState-based `Package workflow:` summary is suppressed to
+avoid displaying two conflicting package statuses. The popup header and overlap-picker status marker
+and subtitle also use this aggregate through the layer symbolization contract; ordinary Products
+continue to show their own ProductState. Pause/Resume, send/accept, error dialog focus, Tools and
+all other popup actions continue through existing session ownership.
+
+## F5 package popup read freshness
+
+`GET electronicproducts/{name}` supplies independent current S-101 and S-57
+Products. Transport normalizers project them into `workUnitMetadata.members`;
+initial ENC AOIs populate the same boundary from `Attributes.Package` current
+member fields. The popup shows a Product row in registry member order. Missing
+members stay missing; names are never derived. Active normalized export metadata
+overlays only its matching member's version, status, error and validation artifacts.
+Without an export, current Edition/Update and AOI `workUnitStatus` member status are
+shown. Workflow status never replaces member status. Only Status cells are colored;
+unchanged presentation retains the existing DOM/error-details focus identity.
+
+Connected package popups use `createWorkspaceFreshnessMonitor` with its 30,000 ms
+default. They prime revision, read Product detail once, then check revision again
+to catch a racing change. A failed initial detail read marks recovery required.
+Unchanged revisions cause no further detail read; changed revisions are acknowledged
+only after successful, current detail publication. Hidden documents suppress
+periodic checks; visibility re-entry shares the monitor's in-flight check. Disconnect
+destroys the monitor and invalidates pending detail completion. No additional focus
+or pageshow listener is installed. Package popups do not register Product-job watches or job-triggered Product-detail
+callbacks, and do not poll `jobs/active` or Hangfire jobs.
+
+Detail publication allows only `workUnitMetadata` and `exportMetadata`. Complete
+workflow/member map status, F1 filters, F2 symbols, F3 facets, geometry and source
+identity remain owned by normal Main-map source refresh (10 minutes). Popup freshness
+does not fetch global AOIs. A member status without an active export therefore
+converges through normal source refresh. Non-package job discovery and targeted
+Graphic refresh remain unchanged. All package mutations remain unavailable. F6A-F6D subsequently enabled
+package-aware Analyze/Review/History navigation; F7A preserves that accepted behavior.
+
+### F5 v2: normal source refresh and an open popup
+
+The connected package popup registers a local callback on the existing
+`registerPopupRefreshHandler` / `refreshOpenProductPopup` bridge. Stable Graphic
+source reconciliation uses this callback to replace the popup snapshot with the
+already-refreshed Graphic's AOI-owned state, including `workUnitStatus`, current
+`workUnitMetadata`, identity and filter/display fields. This callback performs no
+Product-detail or AOI request and starts no timer.
+
+Only the session's last accepted `exportMetadata` is preserved if the refreshed
+Graphic omits that field. An explicit replacement (including undefined/null)
+replaces it. The retained overlay is local to popup presentation and is not copied
+back into map/filter state. The existing revision monitor alone revalidates Product
+detail at its bounded 30-second cadence. A local source refresh supersedes publication of an older in-flight detail result
+without duplicating simultaneous detail reads. Metadata-signature rendering still preserves
+focus and error controls on semantic no-ops.
+
+Close/disconnect unregisters both the local bridge and freshness lifecycle. Delayed
+publication checks connection, source/dataset/Product identity, layer/source object
+identity, source visibility and Graphic membership using application state/public
+collection APIs. An invalid local callback unregisters its session.
+
+F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
+facet counts are active. F5 preserves their semantics and source-refresh ownership.
+
+### F5 v3: shared publication generation
+
+A valid package source-refresh publication advances the same `latestRefreshId`
+owned by `createPopup.js` for targeted detail publication. A detail request begun
+before that publication is rejected entirely: neither its current member metadata
+nor its export/validation overlay is applied. The newer AOI snapshot and currently
+accepted overlay remain visible. The bridge is still network-free and starts no timer.
+
+A superseded detail returns false, so the revision monitor does not acknowledge
+that revision. The next bounded check can retry; superseded initial reads use the
+existing `requireRefresh()` recovery path and subsequent initial check. There is
+still one in-flight detail read and no separate generation owner. All v2 source,
+identity, connection and cleanup guards remain in place.
+
+### External Product operations: AOI status drift
+
+An externally completed Product operation (for example, a Swagger-initiated
+standalone Discard) can change Product-detail `status` before the Main-map AOI
+source refreshes. An open package popup compares that authoritative primary-track
+status with the primary member in its current AOI `workUnitStatus`. A recognized,
+identity-consistent mismatch requests **one targeted active-source reload** through
+the existing source controller; detail never writes workflow/member status,
+symbols, filters or identity to a Graphic. Source reconciliation updates the map
+and the open popup using the existing generation and stable-Graphic mechanisms.
+
+Only connected, current popup detail results may issue this request. A map-owned
+coordinator coalesces in-flight source requests, uses a 30-second retry cooldown
+and skips disabled/loading sources or an already-running global refresh. Failed
+source loads retain the existing map representation. No global AOI polling or
+new backend contract is introduced: without an open popup, status converges
+through normal auto/manual source refresh. The existing package-Discard action
+uses its own full refresh signal rather than also requesting a targeted reload.
+
+## Historical F7A v3 presentation boundary (superseded by FI-029 dispatch)
+
+`packagePopupPresentation.js` is a popup-owned pure projection of a resolved
+registry work unit, not Review state. It validates the current Graphic/source and
+member identity. The actual action configuration returns the package branch before
+reading Product-operation availability or constructing any Product mutation callback.
+
+Each package descriptor separates `frontendSupported`, `backendAuthorized` and
+`dispatchImplemented`. The live frontend supports presentation, backend authorization
+is unknown, and dispatch is unconditionally false. Unexpected Graphic fields cannot
+supply workflow authorization, paused state, send count or scheduling. No package
+endpoint, DTO, storage, action simulator or confirmation flow is introduced.
+
+An optional `workflowPresentation` argument exists only on the pure helper for
+presentation fixtures and a future reviewed F7B adapter. It is never read from
+Graphic attributes or passed by live popup rendering. Its verified identity, explicit
+paused boolean, primary action, member identities and timezone-qualified timestamp
+are validated; even accepted fixture inputs cannot enable dispatch. F7B must establish
+run/generation identity and real backend authorization before introducing a dispatcher.
+
+Pause/Resume shares the stable `package-pause-resume` slot. Send/Accept shares the
+stable `package-send-accept` slot, selected only by an explicit optional presentation
+mode. Production supplies no mode, so only Send is shown. IC-ENC responses, Product
+statuses and candidates never imply Accept; an approved result does not require it.
+Discard retains its package-only identity with the shorter name. All three package
+controls are icon-only, and Tools keeps its right-side placement in one row. Package
+rows reconcile by ID; ordinary Product rows preserve their original reconciler.
+`popupActionDom.js` applies the optional package Tools current-session guard before
+opening menus. Package navigation callbacks also verify the connected anchor and
+current source. Existing Product callbacks and dropdown behavior remain unchanged.
+
+`packagePopupWorkflow.js` reconciles a sibling below `.popup-section` using a
+separate presentation signature. Source-owned `workUnitStatus.workflowStatus` is
+shown only when the existing status lookup has a known label. It never becomes an
+action permission or Pause flag. Detail still publishes only `workUnitMetadata`
+and `exportMetadata`; source refresh owns workflow/member statuses. No new data
+request, polling loop or generation owner is added.
+
+The existing snapshot/current-generation checks guard both action and workflow
+presentation. Invalid source, member identity or disconnected sessions stop freshness;
+invalid package publication clears the session's DOM/error overlay and unregisters
+the bridge. Same-state rendering retains action hosts, member table, error controls,
+selection and Tools dropdown. Workflow-only changes update just the summary text.
+`popupPackageActionDom.js` renders application-owned native buttons with public
+Calcite scale `m` icons in square 40px surfaces, explicit accessible names and
+`aria-disabled="true"`. Buttons remain
+focusable for help, while click/Enter/Space are blocked and no dispatcher exists even
+for forged configs. Hover and focus expose the same transient application-owned tooltip
+and description. Package controls have no native `title`; unchanged or forced reconciliation
+also removes obsolete native titles from reused controls. Tools and ordinary Product
+actions use the same application-owned help; their sizing is unchanged.
+Escape dismisses help without moving focus; removal/disposal unregisters its temporary
+keydown/scroll/resize handlers. Same-state refresh retains focused controls and help.
+The workflow footer is omitted when it has no meaningful information. Idle and missing
+package-state placeholders are not displayed; a real non-idle workflow, pause or scheduled
+send remains visible. The old permanent action explanation panel is removed. CSS uses popup theme tokens, square controls and
+one non-wrapping row, with local horizontal scrolling only at exceptionally narrow widths.
+
+## October 2026 demo: live Pause/Resume and Discard, simulated Send/Accept
+
+The historical [demo action note](../../../../docs/package-demo-live-actions.md) records
+an opt-in development simulation; it is **not** current deployment or demo setup
+approval. Reverify the flag, source session and backend/Worker behavior before using
+any mutation or simulation in a demonstration. Also verify the backend-owned contract
+in the matching API baseline rather than assuming this frontend snapshot is sufficient.
+
+This replaces only F7A's
+**unavailable dispatch** boundary; icon row sizing, focus/Escape/help,
+source-aware package identity, member data and Tools remain unchanged.
+
+`packageActionSession.js` is the package-popup-owned action and request lifecycle;
+FI-029 does not grant this session authority over standalone Products.
+Pause/Resume and Discard require an authoritative backend package ID;
+Send/Accept, when explicitly opted in through `VITE_PACKAGE_DEMO_ENABLED=true`
+under `npm run dev`, only show a toast and toggle that same popup's primary
+action. The opt-in is independent of the URL and cannot enable simulation in
+production builds. No real Send/Accept endpoint is called. Normal frontend
+operation leaves Send/Accept disabled.
+
+### October 2026 follow-up: package action copy, incomplete tracks and Discard refresh
+
+Package tooltips now describe normal workflow actions rather than demo plumbing.
+Only the simulated Send/Accept notices state the demo boundary. The action
+session distinguishes an unavailable API/current package from an existing
+package whose member tracks are missing or still processing; absent server
+permission still never installs a live click dispatcher. Missing members cannot
+be synthesized from a dataset name or Graphic attributes.
+
+After a confirmed Discard Worker success, the existing popup generation owner
+invalidates old detail reads, clears its candidate overlay and performs one
+targeted Product-detail refresh. The regular source-refresh event still updates
+AOI-owned status and symbol data. The same popup, row and focus patterns remain;
+there is no new timer or polling owner. A failed detail read warns without
+undoing the successful Discard or reintroducing discarded candidate details.
+
+### Popup help consistency (October 2026)
+
+The package buttons, ordinary Product actions, Tools/Export menu entries, and application-owned
+popup-header Copy/Collection buttons use `bindPopupActionHelp`. No native `title` is set on these
+controls; the global title helper skips `data-popup-help` targets. Tooltip text is brief and
+intended for normal operation; demo disclosure remains in Send/Accept notices only.
+
+A single viewport-clamped tooltip is shown at a time. It follows the mouse with a small offset,
+while keyboard-focus help remains anchored to its control. Tooltips cannot capture pointer events
+or block hover on neighboring Tools/Export menu items. Tooltip state updates in place with action
+changes and is disposed with its owner. Escape dismisses action help; inside an open Tools menu,
+Escape also follows the established menu-close path. Non-interactive headings and empty action-bar
+areas do not show tooltips merely because they have accessible labels. Product error triggers show
+only the existing selectable error overlay on hover/focus, which can be pinned by clicking.
+
+The change covers application-owned popup actions; ArcGIS/Calcite-supplied framework controls
+are not modified through private component internals. It makes no change to backend eligibility,
+workflow state, Product attributes or action dispatch.
+
+### Targeted package-status reconciliation (October 2026)
+
+A current popup compares the primary Product-detail status with the AOI-owned
+S-101 member state. On drift it delegates to the Main-map source controller,
+which fetches `GET /electronicproducts/{sourceName}/status` and validates the
+same canonical S-101/S-57 package projection as the full AOI path. Only the
+matching Graphic is updated; symbols, filters and popup reconciliation use
+existing public application-owned boundaries. No geometry or full AOI list is
+requested in this flow. An in-flight full source refresh, deactivation or
+replacement supersedes a stale targeted result. Failed/partial responses do not
+publish any status, and normal manual/periodic AOI refresh remains available.
+
+`Package.HasActivePackage` is server-owned and never inferred from standalone
+track errors. Missing packages suppress the package action read and controls.
+If a package disappears between reads, the action endpoint returns an explicit
+200 `actionsAvailable: false` response without claiming package absence;
+backend authorization remains required
+for every real mutation. The existing popup generation, focus, tooltip and
+navigation semantics are unchanged.
+
+## Unified popup action presentation (FI-029)
+
+All resolved Product contexts use the same four-slot F7A-style action bar and stable keyed controls. `popupWorkflowActions.js` owns the shared action descriptors. `popupActionConfig.js` attaches live dispatch only through a verified source-owned session; unsupported controls remain focusable with explanation and cannot dispatch. The established `packageActionSession.js` still requires authoritative package identity and must not be invoked for standalone or mock sources. Backend Freeze/Export/Cancel Export modules remain in the codebase but no longer define a separate popup action row. Tools navigations remain capability-aware.
+
+### FI-029 UI acceptance record (2026-10-26)
+
+The shared four-slot action presentation was committed at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`. The owner manually reviewed the existing ENC-package UI and reported no apparent popup regression. This is presentation/regression acceptance only: there were no standalone/non-package Products available for an end-to-end mutation test. Keep non-package Pause/Resume, Discard and Send/Accept disabled until the actual source-owned backend eligibility and dispatch contract is verified. Do not route the Product through a different source's package session or the previous Freeze/Export/Cancel Export workflow. See `../../../../docs/demo-readiness-plan.md` for current regression scope.

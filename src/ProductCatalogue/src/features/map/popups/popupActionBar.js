@@ -1,7 +1,6 @@
-import { isStatusFrozen } from "../state/featureState.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
-import { createActionButton, updateActionButton } from "./popupActionDom.js";
+import { createActionButton, updateActionButton, disposeActionButton } from "./popupActionDom.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 
 const ACTION_ROW_CLASS = "popup-action-bar__row";
@@ -11,6 +10,7 @@ export function createPopupActionBar({
   graphic,
   productContext,
   refreshAndRender,
+  packageActions,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
   const actionGroups = getActionGroups({
@@ -18,6 +18,7 @@ export function createPopupActionBar({
     graphic,
     attributes,
     refreshAndRender,
+    packageActions,
   });
 
   if (actionGroups.length === 0) {
@@ -28,13 +29,14 @@ export function createPopupActionBar({
   container.className = "popup-action-bar";
   container.setAttribute("aria-label", "Popup actions");
   reconcileActionRows(container, actionGroups, { force: true });
+  container.classList.add("popup-action-bar--unified");
 
   return container;
 }
 
 export function updatePopupActionBar(
   container,
-  { attributes, graphic, productContext, refreshAndRender, force = false } = {}
+  { attributes, graphic, productContext, refreshAndRender, packageActions, force = false } = {}
 ) {
   if (!container) {
     return {
@@ -49,11 +51,13 @@ export function updatePopupActionBar(
     graphic,
     attributes,
     refreshAndRender,
+    packageActions,
   });
 
   if (actionGroups.length === 0) {
     const changed = container.childElementCount > 0;
     closeOpenDropdownIn(container);
+    disposeActionsIn(container);
     container.replaceChildren();
 
     return {
@@ -63,6 +67,7 @@ export function updatePopupActionBar(
   }
 
   const changed = reconcileActionRows(container, actionGroups, { force });
+  container.classList.add("popup-action-bar--unified");
 
   return {
     supported: true,
@@ -70,7 +75,7 @@ export function updatePopupActionBar(
   };
 }
 
-function getActionGroups({ context, graphic, attributes, refreshAndRender }) {
+function getActionGroups({ context, graphic, attributes, refreshAndRender, packageActions }) {
   if (!context) {
     return [];
   }
@@ -80,8 +85,8 @@ function getActionGroups({ context, graphic, attributes, refreshAndRender }) {
     attributes: resolvedAttributes,
     graphic,
     productContext: context,
-    frozen: isStatusFrozen(resolvedAttributes?.status),
     refreshAndRender,
+    packageActions,
   });
 }
 
@@ -99,43 +104,15 @@ function reconcileActionRows(container, actionGroups, { force }) {
       changed = true;
     }
 
-    if (reconcileActionButtons(row, actions, { force })) {
+    if (reconcileWorkflowActionButtons(row, actions, { force })) {
       changed = true;
     }
   }
 
   for (let rowIndex = actionGroups.length; rowIndex < rows.length; rowIndex += 1) {
     closeOpenDropdownIn(rows[rowIndex]);
+    disposeActionsIn(rows[rowIndex]);
     rows[rowIndex].remove();
-    changed = true;
-  }
-
-  return changed;
-}
-
-function reconcileActionButtons(row, actions, { force }) {
-  let changed = false;
-  const currentActions = Array.from(row.children);
-
-  for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
-    const actionConfig = actions[actionIndex];
-    let action = currentActions[actionIndex];
-
-    if (!action) {
-      action = createActionButton(actionConfig);
-      row.appendChild(action);
-      changed = true;
-      continue;
-    }
-
-    if (updateActionButton(action, actionConfig, { force })) {
-      changed = true;
-    }
-  }
-
-  for (let actionIndex = actions.length; actionIndex < currentActions.length; actionIndex += 1) {
-    closeOpenDropdownForAction(currentActions[actionIndex]);
-    currentActions[actionIndex].remove();
     changed = true;
   }
 
@@ -164,5 +141,39 @@ function closeOpenDropdownIn(container) {
 function closeOpenDropdownForAction(action) {
   if (action?.getAttribute?.("aria-expanded") === "true") {
     closePopupActionDropdown();
+  }
+}
+
+function reconcileWorkflowActionButtons(row, actions, { force }) {
+  let changed = false;
+  const existing = new Map(
+    Array.from(row.children).map((action) => [action.dataset.popupActionId, action])
+  );
+  for (const [index, config] of actions.entries()) {
+    let action = existing.get(config.id);
+    if (action) {
+      existing.delete(config.id);
+      changed = updateActionButton(action, config, { force }) || changed;
+    } else {
+      action = createActionButton(config);
+      changed = true;
+    }
+    if (row.children[index] !== action) {
+      row.insertBefore(action, row.children[index] ?? null);
+      changed = true;
+    }
+  }
+  for (const action of existing.values()) {
+    closeOpenDropdownForAction(action);
+    disposeActionButton(action);
+    action.remove();
+    changed = true;
+  }
+  return changed;
+}
+
+function disposeActionsIn(container) {
+  for (const action of container.querySelectorAll(".popup-action-bar__action")) {
+    disposeActionButton(action);
   }
 }

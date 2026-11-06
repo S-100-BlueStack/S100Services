@@ -610,9 +610,102 @@ namespace TestProductCatalogueAPI
             var validator = new SendToIcEncOptionsValidator();
 
             Assert.False(validator.Validate(null, new SendToIcEncOptions { Mode = SendToIcEncMode.Live }).Succeeded);
+            Assert.True(validator.Validate(null, new SendToIcEncOptions {
+                Mode = SendToIcEncMode.Live, Host = "icenc.example", Username = "worker", Password = "secret", OperatorKey = "operator-secret",
+                S57RemoteRoot = "/Upload/S-57", S101RemoteRoot = "/Upload/S-101"
+            }).Succeeded);
             Assert.False(validator.Validate(null, new SendToIcEncOptions { Mode = (SendToIcEncMode)999 }).Succeeded);
             Assert.True(validator.Validate(null, new SendToIcEncOptions { Mode = SendToIcEncMode.Disabled }).Succeeded);
             Assert.True(validator.Validate(null, new SendToIcEncOptions { Mode = SendToIcEncMode.Simulation }).Succeeded);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task LiveJobDeliversReservedCandidateAndWaitsForAcknowledgement() {
+            var deliveries = new RecordingDeliveryRepository();
+            var transport = new RecordingTransport();
+            var job = new UploadSingularProductJob(new RecordingProductRepository(null),
+                new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = SendToIcEncMode.Live }),
+                NullLogger<UploadSingularProductJob>.Instance, deliveries, transport);
+            var context = new RecordingExecutionContext();
+            await job.ExecuteAsync(LiveRequest(), context, CancellationToken.None);
+
+            Assert.Equal(1, deliveries.Reservations);
+            Assert.Equal(1, transport.Calls);
+            Assert.Equal(1, deliveries.Completed);
+            Assert.Equal(SendToIcEncContract.DeliveredStatus, context.Get<string>(ExportJobParameterNames.DeliveryStatus));
+            Assert.Equal(SendToIcEncContract.DeliveredOutcome, context.Get<string>(ExportJobParameterNames.OperationOutcome));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task LiveEndpointRequiresOperatorKeyAndQueuesTheS101Track() {
+            var tracks = new InMemoryProductRepository();
+            var track = await tracks.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 0);
+            await tracks.BeginExportAsync(track.Id, 5, 0, "test", DateTime.UtcNow);
+            await tracks.SetStateAsync(track.Id, ProductState.ReadyForDistribution, "test", DateTime.UtcNow);
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(new RecordingProductRepository(null), new ThrowingLockService(), jobs, SendToIcEncMode.Live, tracks);
+
+            Assert.IsType<StatusCodeResult>(await controller.UploadSingularProduct(DatasetName, CancellationToken.None));
+            Assert.Equal(0, jobs.EnqueueCalls);
+            Assert.IsType<AcceptedResult>(await controller.UploadSingularProduct(DatasetName, CancellationToken.None, "operator-secret"));
+            Assert.Equal(SendToIcEncMode.Live, jobs.LastRequest!.Mode);
+            Assert.Equal("S101", jobs.LastRequest.ProductSpecification);
+            Assert.Equal(5, jobs.LastRequest.ExpectedEdition);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task LiveJobLeavesUncertainDeliveryForManualReconciliation() {
+            var deliveries = new RecordingDeliveryRepository();
+            var transport = new RecordingTransport { Fail = true };
+            var job = new UploadSingularProductJob(new RecordingProductRepository(null),
+                new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = SendToIcEncMode.Live }),
+                NullLogger<UploadSingularProductJob>.Instance, deliveries, transport);
+            var context = new RecordingExecutionContext();
+
+            var error = await Assert.ThrowsAsync<SendToIcEncJobException>(() => job.ExecuteAsync(LiveRequest(), context, CancellationToken.None));
+            Assert.Equal(SendToIcEncContract.DeliveryUncertainCode, error.Code);
+            Assert.Equal(0, deliveries.Completed);
+            Assert.Equal(1, deliveries.Uncertain);
+            Assert.Equal(SendToIcEncContract.UncertainStatus, context.Get<string>(ExportJobParameterNames.DeliveryStatus));
+        }
+
+        private static SendToIcEncJobRequest LiveRequest() => new(DatasetName, SendToIcEncMode.Live, 5, 0,
+            "correlation-1", DateTimeOffset.UtcNow, ProductSpecification: "S101");
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void LiveJobMetadataIdentifiesLiveMode() {
+            var parameters = ExportJobMetadataClientFilter.CreateParameters(LiveRequest());
+            Assert.Equal(SendToIcEncContract.LiveMode, parameters[ExportJobParameterNames.Mode]);
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, parameters[ExportJobParameterNames.DeliveryStatus]);
+        }
+
+        private sealed class RecordingDeliveryRepository : IIcEncDeliveryRepository
+        {
+            public int Reservations { get; private set; }
+            public int Completed { get; private set; }
+            public int Uncertain { get; private set; }
+            public Task<IcEncDelivery?> ReserveAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken token) {
+                Reservations++;
+                return Task.FromResult<IcEncDelivery?>(new IcEncDelivery(Guid.NewGuid(), datasetName, specification, edition, update, [1]));
+            }
+            public Task MarkDeliveredAsync(Guid deliveryId, DateTime nowUtc, CancellationToken token) { Completed++; return Task.CompletedTask; }
+            public Task MarkUncertainAsync(Guid deliveryId, DateTime nowUtc, string reason, CancellationToken token) { Uncertain++; return Task.CompletedTask; }
+            public Task<bool> ReconcileAsync(Guid deliveryId, bool receivedByIcEnc, string? owner, DateTime nowUtc, CancellationToken token) => Task.FromResult(true);
+        }
+
+        private sealed class RecordingTransport : IIcEncTransport
+        {
+            public int Calls { get; private set; }
+            public bool Fail { get; init; }
+            public Task<string> UploadAsync(IcEncDelivery delivery, CancellationToken token) {
+                Calls++;
+                if (Fail) throw new IOException("The FTPS session ended after sending bytes.");
+                return Task.FromResult("/Upload/S-101/dataset");
+            }
         }
 
         [Fact]
@@ -641,7 +734,7 @@ namespace TestProductCatalogueAPI
                 workflowRepository ?? new InMemoryProductRepository(),
                 locks,
                 jobs,
-                new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode }),
+                new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode, OperatorKey = mode == SendToIcEncMode.Live ? "operator-secret" : null }),
                 TimeProvider.System,
                 new FreezeProductManager(new FreezeElectronicProductManager())
             ) {

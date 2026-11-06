@@ -1,4 +1,6 @@
+import { normalizeWorkUnitMetadata } from "../../data/normalizers/workUnitMetadata.js";
 import { normalizeElectronicProductStatus } from "../domain/electronicProductStatus.js";
+import { normalizeEncPackageStatus } from "../domain/encPackageStatus.js";
 import {
   assertUniqueProductIdentities,
   createSourceAwareProductIdentity,
@@ -237,6 +239,18 @@ function normalizeElectronicAois(payload, source) {
         status:
           normalizeElectronicProductStatus(raw.Status ?? raw.status) ?? raw.Status ?? raw.status,
         workUnitStatus: normalizeElectronicPackage(raw, source, datasetName),
+        hasActivePackage: readActivePackagePresence(raw),
+        workUnitMetadata:
+          source.workUnit?.kind === "package" && source.normalizer?.packageMembers
+            ? normalizeWorkUnitMetadata(
+                readFirstDefined(raw, ["package"]),
+                source.workUnit.members.map(({ key }) => ({
+                  key,
+                  field: source.normalizer.packageMembers[key]?.field ?? key,
+                })),
+                { aoi: true }
+              )
+            : undefined,
         displayScale: raw.DisplayScale ?? raw.displayScale,
         usageBand: raw.UsageBand ?? raw.usageBand,
         errorMessage: raw.ErrorMessage ?? raw.errorMessage,
@@ -293,19 +307,72 @@ function normalizeElectronicPackage(attributes, source, datasetName) {
       key: declaration.key,
       datasetName: memberDatasetName,
       status: normalizeElectronicProductStatus(readFirstDefined(member, ["status"])),
+      errorMessage: readFirstDefined(member, ["errorMessage"]) ?? null,
     };
   });
 
-  // Incomplete member state must keep representative rendering; a single known
-  // member must not masquerade as the rendering state of the whole package.
-  if (
-    members.length === 0 ||
-    members.some((member) => !member.datasetName || member.status === undefined)
-  ) {
-    return undefined;
-  }
+  // Package.Status is authoritative even when a member track is incomplete.
+  // Preserve truthful partial member state for display; targeted mutations still
+  // reject incomplete membership before publication.
   return {
+    packageStatus: normalizeEncPackageStatus(readFirstDefined(pkg, ["status"])),
     workflowStatus: normalizeElectronicProductStatus(readFirstDefined(attributes, ["status"])),
     members,
   };
+}
+
+// The targeted endpoint returns the same AOI status attributes without geometry.
+// Require a complete, coherent package projection before publishing any member state.
+export function normalizeTargetedElectronicStatus(payload, source, requestedDatasetName) {
+  if (source?.normalizer?.type !== "electronic-aoi" || source?.workUnit?.kind !== "package") {
+    throw new Error("The source does not support targeted package status.");
+  }
+  const datasetName = normalizeText(readFirstDefined(payload, ["datasetName"]));
+  const requested = normalizeText(requestedDatasetName);
+  if (!requested || datasetName?.toUpperCase() !== requested.toUpperCase()) {
+    throw new Error("Targeted package status returned a different Product identity.");
+  }
+  const status = normalizeElectronicProductStatus(readFirstDefined(payload, ["status"]));
+  const workUnitStatus = normalizeElectronicPackage(payload, source, datasetName);
+  const hasActivePackage = readActivePackagePresence(payload);
+  const pkg = readFirstDefined(payload, ["package"]);
+  const workUnitMetadata = normalizeWorkUnitMetadata(
+    pkg,
+    source.workUnit.members.map(({ key }) => ({
+      key,
+      field: source.normalizer.packageMembers[key]?.field ?? key,
+    })),
+    { aoi: true }
+  );
+  const names = workUnitMetadata.members ?? {};
+  if (
+    status === undefined ||
+    !workUnitStatus ||
+    typeof hasActivePackage !== "boolean" ||
+    workUnitStatus.members.length !== source.workUnit.members.length ||
+    workUnitStatus.members.some((member) => !member.datasetName || member.status === undefined) ||
+    source.workUnit.members.some(({ key }) => !names[key]?.datasetName) ||
+    names[source.workUnit.primaryMemberKey]?.datasetName?.toUpperCase() !==
+      datasetName.toUpperCase()
+  ) {
+    throw new Error("Targeted package status is incomplete or invalid.");
+  }
+  for (const member of workUnitStatus.members) {
+    if (names[member.key]?.datasetName?.toUpperCase() !== member.datasetName.toUpperCase()) {
+      throw new Error("Targeted package status has inconsistent member identities.");
+    }
+  }
+  return {
+    status,
+    workUnitStatus,
+    workUnitMetadata,
+    hasActivePackage,
+    errorMessage: readFirstDefined(payload, ["errorMessage"]) ?? null,
+  };
+}
+
+function readActivePackagePresence(attributes) {
+  const pkg = readFirstDefined(attributes, ["package"]);
+  const value = readFirstDefined(pkg, ["hasActivePackage"]);
+  return typeof value === "boolean" ? value : undefined;
 }

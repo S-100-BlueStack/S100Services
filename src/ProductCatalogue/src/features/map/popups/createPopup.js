@@ -1,7 +1,19 @@
+import {
+  createPackagePopupPresentation,
+  isCurrentPackagePopupContext,
+} from "./packagePopupPresentation.js";
+import { createPackageActionSession } from "./packageActionSession.js";
+import { updatePackagePopupWorkflow } from "./packagePopupWorkflow.js";
+import { createPackagePopupSnapshotSynchronization } from "./packagePopupSnapshot.js";
 import { createPopupErrorDetails } from "./popupErrorDetails.js";
+import {
+  getEncPackageStatusLabel,
+  normalizeEncPackageStatus,
+} from "../../dataSources/domain/encPackageStatus.js";
+import { packageStatusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { applyPopupProductStatusCell } from "./popupProductStatusCell.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
-import { getStatusName, getStatusIdByName } from "../../data/stores/statusStore.js";
+import { getStatusName, getStatusIdByName, getAllStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
@@ -15,8 +27,12 @@ import {
 import { onPopupExportStateChanged } from "./popupExportState.js";
 import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
 import { watchActiveProductJobs } from "../../products/services/productJobService.js";
-import { registerPopupRefreshHandler } from "./popupRefreshBridge.js";
+import {
+  registerPopupRefreshHandler,
+  requestPopupSourceStatusRefresh,
+} from "./popupRefreshBridge.js";
 import { createPopupProductMetadataColumns } from "./popupProductMetadata.js";
+import { detectPackagePopupStatusDrift } from "./popupSourceStatusDrift.js";
 
 const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
@@ -66,16 +82,92 @@ export function createPopup() {
         stopRefreshingPopup: null,
       };
 
+      const packageActions =
+        productContext?.workUnit?.kind === "package"
+          ? createPackageActionSession({
+              sourceName: productContext.datasetName,
+              identityKey: productContext.identityKey,
+              hasActivePackage: () => graphic.attributes?.hasActivePackage === true,
+              memberNames: () =>
+                Object.fromEntries(
+                  Object.entries(currentAttributes.workUnitMetadata?.members ?? {}).map(
+                    ([key, value]) => [key, value.datasetName]
+                  )
+                ),
+              isCurrent: () =>
+                !disposed &&
+                container.isConnected &&
+                isCurrentPackagePopupContext(productContext, currentAttributes, graphic),
+              onChange: () => render(),
+              onDiscardSucceeded: async () => {
+                if (disposed || !container.isConnected || !packageSnapshot?.isCurrent()) {
+                  return false;
+                }
+                // A completed Discard invalidates in-flight candidate detail and its
+                // overlay before the next server read. The AOI-owned statuses remain
+                // untouched until the normal source refresh publishes them.
+                latestRefreshId += 1;
+                currentAttributes = applyGraphicAttributes(graphic, { exportMetadata: null });
+                render();
+                return refreshAndRender({ showFailureNotice: false, syncSourceOnDrift: false });
+              },
+            })
+          : null;
+      const packageSnapshot =
+        productContext?.workUnit?.kind === "package"
+          ? createPackagePopupSnapshotSynchronization({
+              graphic,
+              productContext,
+              isConnected: () => !disposed && container.isConnected,
+              getAttributes: () => currentAttributes,
+              onSourcePublication: () => {
+                latestRefreshId += 1;
+                void packageActions?.refresh();
+              },
+              publish: (attributes) => {
+                currentAttributes = attributes;
+                render();
+              },
+              onInvalid: invalidatePackagePresentation,
+            })
+          : null;
+
+      function invalidatePackagePresentation() {
+        disposed = true;
+        latestRefreshId += 1;
+        backendSync.stopRefreshingPopup?.();
+        packageActions?.destroy();
+        const actionBar = getDirectChildByClass(container, "popup-action-bar");
+        // Clear this session's dropdown through the established action-bar cleanup.
+        if (actionBar) updatePopupActionBar(actionBar);
+        errorDetails.destroy();
+        container.replaceChildren();
+      }
+
       function render() {
+        if (disposed) return;
+        if (
+          packageSnapshot &&
+          ((container.isConnected && !packageSnapshot.isCurrent()) ||
+            !createPackagePopupPresentation({ productContext, attributes: currentAttributes }))
+        ) {
+          invalidatePackagePresentation();
+          return;
+        }
         renderPopupContent(container, currentAttributes, {
           graphic,
           productContext,
           refreshAndRender,
           errorDetails,
+          packageActions,
         });
       }
 
-      async function refreshAndRender({ showFailureNotice = true } = {}) {
+      async function refreshAndRender({ showFailureNotice = true, syncSourceOnDrift = true } = {}) {
+        if (packageSnapshot && !packageSnapshot.isCurrent()) {
+          invalidatePackagePresentation();
+          return false;
+        }
         const refreshId = ++latestRefreshId;
         const datasetName =
           productContext?.datasetName ??
@@ -102,9 +194,17 @@ export function createPopup() {
         }
         const result = refreshRequest.result;
 
-        // Ignore stale refreshes. This prevents an older popup-open refresh from
-        // overwriting a newer freeze/unfreeze refresh.
-        if (disposed || !container.isConnected || refreshId !== latestRefreshId) {
+        // The same generation rejects older detail after a source publication
+        // as well as after a newer action refresh.
+        if (
+          disposed ||
+          !container.isConnected ||
+          refreshId !== latestRefreshId ||
+          (packageSnapshot && !packageSnapshot.isCurrent())
+        ) {
+          if (packageSnapshot && !packageSnapshot.isCurrent()) {
+            invalidatePackagePresentation();
+          }
           return false;
         }
         if (!result.success) {
@@ -115,11 +215,26 @@ export function createPopup() {
           return false;
         }
 
+        const drift =
+          syncSourceOnDrift && packageSnapshot
+            ? detectPackagePopupStatusDrift({
+                productContext,
+                attributes: graphic.attributes,
+                detail: result.data,
+              })
+            : null;
+        const hadMembers = Object.keys(currentAttributes.workUnitMetadata?.members ?? {}).length;
         currentAttributes = applyGraphicAttributes(
           graphic,
           mergePopupProductRefreshAttributes(productContext, result.data)
         );
         render();
+        if (drift && !disposed && packageSnapshot?.isCurrent()) {
+          void requestPopupSourceStatusRefresh(drift);
+        }
+        if (!hadMembers && Object.keys(currentAttributes.workUnitMetadata?.members ?? {}).length) {
+          void packageActions?.refresh();
+        }
 
         return true;
       }
@@ -136,7 +251,10 @@ export function createPopup() {
         container,
         combineCleanups(
           () => {
+            const actionBar = getDirectChildByClass(container, "popup-action-bar");
+            if (actionBar) updatePopupActionBar(actionBar);
             errorDetails.destroy();
+            packageActions?.destroy();
             disposed = true;
             latestRefreshId += 1;
           },
@@ -146,15 +264,22 @@ export function createPopup() {
           () => backendSync.stopRefreshingPopup?.()
         ),
         () => {
+          if (disposed) return;
+          void packageActions?.start();
           backendSync = initializePopupBackendSynchronization({
             productContext,
             datasetName: popupDatasetName,
             refresh: refreshAndRender,
             watchActiveProductJobs,
             registerPopupRefreshHandler,
+            syncFromGraphic: packageSnapshot?.synchronize,
           });
           if (backendSync.enabled) {
-            void refreshAndRender({ showFailureNotice: false });
+            if (backendSync.start) {
+              void backendSync.start();
+            } else {
+              void refreshAndRender({ showFailureNotice: false });
+            }
           }
         }
       );
@@ -186,7 +311,7 @@ export function createPopup() {
 function renderPopupContent(
   container,
   attributes,
-  { graphic, productContext, refreshAndRender, errorDetails }
+  { graphic, productContext, refreshAndRender, errorDetails, packageActions }
 ) {
   const section = getOrCreatePopupSection(container);
   const actionBar = getDirectChildByClass(container, "popup-action-bar");
@@ -197,6 +322,7 @@ function renderPopupContent(
       graphic,
       productContext,
       refreshAndRender,
+      packageActions,
     });
     if (!actionBarUpdate.supported) {
       actionBar.remove();
@@ -207,6 +333,7 @@ function renderPopupContent(
       graphic,
       productContext,
       refreshAndRender,
+      packageActions,
     });
 
     if (nextActionBar) {
@@ -214,19 +341,33 @@ function renderPopupContent(
     }
   }
 
+  updatePackagePopupWorkflow(
+    container,
+    createPackagePopupPresentation({
+      productContext,
+      attributes,
+      workflowPresentation: packageActions?.projection(),
+      workflowStatusLabels: Object.fromEntries(
+        getAllStatuses().map((status) => [status.Id, status.Name])
+      ),
+    })
+  );
+
   // Job/action updates must not replace focused error controls or selected error text
   // when the metadata itself has not changed.
   const columns = createPopupProductMetadataColumns(attributes, productContext);
   const signature = JSON.stringify({
     columns,
     statuses: columns.map((column) => formatProductStatus(column.item.status)),
+    packageStatus: attributes?.workUnitStatus?.packageStatus,
+    packageError: productContext?.workUnit?.kind === "package" ? attributes?.errorMessage : null,
   });
   if (shouldRenderProductContent(attributes) && section.metadataSignature === signature) return;
   const focusedErrorKey = errorDetails.beforeRender();
   section.replaceChildren();
   section.metadataSignature = null;
   if (shouldRenderProductContent(attributes)) {
-    renderProductRows(section, columns, errorDetails);
+    renderProductRows(section, columns, errorDetails, attributes, productContext);
     section.metadataSignature = signature;
   } else {
     renderGenericRows(section, attributes);
@@ -255,7 +396,10 @@ function getDirectChildByClass(container, className) {
   });
 }
 
-function renderProductRows(section, columns, errorDetails) {
+function renderProductRows(section, columns, errorDetails, attributes, productContext) {
+  if (productContext?.workUnit?.kind === "package") {
+    section.appendChild(createPackageStatusRow(attributes, errorDetails));
+  }
   const table = createProductMetadataTable(columns, errorDetails);
 
   if (table) {
@@ -264,6 +408,31 @@ function renderProductRows(section, columns, errorDetails) {
   }
 
   section.appendChild(createRow("Details", "No displayable product attributes."));
+}
+
+function createPackageStatusRow(attributes, errorDetails) {
+  const row = document.createElement("div");
+  row.className = "popup-row popup-package-status";
+  const label = document.createElement("span");
+  label.className = "popup-label";
+  label.textContent = "Package status";
+  const value = document.createElement("span");
+  value.className = "popup-value popup-package-status__value";
+
+  const status = normalizeEncPackageStatus(attributes?.workUnitStatus?.packageStatus);
+  const text = getEncPackageStatusLabel(status);
+  const palette = packageStatusColorConfig[status];
+  if (palette) value.style.setProperty("--pc-package-status-background", palette.badge);
+  const errorMessage = status === 4 ? attributes?.errorMessage : null;
+  const trigger = errorDetails.createTrigger(errorMessage, {
+    key: "package-status",
+    label: "Package",
+    text,
+  });
+  if (trigger) value.appendChild(trigger);
+  else value.textContent = text;
+  row.append(label, value);
+  return row;
 }
 
 function renderGenericRows(section, attributes) {
@@ -467,6 +636,11 @@ function createProductMetadataTable(columns, errorDetails) {
 function createProductMetadataRows(columns, errorDetails) {
   const rows = [
     {
+      label: "Product",
+      getValue: (item) => formatProductTableValue(item?.datasetName),
+      shouldShow: () => columns.some((column) => column.presentation?.productIdentity),
+    },
+    {
       label: "Edition",
       getValue: (item) => formatProductTableValue(item?.edition),
     },
@@ -483,16 +657,13 @@ function createProductMetadataRows(columns, errorDetails) {
           });
         }
       },
-      getValue: (item) => formatProductStatus(item?.status),
-    },
-    {
-      label: "Error message",
       getContent: (item, column) =>
-        column.presentation?.compactError
-          ? errorDetails.createTrigger(item?.errorMessage, column)
-          : null,
-      getValue: (item) => formatProductTableValue(item?.errorMessage),
-      shouldShow: () => columns.some((column) => hasDisplayableValue(column.item?.errorMessage)),
+        errorDetails.createTrigger(item?.errorMessage, {
+          key: column.key,
+          label: column.label,
+          text: formatProductStatus(item?.status) || "Error",
+        }),
+      getValue: (item) => formatProductStatus(item?.status),
     },
     {
       label: "Validation files",

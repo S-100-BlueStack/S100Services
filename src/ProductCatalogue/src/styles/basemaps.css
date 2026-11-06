@@ -1,0 +1,33 @@
+/* Keep the native ArcGIS/Calcite gallery compact below the Zoom web component. */
+.pc-basemap-controls {
+  max-width: calc(100vw - 24px);
+}
+
+/* Calcite 5 uses color-scheme for surface and text tokens. Set it on the
+   public basemap hosts so the floating panel follows the application theme
+   without styling any private ArcGIS or Calcite shadow DOM. */
+html.calcite-mode-light :is(.pc-basemap-controls, .pc-basemap-expand, .pc-basemap-gallery) {
+  color-scheme: light;
+}
+
+html.calcite-mode-dark :is(.pc-basemap-controls, .pc-basemap-expand, .pc-basemap-gallery) {
+  color-scheme: dark;
+}
+
+.pc-map-zoom {
+  box-shadow: var(--calcite-shadow-sm);
+}
+
+.pc-basemap-expand {
+  --calcite-action-background-color: var(--pc-surface);
+  --calcite-action-background-color-hover: var(--pc-surface-alt);
+
+  box-shadow: var(--calcite-shadow-sm);
+}
+
+.pc-basemap-gallery {
+  display: block;
+  width: min(20rem, 80vw);
+  max-height: min(28rem, 65vh);
+  overflow-y: auto;
+}

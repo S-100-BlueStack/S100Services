@@ -64,18 +64,21 @@ test("range controls keep keyboard time editing local until the range interactio
     /datePicker\.onDateChange = \(dateValue\) => \{[\s\S]*?syncRangeDateTimeDraft\([\s\S]*?commitDashboardRangeDraft\(\);/
   );
   assert.match(source, /let timeEditingByKeyboard = false;/);
-  assert.match(
-    source,
-    /timeInput\.addEventListener\("keydown", \(\) => \{\n {4}timeEditingByKeyboard = true;/
-  );
-  assert.match(
-    source,
-    /timeInput\.addEventListener\("input", \(\) => \{[\s\S]*?syncRangeDateTimeDraft\([\s\S]*?\n {2}\}\);/
-  );
-  assert.match(
-    source,
-    /if \(!timeEditingByKeyboard\) \{\n {6}scheduleDashboardTimeCommit\(timeInput\);/
-  );
+  // Verify the same interaction contract with both Git LF and Windows CRLF source text.
+  for (const variant of [source.replace(/\r\n?/g, "\n"), source.replace(/\r?\n/g, "\r\n")]) {
+    assert.match(
+      variant,
+      /timeInput\.addEventListener\("keydown", \(\) => \{\r?\n {4}timeEditingByKeyboard = true;/
+    );
+    assert.match(
+      variant,
+      /timeInput\.addEventListener\("input", \(\) => \{[\s\S]*?syncRangeDateTimeDraft\([\s\S]*?\r?\n {2}\}\);/
+    );
+    assert.match(
+      variant,
+      /if \(!timeEditingByKeyboard\) \{\r?\n {6}scheduleDashboardTimeCommit\(timeInput\);/
+    );
+  }
   assert.match(
     source,
     /wrapper\.addEventListener\("focusout", \(event\) => \{[\s\S]*?wrapper\.contains\(event\.relatedTarget\)[\s\S]*?commitDashboardRangeDraft\(\);/

@@ -18,7 +18,10 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Globalization;
 using System.Reflection.Metadata;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -29,6 +32,11 @@ namespace S100FC.ProductCatalogue
 {
     public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
+        /// <summary>Resolves the current Serilog pipeline with this component's source context, including on the ArcGIS execution lane.</summary>
+        private static Serilog.ILogger Logger => Serilog.Log.ForContext<ProductManagerGDB>();
+        // Abort implausibly broad archive matches before DPC can create any candidates or advance its watermark.
+        internal const int MaxAoisPerArchiveFeature = 600;
+
         public static async Task<IProductManager> CreateInstanceAsync(
             Func<Geodatabase> creator,
             string executionLane = "Unspecified"
@@ -69,6 +77,9 @@ namespace S100FC.ProductCatalogue
         private readonly ConcurrentDictionary<ElectronicProductKey, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new();
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _preferredElectronicProductsByName = new();
         private ElectronicProductMappingIndex _productMappings = ElectronicProductMappingIndex.Empty;
+        // ArcGIS geometries stay on the product manager's single execution lane.
+        private readonly Dictionary<string, DpcCoverageCache> _dpcCoverageCaches = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Lazy<ArchiveClock> DpcArchiveClock = new(ArchiveClock.FromEnvironment);
 
         private ProductManagerGDB(string executionLane) {
             if (string.IsNullOrWhiteSpace(executionLane))
@@ -120,7 +131,7 @@ namespace S100FC.ProductCatalogue
 
                                 //var exist = IO.Path.Exists(path);
 
-                                Log.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.OriginalString);
+                                Logger.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.OriginalString);
 
                                 //  var uri = new Uri(System.IO.Path.GetFullPath(path));
 
@@ -204,7 +215,7 @@ namespace S100FC.ProductCatalogue
                 }
                 finally {
                     var completedAt = Stopwatch.GetTimestamp();
-                    Log.Verbose(
+                    Logger.Verbose(
                         "ArcGIS operation completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}. Success: {Success}. Cancelled: {Cancelled}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}",
                         this._executionLane,
                         operationType,
@@ -358,6 +369,11 @@ namespace S100FC.ProductCatalogue
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken) {
+            return (await CreateVerifiedExportSnapshotAsync(name, exportType, edition, update, [], cancellationToken)).Dataset;
+        }
+
+        /// <summary>Distinguishes features outside the product's topology selection from selected features lost during conversion.</summary>
+        public async Task<VerifiedExportSnapshot> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken) {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentNullException(nameof(name));
             if (edition < 0)
@@ -366,24 +382,35 @@ namespace S100FC.ProductCatalogue
                 throw new ArgumentOutOfRangeException(nameof(update));
 
             cancellationToken.ThrowIfCancellationRequested();
+            var sourceResolutionTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
             var result = await this.GetElectronicProductAsync(
                 name.ToUpperInvariant(),
                 cancellationToken
             );
+            if (sourceResolutionTimer is not null)
+                Logger.Information("ENC detection profile. DatasetName: {DatasetName}. Phase: ResolveSourceProduct. DurationMs: {DurationMs}.",
+                    name, sourceResolutionTimer.Elapsed.TotalMilliseconds);
             result.ElectronicProduct.editionNumber = edition;
             result.ElectronicProduct.updateNumber = update;
 
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
+            var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var suppressedSurfaces = new List<string>();
             var dataset = await this.CreateDatasetAsync(
                 result.ElectronicProduct,
                 result.Shape,
                 exportType,
                 applyEdits: false,
-                cancellationToken: cancellationToken
+                cancellationToken: cancellationToken,
+                requiredFeatureIds: requiredFeatureIds,
+                includedChangedFeatureIds: included,
+                suppressedMetadataSurfaces: suppressedSurfaces
             );
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
-            return dataset;
+            return new VerifiedExportSnapshot(dataset, included.ToArray()) {
+                SuppressedMetadataSurfaces = suppressedSurfaces.ToArray()
+            };
         }
 
         async Task<bool> IElectronicProductManager.IsDirtyAsync(string name) {
@@ -419,12 +446,12 @@ namespace S100FC.ProductCatalogue
                         while (archiveCursor.MoveNext()) {
                             var cur = archiveCursor.Current;
                             var id = cur.UID();
-                            Log.Information("Change detected for {id} in {table}. Stopping further detection", id, baseTableName);
+                            Logger.Information("Change detected for {id} in {table}. Stopping further detection", id, baseTableName);
                             return true;
                         }
                     }
                     else {
-                        Log.Warning("Archive is not enabled on {tableName}. Should only happen while debugging! Checking for 'created_date' or 'last_edited_date' instead", baseTableName);
+                        Logger.Warning("Archive is not enabled on {tableName}. Should only happen while debugging! Checking for 'created_date' or 'last_edited_date' instead", baseTableName);
                         filter.WhereClause = $"UPPER(ps) = 'S-101' AND (" +
                                              $"created_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}' " +
                                              $"OR last_edited_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}')";
@@ -479,7 +506,7 @@ namespace S100FC.ProductCatalogue
                         this.QualifyTableName(baseTableName));
 
                     if (!fc.IsArchiveEnabled()) {
-                        Log.Warning(
+                        Logger.Warning(
                             "Archiving is not enabled on {tableName} for product {name}.",
                             baseTableName,
                             name);
@@ -514,7 +541,7 @@ namespace S100FC.ProductCatalogue
                         tableCount++;
                     }
 
-                    Log.Information(
+                    Logger.Information(
                         "Found {count} archive changes in {tableName} for product {name}.",
                         tableCount,
                         baseTableName,
@@ -522,7 +549,7 @@ namespace S100FC.ProductCatalogue
                 }
             });
 
-            Log.Information(
+            Logger.Information(
                 "Found {count} unique pending edited features for product {name}.",
                 result.Count,
                 name);
@@ -530,78 +557,213 @@ namespace S100FC.ProductCatalogue
             return result;
         }
 
-        public async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) {
+        /// <summary>Scans from an explicit UTC cursor through the instant this call begins.</summary>
+        public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => GetPendingEditsAsync(sinceUtc, DateTime.UtcNow);
+
+        /// <summary>Compares archive states at two fixed UTC boundaries, including versions closed by edits in that window.</summary>
+        public async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc, DateTime throughUtc) {
+            var window = new ArchiveScanWindow(sinceUtc, throughUtc);
             var result = new Dictionary<string, Dictionary<string, ArchiveRow>>();
 
             await this.Dispatch(() => {
                 var products = this._electronicProducts
-                    .Where(x => x.Key.ProductSpecification == "S101" && x.Value.optimumDisplayScale.HasValue)
-                    .Select(x => new {
-                        Name = x.Key.DatasetName,
-                        Product = x.Value,
-                        DisplayScale = x.Value.optimumDisplayScale!.Value,
-                        Aoi = this.GetProductAoiGeometry(x.Key.DatasetName, "S-101")
-                    })
-                    .Where(x => x.Aoi != null && !x.Aoi.IsEmpty)
-                    .ToList();
+                    .Where(entry => entry.Key.ProductSpecification == "S101")
+                    .ToDictionary(entry => entry.Key.DatasetName, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
 
-                foreach (var c in this._connections.Where(e => e.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
-                    var uri = c.ConnectionFile!;
-                    //  var dbScale = $"Database: {c.MinimumScale}-{c.MaximumScale}";
-                    var connectionName = c.ProductSpecification;
+                foreach (var connectionSettings in this._connections.Where(entry => entry.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
+                    var uri = connectionSettings.ConnectionFile!;
                     using var connection = this.OpenGeodatabase(uri);
-
                     var productsForConnection = products
-                        .Where(p => this.Connection(p.Product.productSpecification!.name!) == uri)
-                        .ToList();
-
+                        .Where(entry => this.Connection(entry.Value.productSpecification!.name!) == uri)
+                        .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
                     if (productsForConnection.Count == 0)
                         continue;
 
-                    ScanConnectionForPendingEdits(connection, connectionName, productsForConnection, sinceUtc, result);
+                    // Validate every required class before coverage caching or reading any archive rows.
+                    var connectionLabel = Path.GetFileName(uri.IsAbsoluteUri ? uri.LocalPath : uri.OriginalString);
+                    foreach (var className in ArchiveScanRequirements.SpatialClasses) {
+                        using var requiredClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
+                        ArchiveScanRequirements.Verify(connectionLabel, className, requiredClass.IsArchiveEnabled());
+                    }
+                    foreach (var className in ArchiveScanRequirements.NonSpatialClasses) {
+                        using var requiredTable = connection.OpenDataset<Table>(QualifyTableName(className));
+                        ArchiveScanRequirements.Verify(connectionLabel, className, requiredTable.IsArchiveEnabled());
+                    }
+
+                    var cacheKey = uri.OriginalString;
+                    var coverageTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
+                    var rebuiltCoverage = false;
+                    if (!_dpcCoverageCaches.TryGetValue(cacheKey, out var cache) || HasChangedDataCoverage(connection, cache.LoadedAtUtc)) {
+                        rebuiltCoverage = true;
+                        cache = BuildDpcCoverageCache(connection, productsForConnection);
+                        _dpcCoverageCaches[cacheKey] = cache;
+                        Logger.Information("DPC coverage cache rebuilt. S101AoiCount: {S101AoiCount}. DataCoverageCount: {DataCoverageCount}. Connection: {Connection}.", cache.Products.Count, cache.DataCoverageCount, connectionSettings.ProductSpecification);
+                    }
+                    if (coverageTimer is not null)
+                        Logger.Information("ENC detection profile. Phase: CoverageCache. Connection: {Connection}. Rebuilt: {Rebuilt}. AoiCount: {AoiCount}. DataCoverageCount: {DataCoverageCount}. DurationMs: {DurationMs}.",
+                            connectionSettings.ProductSpecification, rebuiltCoverage, cache.Products.Count, cache.DataCoverageCount, coverageTimer.Elapsed.TotalMilliseconds);
+
+                    ScanConnectionForPendingEdits(connection, connectionLabel, cache.Products, window, result);
                 }
             });
 
             return result;
         }
 
-        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<dynamic> products, DateTime sinceUtc, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
+        /// <summary>Pairs an S-101 product's S-128 AOI with its coverage at the same scale.</summary>
+        internal sealed record ScanProductAoi(string Name, ArcGIS.Core.Geometry.Geometry Aoi);
+
+        /// <summary>Contains only the S-101 DataCoverage polygons relevant to one S-128 product.</summary>
+        internal sealed record DpcProductCoverage(ScanProductAoi Product, long OptimumDisplayScale, IReadOnlyList<ArcGIS.Core.Geometry.Geometry> DataCoverages);
+
+        private sealed record DpcCoverageCache(IReadOnlyList<DpcProductCoverage> Products, int DataCoverageCount, DateTime LoadedAtUtc);
+
+        private DpcCoverageCache BuildDpcCoverageCache(Geodatabase source, IReadOnlyDictionary<string, ElectronicProduct> products) {
+            // Capture the lower bound before reading either geodatabase; edits during a rebuild are checked next time.
+            var loadedAtUtc = DateTime.UtcNow.AddSeconds(-2);
+            var coverages = new List<(long Scale, ArcGIS.Core.Geometry.Geometry Shape)>();
+            using (var surface = source.OpenDataset<FeatureClass>(QualifyTableName("surface"))) {
+                using var cursor = surface.Search(new QueryFilter { WhereClause = "UPPER(ps) = 'S-101' AND code = 'DataCoverage'" }, true);
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+                    if (row is not ArcGIS.Core.Data.Feature feature)
+                        throw new InvalidOperationException("An S-101 DataCoverage row has no feature geometry; DPC cannot rebuild its cache.");
+                    var scale = ReadCoverageScale(row);
+                    var shape = feature.GetShape();
+                    if (shape is null || shape.IsEmpty || shape.SpatialReference is null)
+                        throw new InvalidOperationException("An S-101 DataCoverage row has invalid geometry; DPC cannot rebuild its cache.");
+                    coverages.Add((scale, shape.Clone()));
+                }
+            }
+
+            var aois = new Dictionary<string, ArcGIS.Core.Geometry.Geometry>(StringComparer.OrdinalIgnoreCase);
+            using (var surface = _geodatabase!.OpenDataset<FeatureClass>(QualifyTableName("surface"))) {
+                using var cursor = surface.Search(CreateDatasetAoiQueryFilter(), true);
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+                    if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
+                        continue;
+                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    var name = NormalizeDatasetName(product.datasetName);
+                    if (NormalizeProductSpecification(product.productSpecification?.name) != "S101" || !products.ContainsKey(name))
+                        continue;
+                    var shape = feature.GetShape();
+                    if (shape is null || shape.IsEmpty || shape.SpatialReference is null || !aois.TryAdd(name, shape.Clone()))
+                        throw new ProductDataIntegrityException(name, aois.ContainsKey(name) ? 2 : 0);
+                }
+            }
+
+            var coverageByScale = coverages.GroupBy(coverage => coverage.Scale)
+                .ToDictionary(group => group.Key, group => group.Select(coverage => coverage.Shape).ToArray());
+            var entries = new List<DpcProductCoverage>(products.Count);
+            foreach (var (name, product) in products) {
+                if (!aois.TryGetValue(name, out var aoi))
+                    throw new InvalidOperationException($"Could not find product coverage surface for S-101 product '{name}'.");
+                if (!product.optimumDisplayScale.HasValue || product.optimumDisplayScale.Value <= 0)
+                    throw new InvalidOperationException($"S-128 product '{name}' has no valid optimumDisplayScale.");
+                var optimumScale = Convert.ToInt64(product.optimumDisplayScale.Value, CultureInfo.InvariantCulture);
+                var matching = (coverageByScale.GetValueOrDefault(optimumScale) ?? [])
+                    .Where(coverage => GeometriesIntersect(coverage, aoi)).ToArray();
+                if (matching.Length == 0)
+                    Logger.Warning("S-128 product {ProductName} has no intersecting S-101 DataCoverage at optimumDisplayScale {OptimumDisplayScale}.", name, optimumScale);
+                entries.Add(new DpcProductCoverage(new ScanProductAoi(name, aoi), optimumScale, matching));
+            }
+            return new DpcCoverageCache(entries, coverages.Count, loadedAtUtc);
+        }
+
+        private bool HasChangedDataCoverage(Geodatabase source, DateTime loadedAtUtc) {
+            var window = new ArchiveScanWindow(loadedAtUtc, DateTime.UtcNow);
+            using var surface = source.OpenDataset<FeatureClass>(QualifyTableName("surface"));
+            if (!surface.IsArchiveEnabled())
+                throw new InvalidOperationException("The S-101 surface is not archive enabled; DPC cannot detect DataCoverage cache changes.");
+            using var archive = surface.GetArchiveTable();
+            var syntax = source.GetSQLSyntax();
+            var since = syntax.Format(DpcArchiveClock.Value.ToQueryLowerBound(window), SQLDateTimeType.Timestamp);
+            var maxDate = syntax.Format(new DateTime(9999, 12, 31), SQLDateTimeType.Timestamp);
+            using var cursor = archive.Search(new QueryFilter {
+                WhereClause = $"UPPER(ps) = 'S-101' AND code = 'DataCoverage' AND {ArchiveClock.CreateEventPredicate(since, maxDate)}"
+            }, true);
+            while (cursor.MoveNext()) {
+                var row = cursor.Current;
+                var interval = DpcArchiveClock.Value.ReadInterval(row["GDB_FROM_DATE"], row["GDB_TO_DATE"], DateTime.UtcNow);
+                DpcArchiveClock.Value.VerifyQueryCandidate(interval, window);
+                if (interval.LatestEvent(window).HasValue)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Reads the published S-101 coverage scale, including archived versions of a changed coverage.</summary>
+        private static long ReadCoverageScale(Row row) {
+            if (row.IsNull("attributebindings"))
+                throw new InvalidOperationException("S-101 DataCoverage has no attributeBindings or optimumDisplayScale.");
+            return ReadCoverageScale(Convert.ToString(row["attributebindings"])!);
+        }
+
+        /// <summary>Uses the DataCoverage attribute, not the compilation scale of another feature.</summary>
+        internal static long ReadCoverageScale(string attributeBindings) {
+            using var json = JsonDocument.Parse(attributeBindings);
+            if (json.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException("S-101 DataCoverage attributeBindings is not an object.");
+            foreach (var property in json.RootElement.EnumerateObject()) {
+                if (property.Name.Equals("optimumDisplayScale", StringComparison.OrdinalIgnoreCase) &&
+                    TryReadScale(property.Value.ToString(), out var scale))
+                    return scale;
+            }
+            throw new InvalidOperationException("S-101 DataCoverage has no valid optimumDisplayScale; DPC preserved its watermark.");
+        }
+
+        /// <summary>Reads the renamed S-101 feature scale column and rejects unusable archive selection data.</summary>
+        /// <param name="row">The spatial feature or archive version being matched to products.</param>
+        /// <param name="featureId">The stable identifier included in diagnostics.</param>
+        /// <returns>The positive integral compilation scale.</returns>
+        /// <exception cref="InvalidOperationException">The column is missing, null or contains an invalid scale.</exception>
+        private static long ReadCompilationScale(Row row, string featureId) {
+            if (row.FindField("compilationscale") < 0 || row.IsNull("compilationscale") ||
+                !TryReadScale(Convert.ToString(row["compilationscale"], CultureInfo.InvariantCulture), out var scale))
+                throw new InvalidOperationException($"S-101 archive feature '{featureId}' has no valid compilationscale; DPC preserved its watermark.");
+            return scale;
+        }
+
+        private static bool TryReadScale(string? value, out long scale) {
+            scale = 0;
+            if (!decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) ||
+                number <= 0 || number > long.MaxValue || number != decimal.Truncate(number))
+                return false;
+            scale = decimal.ToInt64(number);
+            return true;
+        }
+
+        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<DpcProductCoverage> products, ArchiveScanWindow window, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
+            var sinceUtc = window.SinceUtc;
             var productList = products.ToList();
 
             var sqlSyntax = connection.GetSQLSyntax();
 
-            var formattedSince = sqlSyntax.Format(
-                sinceUtc,
-                SQLDateTimeType.Timestamp);
+            var archiveClock = DpcArchiveClock.Value;
+            var querySince = archiveClock.ToQueryLowerBound(window);
+            var formattedSince = sqlSyntax.Format(querySince, SQLDateTimeType.Timestamp);
+            var formattedMaxDate = sqlSyntax.Format(new DateTime(9999, 12, 31), SQLDateTimeType.Timestamp);
+            // Keep post-cutoff rows readable for clock validation. Both archive dates are checked
+            // against the exact UTC window before geometry matching or change composition.
+            var archiveWhereClause = $"UPPER(ps) = 'S-101' AND {ArchiveClock.CreateEventPredicate(formattedSince, formattedMaxDate)}";
+            Logger.Information("DPC archive query boundary. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}. StorageZone: {StorageZone}. UnspecifiedValueZone: {UnspecifiedValueZone}. QuerySinceStorage: {QuerySinceStorage:O}. SqlSinceLiteral: {SqlSinceLiteral}.",
+                window.SinceUtc, window.ThroughUtc, archiveClock.StorageTimeZone.Id, archiveClock.UnspecifiedValueTimeZone.Id, querySince, formattedSince);
 
-            var formattedMaxDate = sqlSyntax.Format(
-                new DateTime(9999, 12, 31),
-                SQLDateTimeType.Timestamp);
-
-            var archiveWhereClause =
-                $"UPPER(ps) = 'S-101' AND " +
-                $"(" +
-                $"GDB_FROM_DATE > {formattedSince} OR " +
-                $"(GDB_TO_DATE > {formattedSince} AND GDB_TO_DATE < {formattedMaxDate})" +
-                $")";
-
-            string[] tableNames = ["point", "pointset", "curve", "surface"];
+            var tableNames = ArchiveScanRequirements.SpatialClasses;
             var unclassifiedArchiveRows = 0;
+            var loggedArchiveClock = false;
+            var versionsById = new Dictionary<string, List<ArchiveVersion>>(StringComparer.OrdinalIgnoreCase);
+            var affectedIdsByProduct = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var currentIdsByProduct = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var baseTableName in tableNames) {
+                var archiveTableTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
+                var archiveRowsRead = 0;
                 using var fc = connection.OpenDataset<FeatureClass>(
                     this.QualifyTableName(baseTableName));
 
-                if (!fc.IsArchiveEnabled()) {
-                    Log.Warning(
-                        "Archiving is not enabled on {tableName} for connection {connectionName}.",
-                        baseTableName,
-                        connectionName);
-
-                    continue;
-                }
-
-                var currentFeatureIds = ReadCurrentFeatureIds(fc);
+                ArchiveScanRequirements.Verify(connectionName, baseTableName, fc.IsArchiveEnabled());
 
                 using var archiveTable = fc.GetArchiveTable();
 
@@ -609,81 +771,337 @@ namespace S100FC.ProductCatalogue
                     WhereClause = archiveWhereClause
                 }, true);
 
-                var archiveRows = 0;
-
                 var uniqueChangedFeatureIds = new HashSet<string>();
+                var latestEditByFeature = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
                 var affectedProducts = new HashSet<string>();
 
                 while (cursor.MoveNext()) {
+                    if (archiveTableTimer is not null)
+                        archiveRowsRead++;
                     var row = cursor.Current;
 
-                    var id = row.UID();
-
-                    if (string.IsNullOrWhiteSpace(id)) {
-
-                        Log.Warning("Row in {tableName} for connection {connectionName} is missing UID. Skipping geometry check.", baseTableName, connectionName);
-                        unclassifiedArchiveRows++;
-                        continue;
+                    string id;
+                    try {
+                        id = ReadFeatureId(row);
+                    }
+                    catch (InvalidOperationException exception) {
+                        throw new InvalidOperationException($"S-101 archive row in '{baseTableName}' has no usable feature GUID; DPC preserved the watermark and candidates.", exception);
                     }
 
+                    ArchiveInterval interval;
+                    try {
+                        interval = archiveClock.ReadInterval(row["GDB_FROM_DATE"], row["GDB_TO_DATE"], DateTime.UtcNow);
+                        archiveClock.VerifyQueryCandidate(interval, window);
+                    }
+                    catch (InvalidOperationException exception) {
+                        Logger.Error(exception, "DPC archive clock rejected a row. TableName: {TableName}. FeatureId: {FeatureId}. RawFrom: {RawFrom:O}. RawFromKind: {RawFromKind}. RawTo: {RawTo:O}. RawToKind: {RawToKind}. SqlSinceLiteral: {SqlSinceLiteral}.",
+                            baseTableName, id, row["GDB_FROM_DATE"], (row["GDB_FROM_DATE"] as DateTime?)?.Kind,
+                            row["GDB_TO_DATE"], (row["GDB_TO_DATE"] as DateTime?)?.Kind, formattedSince);
+                        throw new InvalidOperationException($"Invalid archive interval for feature '{id}' in '{baseTableName}'. DPC preserved its watermark and candidates.", exception);
+                    }
+                    if (!loggedArchiveClock) {
+                        Logger.Information("DPC archive clock. Connection: {Connection}. FeatureId: {FeatureId}. RawFrom: {RawFrom:O}. RawFromKind: {RawFromKind}. RawTo: {RawTo:O}. RawToKind: {RawToKind}. FromUtc: {FromUtc:O}. ToUtc: {ToUtc:O}. OpenEnded: {OpenEnded}.",
+                            connectionName, id, row["GDB_FROM_DATE"], (row["GDB_FROM_DATE"] as DateTime?)?.Kind,
+                            row["GDB_TO_DATE"], (row["GDB_TO_DATE"] as DateTime?)?.Kind, interval.FromUtc, interval.ToUtc, !interval.ToUtc.HasValue);
+                        loggedArchiveClock = true;
+                    }
+                    var changedAt = interval.LatestEvent(window);
+                    if (!changedAt.HasValue) {
+                        // A subsecond SQL literal can over-select boundary rows. Later real edits
+                        // belong to the next scan; neither case should affect this scan's counts.
+                        Logger.Debug("DPC archive version outside UTC scan window. FeatureId: {FeatureId}. FromUtc: {FromUtc:O}. ToUtc: {ToUtc:O}. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}.",
+                            id, interval.FromUtc, interval.ToUtc, window.SinceUtc, window.ThroughUtc);
+                        continue;
+                    }
                     if (row is not ArcGIS.Core.Data.Feature feature) {
-                        Log.Warning("Row with UID {id} in {tableName} for connection {connectionName} is not a feature. Skipping geometry check.", id, baseTableName, connectionName);
+                        Logger.Warning("Archive row {FeatureId} in {TableName} for connection {ConnectionName} is not a feature.", id, baseTableName, connectionName);
                         unclassifiedArchiveRows++;
                         continue;
                     }
-
                     var changedShape = feature.GetShape();
-
                     if (changedShape == null || changedShape.IsEmpty) {
-                        Log.Warning("Feature with UID {id} in {tableName} for connection {connectionName} has no geometry. Skipping.", id, baseTableName, connectionName);
+                        Logger.Warning("Archive feature {FeatureId} in {TableName} for connection {ConnectionName} has no geometry.", id, baseTableName, connectionName);
                         unclassifiedArchiveRows++;
                         continue;
                     }
-
-                    archiveRows++;
                     uniqueChangedFeatureIds.Add(id);
-
-                    var fromDate = row["GDB_FROM_DATE"] as DateTime?;
-                    var toDate = row["GDB_TO_DATE"] as DateTime?;
-                    // A removed or superseded archive row changed when it closed, not when it began.
-                    var changedAt = toDate is { Year: < 9999 } && (!fromDate.HasValue || toDate > fromDate) ? toDate : fromDate;
+                    if (!latestEditByFeature.TryGetValue(id, out var latestEdit) || changedAt.Value > latestEdit)
+                        latestEditByFeature[id] = changedAt.Value;
+                    var compilationScale = baseTableName == "surface" && string.Equals(row["Code"]?.ToString(), "DataCoverage", StringComparison.OrdinalIgnoreCase)
+                        ? ReadCoverageScale(row) : ReadCompilationScale(row, id);
                     var archiveRow = new ArchiveRow {
-                        Code = row["Code"]?.ToString(),
+                        Code = row["Code"]?.ToString() ?? string.Empty,
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
-                        Deleted = IsDeletedFeature(id, currentFeatureIds),
-                        EditDate = changedAt
+                        EditDate = changedAt,
+                        NominalScale = compilationScale
                     };
+                    if (!versionsById.TryGetValue(id, out var versions)) {
+                        versions = new List<ArchiveVersion>();
+                        versionsById[id] = versions;
+                    }
+                    versions.Add(new ArchiveVersion(archiveRow, interval, changedShape.Clone()));
 
-                    foreach (var product in productList) {
-                        string productName = product.Name;
+                    var isDataCoverage = baseTableName == "surface" && string.Equals(archiveRow.Code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
+                    foreach (var productName in FindAffectedProductsAtScale(changedShape, compilationScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
                         affectedProducts.Add(productName);
 
-                        if (!result.TryGetValue(productName, out var productChanges)) {
-                            productChanges = new Dictionary<string, ArchiveRow>();
-                            result[productName] = productChanges;
+                        if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds)) {
+                            affectedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            affectedIdsByProduct[productName] = affectedIds;
                         }
-
-                        // Archive cursors have no guaranteed row order; retain the newest change per feature.
-                        if (!productChanges.TryGetValue(id, out var previous) ||
-                            !previous.EditDate.HasValue ||
-                            archiveRow.EditDate > previous.EditDate)
-                            productChanges[id] = archiveRow;
+                        affectedIds.Add(id);
+                        if (interval.Contains(window.ThroughUtc)) {
+                            if (!currentIdsByProduct.TryGetValue(productName, out var currentIds)) {
+                                currentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                currentIdsByProduct[productName] = currentIds;
+                            }
+                            currentIds.Add(id);
+                        }
                     }
                 }
 
-                Log.Information(
-                    "Scanned archive changes in {tableName} for connection {connectionName}. Archive rows: {archiveRows}, unique changed features: {uniqueChangedFeatureIds}, affected products: {affectedProducts}",
-                    baseTableName,
-                    connectionName,
-                    archiveRows,
-                    uniqueChangedFeatureIds.Count,
-                    affectedProducts.Count);
+                if (uniqueChangedFeatureIds.Count == 0) {
+                    Logger.Debug("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. No changed features.",
+                        baseTableName, connectionName, sinceUtc);
+                }
+                else {
+                    Logger.Information("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedProducts: {AffectedProducts}.",
+                        baseTableName, connectionName, sinceUtc, uniqueChangedFeatureIds.Count, affectedProducts.Count);
+                    foreach (var (featureId, latestEditUtc) in latestEditByFeature.OrderBy(entry => entry.Key))
+                        Logger.Information("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
+                            baseTableName, featureId, latestEditUtc, sinceUtc);
+                }
+                if (archiveTableTimer is not null)
+                    Logger.Information("ENC detection profile. Phase: ArchiveTable. TableName: {TableName}. Connection: {Connection}. RowsRead: {RowsRead}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedAoiCount: {AffectedAoiCount}. DurationMs: {DurationMs}.",
+                        baseTableName, connectionName, archiveRowsRead, uniqueChangedFeatureIds.Count, affectedProducts.Count, archiveTableTimer.Elapsed.TotalMilliseconds);
+            }
+
+            // A non-spatial edit has no scale or shape of its own. Resolve its incoming
+            // spatial owners at these exact boundaries, including unchanged and deleted owners.
+            var associatedChanges = ReadAssociatedArchiveChanges(connection, connectionName, window,
+                ArchiveClock.CreateEventPredicate(formattedSince, formattedMaxDate));
+            if (associatedChanges.Count > 0) {
+                var bindings = BuildArchiveBindingIndex(connection, connectionName, window, productList, associatedChanges.Keys);
+                foreach (var (productName, targets) in bindings.Affected) {
+                    if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds))
+                        affectedIdsByProduct[productName] = affectedIds = new(StringComparer.OrdinalIgnoreCase);
+                    foreach (var target in targets) {
+                        var id = target.SourceId;
+                        if (versionsById.ContainsKey(id))
+                            throw new InvalidOperationException($"Duplicate spatial/non-spatial source GUID '{id}' in connection '{connectionName}'. DPC preserved its watermark.");
+                        affectedIds.Add(id);
+                        if (bindings.IsCurrent(productName, target)) {
+                            if (!currentIdsByProduct.TryGetValue(productName, out var currentIds))
+                                currentIdsByProduct[productName] = currentIds = new(StringComparer.OrdinalIgnoreCase);
+                            currentIds.Add(id);
+                        }
+                    }
+                }
+                foreach (var (target, versions) in associatedChanges) {
+                    if (!versionsById.TryAdd(target.SourceId, versions))
+                        throw new InvalidOperationException($"Duplicate source GUID '{target.SourceId}' in connection '{connectionName}'. DPC preserved its watermark.");
+                }
+            }
+
+            foreach (var (productName, affectedIds) in affectedIdsByProduct) {
+                if (!result.TryGetValue(productName, out var productChanges)) {
+                    productChanges = new Dictionary<string, ArchiveRow>(StringComparer.OrdinalIgnoreCase);
+                    result[productName] = productChanges;
+                }
+                foreach (var id in affectedIds) {
+                    var change = ComposeArchiveChange(versionsById[id], window);
+                    change.CurrentInProduct = currentIdsByProduct.TryGetValue(productName, out var currentIds) && currentIds.Contains(id);
+                    productChanges[id] = change;
+                }
             }
 
             if (unclassifiedArchiveRows > 0)
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
+        }
+
+        private sealed record ArchiveVersion(ArchiveRow Row, ArchiveInterval Interval, ArcGIS.Core.Geometry.Geometry? Shape);
+
+        /// <summary>Compares the states at the fixed scan boundaries, even when a version closed during this scan.</summary>
+        private static ArchiveRow ComposeArchiveChange(IReadOnlyCollection<ArchiveVersion> versions, ArchiveScanWindow window) {
+            var endpoints = window.Compose(versions, version => version.Interval);
+            var before = endpoints.Before;
+            var after = endpoints.After;
+            return ArchiveChangeComposer.Compose(before?.Row, after?.Row, endpoints.Latest.Row, endpoints.LatestEditUtc,
+                before?.Shape is not null && after?.Shape is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape));
+        }
+
+        /// <summary>Reads the same bounded event history for non-spatial rows without requiring compilationscale, geometry, or optional binding columns.</summary>
+        private Dictionary<ArchiveBindingTarget, List<ArchiveVersion>> ReadAssociatedArchiveChanges(Geodatabase connection, string connectionName, ArchiveScanWindow window, string eventPredicate) {
+            var result = new Dictionary<ArchiveBindingTarget, List<ArchiveVersion>>();
+            foreach (var className in ArchiveScanRequirements.NonSpatialClasses) {
+                using var table = connection.OpenDataset<Table>(QualifyTableName(className));
+                using var archive = table.GetArchiveTable();
+                // Like the actual exporter, read non-spatial targets independently of
+                // optional ps values. Incoming S-101 owners establish product membership.
+                using var cursor = archive.Search(new QueryFilter {
+                    WhereClause = eventPredicate
+                }, true);
+                var kind = className == "informationtype" ? ArchiveBindingKind.Information : ArchiveBindingKind.Feature;
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+                    var interval = ReadAssociatedInterval(row, connectionName, className);
+                    DpcArchiveClock.Value.VerifyQueryCandidate(interval, window);
+                    if (interval.LatestEvent(window) is not { } changedAt)
+                        continue;
+                    ArchiveBindingTarget target;
+                    try {
+                        target = new(kind, Guid.Parse(ReadFeatureId(row)));
+                    }
+                    catch (InvalidOperationException exception) {
+                        throw new InvalidOperationException($"DPC archive row has no usable GUID: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.", exception);
+                    }
+                    if (!result.TryGetValue(target, out var versions))
+                        result[target] = versions = [];
+                    versions.Add(new(new ArchiveRow {
+                        Code = ReadOptionalString(row, "code") ?? string.Empty,
+                        AttributeBindings = ReadOptionalString(row, "attributebindings"),
+                        InformationBindings = ReadOptionalString(row, "informationbindings"),
+                        FeatureBindings = ReadOptionalString(row, "featurebindings"),
+                        EditDate = changedAt
+                    }, interval, null));
+                }
+                Logger.Information("DPC associated archive scanned. Connection: {Connection}. Table: {Table}. ChangedTargets: {ChangedTargets}.",
+                    connectionName, className, result.Keys.Count(target => target.Kind == kind));
+            }
+            return result;
+        }
+
+        /// <summary>Scans small binding columns once per class, then batch-fetches only referenced owner versions for the existing spatial matcher.</summary>
+        private ArchiveBindingIndex BuildArchiveBindingIndex(Geodatabase connection, string connectionName, ArchiveScanWindow window,
+            IReadOnlyList<DpcProductCoverage> products, IEnumerable<ArchiveBindingTarget> targets) {
+            var index = new ArchiveBindingIndex(targets, window);
+            var clock = DpcArchiveClock.Value;
+            var syntax = connection.GetSQLSyntax();
+            var sinceFloor = clock.ToQueryLowerBound(window);
+            var throughFloor = clock.ToQueryLowerBound(new(window.ThroughUtc, window.ThroughUtc));
+            var endpointPredicate = ArchiveClock.CreateEndpointPredicate(
+                syntax.Format(sinceFloor, SQLDateTimeType.Timestamp), syntax.Format(sinceFloor.AddSeconds(1), SQLDateTimeType.Timestamp),
+                syntax.Format(throughFloor, SQLDateTimeType.Timestamp), syntax.Format(throughFloor.AddSeconds(1), SQLDateTimeType.Timestamp));
+            foreach (var className in ArchiveScanRequirements.SpatialClasses) {
+                using var featureClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
+                using var archive = featureClass.GetArchiveTable();
+                using var definition = archive.GetDefinition();
+                var oidField = definition.GetObjectIDField();
+                var owners = new Dictionary<long, (ArchiveInterval Interval, IReadOnlyCollection<ArchiveBindingTarget> Targets)>();
+                var rowsRead = 0;
+                using (var cursor = archive.Search(new QueryFilter {
+                    WhereClause = $"UPPER(ps) = 'S-101' AND {endpointPredicate}",
+                    SubFields = $"{oidField},GDB_FROM_DATE,GDB_TO_DATE,informationbindings,featurebindings"
+                }, true)) {
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        rowsRead++;
+                        var interval = ReadAssociatedInterval(row, connectionName, className);
+                        IReadOnlyCollection<ArchiveBindingTarget> referenced;
+                        try {
+                            referenced = index.FindTargets(interval, ReadOptionalString(row, "informationbindings"), ReadOptionalString(row, "featurebindings"));
+                        }
+                        catch (InvalidOperationException exception) {
+                            throw new InvalidOperationException($"DPC cannot read incoming bindings: connection '{connectionName}', class '{className}', archive owner {row.GetObjectID()}. The watermark and candidates were preserved.", exception);
+                        }
+                        if (referenced.Count > 0)
+                            owners.Add(row.GetObjectID(), (interval, referenced));
+                    }
+                }
+                foreach (var batch in owners.Keys.Chunk(256)) {
+                    using var cursor = archive.Search(new QueryFilter {
+                        WhereClause = $"{oidField} IN ({string.Join(',', batch)})"
+                    }, true);
+                    var found = new HashSet<long>();
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        found.Add(row.GetObjectID());
+                        var owner = owners[row.GetObjectID()];
+                        var id = ReadFeatureId(row);
+                        index.AddOwner(owner.Interval, owner.Targets, () => {
+                            if (row is not ArcGIS.Core.Data.Feature feature || feature.GetShape() is not { IsEmpty: false } shape)
+                                throw new InvalidOperationException($"DPC incoming binding owner '{id}' has no geometry: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
+                            var code = ReadOptionalString(row, "code");
+                            var isCoverage = className == "surface" && string.Equals(code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
+                            var scale = isCoverage ? ReadCoverageScale(row) : ReadCompilationScale(row, id);
+                            return FindAffectedProductsAtScale(shape, scale, products, isCoverage ? shape : null, id, code, className);
+                        });
+                    }
+                    if (found.Count != batch.Length)
+                        throw new InvalidOperationException($"DPC could not re-read all incoming binding owners: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
+                }
+                Logger.Information("DPC incoming bindings resolved. Connection: {Connection}. Table: {Table}. BindingRowsRead: {RowsRead}. MatchingOwnerVersions: {MatchingOwners}. AffectedProducts: {AffectedProducts}.",
+                    connectionName, className, rowsRead, owners.Count, index.Affected.Count);
+            }
+            return index;
+        }
+
+        private static string? ReadOptionalString(Row row, string field) =>
+            row.FindField(field) < 0 || row.IsNull(field) ? null : Convert.ToString(row[field], CultureInfo.InvariantCulture);
+
+        private static ArchiveInterval ReadAssociatedInterval(Row row, string connectionName, string className) {
+            try {
+                return DpcArchiveClock.Value.ReadInterval(row["GDB_FROM_DATE"], row["GDB_TO_DATE"], DateTime.UtcNow);
+            }
+            catch (InvalidOperationException exception) {
+                throw new InvalidOperationException($"Invalid incoming-binding archive interval: connection '{connectionName}', class '{className}'. DPC preserved its watermark and candidates.", exception);
+            }
+        }
+
+        /// <summary>Preserves the existing timestamp reader contract using the configured SDK value clock.</summary>
+        internal static DateTime? ReadArchiveUtc(object? value) => DpcArchiveClock.Value.ReadUtc(value);
+
+        /// <summary>Requires both matching coverage and the final S-128 AOI intersection at the feature's scale.</summary>
+        internal static IReadOnlyList<string> FindAffectedProductsAtScale(ArcGIS.Core.Geometry.Geometry feature, long compilationScale, IReadOnlyList<DpcProductCoverage> products, ArcGIS.Core.Geometry.Geometry? archivedCoverage = null, string? featureId = null, string? featureCode = null, string? tableName = null) {
+            if (compilationScale <= 0)
+                throw new InvalidOperationException($"Archive feature '{featureId}' has no positive compilationscale.");
+            var eligible = products.Where(product => product.OptimumDisplayScale == compilationScale &&
+                (archivedCoverage is not null && GeometriesIntersect(archivedCoverage, product.Product.Aoi) ||
+                 product.DataCoverages.Any(coverage => GeometriesIntersect(feature, coverage))))
+                .Select(product => product.Product).ToArray();
+            return FindAffectedProducts(feature, eligible, featureId, featureCode, tableName);
+        }
+
+        private static bool GeometriesIntersect(ArcGIS.Core.Geometry.Geometry source, ArcGIS.Core.Geometry.Geometry target) {
+            if (source.SpatialReference is null || target.SpatialReference is null)
+                throw new InvalidOperationException("An S-101 feature, DataCoverage, or S-128 AOI has no spatial reference; DPC preserved its watermark.");
+            var comparable = source.SpatialReference.IsEqual(target.SpatialReference)
+                ? source : GeometryEngine.Instance.Project(source, target.SpatialReference);
+            return GeometryEngine.Instance.Intersects(comparable, target);
+        }
+
+        /// <summary>Only a real intersection with an AOI may attach an archived change to its product.</summary>
+        internal static IReadOnlyList<string> FindAffectedProducts(ArcGIS.Core.Geometry.Geometry feature, IReadOnlyList<ScanProductAoi> products, string? featureId = null, string? featureCode = null, string? tableName = null) {
+            if (feature.SpatialReference is null)
+                throw new InvalidOperationException("An archived feature has no spatial reference; the scan watermark was preserved.");
+            var result = new List<string>();
+            var projections = new List<ArcGIS.Core.Geometry.Geometry>();
+            foreach (var product in products) {
+                if (product.Aoi.SpatialReference is null)
+                    throw new InvalidOperationException($"S-101 AOI '{product.Name}' has no spatial reference; the scan watermark was preserved.");
+                var comparable = feature;
+                if (!feature.SpatialReference.IsEqual(product.Aoi.SpatialReference)) {
+                    var projected = projections.FirstOrDefault(shape => shape.SpatialReference.IsEqual(product.Aoi.SpatialReference));
+                    if (projected is null) {
+                        projected = GeometryEngine.Instance.Project(feature, product.Aoi.SpatialReference);
+                        projections.Add(projected);
+                    }
+                    comparable = projected;
+                }
+                if (GeometryEngine.Instance.Intersects(comparable, product.Aoi))
+                    result.Add(product.Name);
+            }
+            if (result.Count > MaxAoisPerArchiveFeature) {
+                var bounds = feature.Extent;
+                var matching = result.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var sample = products.Where(product => matching.Contains(product.Name)).Take(3)
+                    .Select(product => $"{product.Name}: {product.Aoi.Extent.XMin},{product.Aoi.Extent.YMin} to {product.Aoi.Extent.XMax},{product.Aoi.Extent.YMax}");
+                Logger.Error("DPC AOI-intersection matcher v2 rejected excessive spatial fan-out. Table: {TableName}. FeatureId: {FeatureId}. FeatureCode: {FeatureCode}. Matches: {Matches}. AvailableAois: {AvailableAois}. FeatureExtent: {XMin},{YMin} to {XMax},{YMax}. FeatureWkid: {Wkid}. ExampleMatchedAois: {ExampleMatchedAois}.", tableName, featureId, featureCode, result.Count, products.Count, bounds.XMin, bounds.YMin, bounds.XMax, bounds.YMax, feature.SpatialReference.Wkid, string.Join("; ", sample));
+                throw new InvalidOperationException($"Archive feature '{featureId}' matched {result.Count} S-101 AOIs. DPC stopped before creating packages; inspect the AOI geometries and spatial references in the error log.");
+            }
+            return result;
         }
 
         /// <summary>Reads current feature GUIDs so archived deletes can be identified without a UID column.</summary>
@@ -695,12 +1113,24 @@ namespace S100FC.ProductCatalogue
             }, true);
 
             while (cursor.MoveNext()) {
-                var id = cursor.Current.UID();
-                if (!string.IsNullOrWhiteSpace(id))
-                    currentFeatureIds.Add(id);
+                currentFeatureIds.Add(ReadFeatureId(cursor.Current));
             }
 
             return currentFeatureIds;
+        }
+
+        private static string ReadFeatureId(Row row) {
+            var rawGlobalId = row.FindField("GLOBALID") >= 0 && !row.IsNull("GLOBALID") ? row["GLOBALID"] : null;
+            return ResolveFeatureId(row.UID(), rawGlobalId);
+        }
+
+        /// <summary>Rejects an empty archive GUID and falls back to the actual GlobalID field when the row extension cannot read it.</summary>
+        internal static string ResolveFeatureId(string? extensionId, object? rawGlobalId) {
+            if (Guid.TryParse(extensionId, out var id) && id != Guid.Empty)
+                return id.ToString("B");
+            if (Guid.TryParse(Convert.ToString(rawGlobalId), out id) && id != Guid.Empty)
+                return id.ToString("B");
+            throw new InvalidOperationException($"UID returned '{extensionId ?? "<null>"}' and GLOBALID returned '{rawGlobalId ?? "<null>"}'.");
         }
 
         /// <summary>Identifies a deleted feature by its absence from the current feature class version.</summary>
@@ -731,7 +1161,11 @@ namespace S100FC.ProductCatalogue
                     var delta = data["yaml"];
                     index = data["index"];
 
-                    if (!string.IsNullOrEmpty(delta))
+                    // Accepted ENC packages store a full snapshot. Legacy attachments store deltas.
+                    using var metadata = JsonDocument.Parse(Convert.ToString(cursor.Current["json"])!);
+                    if (metadata.RootElement.TryGetProperty("PackageId", out _))
+                        rootYAML = delta;
+                    else if (!string.IsNullOrEmpty(delta))
                         rootYAML = S100FC.YAML.DatasetComparer.AppendUpdate(rootYAML, delta);
                 }
 
@@ -840,7 +1274,7 @@ namespace S100FC.ProductCatalogue
 
             if (exactMatches.Length > 1) {
                 var correlationId = Activity.Current?.TraceId.ToString();
-                Log.Error(
+                Logger.Error(
                     "Multiple exact ElectronicProduct rows found. DatasetName: {DatasetName}. ExactMatchCount: {ExactMatchCount}. CorrelationId: {CorrelationId}",
                     normalizedDatasetName,
                     exactMatches.Length,
@@ -909,7 +1343,6 @@ namespace S100FC.ProductCatalogue
                 //var shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape();
 
                 // TODO: FIX, only exist in s101
-                // var nominalScale = cursorS128.Current["nominalScale"] != null ? Convert.ToInt64(cursorS128.Current["nominalScale"]) : 0;
 
                 var whereClause = "upper(ps) = 'S-101'";
 
@@ -925,7 +1358,15 @@ namespace S100FC.ProductCatalogue
             }, "ResolveExportSourceProduct", name, cancellationToken);
         }
 
-        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default) {
+        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null, ISet<string>? includedChangedFeatureIds = null, ICollection<string>? suppressedMetadataSurfaces = null) {
+            var logNewDataset = exportType == ExportTypes.NewDataset;
+            var creationTimer = Stopwatch.StartNew();
+            var creationSucceeded = false;
+            EncDetectionPhaseProfiler? profiler = null;
+            if (logNewDataset)
+                Logger.Information("CreateNewDataset started. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}.",
+                    electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+            try {
             var timestamp = DateTime.UtcNow;
 
             var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
@@ -936,7 +1377,7 @@ namespace S100FC.ProductCatalogue
             //var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
             var uri = this.Connection(electronicProduct.productSpecification!.name!)!;
 
-            long nominalscale = electronicProduct.optimumDisplayScale!.Value;
+            long compilationScale = electronicProduct.optimumDisplayScale!.Value;
 
             electronicProduct.issueDate = DateOnly.FromDateTime(timestamp);
 
@@ -951,14 +1392,27 @@ namespace S100FC.ProductCatalogue
             };
 
             var supportFiles = new Dictionary<string, string>();
-            var geometries = new List<(ArcGIS.Core.Geometry.Geometry geometry, string name)>();
+            var geometries = new List<(ArcGIS.Core.Geometry.Geometry geometry, string name, YAML.Feature feature)>();
+            var pendingMetadataFeatures = new List<YAML.Feature>();
+            var changedMetadataFeatures = new HashSet<YAML.Feature>(ReferenceEqualityComparer.Instance);
+            var metadataSourceAttributes = new Dictionary<YAML.Feature, string>(ReferenceEqualityComparer.Instance);
             var spatialAssociations = new Dictionary<string, S100FC.YAML.Association>();
             var informationTypes = new List<YAML.Information>();
             var informationsTypesAdded = new HashSet<string>();
             var featureTypes = new List<YAML.Feature>();
             var featureTypesAdded = new HashSet<string>();
+            // Only verified DPC snapshots need per-source feature membership accounting.
+            var featureTracker = requiredFeatureIds is null
+                ? null
+                : new VerifiedSourceFeatureTracker(electronicProduct.datasetName!, requiredFeatureIds);
+            profiler = requiredFeatureIds is null ? null : EncDetectionPhaseProfiler.CreateIfEnabled(
+                electronicProduct.datasetName!, electronicProduct.editionNumber ?? 0, electronicProduct.updateNumber ?? 0,
+                requiredFeatureIds.Count);
 
-            return await this.DispatchMeasured(() => {
+            var createdDataset = await this.DispatchMeasured(() => {
+                profiler?.Next("OpenConnections");
+                var selectedFeatureRows = 0;
+                var emittedYamlFeatures = 0;
                 cancellationToken.ThrowIfCancellationRequested();
                 using Geodatabase connection = this.OpenGeodatabase(uri);
 
@@ -971,9 +1425,22 @@ namespace S100FC.ProductCatalogue
 
                 });
 
-
                 // TODO: Fix S101_QueryDataCoverage. Returns empty array and causes BuildTopology to fail.
-                var filters = s101Geodatabase.S101_QueryDataCoverage(shape, nominalscale).Select(result => result.Filter).ToArray();
+                profiler?.Next("DataCoverage");
+
+                if (shape is null || shape.IsEmpty)
+                    throw new InvalidOperationException($"Cannot query S-101 DataCoverage for '{electronicProduct.datasetName}': the AOI geometry is null or empty.");
+
+                var extent = shape?.Extent;
+                Logger.Information("Calling S101_QueryDataCoverage with compilationScale: {CompilationScale}, extent: {XMin},{YMin} to {XMax},{YMax}", compilationScale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
+
+                var filters = s101Geodatabase.S101_QueryDataCoverage(shape, compilationScale).Select(result => result.Filter).ToArray();
+                EncTopologyQueryFilters.UseCompilationScale(filters);
+                if (featureTracker is not null)
+                    EncTopologyQueryFilters.PrepareForVerifiedSnapshot(filters);
+                profiler?.Next("BuildTopology", filters.Length);
+                Logger.Information("Filters found from S101_QueryDataCoverage: {filtersCount} ", filters.Length);
+             
                 var result = connection.BuildTopology(filters, loggerFactory: loggerFactory)!;
 
                 var topology = result.matrix;
@@ -981,6 +1448,8 @@ namespace S100FC.ProductCatalogue
                 var collapse = topology.Collapse;
 
                 cancellationToken.ThrowIfCancellationRequested();
+                profiler?.Next("InformationTypes", filters.Length,
+                    profiler is null ? 0 : selection.Values.Sum(ids => ids.Count()));
 
                 // InformationTypes
                 try {
@@ -1024,9 +1493,10 @@ namespace S100FC.ProductCatalogue
                     throw;
                 }
                 catch (Exception ex) {
-                    Log.Information("Table: informationtype: {message} ", ex.Message);
+                    Logger.Information("Table: informationtype: {message} ", ex.Message);
                 }
 
+                profiler?.Next("FeatureTypes", informationTypes.Count);
                 // FeatureType
                 try {
                     using var featureType = connection.OpenDataset<Table>(this.QualifyTableName("featuretype"));
@@ -1070,9 +1540,10 @@ namespace S100FC.ProductCatalogue
                     throw;
                 }
                 catch (Exception ex) {
-                    Log.Information("Table: featuretype: {message} ", ex.Message);
+                    Logger.Information("Table: featuretype: {message} ", ex.Message);
                 }
 
+                profiler?.Next("FeatureTables", featureTypes.Count);
                 //  Features
                 foreach (var def in connection.GetDefinitions<FeatureClassDefinition>()) {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -1087,457 +1558,550 @@ namespace S100FC.ProductCatalogue
                     };
 
                     if (!supported) {
-                        Log.Information("Unsupported table detected: {tableName}", tableName);
+                        Logger.Information("Unsupported table detected: {tableName}", tableName);
                         continue;
                     }
 
                     var hashSet = new HashSet<long>();
+                    var tableStartedAt = profiler?.Timestamp() ?? 0;
+                    var tableEmittedFeatures = 0;
 
                     using var fc = connection.OpenDataset<FeatureClass>(def.GetName());
-
                     if (selection.ContainsKey(tableName.ToLowerInvariant()) && selection[tableName.ToLowerInvariant()].Any()) {
-                        using var cursor = fc.Search(new QueryFilter {
+
+                        using var featureCursor = fc.Search(new QueryFilter {
                             WhereClause = $"OBJECTID IN ({string.Join(',', selection[tableName.ToLowerInvariant()])})",
                             SubFields = "OBJECTID,GLOBALID,CODE,attributeBindings,informationBindings,featureBindings,SHAPE",
                         }, true);
 
-                        while (cursor.MoveNext()) {
-                            var current = (ArcGIS.Core.Data.Feature)cursor.Current;
 
-                            //if ("DataCoverage".Equals(Convert.ToString(current["code"]), StringComparison.InvariantCultureIgnoreCase)) System.Diagnostics.Debugger.Break();                                    
+                        while (featureCursor.MoveNext()) {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
+                            var name = current.UID();
+
+
 
                             var oid = current.GetObjectID();
                             if (hashSet.Contains(oid)) continue;
                             hashSet.Add(oid);
 
-                            var _uid = current.UID();// Convert.ToString(current["UID"])!;
-
-                            if (collapse.Contains(_uid)) continue;
-
-                            string[] features = [_uid];
-
-                            if (result.mapper.Values.Contains(_uid)) {
-                                features = result.mapper.Where(e => e.Value.Equals(_uid)).Select(e => e.Key).ToArray();
+                            var _uid = name;
+                            string? requiredSourceFeatureId = null;
+                            if (featureTracker is not null) {
+                                var sourceFeatureId = ReadFeatureId(current);
+                                if (featureTracker.RecordSelected(sourceFeatureId))
+                                    requiredSourceFeatureId = sourceFeatureId;
                             }
 
-                            foreach (var uid in features) {
-                                //if ("F10400000368".Equals(uid)) System.Diagnostics.Debugger.Break();
+                            // if (topology.matrix.Collapse.Contains(_uid)) continue;
+                            if (collapse.Contains(_uid)) {
+                                if (requiredSourceFeatureId is not null)
+                                    featureTracker!.RecordCollapsed(requiredSourceFeatureId);
+                                continue;
+                            }
+                            var shapetype = def.GetShapeType();
 
-                                // Only map geometry, and keep name seperate so foids remain unique
-                                var geometry = uid;
+                            var prim = shapetype switch {
+                                GeometryType.Point => Primitive.Point,
+                                GeometryType.Multipoint => Primitive.Point,
+                                GeometryType.Polyline => Primitive.Curve,
+                                GeometryType.Polygon => Primitive.Surface,
+                                _ => throw new InvalidOperationException(),
+                            };
 
-                                var shapetype = def.GetShapeType();
+                            var featureMappings = TopologyFeatureMapping.Resolve(
+                                _uid,
+                                prim,
+                                result.mapper,
+                                topology.MappingFOID,
+                                topology.Surfaces);
 
-                                var prim = shapetype switch {
-                                    GeometryType.Point => Primitive.Point,
-                                    GeometryType.Multipoint => Primitive.Point,
-                                    GeometryType.Polyline => Primitive.Curve,
-                                    GeometryType.Polygon => Primitive.Surface,
-                                    _ => throw new InvalidOperationException(),
-                                };
-
-
-                                if (topology.MappingFOID.TryGetValue(uid!, out var value)) {
-                                    geometry = value;
-                                }
-                                else if (prim == Primitive.Surface || prim == Primitive.Curve)
-                                    continue;
-                                else {
-                                    geometry = $"P{Guid.Parse(uid).ToStableUInt64()}";
-                                }
+                            foreach (var featureMapping in featureMappings) {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                var geometry = featureMapping.Geometry;
+                                var requiredAssociatedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                                 var code = Convert.ToString(current["code"]);
 
-                                var split = uid.Split(':');
-
-                                //var foid = $"110:{Guid.Parse(uid).ToStableUInt64()}:1";// : $"110:{Guid.Parse(uid).ToStableUInt64()}:1";
-                                var foid = uid.Contains(':') ? $"110:{Guid.Parse(split[0]).ToStableUInt64()}:{split[^1]}" : $"110:{Guid.Parse(uid).ToStableUInt64()}:1";// : $"110:{Guid.Parse(uid).ToStableUInt64()}:1";
+                                var foid = featureMapping.Foid;
 
                                 try {
-                                    var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true) ?? default;
+                                    var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
 
                                     if (type == default) {
-                                        Log.Error("Could not get type: {type} for feature: {name}", code, uid);
+                                        Logger.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
                                         continue;
                                     }
+                                    // var flatten = current["attributebindings"].ToString()!;
+                                    var flatten =
+                                        current.FindField("attributebindings") != -1 &&
+                                        current["attributebindings"] != null &&
+                                        current["attributebindings"] != DBNull.Value
+                                        ? current["attributebindings"].ToString()
+                                        : string.Empty;
 
-                                    var json = Convert.ToString(current["attributebindings"])!;
+                                    var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
 
-                                    var instance = string.IsNullOrEmpty(json) ? null : S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(json, type);
-
-                                    var filenames = S100FC.YAML.Extensions.GetFileNames(json);
+                                    var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
                                     foreach (var filename in filenames) {
-                                        supportFiles.TryAdd(uid, filename);
+                                        supportFiles.Add(name, filename);
                                     }
 
-                                    // Surface Masks
-                                    var topologySurface = topology.Surfaces.FirstOrDefault(e => e.Ref!.Equals(uid, StringComparison.InvariantCultureIgnoreCase));
 
-                                    // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
-                                    var masks = new[] {
-                                                        topologySurface?.Masks1?.Select(e => $"C{e}:1"),
-                                                        topologySurface?.Masks2?.Select(e => $"C{e}:2")
-                                                    }.Where(m => m != null).SelectMany(m => m!);
-
-                                    var feature = new S100FC.YAML.Feature {
+                                    var feature = new YAML.Feature {
                                         Name = code,
                                         Foid = foid,
                                         Prim = prim,
                                         Geometry = geometry,
-                                        Masks = masks.Any() ? string.Join(",", masks) : null,
-                                        Attributes = instance?.attributeBindings.Length > 0 ? instance : null
+                                        Masks = featureMapping.Masks,
+                                        Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
                                     };
-
+                                    if (prim == Primitive.Surface &&
+                                        (code == "DataCoverage" || code == "SoundingDatum" || code == "VerticalDatumOfData"))
+                                        metadataSourceAttributes.Add(feature, flatten ?? string.Empty);
 
                                     // Information Associations
                                     if (!current.IsNull("informationbindings")) {
-                                        var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!); // jsonSerializerOptionsS101
+                                        try {
+                                            var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!);
 
-                                        if (informationBindings != default && informationBindings.Any()) {
-                                            foreach (var binding in informationBindings) {
-                                                var asso = new S100FC.YAML.Association {
-                                                    Name = binding.association!.S100FC_code,
-                                                    Role = binding.role,
-                                                    To = $"{Guid.Parse(binding.informationId).ToStableUInt64()}",
-                                                };
+                                            if (informationBindings != default && informationBindings.Length != 0) {
+                                                foreach (var binding in informationBindings) {
 
-                                                // Special case for SpatialAssociation. Add to dictionary for later processing.
-                                                if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
-                                                    spatialAssociations.TryAdd(geometry, asso);
-                                                else
-                                                    feature?.AddAssociation(asso);
+                                                    var isValid = binding.Validate();
+
+                                                    if (!isValid)
+                                                        continue;
+
+                                                    // The association code identifies the catalogue relationship, not its target information type.
+                                                    var associationCode = binding.association?.S100FC_code;
+                                                    if (string.IsNullOrWhiteSpace(associationCode))
+                                                        throw new InvalidDataException($"S-101 information binding for '{code}' to '{binding.informationType}' has no association code.");
+
+                                                    var asso = new YAML.Association {
+                                                        Name = associationCode,
+                                                        Role = binding.role,
+                                                        To = Guid.Parse(binding.informationId!).ToStableUInt64().ToString()
+                                                    };
+
+                                                    var associatedId = Guid.Parse(binding.informationId!).ToString("B");
+                                                    var requiredAssociation = featureTracker?.RecordSelected(associatedId) == true;
+                                                    var wasAdded = !informationsTypesAdded.Contains(associatedId);
+                                                    if (wasAdded) {
+                                                        dataset!.AddInformation(informationTypes.Single(e => e.ID == asso.To));
+                                                        informationsTypesAdded.Add(associatedId);
 
 
-                                                var newEntry = informationsTypesAdded.Add(binding.informationId!);
-                                                if (newEntry) {
-                                                    dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals($"{Guid.Parse(binding.informationId).ToStableUInt64()}")));
+                                                        using var attachmentTable = connection.OpenDataset<Table>(this.QualifyTableName("attachment"));
 
-                                                    if (supportFiles.TryGetValue(binding.informationId!, out var filename)) {
+                                                        var hasSupportFile = supportFiles.ContainsKey(binding.informationId!);
 
-                                                        // TODO: how get attachment?
-                                                        var attachment = connection.GetAttachment(filename);
-                                                        if (attachment is not null) {
-                                                            var base64 = Convert.ToBase64String(attachment.Value.stream.ToArray());
-                                                            dataset?.Metadata.AddSupportFile(filename, base64);
-                                                        }
-                                                        else {
-                                                            if (System.Diagnostics.Debugger.IsAttached)
-                                                                System.Diagnostics.Debugger.Break();
-                                                            Log.Error("File not found ({filename})!", filename);
+                                                        if (hasSupportFile) {
+                                                            var filename = supportFiles.GetValueOrDefault(binding.informationId!);
+
+                                                            var escapedFilename = filename.Replace("'", "''");
+
+                                                            using var attachmentCursor = attachmentTable.Search(new QueryFilter {
+                                                                WhereClause = $"code = 'supportfile' AND json LIKE '%{escapedFilename}%'"
+                                                            });
+
+
+                                                            while (attachmentCursor.MoveNext()) {
+                                                                cancellationToken.ThrowIfCancellationRequested();
+                                                                var curr = attachmentCursor.Current;
+
+                                                                var json = curr.FindField("json") != -1
+                                                                    && curr["json"] != null
+                                                                    && curr["json"] != DBNull.Value
+                                                                    ? curr["json"].ToString()
+                                                                    : string.Empty;
+
+                                                                if (string.IsNullOrEmpty(json))
+                                                                    continue;
+
+                                                                var file = System.Text.Json.JsonSerializer.Deserialize<S100BlueStack.Settings.SupportFile>(json);
+
+
+                                                                if (curr["data"] is not MemoryStream stream)
+                                                                    throw new ArgumentNullException("Column 'data' is not a memory stream");
+
+                                                                stream.Position = 0;
+                                                                using var reader = new StreamReader(stream);
+
+                                                                var base64 = Convert.ToBase64String(stream.ToArray());
+
+                                                                // Avoid adding duplicate support files.
+                                                                if (dataset?.Metadata?.SupportFiles?.Any(e => string.Equals(e.Name, file.FileName, StringComparison.OrdinalIgnoreCase)) == true) {
+                                                                    continue;
+                                                                }
+
+                                                                dataset?.Metadata?.AddSupportFile(file.FileName, base64);
+                                                            }
+
                                                         }
                                                     }
+
+
+                                                    // Special case for SpatialAssociation. Add to dictionary for later processing.
+                                                    if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
+                                                        spatialAssociations.TryAdd(geometry, asso);
+                                                    else
+                                                        feature?.AddAssociation(asso);
+                                                    if (requiredAssociation)
+                                                        requiredAssociatedIds.Add(associatedId);
                                                 }
                                             }
+                                        }
+                                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                                            throw;
+                                        }
+                                        catch (InvalidDataException) {
+                                            // A missing association contract must stop the export rather than silently drop the binding.
+                                            throw;
+                                        }
+                                        catch (Exception ex) {
+                                            Logger.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
                                     // Feature Associations
                                     if (!current.IsNull("featurebindings")) {
-                                        var featureBindingsJson = Convert.ToString(current["featurebindings"])!;
-                                        var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(featureBindingsJson); // jsonSerializerOptionsS101
+                                        try {
+                                            var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!);
 
-                                        if (featureBindings != default && featureBindings.Any()) {
-                                            foreach (var binding in featureBindings) {
-                                                var roleType = binding.roleType;
+                                            if (featureBindings != default && featureBindings.Length != 0) {
+                                                foreach (var binding in featureBindings) {
 
-                                                // Skip association roleType for now
-                                                if (roleType == "association")
-                                                    continue;
+                                                    // check if valid
+                                                    var isValid = binding.Validate();
 
-                                                var asso = new S100FC.YAML.Association {
-                                                    Name = binding.association!.S100FC_code,
-                                                    Role = binding.role,
-                                                    To = $"110:{Guid.Parse(binding.featureId!).ToStableUInt64()}:1"
-                                                };
+                                                    if (!isValid)
+                                                        continue;
 
-                                                feature?.AddFeatureAssociation(asso);
+                                                    var roleType = binding.roleType;
 
-                                                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{Guid.Parse(binding.featureId!).ToStableUInt64()}:1"));
-                                                if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
-                                                    featureTypesAdded.Add(binding.featureId);
-                                                    dataset?.AddFeature(noGeometry);
+                                                    // Skip association roleType
+                                                    if (roleType == "association")
+                                                        continue;
+
+                                                    // A feature binding names its target type separately from the S-101 association code.
+                                                    var associationCode = binding.association?.S100FC_code;
+                                                    if (string.IsNullOrWhiteSpace(associationCode))
+                                                        throw new InvalidDataException($"S-101 feature binding for '{code}' to '{binding.featureType}' has no association code.");
+
+                                                    var asso = new YAML.Association {
+                                                        Name = associationCode,
+                                                        Role = binding.role,
+                                                        To = TopologyFeatureMapping.CreateFoid(binding.featureId!)
+                                                    };
+
+                                                    feature?.AddFeatureAssociation(asso);
+
+                                                    var noGeometry = featureTypes.SingleOrDefault(e => e.Foid == asso.To);
+                                                    var associatedId = Guid.Parse(binding.featureId!).ToString("B");
+                                                    if (noGeometry is null && requiredFeatureIds?.Contains(associatedId, StringComparer.OrdinalIgnoreCase) == true) {
+                                                        // A spatial feature association may legitimately point outside this
+                                                        // topology selection. Fail only if an actual non-spatial source row
+                                                        // exists but was lost while loading/converting FeatureType.
+                                                        using var sourceTypes = connection.OpenDataset<Table>(QualifyTableName("featuretype"));
+                                                        using var sourceType = sourceTypes.Search(new QueryFilter { WhereClause = $"GLOBALID = '{associatedId}'" }, true);
+                                                        if (sourceType.MoveNext())
+                                                            throw new InvalidDataException($"Selected non-spatial S-101 feature '{associatedId}' was omitted during YAML conversion; DPC preserved its watermark.");
+                                                    }
+                                                    if (noGeometry != null) {
+                                                        var requiredAssociation = featureTracker?.RecordSelected(associatedId) == true;
+                                                        if (!featureTypesAdded.Contains(associatedId)) {
+                                                            dataset!.AddFeature(noGeometry);
+                                                            featureTypesAdded.Add(associatedId);
+                                                        }
+                                                        if (requiredAssociation)
+                                                            requiredAssociatedIds.Add(associatedId);
+                                                    }
                                                 }
                                             }
+
+                                        }
+                                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                                            throw;
+                                        }
+                                        catch (InvalidDataException) {
+                                            // An invalid feature relationship must fail the export instead of being silently omitted.
+                                            throw;
+                                        }
+                                        catch (Exception ex) {
+                                            Logger.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
-                                    //if ("F10500070853".Equals(name)) System.Diagnostics.Debugger.Break();
+                                    // Topology surfaces are available only after AddTopology. Defer
+                                    // metadata insertion so redundant features are never committed.
+                                    if (prim == Primitive.Surface &&
+                                        (code == "DataCoverage" || code == "SoundingDatum" || code == "VerticalDatumOfData"))
+                                        pendingMetadataFeatures.Add(feature);
+                                    else
+                                        dataset?.AddFeature(feature);
+                                    if (profiler is not null)
+                                        tableEmittedFeatures++;
 
-                                    //var lookup = topology.MappingFeature(name);
-
-                                    //if (!lookup.Any())
-                                    dataset?.AddFeature(feature!);
-                                    //else {
-                                    //    int _ = 1;
-                                    //    foreach (var c in lookup) {
-                                    //        feature!.Foid = $"110:{name.Substring(1)}:{_++}";
-                                    //        feature!.Geometry = c;
-                                    //        dataset?.AddFeature(feature!);
-                                    //    }
-                                    //}
-
-                                    Action geometryConverter = tableName.Split('.', StringSplitOptions.RemoveEmptyEntries)[^1] switch {
-                                        "pointset" or "topo_pointset" => () => {
-                                            var _ = MultipointBuilderEx.CreateMultipoint((MapPoint)current.GetShape());
-                                            geometries.Add(new(_, uid!));
-                                        }
-                                        ,
-                                        "point" or "topo_point" => () => {
-                                            geometries.Add(new(current.GetShape(), uid!));
-                                        }
-                                        ,
-                                        _ => () => { }
-                                        ,
+                                    var geometrytype = code!.ToLower() switch {
+                                        "sounding" => MultipointBuilderEx.CreateMultipoint(current.GetShape() as MapPoint),
+                                        _ => current.GetShape()
                                     };
 
-                                    geometryConverter();
-                                    //geometries.Add(new(current.GetShape(), name!));                                        
+                                    geometries.Add(new(geometrytype, geometry!, feature!));
+                                    // Associated rows count only after both their record and a selected
+                                    // owner were emitted. Failed conversion must not become inclusion evidence.
+                                    foreach (var associatedId in requiredAssociatedIds)
+                                        featureTracker!.RecordEmitted(associatedId);
+                                    // Record source membership only after this generated YAML feature and its geometry were added.
+                                    if (requiredSourceFeatureId is not null) {
+                                        featureTracker!.RecordEmitted(requiredSourceFeatureId);
+                                        if (prim == Primitive.Surface &&
+                                            (code == "DataCoverage" || code == "SoundingDatum" || code == "VerticalDatumOfData"))
+                                            changedMetadataFeatures.Add(feature);
+                                    }
+
                                 }
                                 catch (Exception ex) {
-                                    Log.Error("Exception: {ex}", ex);
-                                    continue;
+                                    Logger.Error(ex, ex.Message);
+                                    throw;
                                 }
                             }
                         }
                     }
-                    // using var featureCursor = fc.Search(filter, true);
-
-
+                    if (profiler is not null) {
+                        selectedFeatureRows += hashSet.Count;
+                        emittedYamlFeatures += tableEmittedFeatures;
+                        profiler.Detail($"FeatureTable:{tableName}", tableStartedAt, hashSet.Count, tableEmittedFeatures);
+                    }
                     //if (selection.ContainsKey(tableName.ToLowerInvariant()) && selection[tableName.ToLowerInvariant()].Any()) {
-
-                    //    using var featureCursor = fc.Search(new QueryFilter {
+                    //    using var cursor = fc.Search(new QueryFilter {
                     //        WhereClause = $"OBJECTID IN ({string.Join(',', selection[tableName.ToLowerInvariant()])})",
                     //        SubFields = "OBJECTID,GLOBALID,CODE,attributeBindings,informationBindings,featureBindings,SHAPE",
                     //    }, true);
 
+                    //    while (cursor.MoveNext()) {
+                    //        var current = (ArcGIS.Core.Data.Feature)cursor.Current;
 
-                    //    while (featureCursor.MoveNext()) {
-                    //        cancellationToken.ThrowIfCancellationRequested();
-                    //        var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
-                    //        var name = current.UID();
-
-
+                    //        //if ("DataCoverage".Equals(Convert.ToString(current["code"]), StringComparison.InvariantCultureIgnoreCase)) System.Diagnostics.Debugger.Break();                                    
 
                     //        var oid = current.GetObjectID();
                     //        if (hashSet.Contains(oid)) continue;
                     //        hashSet.Add(oid);
 
-                    //        var _uid = name;
+                    //        var _uid = current.UID();// Convert.ToString(current["UID"])!;
 
-                    //        // if (topology.matrix.Collapse.Contains(_uid)) continue;
-                    //        if (collapse.Contains(_uid)) continue;
-                    //        var shapetype = def.GetShapeType();
+                    //        var currentFeatureId = ReadFeatureId(current);
+                    //        if (requiredFeatureIds is not null && requiredFeatureIds.Contains(currentFeatureId, StringComparer.OrdinalIgnoreCase))
+                    //            selectedFeatureIds.Add(currentFeatureId);
 
-                    //        var prim = shapetype switch {
-                    //            GeometryType.Point => Primitive.Point,
-                    //            GeometryType.Multipoint => Primitive.Point,
-                    //            GeometryType.Polyline => Primitive.Curve,
-                    //            GeometryType.Polygon => Primitive.Surface,
-                    //            _ => throw new InvalidOperationException(),
-                    //        };
+                    //        if (collapse.Contains(_uid)) {
+                    //            collapsedFeatureIds.Add(currentFeatureId);
+                    //            continue;
+                    //        }
 
-                    //        var featureMappings = TopologyFeatureMapping.Resolve(
-                    //            _uid,
-                    //            prim,
-                    //            result.mapper,
-                    //            topology.MappingFOID,
-                    //            topology.Surfaces);
+                    //        string[] features = [_uid];
 
-                    //        foreach (var featureMapping in featureMappings) {
-                    //            cancellationToken.ThrowIfCancellationRequested();
-                    //            var geometry = featureMapping.Geometry;
+                    //        if (result.mapper.Values.Contains(_uid)) {
+                    //            features = result.mapper.Where(e => e.Value.Equals(_uid)).Select(e => e.Key).ToArray();
+                    //        }
+
+                    //        foreach (var uid in features) {
+                    //            //if ("F10400000368".Equals(uid)) System.Diagnostics.Debugger.Break();
+
+                    //            // Only map geometry, and keep name seperate so foids remain unique
+                    //            var geometry = uid;
+
+                    //            var shapetype = def.GetShapeType();
+
+                    //            var prim = shapetype switch {
+                    //                GeometryType.Point => Primitive.Point,
+                    //                GeometryType.Multipoint => Primitive.Point,
+                    //                GeometryType.Polyline => Primitive.Curve,
+                    //                GeometryType.Polygon => Primitive.Surface,
+                    //                _ => throw new InvalidOperationException(),
+                    //            };
+
+
+                    //            if (topology.MappingFOID.TryGetValue(uid!, out var value)) {
+                    //                geometry = value;
+                    //            }
+                    //            else if (prim == Primitive.Surface || prim == Primitive.Curve)
+                    //                continue;
+                    //            else {
+                    //                geometry = $"P{Guid.Parse(uid).ToStableUInt64()}";
+                    //            }
 
                     //            var code = Convert.ToString(current["code"]);
 
-                    //            var foid = featureMapping.Foid;
+                    //            var split = uid.Split(':');
+
+                    //            //var foid = $"110:{Guid.Parse(uid).ToStableUInt64()}:1";// : $"110:{Guid.Parse(uid).ToStableUInt64()}:1";
+                    //            var foid = uid.Contains(':') ? $"110:{Guid.Parse(split[0]).ToStableUInt64()}:{split[^1]}" : $"110:{Guid.Parse(uid).ToStableUInt64()}:1";// : $"110:{Guid.Parse(uid).ToStableUInt64()}:1";
 
                     //            try {
-                    //                var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
+                    //                var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true) ?? default;
 
                     //                if (type == default) {
-                    //                    Log.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
+                    //                    Logger.Error("Could not get type: {type} for feature: {name}", code, uid);
                     //                    continue;
                     //                }
-                    //                // var flatten = current["attributebindings"].ToString()!;
-                    //                var flatten =
-                    //                    current.FindField("attributebindings") != -1 &&
-                    //                    current["attributebindings"] != null &&
-                    //                    current["attributebindings"] != DBNull.Value
-                    //                    ? current["attributebindings"].ToString()
-                    //                    : string.Empty;
 
-                    //                var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+                    //                var json = Convert.ToString(current["attributebindings"])!;
 
-                    //                var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
+                    //                var instance = string.IsNullOrEmpty(json) ? null : S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(json, type);
+
+                    //                var filenames = S100FC.YAML.Extensions.GetFileNames(json);
 
                     //                foreach (var filename in filenames) {
-                    //                    supportFiles.Add(name, filename);
+                    //                    supportFiles.TryAdd(uid, filename);
                     //                }
 
+                    //                // Surface Masks
+                    //                var topologySurface = topology.Surfaces.FirstOrDefault(e => e.Ref!.Equals(uid, StringComparison.InvariantCultureIgnoreCase));
 
-                    //                var feature = new YAML.Feature {
+                    //                // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
+                    //                var masks = new[] {
+                    //                                    topologySurface?.Masks1?.Select(e => $"C{e}:1"),
+                    //                                    topologySurface?.Masks2?.Select(e => $"C{e}:2")
+                    //                                }.Where(m => m != null).SelectMany(m => m!);
+
+                    //                var feature = new S100FC.YAML.Feature {
                     //                    Name = code,
                     //                    Foid = foid,
                     //                    Prim = prim,
                     //                    Geometry = geometry,
-                    //                    Masks = featureMapping.Masks,
-                    //                    Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
+                    //                    Masks = masks.Any() ? string.Join(",", masks) : null,
+                    //                    Attributes = instance?.attributeBindings.Length > 0 ? instance : null
                     //                };
+
 
                     //                // Information Associations
                     //                if (!current.IsNull("informationbindings")) {
-                    //                    try {
-                    //                        var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!);
+                    //                    var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!); // jsonSerializerOptionsS101
 
-                    //                        if (informationBindings != default && informationBindings.Length != 0) {
-                    //                            foreach (var binding in informationBindings) {
+                    //                    if (informationBindings != default && informationBindings.Any()) {
+                    //                        foreach (var binding in informationBindings) {
+                    //                            var asso = new S100FC.YAML.Association {
+                    //                                Name = binding.association!.S100FC_code,
+                    //                                Role = binding.role,
+                    //                                To = $"{Guid.Parse(binding.informationId).ToStableUInt64()}",
+                    //                            };
 
-                    //                                var isValid = binding.Validate();
-
-                    //                                if (!isValid)
-                    //                                    continue;
-
-                    //                                var asso = new YAML.Association {
-                    //                                    Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
-                    //                                    Role = binding.role,
-                    //                                    To = Guid.Parse(binding.informationId!).ToStableUInt64().ToString()
-                    //                                };
-
-                    //                                var wasAdded = informationsTypesAdded.Add(binding.informationId!);
-                    //                                if (wasAdded) {
-                    //                                    dataset!.AddInformation(informationTypes.Single(e => e.ID == asso.To));
+                    //                            // Special case for SpatialAssociation. Add to dictionary for later processing.
+                    //                            if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
+                    //                                spatialAssociations.TryAdd(geometry, asso);
+                    //                            else
+                    //                                feature?.AddAssociation(asso);
 
 
-                    //                                    using var attachmentTable = connection.OpenDataset<Table>(this.QualifyTableName("attachment"));
+                    //                            var newEntry = informationsTypesAdded.Add(binding.informationId!);
+                    //                            if (newEntry) {
+                    //                                dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals($"{Guid.Parse(binding.informationId).ToStableUInt64()}")));
 
-                    //                                    var hasSupportFile = supportFiles.ContainsKey(binding.informationId!);
+                    //                                if (supportFiles.TryGetValue(binding.informationId!, out var filename)) {
 
-                    //                                    if (hasSupportFile) {
-                    //                                        var filename = supportFiles.GetValueOrDefault(binding.informationId!);
-
-                    //                                        var escapedFilename = filename.Replace("'", "''");
-
-                    //                                        using var attachmentCursor = attachmentTable.Search(new QueryFilter {
-                    //                                            WhereClause = $"code = 'supportfile' AND json LIKE '%{escapedFilename}%'"
-                    //                                        });
-
-
-                    //                                        while (attachmentCursor.MoveNext()) {
-                    //                                            cancellationToken.ThrowIfCancellationRequested();
-                    //                                            var curr = attachmentCursor.Current;
-
-                    //                                            var json = curr.FindField("json") != -1
-                    //                                                && curr["json"] != null
-                    //                                                && curr["json"] != DBNull.Value
-                    //                                                ? curr["json"].ToString()
-                    //                                                : string.Empty;
-
-                    //                                            if (string.IsNullOrEmpty(json))
-                    //                                                continue;
-
-                    //                                            var file = System.Text.Json.JsonSerializer.Deserialize<S100BlueStack.Settings.SupportFile>(json);
-
-
-                    //                                            if (curr["data"] is not MemoryStream stream)
-                    //                                                throw new ArgumentNullException("Column 'data' is not a memory stream");
-
-                    //                                            stream.Position = 0;
-                    //                                            using var reader = new StreamReader(stream);
-
-                    //                                            var base64 = Convert.ToBase64String(stream.ToArray());
-
-                    //                                            // Avoid adding duplicate support files.
-                    //                                            if (dataset?.Metadata?.SupportFiles?.Any(e => string.Equals(e.Name, file.FileName, StringComparison.OrdinalIgnoreCase)) == true) {
-                    //                                                continue;
-                    //                                            }
-
-                    //                                            dataset?.Metadata?.AddSupportFile(file.FileName, base64);
-                    //                                        }
-
+                    //                                    // TODO: how get attachment?
+                    //                                    var attachment = connection.GetAttachment(filename);
+                    //                                    if (attachment is not null) {
+                    //                                        var base64 = Convert.ToBase64String(attachment.Value.stream.ToArray());
+                    //                                        dataset?.Metadata.AddSupportFile(filename, base64);
+                    //                                    }
+                    //                                    else {
+                    //                                        if (System.Diagnostics.Debugger.IsAttached)
+                    //                                            System.Diagnostics.Debugger.Break();
+                    //                                        Logger.Error("File not found ({filename})!", filename);
                     //                                    }
                     //                                }
-
-
-                    //                                // Special case for SpatialAssociation. Add to dictionary for later processing.
-                    //                                if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
-                    //                                    spatialAssociations.TryAdd(geometry, asso);
-                    //                                else
-                    //                                    feature?.AddAssociation(asso);
                     //                            }
                     //                        }
-                    //                    }
-                    //                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
-                    //                        throw;
-                    //                    }
-                    //                    catch (Exception ex) {
-                    //                        Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
                     //                    }
                     //                }
 
                     //                // Feature Associations
                     //                if (!current.IsNull("featurebindings")) {
-                    //                    try {
-                    //                        var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!);
+                    //                    var featureBindingsJson = Convert.ToString(current["featurebindings"])!;
+                    //                    var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(featureBindingsJson); // jsonSerializerOptionsS101
 
-                    //                        if (featureBindings != default && featureBindings.Length != 0) {
-                    //                            foreach (var binding in featureBindings) {
+                    //                    if (featureBindings != default && featureBindings.Any()) {
+                    //                        foreach (var binding in featureBindings) {
+                    //                            var roleType = binding.roleType;
 
-                    //                                // check if valid
-                    //                                var isValid = binding.Validate();
+                    //                            // Skip association roleType for now
+                    //                            if (roleType == "association")
+                    //                                continue;
 
-                    //                                if (!isValid)
-                    //                                    continue;
+                    //                            var asso = new S100FC.YAML.Association {
+                    //                                Name = binding.association!.S100FC_code,
+                    //                                Role = binding.role,
+                    //                                To = $"110:{Guid.Parse(binding.featureId!).ToStableUInt64()}:1"
+                    //                            };
 
-                    //                                var roleType = binding.roleType;
+                    //                            feature?.AddFeatureAssociation(asso);
 
-                    //                                // Skip association roleType
-                    //                                if (roleType == "association")
-                    //                                    continue;
-
-                    //                                var asso = new YAML.Association {
-                    //                                    Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
-                    //                                    Role = binding.role,
-                    //                                    To = TopologyFeatureMapping.CreateFoid(binding.featureId!)
-                    //                                };
-
-                    //                                feature?.AddFeatureAssociation(asso);
-
-                    //                                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid == asso.To);
-                    //                                if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
-                    //                                    featureTypesAdded.Add(binding.featureId);
-                    //                                    dataset?.AddFeature(noGeometry);
-                    //                                }
+                    //                            var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{Guid.Parse(binding.featureId!).ToStableUInt64()}:1"));
+                    //                            if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
+                    //                                featureTypesAdded.Add(binding.featureId);
+                    //                                dataset?.AddFeature(noGeometry);
                     //                            }
                     //                        }
-
-                    //                    }
-                    //                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
-                    //                        throw;
-                    //                    }
-                    //                    catch (Exception ex) {
-                    //                        Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
                     //                    }
                     //                }
 
-                    //                dataset?.AddFeature(feature!);
+                    //                //if ("F10500070853".Equals(name)) System.Diagnostics.Debugger.Break();
 
-                    //                var geometrytype = code!.ToLower() switch {
-                    //                    "sounding" => MultipointBuilderEx.CreateMultipoint(current.GetShape() as MapPoint),
-                    //                    _ => current.GetShape()
+                    //                //var lookup = topology.MappingFeature(name);
+
+                    //                //if (!lookup.Any())
+                    //                dataset?.AddFeature(feature!);
+                    //                exportedFeatureIds.Add(currentFeatureId);
+                    //                if (Guid.TryParse(uid, out var exportedId))
+                    //                    exportedFeatureIds.Add(exportedId.ToString("B"));
+
+
+                    //                //else {
+                    //                //    int _ = 1;
+                    //                //    foreach (var c in lookup) {
+                    //                //        feature!.Foid = $"110:{name.Substring(1)}:{_++}";
+                    //                //        feature!.Geometry = c;
+                    //                //        dataset?.AddFeature(feature!);
+                    //                //    }
+                    //                //}
+
+                    //                Action geometryConverter = tableName.Split('.', StringSplitOptions.RemoveEmptyEntries)[^1] switch {
+                    //                    "pointset" or "topo_pointset" => () => {
+                    //                        var _ = MultipointBuilderEx.CreateMultipoint((MapPoint)current.GetShape());
+                    //                        geometries.Add(new(_, geometry!));
+                    //                    }
+                    //                    ,
+                    //                    "point" or "topo_point" => () => {
+                    //                        geometries.Add(new(current.GetShape(), geometry!));
+                    //                    }
+                    //                    ,
+                    //                    _ => () => { 
+                    //                        geometries.Add(new(current.GetShape(), geometry)); 
+                    //                    }
+                    //                    ,
                     //                };
 
-                    //                geometries.Add(new(geometrytype, geometry!));
-
-
+                    //                geometryConverter();
+                    //               // geometries.Add(new(current.GetShape(), name!));                                        
                     //            }
                     //            catch (Exception ex) {
-                    //                Log.Error(ex, ex.Message);
-                    //                throw;
+                    //                Logger.Error("Exception: {ex}", ex);
+                    //                if (Guid.TryParse(_uid, out var failedId) && requiredFeatureIds?.Contains(failedId.ToString("B"), StringComparer.OrdinalIgnoreCase) == true)
+                    //                    throw new InvalidOperationException($"Detected S-101 feature '{_uid}' could not be included in the export snapshot.", ex);
+                    //                continue;
                     //            }
                     //        }
                     //    }
                     //}
+                    // using var featureCursor = fc.Search(filter, true);
+
+
+                    
                 }
 
                 //// SupportFiles
@@ -1576,15 +2140,45 @@ namespace S100FC.ProductCatalogue
                 //    }
                 //}
 
+                profiler?.Next("GeometryAssembly", selectedFeatureRows, emittedYamlFeatures);
                 //  Geometries
-                foreach (var (geometry, name) in geometries.OrderBy(e => e.geometry.GeometryType)) {
+                foreach (var (geometry, name, feature) in geometries.OrderBy(e => e.geometry.GeometryType)) {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (geometry.GeometryType == GeometryType.Polygon) continue;    // Skip polygons after topology
+                    if (geometry.GeometryType != GeometryType.Multipoint) continue;    // Everything but multipoints are handled in topology
+                 
                     dataset?.AddGeometry(geometry, name!);
-                    Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
+                    if (dataset is not null)
+                        EncPointGeometryReferences.Rebind(dataset, geometry, feature);
+                    Logger.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
+                profiler?.Next("MembershipVerification", geometries.Count);
+                if (featureTracker is not null) {
+                    // A selected but unexported source feature must fail this scan before its watermark advances.
+                    var verification = featureTracker.Complete();
+                    foreach (var id in verification.Included)
+                        includedChangedFeatureIds?.Add(id);
+                    foreach (var id in verification.OutsideSelection)
+                        Logger.Information("DPC source feature {FeatureId} is outside the topology selection for {DatasetName}; it is not required in this product's YAML.", id, electronicProduct.datasetName);
+                    foreach (var id in verification.Collapsed)
+                        Logger.Information("DPC source surface {FeatureId} collapsed during topology for {DatasetName}; it is not emitted as a feature.", id, electronicProduct.datasetName);
+                }
+                profiler?.Next("TopologyAndAssociations", requiredFeatureIds?.Count ?? 0, includedChangedFeatureIds?.Count ?? 0);
                 dataset!.AddTopology(topology);
+                var coverageResult = EncMetadataCoverageNormalizer.Normalize(dataset,
+                    pendingMetadataFeatures, metadataSourceAttributes, changedMetadataFeatures);
+                if (suppressedMetadataSurfaces is not null) {
+                    foreach (var surfaceName in coverageResult.SuppressedSurfaceNames)
+                        suppressedMetadataSurfaces.Add(surfaceName);
+                }
+                if (coverageResult.SkippedPartialOverlap)
+                    Logger.Warning("ENC metadata normalization skipped for unsupported partial overlap; all metadata preserved for compiler and SevenCs validation. DatasetName: {DatasetName}. Reason: {Reason}.",
+                        electronicProduct.datasetName, coverageResult.SkipReason);
+                else if (coverageResult.TotalRemoved > 0)
+                    Logger.Information("ENC metadata coverage normalized. DatasetName: {DatasetName}. DataCoverageRemoved: {DataCoverageRemoved}. SoundingDatumRemoved: {SoundingDatumRemoved}. VerticalDatumOfDataRemoved: {VerticalDatumOfDataRemoved}.",
+                        electronicProduct.datasetName, coverageResult.RemovedDataCoverage,
+                        coverageResult.RemovedSoundingDatum, coverageResult.RemovedVerticalDatumOfData);
+                EncPointGeometryReferences.RequireResolvedPointReferences(dataset);
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
                 foreach (var sa in spatialAssociations) {
@@ -1594,6 +2188,7 @@ namespace S100FC.ProductCatalogue
                     curve?.AddAssociation(sa.Value);
                 }
 
+                profiler?.Next("ApplyEdits", spatialAssociations.Count);
                 // Apply Edits
 
                 if (applyEdits) {
@@ -1618,8 +2213,19 @@ namespace S100FC.ProductCatalogue
                     AddElectronicProduct(electronicProduct);
                 }
                 cancellationToken.ThrowIfCancellationRequested();
+                profiler?.Finish(true, selectedFeatureRows, emittedYamlFeatures);
                 return dataset!;
             }, $"CreateDataset:{exportType}", electronicProduct.datasetName, cancellationToken);
+            creationSucceeded = true;
+            return createdDataset;
+            }
+            finally {
+                // The dispatch delegate may never run if it was cancelled while queued.
+                profiler?.Finish(false);
+                if (logNewDataset)
+                    Logger.Information("CreateNewDataset finished. DatasetName: {DatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
+                        electronicProduct.datasetName, creationSucceeded, creationTimer.ElapsedMilliseconds);
+            }
         }
 
         public async Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) {
@@ -1649,7 +2255,7 @@ namespace S100FC.ProductCatalogue
 
                     attachment.CreateRow(buffer);
 
-                    Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+                    Logger.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
                 });
             });
         }
@@ -1684,9 +2290,133 @@ namespace S100FC.ProductCatalogue
 
                     attachment.CreateRow(buffer);
 
-                    Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+                    Logger.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
                 });
             });
+        }
+
+        /// <summary>Publishes the two bound products and the source attachment in one geodatabase edit transaction.</summary>
+        async Task IElectronicProductManager.PublishAcceptedEncPackageAsync(EncPackagePublication publication, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNull(publication);
+            if (publication.PackageId == Guid.Empty || string.IsNullOrWhiteSpace(publication.DatasetYaml) || publication.CompilerIndex.Length == 0)
+                throw new ArgumentException("The accepted package must include its identity, YAML and S-101 compiler index.", nameof(publication));
+
+            await Dispatch(() => {
+                cancellationToken.ThrowIfCancellationRequested();
+                var mapped = _productMappings.GetMapped(publication.S101DatasetName, "S-57");
+                if (mapped.Count != 1 || !string.Equals(mapped[0].datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase))
+                    throw new ProductMappingIntegrityException("The accepted S-57 and S-101 products no longer have an exact ProductMapping binding.");
+
+                using var surface = _geodatabase!.OpenDataset<FeatureClass>(QualifyTableName("surface"));
+                using var attachment = _geodatabase.OpenDataset<Table>(QualifyTableName("attachment"));
+                var existingAttachment = false;
+                var sourceSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(publication.DatasetYaml)));
+                using (var existing = attachment.Search(new QueryFilter {
+                    WhereClause = $"json LIKE '%{publication.PackageId:D}%'"
+                }, true)) {
+                    while (existing.MoveNext()) {
+                        using var document = JsonDocument.Parse(Convert.ToString(existing.Current["json"])!);
+                        if (document.RootElement.TryGetProperty("PackageId", out var id) && id.GetGuid() == publication.PackageId) {
+                            if (existingAttachment || !document.RootElement.TryGetProperty("SourceSha256", out var hash) ||
+                                !string.Equals(hash.GetString(), sourceSha256, StringComparison.Ordinal) ||
+                                !document.RootElement.TryGetProperty("DatasetName", out var name) ||
+                                !string.Equals(name.GetString(), publication.S101DatasetName, StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidOperationException("Conflicting S-128 attachment metadata exists for this package.");
+                            existingAttachment = true;
+                        }
+                    }
+                }
+
+                var products = new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase);
+                using (var cursor = surface.Search(CreateElectronicProductVersionQueryFilter(), true)) {
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        if (row.IsNull("attributebindings")) continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var specification = NormalizeProductSpecification(product.productSpecification?.name);
+                        var wanted = specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase) ||
+                                     specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase);
+                        if (wanted && !products.TryAdd(specification, product))
+                            throw new ProductMappingIntegrityException("Multiple S-128 ElectronicProduct rows match an accepted package product.");
+                    }
+                }
+                if (!products.TryGetValue("S57", out var s57) || !products.TryGetValue("S101", out var s101))
+                    throw new ProductMappingIntegrityException("An accepted package product is missing from the S-128 surface table.");
+
+                var s57Published = s57.editionNumber == publication.S57Edition && s57.updateNumber.GetValueOrDefault() == publication.S57Update;
+                var s101Published = s101.editionNumber == publication.S101Edition && s101.updateNumber.GetValueOrDefault() == publication.S101Update;
+                if (existingAttachment) {
+                    if (!s57Published || !s101Published)
+                        throw new InvalidOperationException("The package attachment exists but S-128 product versions do not match; manual repair is required.");
+                    return;
+                }
+                if (s57Published || s101Published || s57.editionNumber > publication.S57Edition || s101.editionNumber > publication.S101Edition)
+                    throw new InvalidOperationException("An S-128 product version changed outside package finalization; manual review is required.");
+
+                var publishedAtUtc = DateTime.UtcNow;
+                var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _geodatabase.ApplyEdits(() => {
+                    using var cursor = surface.Search(new QueryFilter { WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'" }, false);
+                    while (cursor.MoveNext()) {
+                        using var row = cursor.Current;
+                        if (row.IsNull("attributebindings")) continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var specification = NormalizeProductSpecification(product.productSpecification?.name);
+                        if (specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase)) {
+                            product.editionNumber = publication.S57Edition;
+                            product.updateNumber = publication.S57Update;
+                        }
+                        else if (specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase)) {
+                            product.editionNumber = publication.S101Edition;
+                            product.updateNumber = publication.S101Update;
+                        }
+                        else continue;
+
+                        if (!updated.Add(specification))
+                            throw new ProductMappingIntegrityException("A duplicate S-128 ElectronicProduct appeared during publication.");
+                        // The issued dataset was built from the package snapshot; acceptance can arrive days later.
+                        product.issueDate = DateOnly.FromDateTime(publication.DetectedAtUtc);
+                        row["attributebindings"] = product.Flatten();
+                        row.Store();
+                        products[specification] = product;
+                    }
+                    if (updated.Count != 2)
+                        throw new ProductMappingIntegrityException("An accepted product disappeared during S-128 publication.");
+
+                    using var buffer = attachment.CreateRowBuffer();
+                    buffer["ps"] = "S-128.NuvionPro";
+                    buffer["code"] = nameof(Dataset);
+                    buffer["json"] = JsonSerializer.Serialize(new {
+                        publication.PackageId,
+                        SourceSha256 = sourceSha256,
+                        DatasetName = publication.S101DatasetName,
+                        Edition = publication.S101Edition,
+                        Update = publication.S101Update,
+                        ExportTypes = s101.editionNumber.GetValueOrDefault() == 0 ? ExportTypes.NewDataset : publication.S101Update > 0 ? ExportTypes.Update : ExportTypes.NewEdition,
+                        TimestampUTC = publishedAtUtc,
+                        ProductSpecification = "S-101"
+                    }, jsonSerializerOptions);
+                    using var data = new MemoryStream();
+                    using (var archive = new ZipArchive(data, ZipArchiveMode.Create, leaveOpen: true)) {
+                        Write(archive, "yaml", Encoding.UTF8.GetBytes(publication.DatasetYaml));
+                        Write(archive, "index", publication.CompilerIndex);
+                        Write(archive, "sign", publication.CatalogueSignature);
+                    }
+                    data.Position = 0;
+                    buffer["data_size"] = data.Length;
+                    buffer["data"] = data;
+                    attachment.CreateRow(buffer);
+                });
+
+                AddElectronicProduct(products["S57"]);
+                AddElectronicProduct(products["S101"]);
+                Logger.Information("Accepted ENC package {PackageId} published in S-128.", publication.PackageId);
+            });
+
+            static void Write(ZipArchive archive, string name, byte[] bytes) {
+                using var stream = archive.CreateEntry(name).Open();
+                stream.Write(bytes);
+            }
         }
 
         #endregion
@@ -1791,13 +2521,13 @@ namespace S100FC.ProductCatalogue
             return await this.Dispatch(() => {
                 var sqlSyntax = this._geodatabase!.GetSQLSyntax();
 
-                var formattedDate = sqlSyntax.Format(
-                    dataset.TimestampUTC,
-                    SQLDateTimeType.Timestamp);
-
-                var whereClause =
-                    $"UPPER(ps) = 'S-101' AND " +
-                    $"(GDB_FROM_DATE > {formattedDate} OR GDB_TO_DATE > {formattedDate})";
+                // Attachment timestamps are persisted UTC metadata, unlike ArcGIS archive wall times.
+                var sinceUtc = dataset.TimestampUTC.Kind == DateTimeKind.Local ? dataset.TimestampUTC.ToUniversalTime()
+                    : DateTime.SpecifyKind(dataset.TimestampUTC, DateTimeKind.Utc);
+                var window = new ArchiveScanWindow(sinceUtc, DateTime.UtcNow);
+                var formattedDate = sqlSyntax.Format(DpcArchiveClock.Value.ToQueryLowerBound(window), SQLDateTimeType.Timestamp);
+                var openEnd = sqlSyntax.Format(new DateTime(9999, 12, 31), SQLDateTimeType.Timestamp);
+                var whereClause = $"UPPER(ps) = 'S-101' AND {ArchiveClock.CreateEventPredicate(formattedDate, openEnd)}";
 
                 var shapeCoverage = this.GetProductAoiGeometry(dataset.DatasetName, "S-101");
 
@@ -2056,7 +2786,7 @@ namespace S100FC.ProductCatalogue
                     dispatchCompletedAt
                 ).TotalMilliseconds;
 
-                Log.Information(
+                Logger.Verbose(
                     "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
                     this._executionLane,
                     "GetDatasetAOIs",

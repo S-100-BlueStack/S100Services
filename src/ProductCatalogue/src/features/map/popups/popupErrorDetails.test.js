@@ -195,3 +195,34 @@ test("keyboard focus leaving pinned details dismisses the overlay without moving
   assert.equal(h.doc.listenerCount(), 0);
   h.controller.destroy();
 });
+
+test("status cell can show its actual label while retaining error tooltip and focus behavior", () => {
+  const { doc, win } = createDom();
+  const controller = createPopupErrorDetails({ document: doc, window: win });
+  const button = controller.createTrigger("Backend package error", {
+    key: "package-status",
+    label: "Package",
+    text: "Error",
+  });
+  const member = controller.createTrigger("Rejected by validator", {
+    key: "s57",
+    label: "S-57",
+    text: "Rejected",
+  });
+  doc.body.append(button, member);
+  assert.equal(button.textContent, "Error");
+  assert.equal(member.textContent, "Rejected");
+  assert.equal(member.getAttribute("aria-label"), "S-57: show full error");
+  member.emit("pointerenter");
+  assert.equal(
+    doc.body.children.find((child) => child.className === "popup-error-details").children[1]
+      .textContent,
+    "Rejected by validator"
+  );
+  member.emit("click");
+  assert.equal(doc.activeElement.tagName, "section");
+  const escape = doc.emit("keydown", { key: "Escape" });
+  assert.equal(escape.defaultPrevented, true);
+  assert.equal(doc.activeElement, member);
+  controller.destroy();
+});

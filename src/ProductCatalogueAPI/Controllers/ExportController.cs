@@ -14,7 +14,7 @@ namespace ProductCatalogueAPI.Controllers;
 /// <summary>
 /// Starts SQL-authoritative candidate export workflows. These endpoints do not publish data to S-128.
 /// </summary>
-[AllowAnonymous]
+[Authorize("productmanager:manage")]
 [ApiController]
 [Route("[controller]")]
 public sealed class ExportController(ILogger<ExportController> logger, IProductManager productManager, IExportJobService exportJobService, TimeProvider timeProvider) : ControllerBase
@@ -24,15 +24,13 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
     private readonly IExportJobService _exportJobService = exportJobService;
     private readonly TimeProvider _timeProvider = timeProvider;
 
-    /// <summary>Queues a manual new-edition build for Swagger testing and operator repair.</summary>
-    [HttpPost("{name}/newedition", Name = "NewEdition")]
+    /// <summary>Queues a package build with S-101 and S-57 candidates sharing one source snapshot.</summary>
+    /// <param name="packageName">The S-101 source dataset name identifying the package.</param>
+    /// <param name="cancellationToken">Cancels validation before queueing.</param>
+    /// <returns>The queued background job, or a catalogue validation error.</returns>
+    [HttpPost("{packageName}/newexport", Name = "NewExport")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportEdition, cancellationToken);
-
-    /// <summary>Queues a manual update build for Swagger testing and operator repair.</summary>
-    [HttpPost("{name}/newupdate", Name = "NewUpdate")]
-    [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportUpdate, cancellationToken);
+    public Task<IActionResult> NewExport(string packageName, CancellationToken cancellationToken) => QueueJobAsync(packageName, ExportOperationType.ExportEdition, cancellationToken, buildPackage: true);
 
     /// <summary>Queues a candidate discard; discarding both products removes the package until new edits are detected.</summary>
     [HttpPost("{name}/discard", Name = "Discard")]
@@ -44,7 +42,7 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
     [HttpPost("{name}/cancel-export")]
     public Task<IActionResult> DiscardLegacy(string name, CancellationToken cancellationToken) => Discard(name, cancellationToken);
 
-    private async Task<IActionResult> QueueJobAsync(string name, ExportOperationType operationType, CancellationToken cancellationToken) {
+    private async Task<IActionResult> QueueJobAsync(string name, ExportOperationType operationType, CancellationToken cancellationToken, bool buildPackage = false) {
         var correlationId = Activity.Current?.TraceId.ToString();
         if (string.IsNullOrWhiteSpace(correlationId))
             correlationId = HttpContext.TraceIdentifier;
@@ -61,6 +59,15 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
 
         if (product is null)
             return JobProblem(StatusCodes.Status404NotFound, ExportJobContract.ProductNotFoundCode, ExportJobContract.ProductNotFoundStartMessage);
+
+        if (buildPackage && product.ProductSpecification != ProductSpecification.S101)
+            return JobProblem(StatusCodes.Status400BadRequest, "PACKAGE_NAME_INVALID", "Use the S-101 source dataset name as the package name.");
+
+        if (buildPackage) {
+            var mapped = _electronicProductManager.GetMappedElectronicProducts(product.DatasetName, ProductSpecification.S57.ToString());
+            if (mapped.Count != 1 || string.IsNullOrWhiteSpace(mapped[0].datasetName))
+                return JobProblem(StatusCodes.Status409Conflict, "PACKAGE_MAPPING_INVALID", "The package must map to exactly one S-57 product.");
+        }
 
         try {
             version = await _electronicProductManager.ReadElectronicProductVersionAsync(product.DatasetName, product.ProductSpecification.ToString(), cancellationToken);
@@ -82,7 +89,7 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
         else if (operationType == ExportOperationType.NewDataset && version.Edition.Value != 0)
             return JobProblem(StatusCodes.Status409Conflict, ExportJobContract.NewDatasetInvalidVersionCode, ExportJobContract.NewDatasetInvalidVersionMessage);
 
-        var request = new ExportOperationJobRequest(version.DatasetName, operationType, product.ProductSpecification.ToString(), version.Edition, version.Update, correlationId, _timeProvider.GetUtcNow());
+        var request = new ExportOperationJobRequest(version.DatasetName, operationType, product.ProductSpecification.ToString(), version.Edition, version.Update, correlationId, _timeProvider.GetUtcNow(), BuildPackage: buildPackage);
         try {
             var response = _exportJobService.Enqueue(request);
             return Accepted(response.StatusUrl, response);

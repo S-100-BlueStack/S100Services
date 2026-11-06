@@ -6,37 +6,40 @@ records the normalized backend evidence and remaining limitations.
 
 ## Sources
 
-| Source               | Production transport                       | Capability boundary                                                                                                                                     |
-| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ENC-package (`s101`) | `GET electronicproducts/aoi?layer=ENC`     | One Main-map work unit; read, search and Collection. Package-originated Analyze/Review/History navigation, manual mutations and Export are unavailable. |
-| S-57 (`s57`)         | `GET electronicproducts/{datasetName}/aoi` | Workspace compatibility only; not selectable or selection-persistable on Main map.                                                                      |
-| Paper Charts         | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
-| S-102                | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+| Source               | Production transport                       | Capability boundary                                                                             |
+| -------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| ENC-package (`s101`) | `GET electronicproducts/aoi?layer=ENC`     | One Main-map work unit with capability-gated workspace navigation and package workflow actions. |
+| S-57 (`s57`)         | `GET electronicproducts/{datasetName}/aoi` | Workspace compatibility only; not selectable or selection-persistable on Main map.              |
+| Paper Charts         | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                    |
+| S-102                | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                    |
 
 The [package foundation](../../../docs/enc-package-frontend-foundation.md) retains the technical
 `s101` provider, S-101 dataset key, geometry and DisplayScale. Its declarative `workUnit` describes
 the primary member and ordered metadata columns. No second Graphic or Collection store is created.
-The package source has no live mutation capabilities or manual export leaves. Its `workUnit`
-navigation capabilities restrict Main-map Product contexts until destinations become package-aware;
+The package source has no popup Export leaves. A separate, verified package action session
+owns live Pause/Resume and Discard when the backend authorizes them. Its `workUnit`
+navigation capabilities allow package-aware Analyze, Review and floating History;
 source-level capabilities for direct product-based workspace resolution are retained. Other simple sources
 retain their existing contracts. Analyze, Review and Dashboard remain product-based surfaces.
 
-The package layer also owns the declarative member-aware symbolization strategy described in the
-[F2 mixed-status rendering foundation](../../../docs/package-mixed-status-rendering.md). Rendering
-projects only normalized `workUnitStatus.members[].status`; package `workflowStatus` remains available
-to F1 filtering but cannot affect the AOI symbol. Missing member state falls back to the representative
-scalar status, and all non-opted-in sources retain scalar symbols. F4 maps backend member state into
-`workUnitStatus`; real mixed AOIs now render automatically without Product-detail requests.
+The package layer uses the backend aggregate `Package.Status` (the `EncPackageStatus` enum)
+through `workUnitStatus.packageStatus` to determine its AOI color. Its polygon symbol has a thicker
+outline, low-opacity fill and **no member-status stripes**. The package Status filter matches that
+same aggregate only, independently of S-101, S-57 and the top-level Product workflow status.
+Unknown or absent Package status renders a dashed neutral symbol rather than assuming Idle.
+Ordinary single-product sources retain their ProductState-based scalar symbols and Status filter.
+The previous [F2 mixed-status rendering foundation](../../../docs/package-mixed-status-rendering.md)
+is historical and no longer represents runtime behavior.
 
-Electronic AOI responses contain Esri geometry and DatasetName/Status/DisplayScale/UsageBand/error
-attributes. The server maps each representative S-101 AOI to its unique S-57 member. The normalizer
-projects only an application-owned `workUnitStatus`, using top-level `Attributes.Status` for workflow
-and numeric `ProductState` member statuses for the existing ProductStatus palette. Raw `Package.Status`
-is never a filter or symbol value; raw Package DTOs and version/action metadata are not attached.
-Member keys/order come from `workUnit.members`; DTO field mapping is declarative in the normalizer
-configuration. Missing/unknown member states retain scalar fallback. Contradictory package/member
-identity rejects the source payload before publication. The generic `electronic-aoi` normalizer
-preserves geometry, stable identity and the existing GraphicsLayer/MapView path. There is no duplicate combined production layer.
+The live `electronicproducts/aoi?layer=ENC` and targeted status endpoints provide the authoritative
+aggregate and member states in `Attributes.Package`. The generic `electronic-aoi` normalizer projects
+`workUnitStatus: { packageStatus, workflowStatus, members }` into application-owned attributes.
+`packageStatus` comes only from `Package.Status`; `workflowStatus` comes from top-level
+`Attributes.Status`, and `members[].status` comes from each Export Candidate ProductState.
+Member keys/order and transport mapping remain registry-owned. Both candidate status and candidate
+error messages remain available to the popup, without influencing filtering or map colors.
+Contradictory package/member identity rejects the payload before publication. Geometry, source
+identity and GraphicsLayer/MapView remain unchanged; no duplicate package layer is created.
 The isolated compatibility layer adapter is not registered, persisted or used as a failed-source fallback.
 
 ## Registry and identity
@@ -65,6 +68,13 @@ replaced sessions never reopen later. Scale visibility bindings follow the curre
 source changes rebind scale visibility without republishing compatibility-derived filter/search state;
 compatibility publication remains owned by compatibility load/refresh boundaries.
 
+Targeted Product status drift reads coalesce and throttle by normalized source/Product identity,
+not just by source. Separate Products can refresh concurrently against one committed source operation;
+each accepted change advances the visible generation without invalidating another pending Product.
+Full source reload, disable, reset and destroy still supersede pending targeted reads through their
+source-operation context. Only the current Graphic with matching authoritative identity is updated;
+failed/missing/ambiguous Products are not replaced with another source's data.
+
 Failed active refresh retains the previous representation, filters and search index. Failed initial
 activation leaves no partial representation. Candidate layers are discarded on failure or supersession.
 Source removal closes owned popup/hover state, clears that source's filter/search state and removes
@@ -82,11 +92,15 @@ that is still loading is not dropped; failed explicit activation is rolled back 
 
 ## Filters and Product search
 
-Each active provider has independent fields, facets, selections and counts. The package declares Status,
-Display scale and Usage band using backend lookups. Retired synthetic fixtures do not participate in
-runtime filtering. Unsupported/missing optional facets do not invent data.
+Each active provider has independent fields, facets, selections and counts. The package declares
+**Package status**, Display scale and Usage band; individual Product sources declare **Status**,
+Display scale and Usage band. The package filter uses the five stable backend aggregate states:
+Idle (0), Ready (2), InTransit (3), Error (4) and Hold (5). Backend Ready is not the Export
+Candidate ProductState `ReadyForDistribution`. Unsupported/missing optional facets do not invent data.
 
-Electronic defaults retain the conservative Idle exclusion; saved explicit unfiltered state wins.
+The package source excludes aggregate Idle (0) by default; ordinary Product sources retain their
+ProductState Idle (1) exclusion. Persisted old member-based `status` selections are not applied
+to the new package-status dimension. Explicit saved unfiltered state still takes precedence.
 The final AOI error-only preset remains deferred pending an authoritative classification/policy.
 Product search result identity is `[providerId, productKey]`; layer identity identifies the current
 representative Graphic, not a separate Product. Product search indexes committed active Graphics only. It does not fetch the workspace catalog or

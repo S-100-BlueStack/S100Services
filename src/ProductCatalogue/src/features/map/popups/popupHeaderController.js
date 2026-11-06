@@ -1,5 +1,6 @@
+import { bindPopupActionHelp } from "./popupActionHelp.js";
 import { addNotice } from "../../notices/state/noticeStore.js";
-import { getStatusColor } from "../../data/stores/statusStore.js";
+import { resolveGraphicStatusPresentation } from "../symbology/graphicStatusPresentation.js";
 import {
   addProductCollectionProduct,
   hasProductCollectionProduct,
@@ -13,6 +14,14 @@ import {
 } from "./popupHeaderCollectionAction.js";
 let currentFeatureId = null;
 let headerMode = "default";
+const collectionButtons = new WeakMap();
+
+export function getProductCollectionHeaderButton(view) {
+  const popup = view?.popup;
+  if (!popup?.visible) return null;
+  const entry = collectionButtons.get(popup);
+  return entry?.feature === popup.selectedFeature && entry.button.isConnected ? entry.button : null;
+}
 
 export function applyHeaderColor(view) {
   if (isOverlapPickerPopup(view)) {
@@ -35,6 +44,7 @@ export function applyHeaderColor(view) {
   waitForFeatureHeader(view, featureId);
 }
 export function resetHeaderColor(view) {
+  if (view?.popup) collectionButtons.delete(view.popup);
   headerMode = "default";
   currentFeatureId = null;
   waitForDefaultHeader(view);
@@ -62,11 +72,10 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
   }
 
   const attr = feature.attributes;
-  const color = getStatusColor(attr.status)?.header ?? "#666";
+  const color = resolveGraphicStatusPresentation(feature).colors?.header ?? "#666";
 
   if (header.dataset.statusColor !== color) {
     header.style.backgroundColor = color;
-    header.style.color = "#ffffff";
     header.dataset.statusColor = color;
   }
   ensureCollectionButton(header, feature, view);
@@ -157,6 +166,7 @@ function removeHeaderButton(header, selector) {
   }
 
   btn.cleanup?.();
+  btn.popupHelp?.destroy();
   btn.remove();
 }
 
@@ -173,7 +183,8 @@ function ensureCopyButton(header, datasetName) {
     btn.className = "popup-copy-btn";
     btn.icon = "copy-to-clipboard";
     btn.scale = "m";
-    btn.title = "Copy dataset name";
+    btn.setAttribute("aria-label", "Copy dataset name");
+    btn.popupHelp = bindPopupActionHelp(btn, "Copy the product name.");
     btn.appearance = "transparent";
 
     actions.prepend(btn);
@@ -221,6 +232,7 @@ function ensureCollectionButton(header, feature, view) {
         btn.className = "popup-product-collection-btn";
         btn.scale = "m";
         btn.appearance = "transparent";
+        btn.popupHelp = bindPopupActionHelp(btn);
 
         actions.prepend(btn);
         btn.addEventListener("click", () => {
@@ -282,6 +294,7 @@ function ensureCollectionButton(header, feature, view) {
       btn.dataset.datasetName = datasetName;
       btn.dataset.productIdentity = identityKey;
       syncCollectionButtonState(btn);
+      collectionButtons.set(view.popup, { feature, button: btn });
     },
   });
 }
@@ -291,7 +304,9 @@ function syncCollectionButtonState(btn) {
   const isSelected = hasProductCollectionProduct(productIdentity);
   const title = isSelected ? "Remove from collection" : "Add to collection";
   btn.icon = isSelected ? "check" : "graph-bar";
-  btn.title = title;
+  btn.popupHelp?.update(
+    title === "Remove from collection" ? "Remove from collection." : "Add to collection."
+  );
   btn.text = title;
   btn.toggleAttribute("data-added", isSelected);
   btn.setAttribute("aria-label", title);

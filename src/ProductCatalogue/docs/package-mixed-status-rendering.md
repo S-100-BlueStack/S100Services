@@ -1,5 +1,12 @@
 # Package mixed-status AOI rendering foundation
 
+> **Historical reference (superseded in November 2026).** The live ENC package and Analyze map
+> layers now render by backend `Package.Status` via `WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION`,
+> without CIM hatches. The F2 DevTools helpers below target the former strategy and should **not**
+> be used for current acceptance. See [Data sources](../src/features/dataSources/README.md),
+> [Main-map filters](../src/features/map/filters/README.md) and
+> [Analyze](../src/features/analyze/README.md) for the current contracts.
+
 ## Scope and acceptance state
 
 F2 provides the rendering boundary for mixed member Product statuses. F4 now maps the live backend

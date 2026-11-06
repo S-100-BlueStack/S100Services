@@ -1,3 +1,5 @@
+import { bindPopupActionHelp, hideActivePopupActionHelp } from "./popupActionHelp.js";
+import { getPopupActionHelpText } from "./popupActionHelpText.js";
 import { focusWithVisibleState } from "../../../shared/ui/focus/visibleFocus.js";
 
 let activeDropdown = null;
@@ -36,6 +38,10 @@ export function closePopupActionDropdown({ restoreFocus = false } = {}) {
 
   const { element, anchorElement } = activeDropdown;
 
+  for (const item of element.querySelectorAll(`.${DROPDOWN_ITEM_CLASS}`)) {
+    item.popupHelp?.destroy();
+  }
+  hideActivePopupActionHelp();
   element.remove();
   resetDropdownAnchorState(anchorElement);
 
@@ -54,6 +60,7 @@ export function closePopupActionDropdown({ restoreFocus = false } = {}) {
 
 function openPopupActionDropdown({ anchorElement, items, focusFirstItem = false }) {
   closePopupActionDropdown();
+  hideActivePopupActionHelp();
 
   if (!anchorElement || !items?.length) {
     return;
@@ -130,15 +137,14 @@ function createDropdownItem(itemConfig, level = 0) {
     item.setAttribute("aria-expanded", "false");
   }
 
-  const helpText = itemConfig.disabledReason ?? itemConfig.helpText ?? null;
-  if (helpText) {
-    item.title = helpText;
-  }
-
-  if (disabled) {
-    item.setAttribute("aria-disabled", "true");
-    item.title = helpText ?? "This action is unavailable.";
-  }
+  if (disabled) item.setAttribute("aria-disabled", "true");
+  const helpText = getPopupActionHelpText(itemConfig);
+  // Native disabled buttons do not reliably emit pointer events across browsers.
+  // The menu node owns hover help for disabled entries, without changing menu eligibility.
+  const tooltipAnchor = disabled ? node : item;
+  const tooltip = bindPopupActionHelp(tooltipAnchor, helpText);
+  item.popupHelp = tooltip;
+  if (disabled) item.setAttribute("aria-description", helpText);
 
   item.appendChild(createDropdownLeadingVisual(itemConfig));
 

@@ -77,15 +77,20 @@ export async function fetchProductHistory(datasetName, options = {}) {
     );
   }
 
-  return fetchCompatibilityProductHistory(normalizedDatasetName, get);
+  return fetchCompatibilityProductHistory(
+    normalizedDatasetName,
+    get,
+    options.validateOwnership === true
+  );
 }
 
-async function fetchCompatibilityProductHistory(datasetName, get) {
+async function fetchCompatibilityProductHistory(datasetName, get, validateOwnership = false) {
   const payload = await get(
     `${PRODUCT_HISTORY_ENDPOINT}/${encodeURIComponent(datasetName)}/history`,
     `Product history request failed for ${datasetName}`
   );
 
+  if (validateOwnership) validateBackendHistoryOwnership(payload, datasetName);
   return normalizeProductHistoryResponse(normalizeBackendProductHistory(payload, datasetName));
 }
 
@@ -490,4 +495,19 @@ function areEqualHistoryValues(left, right) {
 }
 function joinDescriptionParts(parts) {
   return parts.filter(Boolean).join(" ");
+}
+
+// Package callers validate raw evidence before normalization/association can hide
+// a contradictory row. Missing evidence in an empty payload is not fabricated.
+function validateBackendHistoryOwnership(payload, datasetName) {
+  const expected = datasetName.trim().toUpperCase();
+  const records = [...getHistoryRecords(payload), ...(payload?.Events ?? payload?.events ?? [])];
+  for (const record of [payload, ...records]) {
+    for (const key of ["Name", "name", "DatasetName", "datasetName"]) {
+      const value = normalizeDatasetName(record?.[key]);
+      if (value && value.toUpperCase() !== expected) {
+        throw new Error("Product History response belongs to a different Product.");
+      }
+    }
+  }
 }

@@ -140,6 +140,14 @@ Expected payload shape:
 }
 ```
 
+The Dashboard endpoint must return an object containing `Activities` (or `activities`) as an
+array. `[]` is a valid empty result; an absent or malformed array, an invalid response body,
+unexpected HTML, or an explicit unsuccessful response envelope is a load failure, not a
+successful empty Dashboard. The adapter checks this contract before normalization. The shared
+API client still permits bodyless HTTP 204 responses on endpoints that support them; Dashboard
+requires a payload. A failed Dashboard read preserves the last accepted rows, paging and
+last-successful-load timestamp and displays the existing error state.
+
 ## Activity classification
 
 Dashboard activity classification is owned by the backend endpoint. The backend owns Dashboard classification, filtering, sorting and paging. The frontend normalizes and renders the supplied activity order without duplicating source-state mapping rules.
@@ -339,6 +347,8 @@ Behavior:
 - Collapsed event rows show only the title, timestamp and short description.
 - Details such as previous status, new status and source state are revealed only when the user expands a row.
 - The Dashboard panel does not pin, auto-close on popup state, or interact with Product Collection.
+- A failed product-state lookup is not cached permanently. A later explicit History open retries the lookup; concurrent opens share the pending request, and a successful lookup remains cached.
+- Closing History or selecting another activity invalidates older lookup and History results. An obsolete lookup must not initiate a new History request or show a stale error notice.
 
 History panel guidance:
 
@@ -346,6 +356,10 @@ History panel guidance:
 - Keep the panel simple; do not turn it into a second Review workspace.
 - Prefer compact context and timeline content over additional action bars.
 - Keep the panel aligned with the activity table and right summary column rather than using a floating overlay.
+
+## Dashboard request lifecycle
+
+Search changes normally use a 300 ms debounce. An immediate Refresh (toolbar or controller API) and browser Back/Forward navigation cancel any pending search timer before starting their own request. The currently applied search/filter state is retained; history navigation still applies the route range and resets paging. Range auto-apply, sorting, page-size changes, and teardown retain their existing timer cleanup and request-generation guards. A cancelled timer must not schedule a second load or update the last-successful-load timestamp.
 
 ## Report links
 

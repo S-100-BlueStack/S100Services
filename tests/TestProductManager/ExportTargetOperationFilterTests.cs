@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using ProductCatalogueAPI.Controllers;
 using ProductCatalogueAPI.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -10,11 +10,17 @@ namespace TestProductCatalogueAPI
 {
     public class ExportTargetOperationFilterTests
     {
+        /// <summary>Unsupported update and superseded edition routes are removed from the controller surface.</summary>
+        [Fact]
+        public void UnsupportedManualEndpointsAreRemoved() {
+            Assert.Null(typeof(ExportController).GetMethod("NewUpdate"));
+            Assert.Null(typeof(ExportController).GetMethod("NewEdition"));
+        }
+
         [Theory]
-        [InlineData(nameof(ExportController.NewEdition), "{name}/newedition")]
-        [InlineData(nameof(ExportController.NewUpdate), "{name}/newupdate")]
+        [InlineData(nameof(ExportController.NewExport), "{packageName}/newexport")]
         [InlineData(nameof(ExportController.Discard), "{name}/discard")]
-        public void QueuedExportRoutesUseTheirProductSpecificNames(string methodName, string expectedRoute) {
+        public void QueuedExportRoutesUseTheirCurrentNames(string methodName, string expectedRoute) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");
 
@@ -23,20 +29,14 @@ namespace TestProductCatalogueAPI
         }
 
         [Theory]
-        [InlineData(nameof(ExportController.NewEdition))]
-        [InlineData(nameof(ExportController.NewUpdate))]
+        [InlineData(nameof(ExportController.NewExport))]
         [InlineData(nameof(ExportController.Discard))]
         public void QueuedExportRoutesDoNotAdvertiseAnExportTarget(string methodName) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");
 
             var operation = new OpenApiOperation();
-            var context = new OperationFilterContext(
-                new ApiDescription(),
-                null!,
-                new SchemaRepository(),
-                method
-            );
+            var context = new OperationFilterContext(new ApiDescription(), null!, new SchemaRepository(), new OpenApiDocument(), method);
 
             new ExportTargetOperationFilter().Apply(operation, context);
 

@@ -1,3 +1,5 @@
+import { createPackagePopupBackendSynchronization } from "./packagePopupFreshness.js";
+import { createWorkspaceFreshnessMonitor } from "../../products/services/workspaceFreshnessMonitor.js";
 import {
   PRODUCT_OPERATION_CAPABILITY,
   createProductContextIdentityAttributes,
@@ -17,6 +19,8 @@ export function initializePopupBackendSynchronization({
   refresh,
   watchActiveProductJobs,
   registerPopupRefreshHandler,
+  syncFromGraphic,
+  createFreshnessMonitor = createWorkspaceFreshnessMonitor,
 } = {}) {
   if (
     !datasetName ||
@@ -28,6 +32,16 @@ export function initializePopupBackendSynchronization({
       stopWatchingActiveJobs: null,
       stopRefreshingPopup: null,
     };
+  }
+
+  if (productContext?.workUnit?.kind === "package") {
+    return createPackagePopupBackendSynchronization({
+      datasetName,
+      refresh,
+      createFreshnessMonitor,
+      registerPopupRefreshHandler,
+      syncFromGraphic,
+    });
   }
 
   return {
@@ -50,13 +64,39 @@ export async function fetchPopupProductRefresh({ productContext, datasetName, fe
     return { dispatched: false, result: null };
   }
 
-  return {
-    dispatched: true,
-    result: await fetchProduct(datasetName),
-  };
+  const result = await fetchProduct(datasetName);
+  if (result?.success && productContext?.workUnit?.kind === "package") {
+    const members = result.data?.workUnitMetadata?.members;
+    const primary = members?.[productContext.workUnit.primaryMemberKey]?.datasetName;
+    const normalize = (value) =>
+      String(value ?? "")
+        .trim()
+        .toUpperCase();
+    if (
+      (result.data?.datasetName && normalize(result.data.datasetName) !== normalize(datasetName)) ||
+      (primary && normalize(primary) !== normalize(datasetName)) ||
+      Object.entries(members ?? {}).some(
+        ([key, member]) =>
+          key !== productContext.workUnit.primaryMemberKey &&
+          normalize(member.datasetName) === normalize(datasetName)
+      )
+    ) {
+      return {
+        dispatched: true,
+        result: { success: false, errorMessage: "Contradictory package member identity." },
+      };
+    }
+  }
+  return { dispatched: true, result };
 }
 
 export function mergePopupProductRefreshAttributes(productContext, refreshAttributes) {
+  if (productContext?.workUnit?.kind === "package") {
+    return {
+      workUnitMetadata: refreshAttributes?.workUnitMetadata,
+      exportMetadata: refreshAttributes?.exportMetadata,
+    };
+  }
   const identityAttributes = createProductContextIdentityAttributes(productContext);
   if (!identityAttributes) {
     return { ...(refreshAttributes ?? {}) };

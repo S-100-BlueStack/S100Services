@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { refreshOpenProductPopup, registerPopupRefreshHandler } from "./popupRefreshBridge.js";
+import {
+  refreshOpenProductPopup,
+  registerPopupRefreshHandler,
+  registerPopupSourceStatusRefreshHandler,
+  requestPopupSourceStatusRefresh,
+} from "./popupRefreshBridge.js";
 
 test("refreshOpenProductPopup refreshes only matching product popups", async () => {
   const calls = [];
@@ -79,5 +84,39 @@ test("one failing popup handler does not block other handlers", async () => {
   } finally {
     removeFirst();
     removeSecond();
+  }
+});
+
+test("popup drift bridge delegates to the active map owner and unregisters on teardown", async () => {
+  const requests = [];
+  const unregister = registerPopupSourceStatusRefreshHandler((observation) => {
+    requests.push(observation);
+    return { success: true };
+  });
+  try {
+    assert.deepEqual(await requestPopupSourceStatusRefresh({ sourceId: "" }), []);
+    const result = await requestPopupSourceStatusRefresh({
+      sourceId: "s101",
+      datasetName: "PRIMARY",
+    });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].status, "fulfilled");
+    assert.deepEqual(requests, [{ sourceId: "s101", datasetName: "PRIMARY" }]);
+  } finally {
+    unregister();
+  }
+  assert.deepEqual(await requestPopupSourceStatusRefresh({ sourceId: "s101" }), []);
+});
+
+test("popup drift bridge contains callback failures", async () => {
+  const unregister = registerPopupSourceStatusRefreshHandler(() => {
+    throw new Error("owner destroyed");
+  });
+  try {
+    const result = await requestPopupSourceStatusRefresh({ sourceId: "s101" });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].status, "rejected");
+  } finally {
+    unregister();
   }
 });

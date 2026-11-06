@@ -25,7 +25,7 @@ namespace ProductCatalogueAPI.Services.Jobs
 
                 var statusUrl = $"/jobs/{Uri.EscapeDataString(jobId)}";
                 _logger.LogInformation(
-                    "IC-ENC send simulation job enqueued. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
+                    "IC-ENC send job enqueued. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
                     jobId,
                     request.DatasetName,
                     request.CorrelationId
@@ -40,9 +40,11 @@ namespace ProductCatalogueAPI.Services.Jobs
                     CreatedAt = request.CreatedAtUtc.ToUniversalTime(),
                     CorrelationId = request.CorrelationId,
                     StatusUrl = statusUrl,
-                    Mode = SendToIcEncContract.SimulationMode,
+                    Mode = request.Mode.ToString(),
                     DeliveryStatus = SendToIcEncContract.NotDeliveredStatus,
-                    Message = request.AllowSevenCsValidationFailure
+                    Message = request.Mode == ProductCatalogueAPI.Options.SendToIcEncMode.Live
+                        ? SendToIcEncContract.LiveAcceptedMessage
+                        : request.AllowSevenCsValidationFailure
                         ? SendToIcEncContract.ManualValidationOverrideAcceptedMessage
                         : SendToIcEncContract.AcceptedMessage
                 };
@@ -52,7 +54,7 @@ namespace ProductCatalogueAPI.Services.Jobs
             }
             catch (Exception ex) {
                 throw new JobEnqueueException(
-                    "The IC-ENC send simulation could not be queued.",
+                    "The IC-ENC send could not be queued.",
                     ex
                 );
             }

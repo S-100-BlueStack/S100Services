@@ -34,7 +34,10 @@ test("Copy dataset name remains independent from Product Collection capability",
     controller,
     /ensureCollectionButton\(header, feature, view\);\s*ensureCopyButton\(header, attr\.datasetName\);/
   );
-  assert.match(controller, /btn\.title = "Copy dataset name";/);
+  assert.match(
+    controller,
+    /btn\.popupHelp = bindPopupActionHelp\(btn, "Copy the product name\."\);/
+  );
 });
 
 test("popup action bar fails closed through central Product context and action resolution", async () => {
@@ -51,8 +54,14 @@ test("popup action bar fails closed through central Product context and action r
   assert.match(actionBar, /const context = productContext \?\? resolveProductContext\(/);
   assert.match(actionBar, /if \(!context\) \{\s*return \[\];\s*\}/);
   assert.match(actionBar, /createPopupActionGroups\(\{[\s\S]*?productContext: context,/);
-  assert.match(actionConfig, /createProductActionAvailability\(/);
+  assert.match(actionConfig, /createPopupWorkflowActions\(\)/);
+  assert.match(actionConfig, /action\.availability\.backendAuthorized === true/);
+  assert.match(actionConfig, /typeof packageActions\?\.invoke === "function"/);
   assert.match(actionConfig, /PRODUCT_OPERATION_CAPABILITY/);
+  assert.doesNotMatch(
+    actionConfig,
+    /createProductActionAvailability|triggerFreeze|triggerRollback/
+  );
   assert.doesNotMatch(
     actionBar,
     /attributesSupportLayerCapability|supportsPopupActions|supportsProductActions/
@@ -74,7 +83,7 @@ test("popup Product Collection uses graph-bar and preserves selected state prese
     controller,
     /const title = isSelected \? "Remove from collection" : "Add to collection";/
   );
-  assert.match(controller, /btn\.title = title;/);
+  assert.match(controller, /btn\.popupHelp\?\.update\(/);
   assert.match(controller, /btn\.text = title;/);
   assert.match(controller, /btn\.toggleAttribute\("data-added", isSelected\);/);
   assert.match(controller, /btn\.setAttribute\("aria-label", title\);/);

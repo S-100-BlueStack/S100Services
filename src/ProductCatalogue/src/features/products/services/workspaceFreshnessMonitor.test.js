@@ -196,3 +196,22 @@ test("destroyed workspace monitor ignores late freshness results", async () => {
   assert.equal(await pending, false);
   assert.equal(changed, 0);
 });
+
+test("consumer detail failure requests recovery even with unchanged revision", async () => {
+  let refreshes = 0;
+  const monitor = createWorkspaceFreshnessMonitor({
+    getDatasetNames: () => ["PRIMARY"],
+    fetchFreshness: async () => [{ datasetName: "PRIMARY", available: true, revision: "same" }],
+    onChanged: async () => {
+      refreshes++;
+      return refreshes > 1;
+    },
+  });
+  await monitor.prime();
+  monitor.requireRefresh();
+  assert.equal(await monitor.check(), false);
+  assert.equal(await monitor.check(), true);
+  assert.equal(await monitor.check(), true);
+  assert.equal(refreshes, 2);
+  monitor.destroy();
+});

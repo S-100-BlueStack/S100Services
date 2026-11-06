@@ -81,12 +81,12 @@ test("runtime-default registry exposes one representative ENC-package source", (
   assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), false);
 });
 
-test("only the package work-unit layer opts into member-aware symbolization", () => {
+test("only the package work-unit layer opts into backend package-status symbolization", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   const packageLayer = registry.byId.get(DATA_SOURCE_IDS.S101).layerDefinitions[0];
 
   assert.deepEqual(packageLayer.symbolization, {
-    type: "work-unit-member-status",
+    type: "work-unit-package-status",
   });
 
   for (const sourceId of [

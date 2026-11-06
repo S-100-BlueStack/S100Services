@@ -159,6 +159,15 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     }
   };
 
+  const clearPendingSearchDebounce = () => {
+    if (searchDebounceId === null) {
+      return;
+    }
+
+    window.clearTimeout(searchDebounceId);
+    searchDebounceId = null;
+  };
+
   const clearPendingRangeAutoApply = () => {
     if (rangeAutoApplyId === null) {
       return;
@@ -186,10 +195,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       return;
     }
 
-    if (searchDebounceId !== null) {
-      window.clearTimeout(searchDebounceId);
-      searchDebounceId = null;
-    }
+    clearPendingSearchDebounce();
 
     currentRange = nextRange;
     pagingState = resetDashboardPaging();
@@ -211,10 +217,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       abortActiveRequests();
     }
 
-    if (searchDebounceId !== null) {
-      window.clearTimeout(searchDebounceId);
-      searchDebounceId = null;
-    }
+    clearPendingSearchDebounce();
 
     const execute = () => {
       searchDebounceId = null;
@@ -272,10 +275,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     // Retain the last loaded order, including when another sort is still pending.
     sortRollbackState ??= successfulQueryState;
     currentSort = nextSort;
-    if (searchDebounceId !== null) {
-      window.clearTimeout(searchDebounceId);
-      searchDebounceId = null;
-    }
+    clearPendingSearchDebounce();
 
     await loadDashboard(currentRange, { updateUrl: false, resetPage: true });
   };
@@ -294,10 +294,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       writeDashboardPageSizePreference(currentPageSize);
     }
 
-    if (searchDebounceId !== null) {
-      window.clearTimeout(searchDebounceId);
-      searchDebounceId = null;
-    }
+    clearPendingSearchDebounce();
 
     await loadDashboard(currentRange, { updateUrl: false, resetPage: true });
   };
@@ -307,11 +304,13 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   });
 
   const handleRefresh = async () => {
+    clearPendingSearchDebounce();
     clearPendingRangeAutoApply();
     await loadDashboard(currentRange, { updateUrl: false });
   };
 
   const handlePopState = async () => {
+    clearPendingSearchDebounce();
     clearPendingRangeAutoApply();
     const route = getCurrentDashboardRoute();
     await loadDashboard(
@@ -342,6 +341,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       return currentDashboard;
     },
     refresh() {
+      clearPendingSearchDebounce();
       clearPendingRangeAutoApply();
       return loadDashboard(currentRange, { updateUrl: false });
     },
@@ -350,9 +350,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       abortActiveRequests();
       clearPendingRangeAutoApply();
 
-      if (searchDebounceId !== null) {
-        window.clearTimeout(searchDebounceId);
-      }
+      clearPendingSearchDebounce();
 
       document.removeEventListener("pc-dashboard-range-change", handleRangeChange);
       document.removeEventListener("pc-dashboard-filter-change", handleFilterChange);

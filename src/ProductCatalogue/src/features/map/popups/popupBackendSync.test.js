@@ -151,3 +151,58 @@ test("compatibility refresh cannot overwrite authoritative Graphic Product ident
   assert.equal(merged.productType, "compatibility-product");
   assert.equal(merged.status, "Ready");
 });
+
+test("package synchronization selects freshness and registers only the local source bridge", async () => {
+  const context = {
+    ...createCompatibilityWorkspaceProductContext("PRIMARY"),
+    workUnit: { kind: "package", primaryMemberKey: "s101" },
+  };
+  let refreshes = 0;
+  const calls = [];
+  const sync = initializePopupBackendSynchronization({
+    productContext: context,
+    datasetName: "PRIMARY",
+    refresh: async () => {
+      refreshes++;
+      return true;
+    },
+    watchActiveProductJobs: () => {
+      throw new Error("Package job discovery");
+    },
+    syncFromGraphic: () => true,
+    registerPopupRefreshHandler: ({ refresh }) => {
+      assert.equal(refresh(), true);
+      calls.push("register");
+      return () => calls.push("unregister");
+    },
+    createFreshnessMonitor: () => ({
+      prime: async () => calls.push("prime"),
+      check: async () => calls.push("check"),
+      start: () => calls.push("start"),
+      destroy: () => calls.push("destroy"),
+      requireRefresh: () => {},
+    }),
+  });
+  await sync.start();
+  assert.equal(refreshes, 1);
+  assert.equal(sync.stopWatchingActiveJobs, null);
+  sync.stopRefreshingPopup();
+  assert.deepEqual(calls, ["register", "prime", "check", "start", "unregister", "destroy"]);
+});
+test("package detail publication whitelist excludes map state and identity", () => {
+  const context = { workUnit: { kind: "package" } };
+  const members = { members: { s57: { datasetName: "OTHER" } } };
+  const exports = { items: [] };
+  assert.deepEqual(
+    mergePopupProductRefreshAttributes(context, {
+      workUnitMetadata: members,
+      exportMetadata: exports,
+      status: 15,
+      workUnitStatus: {},
+      sourceId: "wrong",
+      datasetName: "wrong",
+      geometry: {},
+    }),
+    { workUnitMetadata: members, exportMetadata: exports }
+  );
+});

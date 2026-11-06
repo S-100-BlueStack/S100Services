@@ -7,18 +7,29 @@ This workflow remains separate from Locator/FI-012 and from backend or connected
 
 ## Shared Main-map search controls
 
-`mainMapSearchControls.js` owns only the shared overlay placement, independent host slots, and the
-neutral inline open/closed layout for Product search and Locator. It also owns the decorative Locator
-slot transition. Closing immediately targets the collapsed layout, keeps the empty application-owned
+`mainMapSearchControls.js` mounts independent Product search and Locator hosts at the start of the
+Main-map navbar's right-side controls, before Filters and Data sources. Product search is permanently
+visible; the Locator action expands the adjacent Locator search field on demand. Dashboard, Analyze
+and Review do not mount the Main-map search controls. At narrower widths the Main-map navbar wraps
+so the search and existing controls remain reachable.
+
+FI-027 navbar search was accepted at `a0fde73c58a554c58028c2220399e3ae1691121b`.
+The Locator light-mode hover contrast correction followed at
+`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`; application-owned Locator
+foreground/pressed colors must remain legible in both themes. Verify hover, keyboard
+focus and the open Search state when changing shared Calcite navbar styling.
+
+The layout boundary owns the decorative Locator slot transition. Closing immediately targets the collapsed layout, keeps the empty application-owned
 Locator slot present while `flex-basis` collapses, and finalizes the layout state on `transitionend`.
 Reopening during that transition cancels the old completion through a generation/state guard. Reduced
 motion finalizes the collapsed layout immediately. None of this keeps an ArcGIS Search session alive.
 Product search still owns its index, suggestions, Product navigation, selected Product behavior, and
 popup opening. Locator owns geographic source configuration and geographic navigation.
 
-The app composition layer may call Product search's public `close()` boundary when Locator opens so
-the two suggestion surfaces do not overlap. This does not clear the Product query, change Product
-selection, or create a dependency from Locator to Product-search internals.
+The app composition layer closes open Filters/Data sources popovers when either search receives
+focus, and calls Product search's public `close()` boundary when Locator opens so the two suggestion
+surfaces do not overlap. These actions never clear the Product query, change Product selection, or
+create a dependency between the two search implementations.
 
 ## Index provider contract
 
@@ -81,6 +92,18 @@ successful committed provider entries. A failed first activation publishes no en
 
 ## Selection flow
 
+REG-01 filter visibility: the source-aware index still covers committed Products from
+active providers, even when a map attribute filter hides their representative Graphic.
+Filtered matching Products are omitted from the selectable suggestions. The dropdown
+shows a subtle count of `N filtered out` below the visible results; the count includes
+all matching hidden Products, not only the first ten results. The visible-result limit
+is applied after filtering, and an entirely hidden match set displays a clear empty
+state. A typed exact name that is filtered out receives a warning to adjust the map
+filters rather than opening an empty popup. Filter changes update open suggestions
+and the count without clearing the input; selection also revalidates visibility after
+asynchronous map navigation and immediately before popup publication. This is map-filter gating, not source activation or backend
+mutation permission. Display-scale visibility continues to be owned by the map.
+
 Selecting a result resolves the exact current entry, navigates to its Graphic, updates the existing
 selected-Graphic state, and opens the normal Product popup.
 
@@ -89,6 +112,14 @@ no Product Collection action or Product actions.
 
 Search never activates a disabled source. If a suggestion becomes stale before selection, the UI
 clears the stale result and reports that it is no longer available without throwing.
+
+Search navigation uses a per-selection generation. After navigation, animation-frame waiting,
+and any committed Graphic replacement navigation, the controller revalidates the latest selection
+and currently resolved source-aware Graphic before opening the popup. Newer Product choices,
+query edits, explicit selection clearing, index removal, map click/direct keyboard selection,
+Locator opening and search teardown retire pending navigation. Merely closing suggestions keeps
+the existing query and does not cancel a previously accepted Product choice. Aborted or failed
+navigation never opens a late popup; a valid same-identity Graphic replacement can still open.
 
 ## Future extension
 
