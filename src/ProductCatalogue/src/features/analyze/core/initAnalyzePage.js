@@ -330,7 +330,7 @@ export async function initAnalyzePage({ datasetNames }) {
           "The product metadata was loaded, but the backend response did not include AOI geometry."
         );
       }
-      loaderProgress.complete({ text: "Analyze ready" });
+      await loaderProgress.complete({ text: "Analyze ready" });
     } catch (error) {
       if (requestId === loadRequestId) {
         loaderProgress.fail({ text: "Failed to load analyze data" });
@@ -712,6 +712,7 @@ function createAnalyzeLoaderProgress() {
     simulatedProgressStep: 0.014,
     showLoaderOnStart: true,
     showLoaderDelayMs: 350,
+    completionHoldMs: 300,
   });
 }
 

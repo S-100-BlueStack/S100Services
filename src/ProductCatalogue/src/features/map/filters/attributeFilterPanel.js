@@ -520,7 +520,10 @@ function renderRangeField(filterService, providerId, fieldName, values, openFiel
   const maxIndex = range ? findMaxIndex(entries, range.max) : entries.length - 1;
   const state = getRangeState(entries, minIndex, maxIndex, fieldName);
   const isOpen = openFieldKeys.has(getFieldKey(providerId, fieldName));
+  const fieldLabel = getAttributeFilterFieldLabel(fieldName);
 
+  // The visible range outputs already show both values; handle labels would
+  // duplicate them and trigger font measurement in the initially hidden panel.
   return `
     <details
       class="pc-filter-field"
@@ -529,7 +532,7 @@ function renderRangeField(filterService, providerId, fieldName, values, openFiel
       ${isOpen ? "open" : ""}
     >
       <summary>
-        <span>${escapeHtml(getAttributeFilterFieldLabel(fieldName))}</span>
+        <span>${escapeHtml(fieldLabel)}</span>
         <span class="pc-filter-field__summary" data-range-summary>
           ${state.selectedValueCount}/${values.length}
         </span>
@@ -562,8 +565,8 @@ function renderRangeField(filterService, providerId, fieldName, values, openFiel
           max-value="${state.maxIndex}"
           step="1"
           scale="s"
-          label-handles
-          ticks="0"
+          min-label="${escapeHtml(`${fieldLabel} minimum`)}"
+          max-label="${escapeHtml(`${fieldLabel} maximum`)}"
         ></calcite-slider>
         <div class="pc-filter-range__hint" data-range-hint>
           ${state.featureCount} product(s) in range
