@@ -165,3 +165,14 @@ The outer Filter panel scroller and the nested checkbox option lists use the neu
 `pc-scrollbar` contract established by FI-035. The class styles only application-owned elements that
 already own overflow; it does not change panel or option-list sizing, overflow ownership, filtering
 state, rerender behavior, or private Calcite internals.
+
+## Calcite range slider presentation (PC-TH-01)
+
+Numeric range fields continue to use the public `calcite-slider` range handles and
+`calciteSliderInput`/`calciteSliderChange` events. The visible output elements above the
+slider already show the selected endpoints. Native `label-handles` is deliberately omitted
+because its label-measurement lifecycle can fail when Calcite 5.0.2 updates sliders inside
+the initially hidden Filter panel. Both handles have descriptive `min-label`/`max-label`
+names for assistive technology. No filter values, range semantics, persistence, or
+focus/rerender ownership change. The suspected link to the reported Slider exception
+requires browser confirmation; do not claim a verified Calcite library defect.

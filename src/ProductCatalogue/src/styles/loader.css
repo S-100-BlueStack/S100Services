@@ -111,3 +111,15 @@
     transform: translateX(240%);
   }
 }
+
+/* Keep progress legible without animated movement for reduced-motion users. */
+@media (prefers-reduced-motion: reduce) {
+  .app-loader,
+  .loader-progress__fill {
+    transition: none;
+  }
+
+  .loader-progress.is-indeterminate .loader-progress__fill {
+    animation: none;
+  }
+}

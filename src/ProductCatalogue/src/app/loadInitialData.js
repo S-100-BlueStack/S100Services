@@ -18,6 +18,7 @@ export async function loadInitialData(app) {
     renderEndProgress: 0.52,
     simulatedProgressIntervalMs: 350,
     simulatedProgressStep: 0.012,
+    completionHoldMs: 300,
   });
 
   // Clear startup-era unread state before either independent pipeline can
@@ -62,7 +63,7 @@ export async function loadInitialData(app) {
     startupResult.runtimeSources.status === "fulfilled"
   ) {
     const failed = startupResult.runtimeSources.value?.failedSourceIds ?? [];
-    loaderProgress.complete({
+    const completion = loaderProgress.complete({
       text: failed.length ? "Some sources could not be loaded" : "Map ready",
     });
     app.bindMapVisibility?.();
@@ -72,6 +73,7 @@ export async function loadInitialData(app) {
         countAsUnread: false,
       });
     }
+    await completion;
   }
   return startupResult;
 }

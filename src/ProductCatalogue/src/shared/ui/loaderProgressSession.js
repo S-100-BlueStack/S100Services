@@ -14,6 +14,10 @@ import {
   shouldShowTechnicalLoadingStages,
 } from "../config/loadingTextConfig.js";
 
+// All progress sessions share the global loader. Completed sessions must not hide a
+// newer session after its request has started.
+let latestLoaderSessionRevision = 0;
+
 export function createLoaderProgressSession({
   loadStartProgress = 0.03,
   loadEndProgress = 0.16,
@@ -26,6 +30,7 @@ export function createLoaderProgressSession({
   renderingMessagesStage = "renderingMap",
   showLoaderOnStart = false,
   showLoaderDelayMs = 0,
+  completionHoldMs = 0,
 } = {}) {
   let retryCountdownIntervalId = null;
   let simulatedProgressIntervalId = null;
@@ -37,6 +42,9 @@ export function createLoaderProgressSession({
   let currentProgressLabel = null;
   let pendingTextRotation = null;
   let failHideTimeoutId = null;
+  let completionHideTimeoutId = null;
+  let resolveCompletionHide = null;
+  let sessionRevision = 0;
 
   return {
     startLoading,
@@ -51,8 +59,13 @@ export function createLoaderProgressSession({
     cleanup,
   };
 
+  function isCurrentSession() {
+    return sessionRevision !== 0 && sessionRevision === latestLoaderSessionRevision;
+  }
+
   function startLoading(text, { rotateImmediately = false } = {}) {
     cleanup();
+    sessionRevision = ++latestLoaderSessionRevision;
 
     currentText = text;
     setSessionProgress(loadStartProgress);
@@ -68,6 +81,7 @@ export function createLoaderProgressSession({
   }
 
   function startRetryCountdown({ attempt, totalAttempts, delayMs }) {
+    if (!isCurrentSession()) return;
     stopRetryCountdown();
     stopSimulatedProgress();
     stopSessionTextRotation();
@@ -114,12 +128,14 @@ export function createLoaderProgressSession({
   }
 
   function markDataReceived() {
+    if (!isCurrentSession()) return;
     stopRetryCountdown();
     stopSimulatedProgress();
     setSessionProgress(dataReceivedProgress);
   }
 
   function startRendering({ text } = {}) {
+    if (!isCurrentSession()) return;
     stopSimulatedProgress();
 
     if (shouldShowTechnicalLoadingStages() && text) {
@@ -131,6 +147,7 @@ export function createLoaderProgressSession({
   }
 
   function handleRenderProgress({ progress, stage, layerTitle } = {}) {
+    if (!isCurrentSession()) return;
     const normalizedProgress = clamp(progress ?? 0, 0, 1);
     const loaderProgress =
       renderStartProgress + normalizedProgress * (renderEndProgress - renderStartProgress);
@@ -143,6 +160,7 @@ export function createLoaderProgressSession({
   }
 
   function updateProgressStage({ progress, text, label = null } = {}) {
+    if (!isCurrentSession()) return;
     stopRetryCountdown();
     stopSimulatedProgress();
     stopSessionTextRotation();
@@ -154,17 +172,51 @@ export function createLoaderProgressSession({
   }
 
   function complete({ text = "Ready", hide = true } = {}) {
+    if (!isCurrentSession()) {
+      cleanup();
+      return;
+    }
     cleanup();
+
     setSessionText(text);
     setSessionProgress(1);
 
-    if (hide) {
-      hideLoader();
-      loaderWasShownBySession = false;
+    if (!hide) {
+      return;
     }
+
+    const shouldHold =
+      completionHoldMs > 0 &&
+      (!showLoaderOnStart || loaderWasShownBySession) &&
+      !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    if (shouldHold) {
+      const completedRevision = sessionRevision;
+      // Startup waits for the displayed completion before offering onboarding.
+      // Cleanup resolves the wait as well, so superseded loads never hang.
+      return new Promise((resolve) => {
+        resolveCompletionHide = resolve;
+        completionHideTimeoutId = window.setTimeout(() => {
+          completionHideTimeoutId = null;
+          resolveCompletionHide = null;
+          if (completedRevision === latestLoaderSessionRevision) {
+            hideLoader();
+            loaderWasShownBySession = false;
+          }
+          resolve();
+        }, completionHoldMs);
+      });
+    }
+
+    hideLoader();
+    loaderWasShownBySession = false;
   }
 
   function fail({ text = "Failed to load data", label = "Failed", hideAfterMs = 1500 } = {}) {
+    if (!isCurrentSession()) {
+      cleanup();
+      return;
+    }
     cleanup();
 
     setSessionText(text);
@@ -177,8 +229,12 @@ export function createLoaderProgressSession({
     }
 
     if (hideAfterMs !== null) {
+      const failedRevision = sessionRevision;
       failHideTimeoutId = window.setTimeout(() => {
         failHideTimeoutId = null;
+        if (failedRevision !== latestLoaderSessionRevision) {
+          return;
+        }
         hideLoader();
         loaderWasShownBySession = false;
       }, hideAfterMs);
@@ -188,9 +244,14 @@ export function createLoaderProgressSession({
   function cleanup() {
     stopRetryCountdown();
     stopSimulatedProgress();
-    stopSessionTextRotation();
+    if (sessionRevision === 0 || isCurrentSession()) {
+      stopSessionTextRotation();
+    } else {
+      pendingTextRotation = null;
+    }
     cancelDelayedLoaderShow();
     cancelFailHide();
+    cancelCompletionHide();
   }
 
   function scheduleLoaderShow() {
@@ -204,11 +265,15 @@ export function createLoaderProgressSession({
     }
 
     delayedShowTimeoutId = window.setTimeout(() => {
-      showSessionLoader();
+      delayedShowTimeoutId = null;
+      if (isCurrentSession()) {
+        showSessionLoader();
+      }
     }, showLoaderDelayMs);
   }
 
   function showSessionLoader() {
+    if (!isCurrentSession()) return;
     cancelDelayedLoaderShow();
 
     loaderWasShownBySession = true;
@@ -237,6 +302,17 @@ export function createLoaderProgressSession({
 
     window.clearTimeout(failHideTimeoutId);
     failHideTimeoutId = null;
+  }
+
+  function cancelCompletionHide() {
+    if (completionHideTimeoutId !== null) {
+      window.clearTimeout(completionHideTimeoutId);
+      completionHideTimeoutId = null;
+    }
+
+    const resolve = resolveCompletionHide;
+    resolveCompletionHide = null;
+    resolve?.();
   }
 
   function startSessionTextRotation(stage, rotateImmediately) {
@@ -278,6 +354,10 @@ export function createLoaderProgressSession({
     stopSimulatedProgress();
 
     simulatedProgressIntervalId = window.setInterval(() => {
+      if (!isCurrentSession()) {
+        stopSimulatedProgress();
+        return;
+      }
       setSessionProgress(Math.min(loadEndProgress, currentProgress + simulatedProgressStep));
 
       if (currentProgress >= loadEndProgress) {
