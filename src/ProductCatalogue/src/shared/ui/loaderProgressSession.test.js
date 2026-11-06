@@ -108,6 +108,42 @@ function createVisibleSession(options = {}) {
   });
 }
 
+test("initial map readiness keeps one determinate progress bar until completion", () => {
+  const session = createVisibleSession();
+  session.startLoading("Loading data...");
+  session.updateProgressStage({ progress: 0.96, text: "Data sources loaded (2/2)..." });
+
+  session.updateProgressStage({
+    preserveProgress: true,
+    text: "Finishing initial map display...",
+  });
+
+  assert.equal(loaderText.textContent, "Finishing initial map display...");
+  assert.equal(progress.attributes.get("aria-valuenow"), "96");
+  assert.equal(progressFill.style.width, "96%");
+  assert.equal(progressLabel.textContent, "96%");
+  assert.equal(progress.classList.contains("is-indeterminate"), false);
+
+  session.complete({ text: "Map ready" });
+  assert.equal(progress.attributes.get("aria-valuenow"), "100");
+  assert.equal(progressFill.style.width, "100%");
+  assert.equal(loader.classList.contains("hidden"), false);
+  fireTimeout(300);
+  assert.equal(loader.classList.contains("hidden"), true);
+});
+
+test("map readiness does not advance unresolved source progress or restart the bar", () => {
+  const session = createVisibleSession();
+  session.startLoading("Loading data...");
+  session.updateProgressStage({ progress: 0.74, text: "Loading data sources (1/2)..." });
+  session.updateProgressStage({ preserveProgress: true, text: "Finishing initial map display..." });
+
+  assert.equal(progress.attributes.get("aria-valuenow"), "74");
+  assert.equal(progressFill.style.width, "74%");
+  assert.equal(progress.classList.contains("is-indeterminate"), false);
+  session.cleanup();
+});
+
 test("completion exposes the actual 100% state before a short dismissal", () => {
   const session = createVisibleSession();
   session.startLoading("Loading...");

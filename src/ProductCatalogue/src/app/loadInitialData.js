@@ -1,10 +1,16 @@
 import { loadAppData } from "../features/data/services/dataLoader.js";
+import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { resetUnread } from "../features/notices/state/noticeStore.js";
-import { noticeError, noticeSuccess } from "../features/notices/services/noticeService.js";
+import {
+  noticeError,
+  noticeSuccess,
+  noticeWarning,
+} from "../features/notices/services/noticeService.js";
 import { bindDataToMap } from "../features/map/services/bindDataToMap.js";
 import { createLoaderProgressSession } from "../shared/ui/loaderProgressSession.js";
 import { runWithRetry } from "../shared/utils/retryRunner.js";
 import { createInitialDataSourceProgress } from "./initialDataSourceProgress.js";
+import { waitForInitialMapReadiness } from "./initialMapReadiness.js";
 import { runInitialDataStartup } from "./initialDataStartup.js";
 
 const abortController = new AbortController();
@@ -63,15 +69,54 @@ export async function loadInitialData(app) {
     startupResult.runtimeSources.status === "fulfilled"
   ) {
     const failed = startupResult.runtimeSources.value?.failedSourceIds ?? [];
-    const completion = loaderProgress.complete({
-      text: failed.length ? "Some sources could not be loaded" : "Map ready",
-    });
     app.bindMapVisibility?.();
+
+    // Source loading has settled, but basemap tiles and visible layer views
+    // may still be rendering. Keep the same progress bar at its last measured
+    // value until the map is ready; rendering has no trustworthy percentage.
+    loaderProgress.updateProgressStage({
+      preserveProgress: true,
+      text: "Finishing initial map display...",
+    });
+    const readiness = await waitForInitialMapReadiness({
+      view: app.view,
+      layers: app.map.layers?.toArray?.() ?? [],
+      observeUpdating: (onChange, layerViews) =>
+        reactiveUtils.watch(
+          () => [
+            app.view.updating,
+            app.view.stationary,
+            ...layerViews.map((layer) => layer.updating),
+          ],
+          onChange
+        ),
+    });
+    if (readiness.status !== "ready") {
+      console.warn("[Map readiness] Initial display was not fully ready.", readiness);
+      noticeWarning(
+        readiness.status === "timeout" ? "Map still rendering" : "Map display incomplete",
+        readiness.status === "timeout"
+          ? "The map did not settle within 60 seconds. Some content may continue rendering."
+          : readiness.status === "partial"
+            ? "One or more map layers could not be displayed. Other content remains available."
+            : "The initial map display could not be verified as ready. Some content may be unavailable."
+      );
+    }
+
+    const completion = loaderProgress.complete({
+      text: failed.length
+        ? "Some sources could not be loaded"
+        : readiness.status === "ready"
+          ? "Map ready"
+          : "Map display incomplete",
+    });
     if (!failed.length) {
       app.updateLastUpdated();
-      noticeSuccess(`Data loaded (${getTotalGraphicsFromMap(app.map)} graphics rendered)`, null, {
-        countAsUnread: false,
-      });
+      if (readiness.status === "ready") {
+        noticeSuccess(`Data loaded (${getTotalGraphicsFromMap(app.map)} graphics rendered)`, null, {
+          countAsUnread: false,
+        });
+      }
     }
     await completion;
   }

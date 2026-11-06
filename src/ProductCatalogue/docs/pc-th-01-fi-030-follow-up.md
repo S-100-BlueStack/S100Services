@@ -3,7 +3,8 @@
 ## Authority and limits
 
 - Source snapshot: ProductCatalogue `main` commit `59d1e1fc662fa0e0df49cc00724d6ecc97567475`, clean for ProductCatalogue, verified from the uploaded SHA-256 archive.
-- This document describes a **candidate**, not a committed or browser-accepted change.
+- The developer confirmed that the slider exception disappeared, the deployed frontend had no Lit warning, local checks passed, and the candidate was committed at `ddfb26bb143c52ac80f1277bbe1de1ad8e87800c` before the merge at `2d596754d43d00352fe0adfac9b0f8420fb817c8`.
+- The separate [FI-030B initial map readiness](fi-030b-initial-map-readiness.md) candidate addresses the remaining cold-load display timing issue; this document records the earlier accepted completion presentation.
 - Scope: existing Calcite Filter range UI and shared loader completion presentation. No SDK/Calcite upgrades, API changes, feature additions, or backend phase/chunk contract.
 
 ## PC-TH-01: Calcite Slider
@@ -19,9 +20,10 @@ and native range slider intact. It adds public `min-label` and `max-label`
 attributes so the handles retain descriptive accessible names. No custom shadow
 DOM, element replacement on range commit, or filter contract changes.
 
-This mitigates a suspected failure path; a browser check is still required to
-confirm whether the exception disappears. The `Multiple versions of Lit loaded`
-warning is **not** treated as the same failure and remains separately unverified.
+This mitigated the suspected failure path: the developer reported that the
+Slider exception disappeared during browser testing. The developer also reported
+no `Multiple versions of Lit loaded` warning on the deployed frontend; that is
+not evidence that all possible development/dependency combinations are identical.
 
 ## FI-030: truthful completion presentation
 

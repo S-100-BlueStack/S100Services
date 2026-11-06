@@ -159,7 +159,7 @@ export function createLoaderProgressSession({
     }
   }
 
-  function updateProgressStage({ progress, text, label = null } = {}) {
+  function updateProgressStage({ progress, text, label = null, preserveProgress = false } = {}) {
     if (!isCurrentSession()) return;
     stopRetryCountdown();
     stopSimulatedProgress();
@@ -168,7 +168,11 @@ export function createLoaderProgressSession({
     if (text) {
       setSessionText(text);
     }
-    setSessionProgress(progress, { label });
+    // Map rendering has no measured percentage. Keep the existing bar at its
+    // source-owned value instead of making it appear to restart.
+    if (!preserveProgress) {
+      setSessionProgress(progress, { label });
+    }
   }
 
   function complete({ text = "Ready", hide = true } = {}) {
