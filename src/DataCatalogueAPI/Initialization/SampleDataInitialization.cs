@@ -2,6 +2,7 @@ using DataCatalague.Api.Controllers;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Models.V1;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using PipelineController = DataCatalague.Api.Controllers.V1.DataCatalague.Api.Controllers.PipelineController;
 
 namespace DataCatalague.Api.Initialization;
@@ -20,28 +21,26 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
     public async Task InitializeAsync(CancellationToken cancellationToken) {
         var pipelineSamples = new List<PipelineResponse>();
         foreach (var sample in new[] {
-            (Name: "ENC", Description: "Electronic navigational chart production."),
-            (Name: "Paper Chart", Description: "Paper chart production."),
+            (Name: "ENC", Description: "Electronic navigational chart production.", FileName: "ENC.json"),
+            (Name: "Paper Chart", Description: "Paper chart production.", FileName: "PaperChart.json"),
         }) {
             var created = await pipelines.Create(new CreatePipelineRequest { DisplayName = sample.Name, Description = sample.Description }, cancellationToken).ConfigureAwait(false);
             var pipeline = RequireSuccess(created, $"create pipeline '{sample.Name}'");
             pipelineSamples.Add(pipeline);
 
-            // Both pipelines have independent work areas. Packages may overlap several
-            // areas, and assigning another pipeline never changes their source geometry.
-            foreach (var area in new[] {
-                (Name: "Western Denmark", West: 7.5, East: 11.0),
-                (Name: "Eastern Denmark", West: 11.0, East: 16.0),
-            }) {
-                var json = System.Text.Json.JsonSerializer.Serialize(new {
-                    rings = new[] { new[] { new[] { area.West, 54.0 }, new[] { area.West, 58.5 }, new[] { area.East, 58.5 }, new[] { area.East, 54.0 }, new[] { area.West, 54.0 } } },
-                    spatialReference = new { wkid = 4326 },
-                });
+            var path = Path.Combine(AppContext.BaseDirectory, "Samples", "Workspaces", sample.FileName);
+            await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var areas = await JsonSerializer.DeserializeAsync<WorkspaceSample[]>(input, new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken).ConfigureAwait(false);
+            if (areas is null || areas.Length == 0) { throw new InvalidDataException($"No sample workspaces found in '{path}'."); }
+            foreach (var area in areas) {
+                if (area is null || string.IsNullOrWhiteSpace(area.DisplayName) || area.Aoi.ValueKind != JsonValueKind.Object) {
+                    throw new InvalidDataException($"Each workspace in '{path}' requires displayName and an aoi Esri JSON object.");
+                }
                 RequireSuccess(await pipelines.AddWorkspace(pipeline.Id, new AddWorkspaceRequest {
-                    DisplayName = area.Name,
-                    DisplayScale = new DisplayScale(),
-                    EsriJSON = json,
-                }, cancellationToken).ConfigureAwait(false), $"create workspace '{area.Name}' in '{pipeline.DisplayName}'");
+                    DisplayName = area.DisplayName,
+                    DisplayScale = area.DisplayScale ?? new DisplayScale(),
+                    EsriJSON = area.Aoi.GetRawText(),
+                }, cancellationToken).ConfigureAwait(false), $"create workspace '{area.DisplayName}' in '{pipeline.DisplayName}'");
             }
 
             logger.LogInformation("Created sample pipeline {DisplayName}. PipelineId: {PipelineId}.", pipeline.DisplayName, pipeline.Id);
@@ -154,8 +153,35 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         }
         logger.LogInformation("Created marine aggregate extraction ZIP samples. CreatedPackages: {CreatedPackages}.", extractionFiles.Length);
 
+        // Verify the same read path used by clients, including event replay and
+        // native row resolution. Never finish startup with unusable sample geometry.
+        foreach (var package in packageSamples) {
+            var geometry = RequireSuccess(await packages.GetGeometry(package.Id, cancellationToken).ConfigureAwait(false), $"read geometry for sample '{package.MetaData?.ShortId ?? package.Id}'");
+            if (geometry.Aoi is not { ValueKind: JsonValueKind.Object } || geometry.DetailedGeometry is not { } details
+                || (details.Points.Count == 0 && details.Curves is null && details.Surfaces is null)) {
+                throw new InvalidDataException($"Sample package '{package.Id}' requires a stored AOI and detailed geometry.");
+            }
+        }
+
+        // Shuffle without replacement so exactly half are assigned once. Rotate
+        // through shuffled pipelines to exercise both routes with varied packages.
+        var shuffledPackages = packageSamples.ToArray();
+        var shuffledPipelines = pipelineSamples.ToArray();
+        Random.Shared.Shuffle(shuffledPackages.AsSpan());
+        Random.Shared.Shuffle(shuffledPipelines.AsSpan());
+        var assignedCount = shuffledPackages.Length / 2;
+        for (var index = 0; index < assignedCount; index++) {
+            RequireSuccess(await dispatcher.CreateBinding(new BindRequest {
+                PackageId = shuffledPackages[index].Id,
+                PipelineId = shuffledPipelines[index % shuffledPipelines.Length].Id,
+            }, cancellationToken).ConfigureAwait(false), $"assign sample package '{shuffledPackages[index].Id}' to a pipeline");
+        }
+        logger.LogInformation("Verified sample geometry and assigned packages. VerifiedPackages: {VerifiedPackages}, AssignedPackages: {AssignedPackages}.", packageSamples.Count, assignedCount);
+
         logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}.", pipelineSamples.Count, packageSamples.Count);
     }
+
+    private sealed record WorkspaceSample(string DisplayName, JsonElement Aoi, DisplayScale? DisplayScale = null);
 
     private static T RequireSuccess<T>(ActionResult<T> response, string operation) {
         if (response.Value is { } value) { return value; }

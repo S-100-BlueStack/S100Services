@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using DataCatalague.Api.Models;
 using DataCatalague.Api.Models.V1;
 using DataCatalogue.Api.Tests.Infrastructure;
@@ -99,7 +100,10 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         Assert.Equal(2, (await this.Client.GetFromJsonAsync<BindingResponse[]>("/api/v1/dispatcher/bindings?packageId=" + package.Id))!.Length);
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync("?pipelineId=" + first.Id)).TotalCount == 1);
         var intersecting = await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>($"/api/v1/pipelines/{first.Id}/workspaces/{matching.Id}/packages");
-        Assert.Equal(package.Id, Assert.Single(intersecting!.Items).PackageId);
+        var item = Assert.Single(intersecting!.Items);
+        Assert.Equal(package.Id, item.PackageId);
+        var geometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{package.Id}/geometry"))!;
+        Assert.Equal(geometry.Aoi!.Value.GetRawText(), item.Aoi.GetRawText());
         var path = "/api/v1/dispatcher/bindings/" + Uri.EscapeDataString(binding.Id);
         Assert.Equal(HttpStatusCode.NoContent, (await this.Client.DeleteAsync(path)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await this.Client.DeleteAsync(path)).StatusCode);
@@ -116,5 +120,40 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         Assert.Single((await this.PackagesAsync("?hasPipeline=false")).Items);
         Assert.Equal(HttpStatusCode.NotFound, (await this.Client.PostAsJsonAsync("/api/v1/dispatcher/bindings", new { packageId = "missing", pipelineId = first.Id })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await this.Client.DeleteAsync("/api/v1/dispatcher/bindings/missing")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Workspace_packages_return_current_AOIs_with_stable_pagination() {
+        await this.CategoryAsync();
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        var packageIds = new List<string>();
+        for (var index = 0; index < 3; index++) {
+            var package = await this.PackageAsync();
+            packageIds.Add(package.Id);
+            await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        }
+        var path = $"/api/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}/packages";
+        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path))!.TotalCount == 3);
+        var ordered = packageIds.Order(StringComparer.Ordinal).ToArray();
+        for (var page = 1; page <= 3; page++) {
+            var result = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path + $"?page={page}&pageSize=1"))!;
+            Assert.Equal(3, result.TotalCount);
+            var item = Assert.Single(result.Items);
+            Assert.Equal(ordered[page - 1], item.PackageId);
+            Assert.Equal(JsonValueKind.Object, item.Aoi.ValueKind);
+            Assert.True(item.Aoi.TryGetProperty("spatialReference", out _));
+        }
+        var empty = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path + "?page=4&pageSize=1"))!;
+        Assert.Equal(3, empty.TotalCount);
+        Assert.Empty(empty.Items);
+        var id = ordered[0];
+        using var replaced = await this.Client.PutAsJsonAsync($"/api/v1/packages/{id}/geometry", new { aoi = Geometry, points = "{\"points\":[[12.4,55.4],[12.6,55.6]],\"spatialReference\":{\"wkid\":4326}}" });
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        var current = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{id}/geometry"))!;
+        await this.App.EventuallyAsync(async () => {
+            var result = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path + "?pageSize=1"))!;
+            return result.Items.Count == 1 && result.Items[0].Aoi.GetRawText() == current.Aoi!.Value.GetRawText();
+        });
     }
 }

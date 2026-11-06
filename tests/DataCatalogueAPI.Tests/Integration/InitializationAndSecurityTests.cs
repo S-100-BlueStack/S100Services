@@ -11,17 +11,20 @@ namespace DataCatalogue.Api.Tests.Integration;
 [Trait("Category", "Integration")]
 public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : CatalogueTest(runtime)
 {
-    // Run development initialization against a fresh application and database.
-    // Expected: Three categories, two pipelines, two unowned workspaces per pipeline and all sample packages exist; no package has a binding.
     [Fact]
-    public async Task Initialization_loads_categories_pipelines_workspaces_and_unassigned_sample_packages() {
+    public async Task Initialization_loads_file_workspaces_geometry_for_every_sample_and_half_assigned_packages() {
+        var workspaceCounts = new Dictionary<string, int>();
+        foreach (var (name, file) in new[] { ("ENC", "ENC.json"), ("Paper Chart", "PaperChart.json") }) {
+            using var definitions = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Samples", "Workspaces", file)));
+            workspaceCounts.Add(name, definitions.RootElement.GetArrayLength());
+        }
         await this.App.SeedAsync();
         var extractionCount = Math.Min(10, Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction"), "*.zip").Length);
         var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount;
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == expected);
         await this.App.EventuallyAsync(async () => {
             var page = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/api/v1/pipelines"))!;
-            return page.TotalCount == 2 && page.Items.All(pipeline => pipeline.Workspaces.Count == 2);
+            return page.TotalCount == 2 && page.Items.All(pipeline => pipeline.Workspaces.Count == workspaceCounts[pipeline.DisplayName]);
         });
         await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/api/v1/dispatcher/categories"))!.TotalCount == 3);
         var categories = (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/api/v1/dispatcher/categories"))!;
@@ -29,36 +32,46 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
         Assert.All(categories.Items, category => Assert.NotNull(category.Specification));
         var pipelines = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/api/v1/pipelines"))!;
         Assert.Equal(new[] { "ENC", "Paper Chart" }, pipelines.Items.Select(item => item.DisplayName).Order().ToArray());
-        Assert.All(pipelines.Items, pipeline => {
-            Assert.Equal(new[] { "Eastern Denmark", "Western Denmark" }, pipeline.Workspaces.Select(workspace => workspace.DisplayName).Order().ToArray());
-            Assert.All(pipeline.Workspaces, workspace => {
+        var workspacePolygons = new List<string>();
+        foreach (var pipeline in pipelines.Items) {
+            var filename = pipeline.DisplayName == "ENC" ? "ENC.json" : "PaperChart.json";
+            using var definitions = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Samples", "Workspaces", filename)));
+            Assert.Equal(definitions.RootElement.EnumerateArray().Select(area => area.GetProperty("displayName").GetString()).Order().ToArray(), pipeline.Workspaces.Select(workspace => workspace.DisplayName).Order().ToArray());
+            foreach (var workspace in pipeline.Workspaces) {
                 Assert.True(Guid.TryParse(workspace.Id, out _));
-                Assert.NotNull(workspace.GeometryRef);
                 Assert.Null(workspace.Owner);
                 Assert.Null(workspace.LockedAtUtc);
-            });
-        });
-        Assert.Equal(4, pipelines.Items.SelectMany(pipeline => pipeline.Workspaces).Select(workspace => workspace.Id).Distinct().Count());
-        Assert.Equal(expected, (await this.PackagesAsync("?hasPipeline=false&pageSize=200")).TotalCount);
-        Assert.Empty((await this.PackagesAsync("?hasPipeline=true")).Items);
-        foreach (var package in (await this.PackagesAsync("?pageSize=200")).Items) {
-            Assert.NotNull(package.GeometryRef);
-            Assert.NotNull(package.DetailedGeometry);
-            Assert.Empty((await this.Client.GetFromJsonAsync<BindingResponse[]>("/api/v1/dispatcher/bindings?packageId=" + package.Id))!);
+                var detail = (await this.Client.GetFromJsonAsync<WorkspaceDetailResponse>($"/api/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}"))!;
+                workspacePolygons.Add(detail.EsriJSON);
+            }
         }
+        Assert.Equal(workspacePolygons.Count, workspacePolygons.Distinct().Count());
+        Assert.Equal(expected / 2, (await this.PackagesAsync("?hasPipeline=true&pageSize=200")).TotalCount);
+        Assert.Equal(expected - expected / 2, (await this.PackagesAsync("?hasPipeline=false&pageSize=200")).TotalCount);
+        var bindingCounts = pipelines.Items.ToDictionary(pipeline => pipeline.Id, _ => 0);
+        foreach (var package in (await this.PackagesAsync("?pageSize=200")).Items) {
+            var geometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{package.Id}/geometry"))!;
+            Assert.True(geometry.Aoi.HasValue, package.Id);
+            Assert.NotEmpty(geometry.Aoi.Value.GetProperty("rings").EnumerateArray());
+            var details = Assert.IsType<PackageDetailedGeometryResponse>(geometry.DetailedGeometry);
+            Assert.True(details.Points.Count > 0 || details.Curves.HasValue || details.Surfaces.HasValue, package.Id);
+            var bindings = (await this.Client.GetFromJsonAsync<BindingResponse[]>("/api/v1/dispatcher/bindings?packageId=" + package.Id))!;
+            Assert.InRange(bindings.Length, 0, 1);
+            foreach (var binding in bindings) { bindingCounts[binding.PipelineId!]++; }
+        }
+        Assert.Equal(expected / 2, bindingCounts.Values.Sum());
+        Assert.InRange(bindingCounts.Values.Max() - bindingCounts.Values.Min(), 0, 1);
         Assert.Equal(2, (await this.PackagesAsync("?category=GeneralSubmission")).TotalCount);
         var extractionPage = await this.PackagesAsync("?category=MarineAggregateExtraction&pageSize=200");
         Assert.Equal(extractionCount, extractionPage.TotalCount);
-        Assert.All(extractionPage.Items, package => {
+        foreach (var package in extractionPage.Items) {
             Assert.StartsWith("MA-", package.MetaData!.ShortId);
             Assert.True(Guid.TryParse(package.MetaData.RefId, out _));
-            Assert.NotNull(package.DetailedGeometry!.SurfaceRef);
             Assert.StartsWith("database://", package.AbsoluteUri);
             Assert.EndsWith(".zip", package.FileName);
-        });
-        var extractionGeometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{extractionPage.Items.First().Id}/geometry"))!;
-        Assert.True(extractionGeometry.Aoi.HasValue);
-        Assert.True(extractionGeometry.DetailedGeometry!.Surfaces.HasValue);
+            var geometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{package.Id}/geometry"))!;
+            Assert.True(geometry.DetailedGeometry!.Surfaces.HasValue);
+        }
     }
 
     // Create data in one application and start a second application using the same native runtime.
@@ -91,12 +104,13 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
     }
 
     // Create severity geometry, reject malformed geometry and inspect the generated OpenAPI document.
-    // Expected: Creation returns 201 with a geometry reference; invalid input returns 400 and documented routes/statuses match the controllers.
+    // Expected: Creation returns 201 without exposing storage references; invalid input returns 400 and documented routes/statuses match the controllers.
     [Fact]
     public async Task Severity_creation_and_OpenAPI_describe_real_controller_actions() {
         using var created = await this.Client.PostAsJsonAsync("/api/v1/dispatcher/severity", new { severity = 1UL, esriJSON = Geometry });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        Assert.False(string.IsNullOrWhiteSpace((await created.Content.ReadFromJsonAsync<SeverityResponse>())!.GeometryRef));
+        using var severity = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        Assert.Empty(severity.RootElement.EnumerateObject());
         Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PostAsJsonAsync("/api/v1/dispatcher/severity", new { severity = 1UL, esriJSON = "invalid" })).StatusCode);
         using var document = JsonDocument.Parse(await this.Client.GetStringAsync("/openapi/v1.json"));
         var paths = document.RootElement.GetProperty("paths");

@@ -60,7 +60,7 @@ policy, like the other package endpoints.
 
 | Response field | Content |
 | --- | --- |
-| `aoi` | Current AOI geometry object, or null when there is no reference. |
+| `aoi` | Required current AOI geometry object; an absent reference is an integrity error (500). |
 | `detailedGeometry` | Current detail groups, or null when no points, curves or surfaces exist. |
 | `detailedGeometry.points` | Array of all referenced point or multipoint geometry objects; empty when absent. |
 | `detailedGeometry.curves` | Multipart polyline object, or null when absent. |
@@ -76,7 +76,8 @@ The read captures one package event state and resolves only those references,
 so retained historical rows are excluded and concurrent replacements cannot
 mix reference sets. Unknown packages return 404. Missing or unusable referenced
 geometry returns a generic 500 problem response; details are logged server-side.
-The existing package metadata and geometry replacement contracts are unchanged.
+Package metadata responses omit internal geometry references. Geometry reads retain
+their coordinate response shape; geometry replacement still returns updated metadata.
 
 Focused integration coverage is in
 `tests/DataCatalogueAPI.Tests/Integration/PackageGeometryReadTests.cs`. Run on
@@ -297,8 +298,8 @@ They contain no downloaded PDFs. The original 141-site
 startup imports only the first ten ZIPs in ordinal filename order. It uploads
 each ZIP through `PackageController.UploadFile` before calling
 `PackageController.CreatePackage` with archive import enabled. Existing category
-and pipeline creation still uses the registered controllers. No sample package
-is automatically assigned to a pipeline.
+and pipeline creation still uses the registered controllers. After import,
+half of all sample packages are randomly assigned to the sample pipelines.
 
 | Source value | Package mapping |
 | --- | --- |
@@ -372,7 +373,9 @@ Live synchronization is a separate feature. Before implementing it, decide the
 authoritative source and reconciliation rules, whether expired/missing sites
 remain available, and whether one package represents a site or a source change.
 The current sample initializer assumes fresh stores and is not a recurring,
-idempotent import. No automatic pipeline assignments or chart changes are made.
+idempotent import. After verifying every sample geometry through the package read
+path, it randomly assigns half of all samples to pipelines, balanced between ENC
+and Paper Chart. The remaining samples stay unassigned. Chart data is unchanged.
 
 `PackageTypes/NoticeToMariners.cs` reads every geometry from every part and
 converts GeoJSON into Esri JSON in WGS84. The AOI is always a rectangle covering
@@ -402,8 +405,8 @@ failure cannot be reproduced without the runtime data. The method returns the
 references used by the existing `PackageCreated` and `DetailedGeometryAdded`
 events. `PackageState` now folds the already-defined
 detail and severity events. `PackageState.DetailedGeometry` is one
-`DetailedGeometry(PointRef, CurveRef, SurfaceRef)` record, and package responses
-expose the same nested reference shape. The existing event's three reference
+`DetailedGeometry(PointRef, CurveRef, SurfaceRef)` record. These storage references
+are internal; clients read coordinates through the geometry endpoint. The existing event's three reference
 parameters remain available. An optional `PointRefs` collection carries all point
 references through the command/event and replay; older events without it fall
 back to their single `PointRef`.
@@ -543,13 +546,59 @@ Package category values identify category streams; they are not SQL foreign keys
 The HTTP package creation endpoint rejects missing/terminated categories before
 writing geometry.
 
-Package responses now expose each geometry reference as
-`{ "featureClass": "point", "globalId": "cd9ab46c-734b-4121-b14f-b27316c0dd19" }`.
-This deliberately changes the package response reference fields from strings to
-objects, including `geometryRef` and all `detailedGeometry` members. Clients must
-read `featureClass` and `globalId` instead of splitting a string. These are feature
-identifiers, not coordinate geometry. The feature class is needed because points
-can be stored in either `point` or `pointset`; the GlobalID identifies the row.
-Existing event/command payloads retain their original `featureClass::{GlobalID}`
-encoding, so replay requires no migration. Geometry storage and coordinates are
-unchanged. Other endpoints retain their existing response contracts.
+Package and workspace metadata responses omit `geometryRef`. Package metadata
+also omits `detailedGeometry`, which previously contained feature references.
+Severity creation returns `201` with `{}`. Bindings and pipelines use the same
+workspace response without coverage references. Geometry references remain in
+internal state/events for replay; no event migration or storage change is required.
+Read package coordinates through `GET /api/v1/packages/{id}/geometry` and workspace
+coordinates through `GET /api/v1/pipelines/{id}/workspaces/{workspace}`.
+
+### Editable sample workspace coverage
+
+`Samples/Workspaces/ENC.json` and `Samples/Workspaces/PaperChart.json` define
+independent Danish work areas. Each file is an array of objects with
+`displayName`, an optional `displayScale`, and `aoi` as an Esri JSON polygon
+object containing `rings` and `spatialReference`. Add Paper Chart areas to
+`PaperChart.json`; no C# changes are needed. Names must be unique per pipeline.
+Files are copied to build, publish and test output. Restart the application to
+load edits; normal startup rebuilds the development stores as before.
+
+```json
+[
+  {
+    "displayName": "Copenhagen approaches",
+    "displayScale": { "maximumDisplayScale": 1, "minimumDisplayScale": 19999999 },
+    "aoi": {
+      "rings": [[[12.3,55.5],[12.3,55.9],[12.8,55.9],[12.8,55.5],[12.3,55.5]]],
+      "spatialReference": { "wkid": 4326 }
+    }
+  }
+]
+```
+
+Initialization validates all samples through `PackageController.GetGeometry`
+after import and before assignment. Every sample must resolve a nonempty AOI
+and at least one detail group; a failed native lookup or incomplete geometry
+stops startup with the sample identifier rather than leaving unusable samples.
+All supplied notice fixtures already contain source geometry. No fabricated
+fallback coordinates are used. Roughly half (`count / 2`, rounded down) are
+shuffled and assigned once through `DispatcherController.CreateBinding`;
+pipeline totals differ by at most one. Package choices vary each startup.
+
+`GET /api/v1/pipelines/{id}/workspaces/{workspace}/packages` retains pagination,
+ordinal package ordering and total matching count. Every item now includes
+`packageId`, `shortId`, and `aoi`: the current simple AOI as an Esri JSON object
+with its stored spatial reference, matching the package geometry read. Only AOIs
+for the returned page are loaded; detailed geometry is not hydrated for this list.
+
+Regression coverage is in `InitializationAndSecurityTests`,
+`PackageGeometryReadTests`, and `WorkspaceAndRoutingTests`. It checks every
+seeded package's coordinates, half-assignment counts, independent file-based
+workspaces, absence of public storage references, and current AOIs after replacement.
+Run on Windows x64 with .NET 10, licensed ArcGIS Pro, `s100ed17.zip`, and the
+sample ZIP fixtures (binary fixtures are excluded from filtered context exports):
+
+```powershell
+dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64
+```

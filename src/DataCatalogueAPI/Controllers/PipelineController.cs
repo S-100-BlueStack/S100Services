@@ -150,7 +150,7 @@ namespace DataCatalague.Api.Controllers.V1
                 catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
             }
 
-            /// <summary>Lists bound packages whose rectangular AOIs intersect this workspace.</summary>
+            /// <summary>Lists bound packages and their simple Esri JSON AOIs intersecting this workspace.</summary>
             [HttpGet("{id}/workspaces/{workspace}/packages")]
             [ProducesResponseType<PagedResponse<WorkspacePackageResponse>>(StatusCodes.Status200OK)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

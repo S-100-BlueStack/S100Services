@@ -12,12 +12,6 @@ namespace DataCatalague.Api.Models.V1
 
         public required string? AbsoluteUri { get; init; }
 
-        /// <summary>The rectangular package AOI reference.</summary>
-        public GeometryReferenceResponse? GeometryRef { get; init; }
-
-        /// <summary>References to the full point, curve and surface geometries.</summary>
-        public DetailedGeometryResponse? DetailedGeometry { get; init; }
-
         /// <summary>The severity from the latest severity event.</summary>
         public ulong? Severity { get; init; }
 

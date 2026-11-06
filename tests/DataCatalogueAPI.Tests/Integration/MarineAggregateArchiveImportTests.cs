@@ -23,7 +23,7 @@ public sealed class MarineAggregateArchiveImportTests(CatalogueFixture runtime) 
         Assert.StartsWith("MA-", created.MetaData!.ShortId);
         Assert.Equal(Path.GetFileName(file), created.FileName);
         Assert.Equal(stored.AbsoluteUri, created.AbsoluteUri);
-        Assert.NotNull(created.DetailedGeometry!.SurfaceRef);
+        Assert.NotNull((await this.PackageStateAsync(created.Id)).DetailedGeometry!.SurfaceRef);
         using var input = new MemoryStream(bytes);
         var archive = await MarineAggregateArchive.ReadAsync(input, default);
         Assert.Equal(archive.Site.MetaData.RefId, created.MetaData.RefId);

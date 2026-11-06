@@ -21,7 +21,6 @@ namespace DataCatalague.Api.Models.V1
 
     public sealed class SeverityResponse
     {
-        public required string GeometryRef { get; init; }
     }
 
     public sealed class BindingResponse {

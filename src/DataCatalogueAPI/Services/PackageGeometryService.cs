@@ -21,7 +21,7 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
     /// <param name="id">The catalogue package identifier.</param>
     /// <param name="cancellationToken">Cancels the event read and work before or between geometry queries.</param>
     /// <returns>Esri JSON geometry objects, or null when the package does not exist.</returns>
-    /// <exception cref="InvalidOperationException">A referenced geometry is invalid, missing or unusable.</exception>
+    /// <exception cref="InvalidOperationException">The required AOI reference is absent, or a referenced geometry is invalid, missing or unusable.</exception>
     public async Task<PackageGeometryResponse?> GetAsync(string id, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
         if (!await eventStore.StreamExists(streamNameMap.GetStreamName(new PackageId(id)), cancellationToken)) { return null; }
