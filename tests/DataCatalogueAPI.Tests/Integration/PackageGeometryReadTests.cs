@@ -115,4 +115,54 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         using var forbidden = await this.Client.GetAsync("/api/v1/packages/missing/geometry");
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
     }
+
+    [Fact]
+    public async Task Package_workspace_pipeline_and_binding_responses_omit_geometry_storage_references() {
+        await this.CategoryAsync();
+        var package = await this.PackageAsync();
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        var binding = await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == 1);
+        foreach (var path in new[] {
+            $"/api/v1/packages/{package.Id}", "/api/v1/packages", $"/api/v1/pipelines/{pipeline.Id}",
+            $"/api/v1/pipelines/{pipeline.Id}/workspaces", $"/api/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}",
+            $"/api/v1/dispatcher/bindings/{Uri.EscapeDataString(binding.Id)}",
+            $"/api/v1/dispatcher/bindings?packageId={package.Id}",
+        }) {
+            using var json = JsonDocument.Parse(await this.Client.GetStringAsync(path));
+            AssertNoStorageReference(json.RootElement);
+            if (path.StartsWith("/api/v1/packages", StringComparison.Ordinal)) {
+                var metadata = path.EndsWith(package.Id, StringComparison.Ordinal) ? json.RootElement : Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
+                Assert.False(metadata.TryGetProperty("detailedGeometry", out _));
+            }
+        }
+
+        static void AssertNoStorageReference(JsonElement element) {
+            if (element.ValueKind == JsonValueKind.Object) {
+                foreach (var property in element.EnumerateObject()) {
+                    Assert.DoesNotContain(property.Name, new[] { "geometryRef", "pointRef", "pointRefs", "curveRef", "surfaceRef", "featureClass", "globalId" });
+                    AssertNoStorageReference(property.Value);
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Array) {
+                foreach (var item in element.EnumerateArray()) { AssertNoStorageReference(item); }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Missing_AOI_reference_returns_an_error_instead_of_successful_null_geometry(string? aoi) {
+        await this.CategoryAsync();
+        var package = await this.PackageAsync();
+        using var scope = this.App.Services.CreateScope();
+        var commands = scope.ServiceProvider.GetRequiredService<ICommandService<PackageState>>();
+        (await commands.Handle(new PackagesCommands.ReplaceGeometry(package.Id, aoi!, new(null, null, null)), default)).ThrowIfError();
+        using var response = await this.Client.GetAsync($"/api/v1/packages/{package.Id}/geometry");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("Could not retrieve package geometry.", (await response.Content.ReadFromJsonAsync<ProblemDetails>())!.Title);
+    }
 }

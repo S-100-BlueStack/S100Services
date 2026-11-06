@@ -163,7 +163,7 @@ namespace DataCatalague.Api.Controllers
         /// <param name="id">The existing package identifier.</param>
         /// <param name="request">Esri JSON strings for the AOI fallback and detail groups; omitted groups are removed.</param>
         /// <param name="cancellationToken">Cancels work before the geometry transaction commits.</param>
-        /// <returns>The package containing the persisted geometry references.</returns>
+        /// <returns>The updated package metadata; read coordinates through GET geometry.</returns>
         [HttpPut("{id}/geometry")]
         [Consumes("application/json")]
         [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]
@@ -223,8 +223,6 @@ namespace DataCatalague.Api.Controllers
             Category = state.Category,
             FileName = state.FileName,
             AbsoluteUri = state.AbsoluteUri?.Scheme == "database" ? state.AbsoluteUri.GetLeftPart(UriPartial.Authority) : state.AbsoluteUri?.AbsolutePath,
-            GeometryRef = GeometryReferenceResponse.FromStoredReference(state.GeometryRef),
-            DetailedGeometry = DetailedGeometryResponse.FromState(state.DetailedGeometry),
             Severity = state.Severity,
             MetaData = state.MetaData,
             Descriptions = state.Descriptions,

@@ -1,0 +1,82 @@
+[
+  {
+    "displayName": "Zealand and Oresund",
+    "displayScale": {
+      "maximumDisplayScale": 1,
+      "minimumDisplayScale": 19999999
+    },
+    "aoi": {
+      "rings": [
+        [
+          [
+            10.8,
+            55.0
+          ],
+          [
+            11.1,
+            56.2
+          ],
+          [
+            12.7,
+            56.25
+          ],
+          [
+            12.85,
+            55.5
+          ],
+          [
+            12.4,
+            54.9
+          ],
+          [
+            10.8,
+            55.0
+          ]
+        ]
+      ],
+      "spatialReference": {
+        "wkid": 4326
+      }
+    }
+  },
+  {
+    "displayName": "Southern Little Belt",
+    "displayScale": {
+      "maximumDisplayScale": 1,
+      "minimumDisplayScale": 19999999
+    },
+    "aoi": {
+      "rings": [
+        [
+          [
+            9.35,
+            54.65
+          ],
+          [
+            9.15,
+            55.4
+          ],
+          [
+            9.9,
+            55.65
+          ],
+          [
+            10.65,
+            55.3
+          ],
+          [
+            10.4,
+            54.65
+          ],
+          [
+            9.35,
+            54.65
+          ]
+        ]
+      ],
+      "spatialReference": {
+        "wkid": 4326
+      }
+    }
+  }
+]

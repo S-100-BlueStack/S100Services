@@ -133,7 +133,7 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
             var candidates = packages.FindWorkspacePackages(pipelineId, polygon, cancellationToken);
             var offset = ((long)page - 1) * pageSize;
             IReadOnlyList<WorkspacePackageResponse> items = offset >= candidates.Count ? [] : candidates.Skip((int)offset).Take(pageSize)
-                .Select(package => new WorkspacePackageResponse(package.Id!.Value, package.MetaData?.ShortId)).ToArray();
+                .Select(package => new WorkspacePackageResponse(package.Id!.Value, package.MetaData?.ShortId, JsonSerializer.Deserialize<JsonElement>(packages.ReadPackageAoi(package, cancellationToken)))).ToArray();
             cancellationToken.ThrowIfCancellationRequested();
             return new PagedResponse<WorkspacePackageResponse> { Items = items, Page = page, PageSize = pageSize, TotalCount = candidates.Count };
         });

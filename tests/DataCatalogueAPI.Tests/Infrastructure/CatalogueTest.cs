@@ -1,4 +1,7 @@
 using System.Net.Http.Json;
+using DataCatalague.Api.Domain;
+using Eventuous;
+using Microsoft.Extensions.DependencyInjection;
 using DataCatalague.Api.Models;
 using DataCatalague.Api.Models.V1;
 
@@ -23,6 +26,12 @@ public abstract class CatalogueTest(CatalogueFixture runtime) : IAsyncLifetime
         return await this.App.CreateAsync<PackageResponse>("/api/v1/packages", new { category, absoluteUri = "https://example.org/input.zip", esriJSON = geometry, metaData = metadata });
     }
     protected async Task<PagedResponse<PackageResponse>> PackagesAsync(string query = "") => (await this.Client.GetFromJsonAsync<PagedResponse<PackageResponse>>("/api/v1/packages" + query))!;
+    protected async Task<PackageState> PackageStateAsync(string id) {
+        using var scope = this.App.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IEventStore>();
+        var streams = scope.ServiceProvider.GetRequiredService<StreamNameMap>();
+        return (await store.LoadState<PackageState, PackageId>(streams, new(id), true, default)).State;
+    }
     protected void User(string username) {
         this.Client.DefaultRequestHeaders.Remove(TestAuthentication.UserHeader);
         this.Client.DefaultRequestHeaders.Add(TestAuthentication.UserHeader, username);

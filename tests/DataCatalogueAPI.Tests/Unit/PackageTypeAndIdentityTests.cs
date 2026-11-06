@@ -21,16 +21,19 @@ public sealed class PackageTypeAndIdentityTests
         Assert.Same(descriptions, submission.Descriptions);
     }
 
-    // Parse a real NoticeToMariners JSON fixture.
-    // Expected: The notice has an ID, an NM short ID, an explicit spatial reference and detail geometry.
+    // Check every source fixture; a single valid notice cannot establish that all
+    // samples carry geometry before the native persistence flow is exercised.
     [Fact]
-    public void Notice_parser_reads_real_sample_metadata_and_full_geometry() {
-        var file = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Order().First();
-        var notice = NoticeToMariners.Parse(File.ReadAllText(file));
-        Assert.False(string.IsNullOrWhiteSpace(notice.Id));
-        Assert.StartsWith("NM-", notice.MetaData.ShortId);
-        Assert.Contains("spatialReference", notice.Geometry.Aoi);
-        Assert.True(notice.Geometry.Points is not null || notice.Geometry.Curves is not null || notice.Geometry.Surfaces is not null);
+    public void Every_notice_sample_contains_an_AOI_and_detailed_geometry() {
+        var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Order().ToArray();
+        Assert.NotEmpty(files);
+        foreach (var file in files) {
+            var notice = NoticeToMariners.Parse(File.ReadAllText(file));
+            Assert.False(string.IsNullOrWhiteSpace(notice.Id));
+            Assert.StartsWith("NM-", notice.MetaData.ShortId);
+            Assert.Contains("spatialReference", notice.Geometry.Aoi);
+            Assert.True(notice.Geometry.Points is not null || notice.Geometry.Curves is not null || notice.Geometry.Surfaces is not null, Path.GetFileName(file));
+        }
     }
 
     // Reserve package IDs across two years, reject a duplicate and release its reservation.

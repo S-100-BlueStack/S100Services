@@ -192,7 +192,7 @@ namespace DataCatalague.Api.Controllers
             try {
                 var geometryRef = await resources.CreateSeverityAsync(request.EsriJSON, request.Severity, cancellationToken);
                 this._logger.LogInformation("Created severity area {id}.", geometryRef);
-                return this.StatusCode(StatusCodes.Status201Created, new SeverityResponse { GeometryRef = geometryRef });
+                return this.StatusCode(StatusCodes.Status201Created, new SeverityResponse());
             }
             catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
         }

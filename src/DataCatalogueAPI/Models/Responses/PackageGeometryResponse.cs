@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace DataCatalague.Api.Models.V1;
 
 /// <summary>The package's current AOI and detailed coordinates as Esri JSON objects.</summary>
-/// <param name="Aoi">The stored AOI, including its spatial reference, or null when no AOI is referenced.</param>
+/// <param name="Aoi">The required stored AOI, including its spatial reference; missing references cause a failed read.</param>
 /// <param name="DetailedGeometry">The current detail groups, or null when no points, curves or surfaces are referenced.</param>
 public sealed record PackageGeometryResponse(JsonElement? Aoi, PackageDetailedGeometryResponse? DetailedGeometry);
 
