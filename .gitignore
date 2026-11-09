@@ -480,3 +480,4 @@ src/ProductCatalogueAPI/config/hangfire.connection
 /src/ProductCatalogue/public/branding/Favicon.png
 /src/ProductCatalogue/public/branding/Logo.png
 *.ps1
+/Start-ProductCatalogueGUI.bat

@@ -30,7 +30,7 @@ using IO = System.IO;
 
 namespace S100FC.ProductCatalogue
 {
-    public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
+    public partial class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IArchiveScanSource, IDisposable
     {
         /// <summary>Resolves the current Serilog pipeline with this component's source context, including on the ArcGIS execution lane.</summary>
         private static Serilog.ILogger Logger => Serilog.Log.ForContext<ProductManagerGDB>();
@@ -561,11 +561,17 @@ namespace S100FC.ProductCatalogue
         public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => GetPendingEditsAsync(sinceUtc, DateTime.UtcNow);
 
         /// <summary>Compares archive states at two fixed UTC boundaries, including versions closed by edits in that window.</summary>
-        public async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc, DateTime throughUtc) {
+        public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc, DateTime throughUtc) =>
+            ReadPendingEditsCoreAsync(sinceUtc, throughUtc, null, CancellationToken.None);
+
+        /// <summary>Reads one archive window on the ArcGIS lane, optionally retaining reusable versions instead of composing changes.</summary>
+        private async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> ReadPendingEditsCoreAsync(DateTime sinceUtc, DateTime throughUtc, List<ArchiveHistory>? histories, CancellationToken cancellationToken, IReadOnlyCollection<DateTime>? comparisonBoundsUtc = null) {
             var window = new ArchiveScanWindow(sinceUtc, throughUtc);
             var result = new Dictionary<string, Dictionary<string, ArchiveRow>>();
 
+            cancellationToken.ThrowIfCancellationRequested();
             await this.Dispatch(() => {
+                cancellationToken.ThrowIfCancellationRequested();
                 var products = this._electronicProducts
                     .Where(entry => entry.Key.ProductSpecification == "S101")
                     .ToDictionary(entry => entry.Key.DatasetName, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
@@ -603,7 +609,10 @@ namespace S100FC.ProductCatalogue
                         Logger.Information("ENC detection profile. Phase: CoverageCache. Connection: {Connection}. Rebuilt: {Rebuilt}. AoiCount: {AoiCount}. DataCoverageCount: {DataCoverageCount}. DurationMs: {DurationMs}.",
                             connectionSettings.ProductSpecification, rebuiltCoverage, cache.Products.Count, cache.DataCoverageCount, coverageTimer.Elapsed.TotalMilliseconds);
 
-                    ScanConnectionForPendingEdits(connection, connectionLabel, cache.Products, window, result);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var history = histories is null ? null : new ArchiveHistory(window, comparisonBoundsUtc);
+                    ScanConnectionForPendingEdits(connection, connectionLabel, cache.Products, window, result, history, cancellationToken);
+                    if (history is not null) histories!.Add(history);
                 }
             });
 
@@ -734,7 +743,7 @@ namespace S100FC.ProductCatalogue
             return true;
         }
 
-        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<DpcProductCoverage> products, ArchiveScanWindow window, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
+        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<DpcProductCoverage> products, ArchiveScanWindow window, Dictionary<string, Dictionary<string, ArchiveRow>> result, ArchiveHistory? history = null, CancellationToken cancellationToken = default) {
             var sinceUtc = window.SinceUtc;
             var productList = products.ToList();
 
@@ -776,6 +785,7 @@ namespace S100FC.ProductCatalogue
                 var affectedProducts = new HashSet<string>();
 
                 while (cursor.MoveNext()) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (archiveTableTimer is not null)
                         archiveRowsRead++;
                     var row = cursor.Current;
@@ -841,10 +851,10 @@ namespace S100FC.ProductCatalogue
                         versions = new List<ArchiveVersion>();
                         versionsById[id] = versions;
                     }
-                    versions.Add(new ArchiveVersion(archiveRow, interval, changedShape.Clone()));
-
                     var isDataCoverage = baseTableName == "surface" && string.Equals(archiveRow.Code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
-                    foreach (var productName in FindAffectedProductsAtScale(changedShape, compilationScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
+                    var matchedProducts = FindAffectedProductsAtScale(changedShape, compilationScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName);
+                    versions.Add(new ArchiveVersion(archiveRow, interval, changedShape.Clone(), matchedProducts));
+                    foreach (var productName in matchedProducts) {
                         affectedProducts.Add(productName);
 
                         if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds)) {
@@ -869,9 +879,10 @@ namespace S100FC.ProductCatalogue
                 else {
                     Logger.Information("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedProducts: {AffectedProducts}.",
                         baseTableName, connectionName, sinceUtc, uniqueChangedFeatureIds.Count, affectedProducts.Count);
-                    foreach (var (featureId, latestEditUtc) in latestEditByFeature.OrderBy(entry => entry.Key))
-                        Logger.Information("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
-                            baseTableName, featureId, latestEditUtc, sinceUtc);
+                    if (Logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+                        foreach (var (featureId, latestEditUtc) in latestEditByFeature.OrderBy(entry => entry.Key))
+                            Logger.Debug("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
+                                baseTableName, featureId, latestEditUtc, sinceUtc);
                 }
                 if (archiveTableTimer is not null)
                     Logger.Information("ENC detection profile. Phase: ArchiveTable. TableName: {TableName}. Connection: {Connection}. RowsRead: {RowsRead}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedAoiCount: {AffectedAoiCount}. DurationMs: {DurationMs}.",
@@ -881,9 +892,9 @@ namespace S100FC.ProductCatalogue
             // A non-spatial edit has no scale or shape of its own. Resolve its incoming
             // spatial owners at these exact boundaries, including unchanged and deleted owners.
             var associatedChanges = ReadAssociatedArchiveChanges(connection, connectionName, window,
-                ArchiveClock.CreateEventPredicate(formattedSince, formattedMaxDate));
+                ArchiveClock.CreateEventPredicate(formattedSince, formattedMaxDate), cancellationToken);
             if (associatedChanges.Count > 0) {
-                var bindings = BuildArchiveBindingIndex(connection, connectionName, window, productList, associatedChanges.Keys);
+                var bindings = BuildArchiveBindingIndex(connection, connectionName, window, productList, associatedChanges.Keys, history?.Owners, cancellationToken, history?.ComparisonBoundsUtc);
                 foreach (var (productName, targets) in bindings.Affected) {
                     if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds))
                         affectedIdsByProduct[productName] = affectedIds = new(StringComparer.OrdinalIgnoreCase);
@@ -905,6 +916,13 @@ namespace S100FC.ProductCatalogue
                 }
             }
 
+            if (unclassifiedArchiveRows > 0)
+                throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
+            if (history is not null) {
+                history.Seal(versionsById, associatedChanges.Keys);
+                return;
+            }
+
             foreach (var (productName, affectedIds) in affectedIdsByProduct) {
                 if (!result.TryGetValue(productName, out var productChanges)) {
                     productChanges = new Dictionary<string, ArchiveRow>(StringComparer.OrdinalIgnoreCase);
@@ -917,11 +935,14 @@ namespace S100FC.ProductCatalogue
                 }
             }
 
-            if (unclassifiedArchiveRows > 0)
-                throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
 
-        private sealed record ArchiveVersion(ArchiveRow Row, ArchiveInterval Interval, ArcGIS.Core.Geometry.Geometry? Shape);
+        /// <summary>Retains source data and its precomputed product matches independently of disposed native rows.</summary>
+        /// <param name="Row">Managed attributes and bindings copied from the archive version.</param>
+        /// <param name="Interval">The normalized UTC lifetime of this version.</param>
+        /// <param name="Shape">The cloned spatial shape, or null for a non-spatial target.</param>
+        /// <param name="Products">The version's coverage/AOI matches, retained independently of comparison timestamps.</param>
+        internal sealed record ArchiveVersion(ArchiveRow Row, ArchiveInterval Interval, ArcGIS.Core.Geometry.Geometry? Shape, IReadOnlyList<string>? Products = null);
 
         /// <summary>Compares the states at the fixed scan boundaries, even when a version closed during this scan.</summary>
         private static ArchiveRow ComposeArchiveChange(IReadOnlyCollection<ArchiveVersion> versions, ArchiveScanWindow window) {
@@ -933,7 +954,7 @@ namespace S100FC.ProductCatalogue
         }
 
         /// <summary>Reads the same bounded event history for non-spatial rows without requiring compilationscale, geometry, or optional binding columns.</summary>
-        private Dictionary<ArchiveBindingTarget, List<ArchiveVersion>> ReadAssociatedArchiveChanges(Geodatabase connection, string connectionName, ArchiveScanWindow window, string eventPredicate) {
+        private Dictionary<ArchiveBindingTarget, List<ArchiveVersion>> ReadAssociatedArchiveChanges(Geodatabase connection, string connectionName, ArchiveScanWindow window, string eventPredicate, CancellationToken cancellationToken = default) {
             var result = new Dictionary<ArchiveBindingTarget, List<ArchiveVersion>>();
             foreach (var className in ArchiveScanRequirements.NonSpatialClasses) {
                 using var table = connection.OpenDataset<Table>(QualifyTableName(className));
@@ -945,6 +966,7 @@ namespace S100FC.ProductCatalogue
                 }, true);
                 var kind = className == "informationtype" ? ArchiveBindingKind.Information : ArchiveBindingKind.Feature;
                 while (cursor.MoveNext()) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var row = cursor.Current;
                     var interval = ReadAssociatedInterval(row, connectionName, className);
                     DpcArchiveClock.Value.VerifyQueryCandidate(interval, window);
@@ -975,7 +997,7 @@ namespace S100FC.ProductCatalogue
 
         /// <summary>Scans small binding columns once per class, then batch-fetches only referenced owner versions for the existing spatial matcher.</summary>
         private ArchiveBindingIndex BuildArchiveBindingIndex(Geodatabase connection, string connectionName, ArchiveScanWindow window,
-            IReadOnlyList<DpcProductCoverage> products, IEnumerable<ArchiveBindingTarget> targets) {
+            IReadOnlyList<DpcProductCoverage> products, IEnumerable<ArchiveBindingTarget> targets, List<ArchiveOwner>? retainedOwners = null, CancellationToken cancellationToken = default, IReadOnlyCollection<DateTime>? comparisonBoundsUtc = null) {
             var index = new ArchiveBindingIndex(targets, window);
             var clock = DpcArchiveClock.Value;
             var syntax = connection.GetSQLSyntax();
@@ -984,6 +1006,8 @@ namespace S100FC.ProductCatalogue
             var endpointPredicate = ArchiveClock.CreateEndpointPredicate(
                 syntax.Format(sinceFloor, SQLDateTimeType.Timestamp), syntax.Format(sinceFloor.AddSeconds(1), SQLDateTimeType.Timestamp),
                 syntax.Format(throughFloor, SQLDateTimeType.Timestamp), syntax.Format(throughFloor.AddSeconds(1), SQLDateTimeType.Timestamp));
+            if (retainedOwners is not null)
+                endpointPredicate = $"(GDB_FROM_DATE <= {syntax.Format(throughFloor.AddSeconds(1), SQLDateTimeType.Timestamp)} AND GDB_TO_DATE > {syntax.Format(sinceFloor, SQLDateTimeType.Timestamp)})";
             foreach (var className in ArchiveScanRequirements.SpatialClasses) {
                 using var featureClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
                 using var archive = featureClass.GetArchiveTable();
@@ -996,12 +1020,15 @@ namespace S100FC.ProductCatalogue
                     SubFields = $"{oidField},GDB_FROM_DATE,GDB_TO_DATE,informationbindings,featurebindings"
                 }, true)) {
                     while (cursor.MoveNext()) {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var row = cursor.Current;
                         rowsRead++;
                         var interval = ReadAssociatedInterval(row, connectionName, className);
+                        if (comparisonBoundsUtc is not null && !comparisonBoundsUtc.Any(interval.Contains))
+                            continue;
                         IReadOnlyCollection<ArchiveBindingTarget> referenced;
                         try {
-                            referenced = index.FindTargets(interval, ReadOptionalString(row, "informationbindings"), ReadOptionalString(row, "featurebindings"));
+                            referenced = index.FindTargets(interval, ReadOptionalString(row, "informationbindings"), ReadOptionalString(row, "featurebindings"), includeIntermediate: retainedOwners is not null);
                         }
                         catch (InvalidOperationException exception) {
                             throw new InvalidOperationException($"DPC cannot read incoming bindings: connection '{connectionName}', class '{className}', archive owner {row.GetObjectID()}. The watermark and candidates were preserved.", exception);
@@ -1016,18 +1043,23 @@ namespace S100FC.ProductCatalogue
                     }, true);
                     var found = new HashSet<long>();
                     while (cursor.MoveNext()) {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var row = cursor.Current;
                         found.Add(row.GetObjectID());
                         var owner = owners[row.GetObjectID()];
                         var id = ReadFeatureId(row);
-                        index.AddOwner(owner.Interval, owner.Targets, () => {
+                        IReadOnlyList<string> MatchOwner() {
                             if (row is not ArcGIS.Core.Data.Feature feature || feature.GetShape() is not { IsEmpty: false } shape)
                                 throw new InvalidOperationException($"DPC incoming binding owner '{id}' has no geometry: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
                             var code = ReadOptionalString(row, "code");
                             var isCoverage = className == "surface" && string.Equals(code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
                             var scale = isCoverage ? ReadCoverageScale(row) : ReadCompilationScale(row, id);
                             return FindAffectedProductsAtScale(shape, scale, products, isCoverage ? shape : null, id, code, className);
-                        });
+                        }
+                        if (retainedOwners is not null)
+                            retainedOwners.Add(new(owner.Interval, owner.Targets, MatchOwner()));
+                        else
+                            index.AddOwner(owner.Interval, owner.Targets, MatchOwner);
                     }
                     if (found.Count != batch.Length)
                         throw new InvalidOperationException($"DPC could not re-read all incoming binding owners: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");

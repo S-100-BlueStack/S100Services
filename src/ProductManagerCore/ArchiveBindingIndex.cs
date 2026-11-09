@@ -45,10 +45,18 @@ internal sealed class ArchiveBindingIndex
     }
 
     /// <summary>Filters a lightweight binding row before any shape or compilationscale is fetched.</summary>
-    internal IReadOnlyCollection<ArchiveBindingTarget> FindTargets(ArchiveInterval interval, string? informationBindings, string? featureBindings) {
+    /// <param name="interval">The owner's normalized archive lifetime.</param>
+    /// <param name="informationBindings">Optional information references copied from this owner.</param>
+    /// <param name="featureBindings">Optional feature references copied from this owner.</param>
+    /// <param name="includeIntermediate">Retains owners needed at intermediate comparison boundaries when building reusable history.</param>
+    /// <returns>Distinct changed targets referenced by this owner.</returns>
+    internal IReadOnlyCollection<ArchiveBindingTarget> FindTargets(ArchiveInterval interval, string? informationBindings, string? featureBindings, bool includeIntermediate = false) {
         var before = interval.Contains(_window.SinceUtc);
         var after = interval.Contains(_window.ThroughUtc);
-        if (!before && !after)
+        // Reusable history must also retain owners that exist only at a later replay boundary.
+        var intermediate = includeIntermediate && interval.FromUtc <= _window.ThroughUtc &&
+            (!interval.ToUtc.HasValue || interval.ToUtc.Value > _window.SinceUtc);
+        if (!before && !after && !intermediate)
             return [];
         IReadOnlyCollection<ArchiveBindingTarget> information = _hasInformation ? ReadTargets(informationBindings, ArchiveBindingKind.Information) : [];
         IReadOnlyCollection<ArchiveBindingTarget> features = _hasFeatures ? ReadTargets(featureBindings, ArchiveBindingKind.Feature) : [];
