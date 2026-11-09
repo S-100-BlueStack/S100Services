@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
 using IO = System.IO;
+using System.Diagnostics;
 using DataCatalague.Api.Services;
 
 /*
@@ -230,15 +231,34 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<IReadOnlyList<BindingResponse>>> GetBindings([FromQuery, System.ComponentModel.DataAnnotations.Required] string packageId, CancellationToken cancellationToken) {
             if (string.IsNullOrWhiteSpace(packageId)) { return this.Problem(title: "Package identifier is required.", statusCode: StatusCodes.Status400BadRequest); }
+            var total = Stopwatch.StartNew();
+            var assignmentReadMs = 0.0;
+            var bindingCount = 0;
+            var outcome = "Failed";
             try {
+                var states = await assignments.ListAsync(packageId, cancellationToken);
+                assignmentReadMs = total.Elapsed.TotalMilliseconds;
                 var result = new List<BindingResponse>();
-                foreach (var state in await assignments.ListAsync(packageId, cancellationToken)) {
+                foreach (var state in states) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var intersections = await workspaceService.GetIntersectionsAsync(packageId, state.PipelineId!.Value, cancellationToken);
                     result.Add(Map(state, intersections));
                 }
+                bindingCount = result.Count;
+                outcome = "Succeeded";
                 return this.Ok(result);
             }
             catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+            catch (OperationCanceledException) {
+                outcome = "Canceled";
+                throw;
+            }
+            finally {
+                if (assignmentReadMs == 0) { assignmentReadMs = total.Elapsed.TotalMilliseconds; }
+                this._logger.LogInformation(
+                    "Bindings read {Outcome}. Bindings: {BindingCount}, AssignmentReadMs: {AssignmentReadMs}, TotalMs: {TotalMs}.",
+                    outcome, bindingCount, assignmentReadMs, total.Elapsed.TotalMilliseconds);
+            }
         }
 
         /// <summary>Gets an active package–pipeline assignment.</summary>

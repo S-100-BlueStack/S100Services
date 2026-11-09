@@ -5,6 +5,7 @@ using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 using System.Text.Json;
+using System.Diagnostics;
 
 namespace DataCatalague.Api.Services;
 
@@ -102,19 +103,60 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
 
     /// <summary>Returns workspaces whose geometry intersects the package rectangular AOI in this pipeline.</summary>
     public async Task<IReadOnlyList<WorkspaceResponse>> GetIntersectionsAsync(string packageId, string pipelineId, CancellationToken cancellationToken) {
-        var pipeline = await GetPipelineAsync(pipelineId, cancellationToken);
-        if (!await eventStore.StreamExists(streams.GetStreamName(new PackageId(packageId)), cancellationToken)) { throw new KeyNotFoundException("Package not found."); }
-        var package = await eventStore.LoadState<PackageState, PackageId>(streams, new(packageId), true, cancellationToken);
-        return await dispatcher.ExecuteAsync<IReadOnlyList<WorkspaceResponse>>(() => {
-            var matches = new List<WorkspaceResponse>();
-            foreach (var workspace in pipeline.Workspaces) {
+        cancellationToken.ThrowIfCancellationRequested();
+        var total = Stopwatch.StartNew();
+        var eventStateMs = 0.0;
+        var queueWaitMs = 0.0;
+        var geometryReadMs = 0.0;
+        var intersectionMs = 0.0;
+        var workspaceCount = 0;
+        var matchCount = 0;
+        var outcome = "Failed";
+        try {
+            var pipeline = await GetPipelineAsync(pipelineId, cancellationToken);
+            if (!await eventStore.StreamExists(streams.GetStreamName(new PackageId(packageId)), cancellationToken)) { throw new KeyNotFoundException("Package not found."); }
+            var package = await eventStore.LoadState<PackageState, PackageId>(streams, new(packageId), true, cancellationToken);
+            eventStateMs = total.Elapsed.TotalMilliseconds;
+            var workspaces = pipeline.Workspaces;
+            workspaceCount = workspaces.Count();
+            var references = workspaces.Select(workspace => workspace.GeometryRef).ToArray();
+            var queuedAt = Stopwatch.GetTimestamp();
+            var matches = await dispatcher.ExecuteAsync<IReadOnlyList<WorkspaceResponse>>(() => {
+                queueWaitMs = Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds;
                 cancellationToken.ThrowIfCancellationRequested();
-                var polygon = coverage.GetWorkspaceGeometry(workspace.GeometryRef, cancellationToken);
-                var aoiReference = package.State.GeometryRef ?? throw new InvalidOperationException("Package has no rectangular AOI reference.");
-                if (packages.AoiIntersectsWorkspace(aoiReference, polygon, cancellationToken)) { matches.Add(WorkspaceResponse.FromState(workspace)); }
-            }
+                var geometryTimer = Stopwatch.StartNew();
+                IReadOnlyList<Polygon> geometries;
+                try { geometries = coverage.GetWorkspaceGeometries(references, cancellationToken); }
+                finally { geometryReadMs = geometryTimer.Elapsed.TotalMilliseconds; }
+                var intersectionTimer = Stopwatch.StartNew();
+                IReadOnlyList<bool> intersections;
+                try {
+                    intersections = geometries.Count == 0
+                        ? Array.Empty<bool>()
+                        : packages.AoiIntersectsWorkspaces(package.State.GeometryRef ?? throw new InvalidOperationException("Package has no rectangular AOI reference."), geometries, cancellationToken);
+                }
+                finally { intersectionMs = intersectionTimer.Elapsed.TotalMilliseconds; }
+                var result = new List<WorkspaceResponse>();
+                for (var index = 0; index < workspaces.Count(); index++) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (intersections[index]) { result.Add(WorkspaceResponse.FromState(workspaces[index])); }
+                }
+                return result;
+            });
+            matchCount = matches.Count;
+            outcome = "Succeeded";
             return matches;
-        });
+        }
+        catch (OperationCanceledException) {
+            outcome = "Canceled";
+            throw;
+        }
+        finally {
+            if (eventStateMs == 0) { eventStateMs = total.Elapsed.TotalMilliseconds; }
+            logger.LogInformation(
+                "Workspace intersection read {Outcome}. PipelineId: {PipelineId}, Workspaces: {WorkspaceCount}, Matches: {MatchCount}, EventStateMs: {EventStateMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceGeometryMs: {WorkspaceGeometryMs}, AoiIntersectionMs: {AoiIntersectionMs}, TotalMs: {TotalMs}.",
+                outcome, pipelineId, workspaceCount, matchCount, eventStateMs, queueWaitMs, geometryReadMs, intersectionMs, total.Elapsed.TotalMilliseconds);
+        }
     }
 
     /// <summary>Returns a workspace with its complete polygon in Esri JSON.</summary>
