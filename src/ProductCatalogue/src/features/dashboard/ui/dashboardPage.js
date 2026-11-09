@@ -467,36 +467,56 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect, onClear }) {
   const daysInMonth = new Date(view.year, view.month, 0).getDate();
   const previousMonthDays = new Date(view.year, view.month - 1, 0).getDate();
 
-  panel.replaceChildren();
+  // Keep the month-navigation buttons mounted so keyboard focus is not lost
+  // (or interpreted as leaving the range controls) when the month changes.
+  let header = panel.querySelector(".pc-dashboard-date-picker__header");
 
-  const header = document.createElement("div");
-  header.className = "pc-dashboard-date-picker__header";
+  if (!header) {
+    header = document.createElement("div");
+    header.className = "pc-dashboard-date-picker__header";
 
-  const previousButton = createDashboardDatePickerNavButton("Previous month", "\u2039");
-  previousButton.addEventListener("click", () => {
-    shiftDashboardDatePickerMonth({ root, panel, delta: -1, onSelect, onClear });
+    const previousButton = createDashboardDatePickerNavButton("Previous month", "\u2039");
+    previousButton.addEventListener("click", () => {
+      shiftDashboardDatePickerMonth({ root, panel, delta: -1, onSelect, onClear });
+    });
+
+    const title = document.createElement("div");
+    title.className = "pc-dashboard-date-picker__title";
+    title.setAttribute("aria-live", "polite");
+
+    const nextButton = createDashboardDatePickerNavButton("Next month", "\u203a");
+    nextButton.addEventListener("click", () => {
+      shiftDashboardDatePickerMonth({ root, panel, delta: 1, onSelect, onClear });
+    });
+
+    header.append(previousButton, title, nextButton);
+    panel.appendChild(header);
+
+    const weekdays = document.createElement("div");
+    weekdays.className = "pc-dashboard-date-picker__weekdays";
+
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach((weekday) => {
+      const weekdayElement = document.createElement("span");
+      weekdayElement.textContent = weekday;
+      weekdays.appendChild(weekdayElement);
+    });
+
+    panel.appendChild(weekdays);
+  }
+
+  header.querySelector(".pc-dashboard-date-picker__title").textContent =
+    formatDashboardCalendarMonthTitle(view);
+
+  panel.querySelector(".pc-dashboard-date-picker__days")?.remove();
+  panel.querySelector(".pc-dashboard-date-picker__clear")?.remove();
+
+  const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
-
-  const title = document.createElement("div");
-  title.className = "pc-dashboard-date-picker__title";
-  title.textContent = formatDashboardCalendarMonthTitle(view);
-
-  const nextButton = createDashboardDatePickerNavButton("Next month", "\u203a");
-  nextButton.addEventListener("click", () => {
-    shiftDashboardDatePickerMonth({ root, panel, delta: 1, onSelect, onClear });
-  });
-
-  header.append(previousButton, title, nextButton);
-
-  const weekdays = document.createElement("div");
-  weekdays.className = "pc-dashboard-date-picker__weekdays";
-
-  ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach((weekday) => {
-    const weekdayElement = document.createElement("span");
-    weekdayElement.textContent = weekday;
-    weekdays.appendChild(weekdayElement);
-  });
-
+  const todayDateValue = getTodayDateValue();
   const days = document.createElement("div");
   days.className = "pc-dashboard-date-picker__days";
 
@@ -527,9 +547,18 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect, onClear }) {
     dayButton.className = "pc-dashboard-date-picker__day";
     dayButton.textContent = String(day);
     dayButton.dataset.dateValue = dateValue;
+    dayButton.setAttribute(
+      "aria-label",
+      `${dateFormatter.format(new Date(year, month - 1, day))}${
+        dateValue === selectedDate ? ", selected" : ""
+      }`
+    );
+    if (dateValue === todayDateValue) {
+      dayButton.setAttribute("aria-current", "date");
+    }
     dayButton.classList.toggle("is-outside-month", isOutsideMonth);
     dayButton.classList.toggle("is-selected", dateValue === selectedDate);
-    dayButton.classList.toggle("is-today", dateValue === getTodayDateValue());
+    dayButton.classList.toggle("is-today", dateValue === todayDateValue);
     dayButton.addEventListener("click", () => {
       root.dataset.viewDate = dateValue;
       onSelect(dateValue);
@@ -537,7 +566,7 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect, onClear }) {
     days.appendChild(dayButton);
   }
 
-  panel.append(header, weekdays, days);
+  panel.appendChild(days);
 
   if (onClear && selectedDate) {
     const clearButton = document.createElement("button");

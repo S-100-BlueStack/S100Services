@@ -16,6 +16,8 @@ Implemented scope:
 - Danish operational time handling through backend-provided `Europe/Copenhagen` range metadata.
 - Always-visible Danish local `From` and optional `To` date/time controls.
 - Compact Dashboard-owned date picker for date selection so month/year navigation stays predictable.
+- Calendar month navigation keeps the same buttons mounted to preserve keyboard focus; day buttons
+  expose full accessible dates, including adjacent-month dates, and distinguish selected and current dates.
 - Committed valid date and time changes apply automatically; invalid or incomplete drafts remain editable without requesting or changing the route.
 - Compact icon-only `Refresh` reloads the currently applied range and retains an accessible name and hover help.
 - An adjacent `HH:MM` value represents only the most recent accepted successful Dashboard load.

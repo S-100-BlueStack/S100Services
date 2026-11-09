@@ -25,3 +25,16 @@ For manual verification, hover the top, text and bottom of each link in both
 application themes. Check pointer and click across the full 50px navbar height,
 animated hover/focus versus solid current-route indicator, reduced-motion
 behavior, Tab/Enter navigation, and Main Map new-tab links.
+
+## Narrow-screen route layout
+
+At widths up to 820 px, Dashboard, Analyze and Review use a two-row shared
+navbar: the four native route links remain keyboard-accessible in a horizontally
+scrollable first row, while the right-hand controls wrap onto the second row.
+This does not change the desktop full-height links and 3 px indicators. Main Map
+continues to use its dedicated `has-main-map-search` responsive layout, including
+the Product search and Locator.
+
+Verify Preferences and Notifications remain reachable at 320, 390, 500, 650
+and 820 px, that keyboard focus scrolls clipped navigation links into view,
+and that Main Map and desktop navbar behavior stay unchanged.

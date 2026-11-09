@@ -39,6 +39,22 @@ browser acceptance. Confirm both themes, Tab/Shift+Tab, Enter/Escape,
 Product selection, source enabling/reset, disclosure state, loading, MapView and
 all async/request boundaries are unchanged.
 
+## PC-UX-02B — Dashboard calendar and responsive navbar (candidate)
+
+This focused UI-only candidate addresses the documented small-screen navbar
+overflow on Dashboard/Analyze/Review and date-picker keyboard accessibility on
+Dashboard. At widths up to 820 px the non-map navbar wraps its actions below
+the horizontally navigable route links; Main Map retains its search-aware
+layout. Dashboard month navigation reuses its existing focused buttons instead
+of remounting them and gives each day a full English date accessible label,
+including selected/today information. The existing date, time, filtering,
+range-commit, Escape and request lifecycles are unchanged.
+
+Local acceptance is still required on the authoritative baseline: verify
+Dashboard and Review at 320/390/500/650/820 px, keyboard navigation of both From
+and To calendars, 100%/125%/150% browser zoom, light/dark mode, and no Main Map
+navbar regression. This is not an SDK/Calcite upgrade or a new Dashboard feature.
+
 ## Accepted interaction boundaries
 
 The details below are preservation constraints. A new task must use current code and feature tests from its explicit commit before modifying them.
