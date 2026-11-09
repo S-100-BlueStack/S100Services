@@ -32,9 +32,26 @@ public partial class DispatchRepository
     }
 
     /// <summary>Reads the workspace polygon addressed by its stored coverage reference.</summary>
-    public Polygon GetWorkspaceGeometry(string reference, CancellationToken cancellationToken) {
+    public Polygon GetWorkspaceGeometry(string reference, CancellationToken cancellationToken) =>
+        this.GetWorkspaceGeometries([reference], cancellationToken)[0];
+
+    /// <summary>Reads multiple workspace polygons while retaining one ArcGIS read scope.</summary>
+    internal IReadOnlyList<Polygon> GetWorkspaceGeometries(IReadOnlyList<string> references, CancellationToken cancellationToken) {
+        ArgumentNullException.ThrowIfNull(references);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (references.Count == 0) { return []; }
+
+        // Geometry and feature class handles must remain on the calling ArcGIS dispatcher thread.
         using var connector = this.createGeodatabase();
-        return ReadCoverage(connector, reference, cancellationToken);
+        using var fc = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
+        using var definition = fc.GetDefinition();
+        var globalIdField = definition.GetGlobalIDField();
+        var geometries = new Polygon[references.Count];
+        for (var index = 0; index < references.Count; index++) {
+            cancellationToken.ThrowIfCancellationRequested();
+            geometries[index] = ReadCoverage(fc, globalIdField, references[index], cancellationToken);
+        }
+        return geometries;
     }
 
     /// <summary>Removes unreferenced geometry after a failed workspace event write.</summary>
@@ -49,11 +66,9 @@ public partial class DispatchRepository
         });
     }
 
-    private Polygon ReadCoverage(Geodatabase connector, string reference, CancellationToken cancellationToken) {
+    private static Polygon ReadCoverage(FeatureClass fc, string globalIdField, string reference, CancellationToken cancellationToken) {
         var id = ParseWorkspaceReference(reference);
-        using var fc = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
-        using var definition = fc.GetDefinition();
-        using var cursor = fc.Search(new QueryFilter { WhereClause = $"{definition.GetGlobalIDField()} = '{id.ToString("B").ToUpperInvariant()}' AND code = '{nameof(WorkspaceCoverage)}'" }, false);
+        using var cursor = fc.Search(new QueryFilter { WhereClause = $"{globalIdField} = '{id.ToString("B").ToUpperInvariant()}' AND code = '{nameof(WorkspaceCoverage)}'" }, false);
         cancellationToken.ThrowIfCancellationRequested();
         if (!cursor.MoveNext()) { throw new InvalidOperationException($"Workspace coverage '{reference}' is missing."); }
         using var feature = (Feature)cursor.Current;

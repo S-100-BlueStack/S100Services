@@ -87,6 +87,34 @@ Windows x64 with .NET 10, licensed ArcGIS Pro and the `s100ed17.zip` template:
 dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter FullyQualifiedName~PackageGeometryReadTests
 ```
 
+## Binding read performance
+
+`GET /api/v1/dispatcher/bindings?packageId=...` returns active Pipeline
+bindings with Workspaces intersecting the Package's **current** AOI. Each
+Pipeline's Workspace coverage and intersection checks run on the existing
+single-threaded `ArcGisDispatcher`. For a Pipeline with N Workspaces the read
+now opens one Workspace coverage geodatabase/feature class and one Package AOI
+geodatabase/feature class, rather than reopening both for each Workspace.
+Each Workspace still uses the existing GlobalID-restricted spatial `Intersects`
+query. This is a request-scoped resource reuse optimization, **not** a cache of
+Workspace membership or Package geometry. Changes to Package AOIs remain visible
+on the next read.
+
+Two structured timing events are emitted at Information level:
+
+- `Bindings read`: `AssignmentReadMs`, `TotalMs`, and returned binding count.
+- `Workspace intersection read`: `EventStateMs`, `ArcGisQueueWaitMs`,
+  `WorkspaceGeometryMs`, `AoiIntersectionMs`, `TotalMs`, Workspace count and
+  match count (one event per active Pipeline).
+
+The difference between elapsed time and the named stages includes coordination,
+response mapping, and logging; timings also include failures or cancellation
+and should not be interpreted as database-only measurements. The frontend needs
+no change. Use the same Package and test dataset for before/after timing and
+compare repeated warm requests, not one cold request. See
+[DC_BIND_PERF_01_VALIDATION.md](docs/DC_BIND_PERF_01_VALIDATION.md) for tests,
+limits, and baseline provenance.
+
 ## Package search and pagination
 
 `GET /api/v1/packages` keeps the existing response envelope and accepts:

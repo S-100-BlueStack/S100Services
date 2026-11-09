@@ -21,8 +21,15 @@ public partial class PackageRepository
     }
 
     /// <summary>Tests only the package's current AOI reference; no detail geometry is loaded.</summary>
-    internal bool AoiIntersectsWorkspace(string aoiReference, Polygon workspace, CancellationToken cancellationToken) {
+    internal bool AoiIntersectsWorkspace(string aoiReference, Polygon workspace, CancellationToken cancellationToken) =>
+        this.AoiIntersectsWorkspaces(aoiReference, [workspace], cancellationToken)[0];
+
+    /// <summary>Tests multiple workspaces with one geodatabase and feature class read scope.</summary>
+    internal IReadOnlyList<bool> AoiIntersectsWorkspaces(string aoiReference, IReadOnlyList<Polygon> workspaces, CancellationToken cancellationToken) {
+        ArgumentNullException.ThrowIfNull(workspaces);
         cancellationToken.ThrowIfCancellationRequested();
+        if (workspaces.Count == 0) { return []; }
+
         var parts = aoiReference.Split("::", StringSplitOptions.None);
         if (parts.Length != 2 || !string.Equals(parts[0], "surface", StringComparison.OrdinalIgnoreCase) || !Guid.TryParse(parts[1], out var id)) {
             throw new InvalidOperationException("Invalid package AOI reference.");
@@ -32,19 +39,25 @@ public partial class PackageRepository
         using var definition = fc.GetDefinition();
         var spatialReference = definition.GetSpatialReference();
         if (spatialReference is null || spatialReference.IsUnknown) { throw new InvalidOperationException("Package AOI coverage requires a known spatial reference."); }
-        var geometry = workspace.SpatialReference.IsEqual(spatialReference) ? workspace : GeometryEngine.Instance.Project(workspace, spatialReference);
-        var filter = new SpatialQueryFilter {
-            FilterGeometry = geometry,
-            SpatialRelationship = SpatialRelationship.Intersects,
-            // The stream's current reference excludes historical AOI rows retained after replacement.
-            WhereClause = $"{definition.GetGlobalIDField()} = '{id.ToString("B").ToUpperInvariant()}' AND code = '{nameof(S100FC.S840.FeatureTypes.PackageCoverage)}'",
-            SubFields = definition.GetGlobalIDField(),
-        };
-        cancellationToken.ThrowIfCancellationRequested();
-        using var cursor = fc.Search(filter, false);
-        var intersects = cursor.MoveNext();
-        if (intersects) { using var row = cursor.Current; }
-        cancellationToken.ThrowIfCancellationRequested();
-        return intersects;
+        var globalIdField = definition.GetGlobalIDField();
+        var whereClause = $"{globalIdField} = '{id.ToString("B").ToUpperInvariant()}' AND code = '{nameof(S100FC.S840.FeatureTypes.PackageCoverage)}'";
+        var intersections = new bool[workspaces.Count];
+        for (var index = 0; index < workspaces.Count; index++) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var workspace = workspaces[index];
+            var geometry = workspace.SpatialReference.IsEqual(spatialReference) ? workspace : GeometryEngine.Instance.Project(workspace, spatialReference);
+            var filter = new SpatialQueryFilter {
+                FilterGeometry = geometry,
+                SpatialRelationship = SpatialRelationship.Intersects,
+                // Retain the current AOI reference check so replaced historical rows cannot match.
+                WhereClause = whereClause,
+                SubFields = globalIdField,
+            };
+            using var cursor = fc.Search(filter, false);
+            intersections[index] = cursor.MoveNext();
+            if (intersections[index]) { using var row = cursor.Current; }
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        return intersections;
     }
 }

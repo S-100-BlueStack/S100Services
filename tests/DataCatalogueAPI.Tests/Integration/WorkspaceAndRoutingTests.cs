@@ -4,6 +4,8 @@ using System.Text.Json;
 using DataCatalague.Api.Models;
 using DataCatalague.Api.Models.V1;
 using DataCatalogue.Api.Tests.Infrastructure;
+using DataCatalague.Api.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DataCatalogue.Api.Tests.Integration;
 
@@ -120,6 +122,53 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         Assert.Single((await this.PackagesAsync("?hasPipeline=false")).Items);
         Assert.Equal(HttpStatusCode.NotFound, (await this.Client.PostAsJsonAsync("/api/v1/dispatcher/bindings", new { packageId = "missing", pipelineId = first.Id })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await this.Client.DeleteAsync("/api/v1/dispatcher/bindings/missing")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Binding_reads_keep_order_and_recalculate_current_AOI_intersections() {
+        await this.CategoryAsync();
+        var package = await this.PackageAsync();
+        var first = await this.PipelineAsync();
+        var intersecting = await this.WorkspaceAsync(first.Id, Geometry, "Intersecting");
+        await this.WorkspaceAsync(first.Id, DistantGeometry, "Elsewhere");
+        var alsoIntersecting = await this.WorkspaceAsync(first.Id, Geometry, "Intersecting again");
+        var second = await this.PipelineAsync();
+        var secondWorkspace = await this.WorkspaceAsync(second.Id, DistantGeometry, "Second pipeline area");
+        var emptyPipeline = await this.PipelineAsync();
+
+        var firstBinding = await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = first.Id });
+        var secondBinding = await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = second.Id });
+        var emptyBinding = await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = emptyPipeline.Id });
+        Assert.Empty(emptyBinding.Workspaces);
+        Assert.Equal(new[] { intersecting.Id, alsoIntersecting.Id }, firstBinding.Workspaces.Select(workspace => workspace.Id));
+        Assert.Empty(secondBinding.Workspaces);
+
+        var path = "/api/v1/dispatcher/bindings?packageId=" + package.Id;
+        var before = (await this.Client.GetFromJsonAsync<BindingResponse[]>(path))!;
+        Assert.Equal(new[] { intersecting.Id, alsoIntersecting.Id }, before.Single(binding => binding.PipelineId == first.Id).Workspaces.Select(workspace => workspace.Id));
+        Assert.Empty(before.Single(binding => binding.PipelineId == second.Id).Workspaces);
+        Assert.Empty(before.Single(binding => binding.PipelineId == emptyPipeline.Id).Workspaces);
+
+        // A replaced AOI must affect the next read without a stale intersection cache.
+        using var replaced = await this.Client.PutAsJsonAsync($"/api/v1/packages/{package.Id}/geometry", new { aoi = DistantGeometry });
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        var after = (await this.Client.GetFromJsonAsync<BindingResponse[]>(path))!;
+        Assert.Empty(after.Single(binding => binding.PipelineId == first.Id).Workspaces);
+        Assert.Equal(new[] { secondWorkspace.Id }, after.Single(binding => binding.PipelineId == second.Id).Workspaces.Select(workspace => workspace.Id));
+        Assert.Empty(after.Single(binding => binding.PipelineId == emptyPipeline.Id).Workspaces);
+    }
+
+    [Fact]
+    public async Task Cancelled_intersection_read_does_not_enter_the_ArcGIS_queue() {
+        await this.CategoryAsync();
+        var package = await this.PackageAsync();
+        var pipeline = await this.PipelineAsync();
+        await this.WorkspaceAsync(pipeline.Id);
+        using var scope = this.App.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetIntersectionsAsync(package.Id, pipeline.Id, cancelled.Token));
     }
 
     [Fact]
