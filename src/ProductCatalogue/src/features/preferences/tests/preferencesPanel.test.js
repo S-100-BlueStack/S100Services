@@ -192,10 +192,19 @@ for (const route of ["analyze", "review", "dashboard", "other-shared-page"]) {
     );
     assert.match(panel.html, /title="Show a short guide to the controls on this page\."/);
     assert.doesNotMatch(panel.html, /Show a short guide[^"]*<\/small>/);
+    assert.match(panel.html, /<h3 id="preferences-display-heading">Display<\/h3>/);
     assert.match(panel.html, /<h3 id="preferences-saved-heading">Saved preferences<\/h3>/);
     assert.match(
       panel.html,
-      /Choose which preferences are remembered\. Turning Auto-save off removes the saved value\./
+      /Auto-save remembers settings in this browser\. Turning it off clears the saved value\./
+    );
+    assert.match(
+      panel.html,
+      /data-preference-action="reset-all"[\s\S]*>Restore defaults<\/button>/
+    );
+    assert.doesNotMatch(
+      panel.html,
+      /data-preference-action="reset-(?:theme|map-view|filters|display-scale|dashboard-page-size)"/
     );
     assert.doesNotMatch(panel.html, /Clear saved value|data-preference-action="clear-/);
     assert.equal(document.activeElement.id, "preferences-dark-mode");
@@ -206,6 +215,10 @@ for (const route of ["analyze", "review", "dashboard", "other-shared-page"]) {
     const escape = event("keydown", button, { key: "Escape" });
     document.dispatchEvent(escape);
     assert.equal(escape.defaultPrevented, true);
+    assert.equal(panel.hidden, true);
+    assert.equal(document.activeElement, button);
+    button.dispatchEvent(event("click", button));
+    click(panel, "close-panel");
     assert.equal(panel.hidden, true);
     assert.equal(document.activeElement, button);
     api.destroy();
@@ -269,7 +282,7 @@ test("Theme Auto-save off removes persistence without changing runtime or unrela
   assert.equal(localStorage.getItem("app-theme"), null);
   assert.equal(localStorage.getItem("unrelated-source-state"), "unchanged");
   assert.equal(document.activeElement, control);
-  const reset = click(panel, "reset-theme");
+  const reset = click(panel, "reset-all");
   assert.equal(theme.module.getCurrentTheme(), "light");
   assert.equal(localStorage.getItem("app-theme"), null);
   assert.equal(persistence.isPreferencePersistenceEnabled("theme"), false);
@@ -280,13 +293,15 @@ test("Theme Auto-save off removes persistence without changing runtime or unrela
   api.destroy();
 });
 
-test("Main-map Scale hiding Auto-save and Reset remain independent", async () => {
+test("Main-map Scale hiding Auto-save and Restore defaults remain independent", async () => {
   persistence.setPreferencePersistenceEnabled("displayScaleOverride", true);
   scale.resetDisplayScaleHidingPreference();
   let binds = 0;
   let removes = 0;
   const mapPreferences = {
     ...scale,
+    resetMapViewpoint: async () => {},
+    resetFilters: () => {},
     bindDisplayScaleOverrideControl(element) {
       binds++;
       const sync = () => {
@@ -318,7 +333,8 @@ test("Main-map Scale hiding Auto-save and Reset remain independent", async () =>
   assert.equal(localStorage.getItem("pc.displayScale.hidingDisabled"), null);
   assert.equal(localStorage.getItem("unrelated-source-state"), "unchanged");
   assert.equal(document.activeElement, autoSave);
-  const reset = click(panel, "reset-display-scale");
+  const reset = click(panel, "reset-all");
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(scale.isDisplayScaleHidingDisabled(), true);
   assert.equal(localStorage.getItem("pc.displayScale.hidingDisabled"), null);
   assert.equal(persistence.isPreferencePersistenceEnabled("displayScaleOverride"), false);
@@ -333,16 +349,17 @@ test("Main-map Scale hiding Auto-save and Reset remain independent", async () =>
   persistence.setPreferencePersistenceEnabled("displayScaleOverride", true);
 });
 
-test("Dashboard page-size Reset uses its existing owner without rendering saved-value status", () => {
+test("Dashboard Restore defaults resets page size using its existing owner", () => {
   const { api, panel } = mount({}, "dashboard");
   dashboard.writeDashboardPageSizePreference(100);
-  click(panel, "reset-dashboard-page-size");
+  assert.equal(panel.querySelector('[data-preference-action="reset-dashboard-page-size"]'), null);
+  click(panel, "reset-all");
   assert.equal(dashboard.readDashboardPageSizePreference(), 50);
   assert.equal(panel.querySelector("[data-preference-status]"), null);
   api.destroy();
 });
 
-test("Map view Reset restores defaults without changing its Auto-save selection", async () => {
+test("Map view reset owner restores defaults without changing its Auto-save selection", async () => {
   const { module: mapState } = await loadModule("../../map/state/mapViewpointPersistence.js", {
     'import { watch } from "@arcgis/core/core/reactiveUtils.js";':
       "const watch = () => ({ remove() {} });",
@@ -466,7 +483,7 @@ for (const routeName of ["analyze", "review", "dashboard"]) {
   });
 }
 
-test("Analyze Preferences controls basemap Auto-save and theme-default reset without stealing focus", async () => {
+test("Analyze Preferences keeps the Basemap theme-default action in Display without stealing focus", async () => {
   persistence.setPreferencePersistenceEnabled("basemap", true);
   localStorage.removeItem(BASEMAP_SELECTION_STORAGE_KEY);
   theme.module.applyTheme("light");
@@ -500,6 +517,11 @@ test("Analyze Preferences controls basemap Auto-save and theme-default reset wit
     assert.equal(settings.getValue(), "oceans");
     theme.module.applyTheme("dark");
     assert.equal(settings.getValue(), "oceans", "theme cannot override a manual choice");
+    assert.equal(panel.querySelectorAll('[data-preference-action="reset-basemap"]').length, 1);
+    assert.match(
+      panel.html,
+      /data-preference-action="reset-basemap"[\s\S]*Use theme default<\/button>/
+    );
     const reset = click(panel, "reset-basemap");
     assert.equal(settings.getValue(), "dark-gray-vector");
     assert.equal(
@@ -523,5 +545,37 @@ test("Analyze Preferences controls basemap Auto-save and theme-default reset wit
     settings.destroy();
     localStorage.removeItem(BASEMAP_SELECTION_STORAGE_KEY);
     persistence.setPreferencePersistenceEnabled("basemap", true);
+  }
+});
+
+test("Main-map Restore defaults reuses existing owners and preserves Auto-save selections", async () => {
+  const calls = [];
+  const mapPreferences = {
+    bindDisplayScaleOverrideControl: () => ({ remove() {} }),
+    isDisplayScaleHidingDisabled: () => true,
+    resetMapViewpoint: async () => calls.push("map view"),
+    resetFilters: () => calls.push("filters"),
+    resetDisplayScaleHidingPreference: () => calls.push("scale hiding"),
+  };
+  const dataSourceController = {
+    resetToDefaults: async (options) => {
+      calls.push(`sources: ${options.reason}`);
+    },
+  };
+  persistence.setPreferencePersistenceEnabled("attributeFilters", false);
+  const before = persistence.getPreferencePersistenceState();
+  const { api, panel } = mount({ mapPreferences, dataSourceController });
+  try {
+    assert.equal(panel.querySelectorAll('[data-preference-action="reset-all"]').length, 1);
+    assert.equal(panel.querySelector('[data-preference-action="reset-filters"]'), null);
+    assert.equal(panel.querySelector('[data-preference-action="reset-map-view"]'), null);
+    const restore = click(panel, "reset-all");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, ["map view", "filters", "scale hiding", "sources: preferences-reset"]);
+    assert.deepEqual(persistence.getPreferencePersistenceState(), before);
+    assert.equal(document.activeElement, restore);
+  } finally {
+    api.destroy();
+    persistence.setPreferencePersistenceEnabled("attributeFilters", true);
   }
 });

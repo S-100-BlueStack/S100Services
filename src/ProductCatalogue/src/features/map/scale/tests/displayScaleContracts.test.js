@@ -39,7 +39,8 @@ test("Main-map Preferences separates Scale hiding behavior from persistence", as
   );
   assert.match(preferences, /data-preference-persistence-key=/);
   assert.match(preferences, /Save Scale hiding/);
-  assert.match(preferences, /resetAction: "reset-display-scale"/);
+  assert.match(preferences, /case "reset-all":[\s\S]*?resetDisplayScaleHidingPreference\(\)/);
+  assert.doesNotMatch(preferences, /case "reset-display-scale"/);
   assert.match(preferences, /renderThemeSetting\(getCurrentTheme\(\)\)/);
 });
 

@@ -674,7 +674,7 @@ FI-044 status: **Done**.
 Implementation commit: `79616f8af0cda91db8e4b1fa90c0248aef4fef41`.  
 Accepted merged baseline: `82f69c1d082773c110b48404d716d99cdc32de02`.
 
-The shared panel presents **Theme** as a standard runtime setting with a Light (sun) / Dark (moon) icon-flanked switch, alongside Main-map-only Scale hiding when available, followed by **Saved preferences**. The Introduction replay is a separate secondary button at the bottom of the panel rather than part of the settings hierarchy. Redundant visible Introduction and Settings headings are intentionally omitted.
+The shared panel groups Theme, Basemap (when available), and Main-map-only Scale hiding under **Display**, followed by **Saved preferences**. Theme uses a Light (sun) / Dark (moon) icon-flanked switch. Basemap keeps a dedicated **Use theme default** action alongside the current selection; this restores automatic theme-based selection without resetting other settings. The panel header has a keyboard-accessible close button, and Introduction replay remains a separate secondary action at the bottom.
 Theme remains owned by `themeService.js` on every shared-navigation route. Main map injects
 `createMainMapPreferences` for Scale hiding, Map view and Filters; the shared panel imports no
 Main-map service. Main-map startup modules load only in the Main-map bootstrap branch.
@@ -683,12 +683,13 @@ visibility behavior. Workspace Preferences does not initialize Main-map Scale hi
 
 Auto-save ON remembers the preference. Auto-save OFF removes that preference's stored value
 without changing its current runtime value. There is no separate saved-value status or clear action.
-**Reset** invokes the named owner's existing runtime reset without changing Auto-save. Theme reset
-selects Light (and saves when enabled); Scale hiding reset selects OFF and removes storage.
-Map view retains its existing reset/save behavior. Filters Reset restores the declarative
-first-visit defaults (including the conservative Idle exclusion) rather than the Filter panel's
-explicit `Clear all` state. Dashboard page-size reset clears storage and restores 50.
-The aggregate reset retains its existing route scope, explicitly including Main-map source defaults.
+The individual Reset buttons have been consolidated into a single understated **Restore defaults**
+action. It invokes the existing route-scoped aggregate reset and leaves Auto-save selections
+unchanged: Main map restores viewpoint, declarative Filters (including conservative Idle exclusion),
+Scale hiding (OFF), source defaults, Basemap and Theme (Light); Dashboard restores Theme and
+page size (50); Analyze/Review restore Theme and available Basemap. Restoring settings uses the
+same domain owners and storage behavior as before. The separate Basemap **Use theme default**
+action changes only the basemap choice, without affecting Auto-save or the other preferences.
 
 Changes update controls in place, preserving focus. Context replacement uses application-owned
 focus identity. Escape and click-away preserve route lifecycle priorities and focus restoration.
