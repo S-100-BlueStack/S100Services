@@ -157,11 +157,25 @@
   margin-inline-start: auto;
 }
 
+.popup-package-status {
+  /* Align the summary with the metadata table instead of the generic 3-column row. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 7px;
+}
+
 .popup-package-status__value {
+  justify-self: end;
   width: fit-content;
   min-width: 0;
   padding: 3px 7px;
+  white-space: nowrap;
   background: var(--pc-package-status-background, var(--pc-popup-surface-alt));
+}
+
+.popup-package-status + .popup-product-table-wrapper {
+  /* Share one visual metadata block with no extra gap between summary and columns. */
+  margin-top: -6px;
 }
 
 .popup-package-status .popup-product-error {
@@ -183,7 +197,7 @@
 
 .popup-product-table th,
 .popup-product-table td {
-  padding: 5px 7px;
+  padding: 6px 7px;
   vertical-align: top;
   border-bottom: 1px solid var(--pc-popup-border);
   word-break: break-word;
