@@ -1,3 +1,40 @@
+## DC-UX-02 — Navbar and Preferences visual consistency (candidate, 2026-11-09)
+
+Implementation source: verified `git archive` export from `main` at
+`6f38fdb67fcaebfc06b852291718b8d3f474c4c2` (776/776 source-file hashes
+matched). The separately reported DC-UX-01 commit
+`b6b596f25a5ef4451dc76b96278ca71574404e63` is not the archive's
+baseline commit; no Git ancestry relationship was independently checked.
+
+- Preserve the DC-UX-01 v5 Packages workflows, assignment layout, selected
+  Package summaries, map position controls, reversible statuses and guarded
+  draft Save logic. ProductCatalogue is a read-only design reference.
+- Keep the native route links and their existing navigation ownership. Align
+  navbar action sizing, accessible labels, last-updated typography, active
+  Preferences state and responsive icon spacing with ProductCatalogue.
+- Retain the application-owned, non-modal Preferences panel and its existing
+  lifecycle. Align placement, surface, shadow, section grouping and control
+  density with ProductCatalogue. Use public Calcite `calcite-switch` controls
+  for Theme and the three independent Auto-save choices; native controls
+  remain responsible for panel Close and basemap Reset.
+- Keep the exact existing DataCatalogue preference storage keys and opt-in /
+  opt-out rules. Enabling Theme Auto-save records the current theme, disabling
+  it clears stored theme values; Map position and Basemap retention stay
+  separate. Do not import ProductCatalogue's reset-all, map controls, or
+  persistence implementation.
+- Public `setFocus`, `calciteSwitchChange` and `checked` component APIs are
+  used without querying Calcite shadow DOM. Escape and Close restore focus;
+  outside-pointer dismissal does not interfere with the clicked target.
+  Panel positioning follows the Preferences action and updates on viewport
+  resize without re-creating the main/assignment map.
+- No backend, authentication, API, dependency or ProductCatalogue changes.
+  Visual browser acceptance and the local full `npm run check` remain required.
+
+See [DC_UX_02_VALIDATION.md](DC_UX_02_VALIDATION.md) for focused regression
+results, manual theme/layout checks and delivery boundaries.
+
+---
+
 ## DC-UX-01 v5 — Selected-Package summary cache and full-height map (2026-11-06)
 
 Status: focused correction of the controlled v4 candidate. Authoritative baseline remains

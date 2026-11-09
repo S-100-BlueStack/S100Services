@@ -1,13 +1,25 @@
 import { writeStoredThemeMode } from "../../theme/state/themeStorage.js";
 
 const STORAGE_ROWS = [
-  ["rememberBasemap", "Remember basemap"],
-  ["rememberMapPosition", "Remember map location and zoom"],
-  ["rememberTheme", "Remember theme"],
+  {
+    key: "rememberBasemap",
+    title: "Basemap",
+    label: "Save basemap selection in this browser",
+  },
+  {
+    key: "rememberMapPosition",
+    title: "Map view",
+    label: "Save map location and zoom in this browser",
+  },
+  {
+    key: "rememberTheme",
+    title: "Theme",
+    label: "Save theme selection in this browser",
+  },
 ];
 
-// A small application-owned panel avoids coupling Preferences availability to
-// asynchronous Calcite popover initialization. Calcite Action remains the trigger.
+// Keep the application-owned panel and preference lifecycle; only the presentation
+// follows the Product Catalogue pattern of grouped settings and Calcite switches.
 export function createPreferencesPanel({
   navbarElement,
   settings,
@@ -21,61 +33,92 @@ export function createPreferencesPanel({
 
   const abort = new AbortController();
   const { signal } = abort;
-  const panel = documentRef.createElement("section");
-  panel.className = "dc-preferences";
-  panel.setAttribute("aria-label", "Preferences settings");
-  const header = documentRef.createElement("div");
-  header.className = "dc-preferences__header";
-  const heading = documentRef.createElement("h2");
+  const create = (tag, className) => {
+    const element = documentRef.createElement(tag);
+    if (className) element.className = className;
+    return element;
+  };
+  const createCopy = (title, description) => {
+    const copy = create("div", "dc-preferences__copy");
+    const heading = create("h4");
+    heading.textContent = title;
+    copy.append(heading);
+    if (description) {
+      const detail = create("p");
+      detail.textContent = description;
+      copy.append(detail);
+    }
+    return copy;
+  };
+
+  const panel = create("section", "dc-preferences");
+  const header = create("div", "dc-preferences__header");
+  const heading = create("h2");
   heading.id = "data-catalogue-preferences-title";
   heading.textContent = "Preferences";
-  const closeButton = documentRef.createElement("button");
+  const closeButton = create("button", "dc-preferences__close");
   closeButton.type = "button";
-  closeButton.className = "dc-preferences__close";
+  closeButton.title = "Close Preferences";
   closeButton.setAttribute("aria-label", "Close Preferences");
-  closeButton.textContent = "×";
+  const closeIcon = create("calcite-icon");
+  closeIcon.setAttribute("icon", "x");
+  closeIcon.setAttribute("scale", "s");
+  closeIcon.setAttribute("aria-hidden", "true");
+  closeButton.append(closeIcon);
   header.append(heading, closeButton);
 
-  const themeLabel = documentRef.createElement("label");
-  themeLabel.className = "dc-preferences__row";
-  const themeText = documentRef.createElement("span");
-  themeText.textContent = "Theme";
-  const themeSelect = documentRef.createElement("select");
-  themeSelect.setAttribute("aria-label", "Theme");
-  for (const [label, value] of [
-    ["Light", "light"],
-    ["Dark", "dark"],
-  ]) {
-    const option = documentRef.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    themeSelect.append(option);
-  }
-  themeLabel.append(themeText, themeSelect);
+  const content = create("div", "dc-preferences__content");
+  const displayGroup = create("section", "dc-preferences__group");
+  const displayTitle = create("h3");
+  displayTitle.textContent = "Display";
+  displayGroup.append(displayTitle);
 
-  const basemapRow = documentRef.createElement("div");
-  basemapRow.className = "dc-preferences__row";
-  const basemapDescription = documentRef.createElement("span");
-  const resetBasemap = documentRef.createElement("button");
+  const themeRow = create("div", "dc-preferences__setting");
+  const themeCopy = createCopy("Theme");
+  const themeControl = create("div", "dc-preferences__theme-control");
+  const lightIcon = create("calcite-icon", "dc-preferences__theme-icon");
+  lightIcon.setAttribute("icon", "brightness");
+  lightIcon.setAttribute("scale", "s");
+  lightIcon.setAttribute("aria-hidden", "true");
+  const themeSwitch = create("calcite-switch", "dc-preferences__switch");
+  themeSwitch.id = "data-catalogue-dark-mode";
+  themeSwitch.setAttribute("label", "Dark theme");
+  const darkIcon = create("calcite-icon", "dc-preferences__theme-icon");
+  darkIcon.setAttribute("icon", "moon");
+  darkIcon.setAttribute("scale", "s");
+  darkIcon.setAttribute("aria-hidden", "true");
+  themeControl.append(lightIcon, themeSwitch, darkIcon);
+  themeRow.append(themeCopy, themeControl);
+
+  const basemapRow = create("div", "dc-preferences__setting dc-preferences__setting--basemap");
+  const basemapCopy = createCopy("Basemap");
+  const basemapDescription = create("p", "dc-preferences__basemap-status");
+  basemapCopy.append(basemapDescription);
+  const resetBasemap = create("button", "dc-preferences__reset-basemap");
   resetBasemap.type = "button";
-  resetBasemap.className = "dc-preferences__reset-basemap";
   resetBasemap.textContent = "Use theme default";
-  resetBasemap.title = "Automatically select a light or dark basemap to match the theme";
-  basemapRow.append(basemapDescription, resetBasemap);
+  resetBasemap.title = "Automatically select a basemap to match the theme";
+  basemapRow.append(basemapCopy, resetBasemap);
+  displayGroup.append(themeRow, basemapRow);
 
-  const storageTitle = documentRef.createElement("h3");
-  storageTitle.textContent = "Local preferences";
-  panel.append(header, themeLabel, basemapRow, storageTitle);
+  const savedGroup = create("section", "dc-preferences__group");
+  const savedTitle = create("h3");
+  savedTitle.textContent = "Saved preferences";
+  const savedDescription = create("p", "dc-preferences__group-description");
+  savedDescription.textContent = "Choose which preferences are remembered in this browser.";
+  savedGroup.append(savedTitle, savedDescription);
 
   const controls = new Map();
-  for (const [key, title] of STORAGE_ROWS) {
-    const label = documentRef.createElement("label");
-    label.className = "dc-preferences__row";
-    const input = documentRef.createElement("input");
-    input.type = "checkbox";
+  for (const { key, title, label } of STORAGE_ROWS) {
+    const row = create("div", "dc-preferences__item");
+    const autoSave = create("label", "dc-preferences__auto-save");
+    const autoSaveText = create("span");
+    autoSaveText.textContent = "Auto-save";
+    const input = create("calcite-switch", "dc-preferences__switch");
+    input.setAttribute("label", label);
     input.name = key;
     input.addEventListener(
-      "change",
+      "calciteSwitchChange",
       () => {
         settings.set(key, input.checked);
         if (key === "rememberTheme" && input.checked) {
@@ -84,43 +127,88 @@ export function createPreferencesPanel({
       },
       { signal }
     );
-    label.append(documentRef.createTextNode(title), input);
+    autoSave.append(autoSaveText, input);
+    row.append(createCopy(title), autoSave);
     controls.set(key, input);
-    panel.append(label);
+    savedGroup.append(row);
   }
-  const help = documentRef.createElement("p");
-  help.textContent =
-    "Disabling a saved preference clears its stored value. The current session remains unchanged.";
-  help.className = "dc-preferences__help";
-  panel.append(help);
+  content.append(displayGroup, savedGroup);
+  panel.append(header, content);
   host.replaceChildren(panel);
+  host.setAttribute("aria-labelledby", heading.id);
+  button.setAttribute("aria-controls", "preferences-panel");
+
+  function positionPanel() {
+    const viewport = documentRef.defaultView;
+    const bounds = button.getBoundingClientRect?.();
+    if (!viewport || !bounds) return;
+    host.style.top = `${Math.round(bounds.bottom + 8)}px`;
+    if (viewport.innerWidth <= 480) {
+      host.style.left = "12px";
+      host.style.right = "12px";
+    } else {
+      host.style.left = "";
+      host.style.right = `${Math.max(12, Math.round(viewport.innerWidth - bounds.right))}px`;
+    }
+    const availableHeight = Math.max(80, Math.floor(viewport.innerHeight - bounds.bottom - 20));
+    host.style.maxHeight = `${availableHeight}px`;
+  }
 
   function setOpen(open, { restoreFocus = false } = {}) {
+    const wasOpen = !host.hidden;
     host.hidden = !open;
     host.inert = !open;
     button.active = open;
     button.setAttribute("aria-expanded", String(open));
-    if (!open && restoreFocus) button.focus?.({ preventScroll: true });
+    if (open) {
+      positionPanel();
+      // Calcite's public focus method reaches the switch inside its shadow root.
+      if (typeof themeSwitch.setFocus === "function") {
+        void themeSwitch.setFocus({ preventScroll: true });
+      } else {
+        themeSwitch.focus?.({ preventScroll: true });
+      }
+    } else if (wasOpen && restoreFocus) {
+      if (typeof button.setFocus === "function") {
+        void button.setFocus({ preventScroll: true });
+      } else {
+        button.focus?.({ preventScroll: true });
+      }
+    }
   }
 
   const unsubscribeSettings = settings.subscribe((snapshot) => {
     for (const [key, input] of controls) input.checked = snapshot[key];
   });
   const unsubscribeTheme = themeStore.subscribe(({ themeMode }) => {
-    themeSelect.value = themeMode;
+    themeSwitch.checked = themeMode === "dark";
   });
   const unsubscribeBasemap =
     basemapSettings?.subscribe(() => {
       const manual = basemapSettings.isCustom();
-      basemapDescription.textContent = manual ? "Basemap: Custom" : "Basemap: Automatic";
+      const choice = basemapSettings
+        .getOptions()
+        .find((entry) => entry.id === basemapSettings.getValue());
+      const selectionMode = manual ? "Custom" : "Automatic";
+      basemapDescription.textContent = `${selectionMode}: ${choice?.label ?? "Unavailable"}`;
       resetBasemap.disabled = !manual;
     }) ?? (() => {});
-  themeSelect.addEventListener("change", () => themeStore.setThemeMode(themeSelect.value), {
-    signal,
-  });
+  if (!basemapSettings) {
+    basemapDescription.textContent = "Unavailable";
+    resetBasemap.disabled = true;
+  }
+
+  themeSwitch.addEventListener(
+    "calciteSwitchChange",
+    () => {
+      const next = themeSwitch.checked ? "dark" : "light";
+      if (themeStore.getSnapshot().themeMode !== next) themeStore.setThemeMode(next);
+    },
+    { signal }
+  );
   resetBasemap.addEventListener("click", () => basemapSettings?.resetToThemeDefault(), { signal });
   closeButton.addEventListener("click", () => setOpen(false, { restoreFocus: true }), { signal });
-  button.addEventListener("click", () => setOpen(host.hidden), { signal });
+  button.addEventListener("click", () => setOpen(host.hidden, { restoreFocus: true }), { signal });
   documentRef.addEventListener(
     "pointerdown",
     (event) => {
@@ -140,9 +228,16 @@ export function createPreferencesPanel({
   documentRef.addEventListener(
     "keydown",
     (event) => {
-      if (host.hidden || event.key !== "Escape") return;
+      if (host.hidden || event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
       setOpen(false, { restoreFocus: true });
+    },
+    { signal }
+  );
+  documentRef.defaultView?.addEventListener(
+    "resize",
+    () => {
+      if (!host.hidden) positionPanel();
     },
     { signal }
   );
@@ -150,11 +245,11 @@ export function createPreferencesPanel({
 
   return {
     destroy() {
+      setOpen(false);
       abort.abort();
       unsubscribeSettings();
       unsubscribeTheme();
       unsubscribeBasemap();
-      setOpen(false);
       host.replaceChildren();
     },
   };

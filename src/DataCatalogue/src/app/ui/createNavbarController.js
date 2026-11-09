@@ -120,6 +120,7 @@ async function ensureNavbarComponentsDefined() {
     customElements.whenDefined("calcite-button"),
     customElements.whenDefined("calcite-icon"),
     customElements.whenDefined("calcite-popover"),
+    customElements.whenDefined("calcite-switch"),
   ]);
 }
 

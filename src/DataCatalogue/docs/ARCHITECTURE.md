@@ -1,3 +1,26 @@
+## DC-UX-02 — Shared visual language without shared state (2026-11-09)
+
+`public/components/navbar.html` and `src/styles/navbar.css` remain owned by
+DataCatalogue. ProductCatalogue's `header.css` and `preferences.css` are
+reference designs only: there is no runtime CSS import or state dependency
+between the frontends.
+
+`features/preferences/ui/createPreferencesPanel.js` owns a single stable,
+application-owned panel instance, its open/close/focus lifecycle, fixed
+positioning and direct public Calcite switch events. The existing
+`features/preferences/state/createPreferencesSettings.js`, theme store and
+basemap settings remain authoritative for their respective storage semantics.
+The panel only converts user actions into existing service calls and subscribes
+to the services for display; it never owns storage keys or ArcGIS MapViews.
+
+`main.js` registers `calcite-switch` and navbar initialization waits for its
+public custom element definition before constructing Preferences. Close/Escape
+restore focus to the trigger, pointer dismissal leaves external pointer actions
+alone, and AbortController tears down all event listeners. No private shadow
+DOM or ProductCatalogue preference controllers are used.
+
+---
+
 ## DC-UX-01 v5 — Selection-owned summaries and full-height map (2026-11-06)
 
 The live Package list no longer performs a separate per-row bindings read.
