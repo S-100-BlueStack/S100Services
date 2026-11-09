@@ -1011,44 +1011,20 @@ namespace S100FC.ProductCatalogue
             foreach (var className in ArchiveScanRequirements.SpatialClasses) {
                 using var featureClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
                 using var archive = featureClass.GetArchiveTable();
-                using var definition = archive.GetDefinition();
-                var oidField = definition.GetObjectIDField();
-                var owners = new Dictionary<long, (ArchiveInterval Interval, IReadOnlyCollection<ArchiveBindingTarget> Targets)>();
                 var rowsRead = 0;
-                using (var cursor = archive.Search(new QueryFilter {
-                    WhereClause = $"UPPER(ps) = 'S-101' AND {endpointPredicate}",
-                    SubFields = $"{oidField},GDB_FROM_DATE,GDB_TO_DATE,informationbindings,featurebindings"
-                }, true)) {
+                IEnumerable<ArchiveBindingOwner> ReadOwners() {
+                    // Archive GetObjectID() can be -1, and a feature can have multiple
+                    // versions. Consume the full row directly instead of re-querying by OID.
+                    using var cursor = archive.Search(new QueryFilter {
+                        WhereClause = $"UPPER(ps) = 'S-101' AND {endpointPredicate}"
+                    }, true);
                     while (cursor.MoveNext()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         var row = cursor.Current;
                         rowsRead++;
                         var interval = ReadAssociatedInterval(row, connectionName, className);
-                        if (comparisonBoundsUtc is not null && !comparisonBoundsUtc.Any(interval.Contains))
-                            continue;
-                        IReadOnlyCollection<ArchiveBindingTarget> referenced;
-                        try {
-                            referenced = index.FindTargets(interval, ReadOptionalString(row, "informationbindings"), ReadOptionalString(row, "featurebindings"), includeIntermediate: retainedOwners is not null);
-                        }
-                        catch (InvalidOperationException exception) {
-                            throw new InvalidOperationException($"DPC cannot read incoming bindings: connection '{connectionName}', class '{className}', archive owner {row.GetObjectID()}. The watermark and candidates were preserved.", exception);
-                        }
-                        if (referenced.Count > 0)
-                            owners.Add(row.GetObjectID(), (interval, referenced));
-                    }
-                }
-                foreach (var batch in owners.Keys.Chunk(256)) {
-                    using var cursor = archive.Search(new QueryFilter {
-                        WhereClause = $"{oidField} IN ({string.Join(',', batch)})"
-                    }, true);
-                    var found = new HashSet<long>();
-                    while (cursor.MoveNext()) {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        var row = cursor.Current;
-                        found.Add(row.GetObjectID());
-                        var owner = owners[row.GetObjectID()];
-                        var id = ReadFeatureId(row);
                         IReadOnlyList<string> MatchOwner() {
+                            var id = ReadFeatureId(row);
                             if (row is not ArcGIS.Core.Data.Feature feature || feature.GetShape() is not { IsEmpty: false } shape)
                                 throw new InvalidOperationException($"DPC incoming binding owner '{id}' has no geometry: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
                             var code = ReadOptionalString(row, "code");
@@ -1056,16 +1032,15 @@ namespace S100FC.ProductCatalogue
                             var scale = isCoverage ? ReadCoverageScale(row) : ReadCompilationScale(row, id);
                             return FindAffectedProductsAtScale(shape, scale, products, isCoverage ? shape : null, id, code, className);
                         }
-                        if (retainedOwners is not null)
-                            retainedOwners.Add(new(owner.Interval, owner.Targets, MatchOwner()));
-                        else
-                            index.AddOwner(owner.Interval, owner.Targets, MatchOwner);
+                        yield return new(interval, ReadOptionalString(row, "informationbindings"), ReadOptionalString(row, "featurebindings"), MatchOwner,
+                            $"connection '{connectionName}', class '{className}', archive cursor position {rowsRead}");
                     }
-                    if (found.Count != batch.Length)
-                        throw new InvalidOperationException($"DPC could not re-read all incoming binding owners: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
                 }
+                Action<ArchiveInterval, IReadOnlyCollection<ArchiveBindingTarget>, IReadOnlyList<string>>? retainOwner = retainedOwners is null
+                    ? null : (interval, referenced, matchedProducts) => retainedOwners.Add(new(interval, referenced, matchedProducts));
+                var matchedOwners = ArchiveBindingOwnerResolver.Resolve(index, ReadOwners(), cancellationToken, retainOwner, comparisonBoundsUtc);
                 Logger.Information("DPC incoming bindings resolved. Connection: {Connection}. Table: {Table}. BindingRowsRead: {RowsRead}. MatchingOwnerVersions: {MatchingOwners}. AffectedProducts: {AffectedProducts}.",
-                    connectionName, className, rowsRead, owners.Count, index.Affected.Count);
+                    connectionName, className, rowsRead, matchedOwners, index.Affected.Count);
             }
             return index;
         }

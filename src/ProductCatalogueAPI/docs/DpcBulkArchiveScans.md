@@ -40,7 +40,7 @@ Validation on the production Windows/.NET 10/ArcGIS toolchain:
 ```powershell
 dotnet restore Nexus.slnx
 dotnet build Nexus.slnx -c Debug -p:Platform=x64
-dotnet test tests/TestProductManager/TestProductManager.csproj -c Debug -p:Platform=x64 --no-build --filter "FullyQualifiedName~DpcArchiveHistoryTests|FullyQualifiedName~DpcRunAsyncTests|FullyQualifiedName~DpcImportBaselineTests"
+dotnet test tests/TestProductManager/TestProductManager.csproj -c Debug -p:Platform=x64 --no-build --filter "FullyQualifiedName~ArchiveBindingOwnerResolverTests|FullyQualifiedName~DpcArchiveHistoryTests|FullyQualifiedName~DpcRunAsyncTests|FullyQualifiedName~DpcImportBaselineTests"
 ```
 
 The current solution links the regression sources under tests/TestProductCatalogue
@@ -50,3 +50,21 @@ at most one reusable-history read, and subsequent source comparison messages
 without further archive-table passes. Ordinary single edits, bulk edits,
 hold/release, failed snapshots and changes arriving during a scan should retain
 their existing paired-export behavior.
+
+
+## Incoming archive-owner identity
+
+Incoming binding resolution consumes each matching spatial archive version in
+one sequential cursor pass per class. It does not key or batch-fetch owners by
+Row.GetObjectID(), a feature GUID, or an assumed archive-specific field. Multiple
+versions and unavailable/repeated SDK ObjectIDs therefore remain independent.
+This removes the duplicate-key -1 failure before exports and checkpoint updates.
+
+Full owner rows are requested so geometry and scale can be consumed while the
+recycling cursor is on that row. Geometry matching runs only for versions that
+reference changed targets at required endpoints. This can transfer more data
+than the former lightweight binding scan, but removes its subsequent batch
+queries and its unsupported identity assumption. No native row or row callback
+is retained after cursor advancement; reusable history receives managed matches.
+Malformed relevant bindings, invalid geometry/scale and cancellation still fail
+without advancing the scan checkpoint. Existing scan reuse remains enabled.
