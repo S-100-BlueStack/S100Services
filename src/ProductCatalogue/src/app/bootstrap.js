@@ -131,7 +131,6 @@ async function bootstrapAnalyzeRoute(route) {
     await waitForCalcite();
 
     setLoaderText("Loading analysis...");
-    setLoaderProgress(null);
     const app = await initAnalyzePage({
       datasetNames: route.datasetNames,
     });

@@ -41,3 +41,24 @@ Test against the built frontend from this exact candidate, ideally with **Networ
 ## Verification boundaries
 
 Node tests cover success, visible layer readiness, idle-window restart, timeout, cancellation, failure and cleanup. They do **not** establish ArcGIS rendering behavior, network request timing, live services or complete page readiness. The developer runs `npm run format` and `npm run check` in the actual repository and performs the browser tests before committing.
+
+## Analyze direct-route follow-up (2026-11-09 candidate)
+
+The separate Analyze bootstrap loader previously disappeared immediately after
+`view.when()`, before the explicit URL Products finished resolving. The Analyze data
+session then displayed a second delayed loading bar. Direct navigation now continues
+one visible loader from bootstrap through initial Product, layer and map readiness.
+The existing `waitForInitialMapReadiness()` helper is reused with Analyze's visible
+layers; a 500 ms idle/stationary window is required, with a bounded 60-second fallback.
+Only verified readiness shows `Analyze ready`; an incomplete display raises a notice.
+The Product catalogue picker remains independently loaded, as established in DSA-08.
+
+Interactive Analyze Product changes keep their existing compact sidebar loading only.
+No global loading bar is started by adding, removing, enabling, disabling or submitting
+Products after the first route load. The established load generation and cancellation
+rules remain authoritative. Analyze's read-only popup correction is documented in
+[`src/features/analyze/README.md`](../src/features/analyze/README.md).
+
+This follow-up needs a fresh-cache browser check on the accepted frontend, including
+cold navigation with two Products, LayerView readiness, a later Product change, Popup
+metadata, focus/Escape, and no regression of Main Map popup actions.

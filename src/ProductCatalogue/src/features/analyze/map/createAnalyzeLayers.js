@@ -33,7 +33,34 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
         key: member.memberKey,
         datasetName: member.datasetName,
         status: member.status,
+        ...(member.errorMessage != null ? { errorMessage: member.errorMessage } : {}),
       })),
+    };
+    // The shared popup table reads source-member details from the graphic.
+    // Keep these display fields tied to validated Analyze member identities;
+    // they do not grant any package mutation capability.
+    const members = product.workUnit.members ?? [];
+    entry.feature.attributes.workUnitMetadata = {
+      members: Object.fromEntries(
+        product.members
+          .filter((member) =>
+            members.some(
+              (declared) =>
+                declared.key === member.memberKey &&
+                declared.datasetName?.trim().toUpperCase() ===
+                  member.datasetName?.trim().toUpperCase()
+            )
+          )
+          .map((member) => [
+            member.memberKey,
+            {
+              datasetName: member.datasetName,
+              edition: member.edition,
+              update: member.update,
+              issueDate: member.issueDate,
+            },
+          ])
+      ),
     };
     addGeometryDefinition(definitions, [entry], {
       id: `analyze-package:${product.workUnit.identityKey}`,
@@ -63,8 +90,23 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
 
   const layers = [];
   try {
-    for (const definition of definitions) {
-      const layer = await createLayer(map, definition, { onProgress });
+    for (const [index, definition] of definitions.entries()) {
+      // Aggregate each layer's progress into the single initial loading session.
+      // Reporting raw per-layer fractions would make the bar jump backwards.
+      const reportLayerProgress = onProgress
+        ? ({ progress, stage, layerTitle }) =>
+            onProgress({
+              progress:
+                (index + Math.min(1, Math.max(0, Number(progress) || 0))) / definitions.length,
+              stage,
+              layerTitle,
+            })
+        : undefined;
+      const layer = await createLayer(
+        map,
+        { ...definition, popupReadOnly: true },
+        { onProgress: reportLayerProgress }
+      );
       if (layer) {
         layer.appAnalyzeWorkUnitKey = definition.appAnalyzeWorkUnitKey ?? null;
         registerAnalyzeGraphicProductContexts(layer, definition.productContextByIdentityKey);

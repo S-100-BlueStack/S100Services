@@ -12,7 +12,8 @@ import {
   getProductOperationState,
   onProductOperationStateChanged,
 } from "../../products/state/productOperationState.js";
-import { hideLoader } from "../../../shared/ui/loader.js";
+import { watch } from "@arcgis/core/core/reactiveUtils.js";
+import { waitForInitialMapReadiness } from "../../../app/initialMapReadiness.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import {
   addAnalyzeDatasetItem,
@@ -47,6 +48,7 @@ export async function initAnalyzePage({ datasetNames }) {
   let productCatalogRequestId = 0;
   let lookupsLoaded = false;
   let activeLoaderProgress = null;
+  let activeInitialReadiness = null;
   let cleanupViewPadding = null;
   let cleanupKeyboardClose = null;
   let freshnessMonitor = null;
@@ -171,8 +173,15 @@ export async function initAnalyzePage({ datasetNames }) {
   };
   const loadAnalyzeDatasetItems = async (
     nextDatasetItems,
-    { updateUrl = true, showLoader = true, skipCatalogValidation = false } = {}
+    {
+      updateUrl = true,
+      showLoader = false,
+      initialLoad = false,
+      skipCatalogValidation = false,
+    } = {}
   ) => {
+    activeInitialReadiness?.abort();
+    activeInitialReadiness = null;
     const requestId = ++loadRequestId;
     cancelPendingPackageReplacements();
     activeWorkspaceLoadRequestId = requestId;
@@ -242,7 +251,7 @@ export async function initAnalyzePage({ datasetNames }) {
     }
 
     const loaderProgress = showLoader
-      ? createAnalyzeLoaderProgress()
+      ? createAnalyzeLoaderProgress({ initialLoad })
       : createSilentAnalyzeLoaderProgress();
 
     if (showLoader) {
@@ -330,7 +339,46 @@ export async function initAnalyzePage({ datasetNames }) {
           "The product metadata was loaded, but the backend response did not include AOI geometry."
         );
       }
-      await loaderProgress.complete({ text: "Analyze ready" });
+      let completionText = "Analyze ready";
+      if (initialLoad) {
+        // The first Analyze navigation keeps bootstrap's one global loader until
+        // the selected Product layers have completed their initial map rendering.
+        loaderProgress.updateProgressStage({
+          preserveProgress: true,
+          text: "Finishing initial analysis map...",
+        });
+        const controller = new AbortController();
+        activeInitialReadiness = controller;
+        const readiness = await waitForInitialMapReadiness({
+          view,
+          layers,
+          signal: controller.signal,
+          observeUpdating: (onChange, layerViews) =>
+            watch(
+              () => [
+                view.updating,
+                view.stationary,
+                ...layerViews.map((layerView) => layerView.updating),
+              ],
+              onChange
+            ),
+        });
+        if (activeInitialReadiness === controller) activeInitialReadiness = null;
+        if (requestId !== loadRequestId) return;
+        if (readiness.status !== "ready") {
+          completionText = "Analyze map incomplete";
+          console.warn("[Analyze readiness] Initial display was not fully ready.", readiness);
+          noticeWarning(
+            readiness.status === "timeout"
+              ? "Analyze map still rendering"
+              : "Analyze map incomplete",
+            readiness.status === "timeout"
+              ? "The Analyze map did not settle within 60 seconds. Some content may continue rendering."
+              : "The initial Analyze map display could not be verified as ready. Some content may be unavailable."
+          );
+        }
+      }
+      await loaderProgress.complete({ text: completionText });
     } catch (error) {
       if (requestId === loadRequestId) {
         loaderProgress.fail({ text: "Failed to load analyze data" });
@@ -559,10 +607,8 @@ export async function initAnalyzePage({ datasetNames }) {
   cleanupViewPadding = applyAnalyzeViewPadding(view);
   cleanupKeyboardClose = bindAnalyzeKeyboardClose(view, basemapExperience);
   await view.when();
-  // The bootstrap loader covers initial page and map setup. Hide it before
-  // data loading starts so the delayed Analyze loader can decide whether a
-  // loader is needed at all.
-  hideLoader();
+  // Bootstrap owns the visible loader for direct navigation. Its Product-load
+  // session continues that same progress bar until the first map display is ready.
 
   renderAnalyzeSidebar({
     datasetItems,
@@ -575,6 +621,8 @@ export async function initAnalyzePage({ datasetNames }) {
   void loadProductCatalogForPicker();
   await loadAnalyzeDatasetItems(datasetItems, {
     updateUrl: false,
+    showLoader: true,
+    initialLoad: true,
     skipCatalogValidation: true,
   });
   freshnessMonitor.start();
@@ -596,6 +644,8 @@ export async function initAnalyzePage({ datasetNames }) {
     },
     loadAnalyzeDatasetNames,
     destroy() {
+      activeInitialReadiness?.abort();
+      activeInitialReadiness = null;
       loadRequestId += 1;
       targetedRefreshRequestId += 1;
       cancelPendingPackageReplacements();
@@ -701,7 +751,7 @@ export async function initAnalyzePage({ datasetNames }) {
   }
 }
 
-function createAnalyzeLoaderProgress() {
+function createAnalyzeLoaderProgress({ initialLoad = false } = {}) {
   return createLoaderProgressSession({
     loadStartProgress: 0.04,
     loadEndProgress: 0.2,
@@ -710,8 +760,8 @@ function createAnalyzeLoaderProgress() {
     renderEndProgress: 0.96,
     simulatedProgressIntervalMs: 350,
     simulatedProgressStep: 0.014,
-    showLoaderOnStart: true,
-    showLoaderDelayMs: 350,
+    showLoaderOnStart: !initialLoad,
+    showLoaderDelayMs: initialLoad ? 0 : 350,
     completionHoldMs: 300,
   });
 }
@@ -723,6 +773,7 @@ function createSilentAnalyzeLoaderProgress() {
     markDataReceived: noop,
     startRendering: noop,
     handleRenderProgress: noop,
+    updateProgressStage: noop,
     complete: noop,
     fail: noop,
     cleanup: noop,

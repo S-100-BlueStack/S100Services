@@ -137,6 +137,9 @@ async function harness(
     closes: 0,
     failRegister: false,
     registrationGate: null,
+    loaderSessions: [],
+    loaderEvents: [],
+    readinessCalls: [],
   };
   const map = {
     layers: [],
@@ -231,16 +234,25 @@ async function harness(
     },
     onProductOperationStateChanged: () => noop,
     getProductOperationState: () => ({ running: false }),
-    hideLoader: noop,
-    createLoaderProgressSession: () => ({
-      startLoading: noop,
-      markDataReceived: noop,
-      startRendering: noop,
-      handleRenderProgress: noop,
-      complete: noop,
-      fail: noop,
-      cleanup: noop,
-    }),
+    waitForInitialMapReadiness: async ({ layers }) => {
+      state.readinessCalls.push(layers);
+      state.loaderEvents.push("readiness");
+      return { status: "ready" };
+    },
+    watch: () => ({ remove: noop }),
+    createLoaderProgressSession: (options) => {
+      state.loaderSessions.push(options);
+      return {
+        startLoading: () => state.loaderEvents.push("start"),
+        markDataReceived: noop,
+        startRendering: noop,
+        handleRenderProgress: noop,
+        updateProgressStage: ({ text }) => state.loaderEvents.push(text),
+        complete: () => state.loaderEvents.push("complete"),
+        fail: noop,
+        cleanup: noop,
+      };
+    },
     resolveAnalyzeWorkUnits: async (requested) => {
       state.resolutions++;
       const result = [];
@@ -815,4 +827,31 @@ test("new Analyze selection appears in the sidebar before Product resolution or 
     h.page.products.map((product) => product.datasetName),
     [ordinaryName]
   );
+});
+
+test("direct Analyze navigation keeps one bootstrap loader until initial rendering completes", async (t) => {
+  const h = await harness(t, names);
+  assert.equal(h.state.loaderSessions.length, 1);
+  assert.equal(h.state.loaderSessions[0].showLoaderOnStart, false);
+  assert.equal(h.state.readinessCalls.length, 1);
+  assert.equal(h.state.readinessCalls[0].length, 1);
+  const readinessIndex = h.state.loaderEvents.indexOf("readiness");
+  assert.ok(readinessIndex > h.state.loaderEvents.indexOf("Finishing initial analysis map..."));
+  assert.ok(h.state.loaderEvents.indexOf("complete") > readinessIndex);
+
+  await h.page.loadAnalyzeDatasetNames([ordinaryName]);
+  await h.event("pc-analyze-dataset-submit", { datasetNames: names });
+  assert.equal(
+    h.state.loaderSessions.length,
+    1,
+    "Later Product selection must use sidebar loading"
+  );
+  assert.equal(h.state.readinessCalls.length, 1, "Only direct navigation waits for map readiness");
+});
+
+test("direct Analyze navigation waits for all initial package and ordinary layers", async (t) => {
+  const h = await harness(t, [names[0], ordinaryName]);
+  assert.equal(h.state.readinessCalls.length, 1);
+  assert.equal(h.state.readinessCalls[0].length, 2);
+  assert.equal(h.state.loaderSessions.length, 1);
 });

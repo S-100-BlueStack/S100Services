@@ -281,3 +281,26 @@ publication and superseded generations, without claiming a transactional backend
 ## FI-043 selection visibility
 
 Adding, removing or enabling a Product updates the Analyze Product composition list before asynchronous source-aware resolution and content loading complete. The existing load generation remains the only authority for canonical identities, geometry and backend results. Content has an independent loading state and cannot be represented as loaded prematurely. The Product picker retains usable focus after a selection-triggered sidebar render.
+
+## Analyze initial loading and read-only map popups
+
+A direct `/Analyze?Datasets=...` navigation keeps the bootstrap loader visible throughout
+source-aware Product resolution, Product content/History loading, Analyze GraphicsLayer
+construction, and the first stable map display. The initial load continues the same
+progress bar instead of hiding the bootstrap bar and showing a second one. The final
+map-rendering phase preserves the last data-owned progress value; it does not invent a
+render percentage. The existing 500 ms stable-frame test, 60-second bound, and 300 ms
+completion hold are shared with Main Map. An incomplete first display raises a warning.
+
+Subsequent Product additions, removals, toggles, refreshes, route changes, and picker
+submissions keep their established sidebar-owned loading state and do not start the
+global startup loader. The lightweight Product catalogue remains independent of explicit
+URL Product resolution and does not gate route publication. Request generations own
+publication, and a superseded first-display readiness check is aborted.
+
+Analyze GraphicsLayers opt into a read-only variant of the shared Product popup table.
+The standard package action session requires a live source-owned AOI snapshot and must
+not run against Analyze's reconstructed workspace Graphics. The read-only presentation
+shows the representative Product, validated package-member identity/edition/update,
+backend status, and any member error details already loaded for Analyze. It does not
+fetch new Product detail, authorize package mutations, or change Main Map popup behavior.

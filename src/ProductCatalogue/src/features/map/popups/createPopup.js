@@ -53,7 +53,7 @@ const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "exportMetadata",
 ]);
 
-export function createPopup() {
+export function createPopup({ readOnly = false } = {}) {
   return {
     title: (event) => {
       return getPopupTitle(event.graphic?.attributes);
@@ -61,7 +61,9 @@ export function createPopup() {
     content: (event) => {
       const graphic = event.graphic;
       const container = document.createElement("div");
-      container.className = "popup-container popup-container--with-action-bar";
+      container.className = readOnly
+        ? "popup-container"
+        : "popup-container popup-container--with-action-bar";
       let currentAttributes = {
         ...(graphic.attributes ?? {}),
       };
@@ -72,6 +74,19 @@ export function createPopup() {
         graphic,
         attributes: currentAttributes,
       });
+      if (readOnly) {
+        // Analyze owns read-only metadata, not the source-authorized action session.
+        // The package action snapshot requires a live AOI source and would clear
+        // valid Analyze popup content when that source is intentionally absent.
+        renderPopupContent(container, currentAttributes, {
+          graphic,
+          productContext,
+          errorDetails,
+          readOnly: true,
+        });
+        cleanupWhenDisconnected(container, () => errorDetails.destroy());
+        return container;
+      }
       const popupDatasetName =
         productContext?.datasetName ??
         readDatasetName(currentAttributes) ??
@@ -311,9 +326,26 @@ export function createPopup() {
 function renderPopupContent(
   container,
   attributes,
-  { graphic, productContext, refreshAndRender, errorDetails, packageActions }
+  { graphic, productContext, refreshAndRender, errorDetails, packageActions, readOnly = false }
 ) {
   const section = getOrCreatePopupSection(container);
+  if (readOnly) {
+    // Reuse the existing Product table, but never create mutation controls or
+    // initiate Product refresh requests from an Analyze-only graphic.
+    section.replaceChildren();
+    if (shouldRenderProductContent(attributes)) {
+      renderProductRows(
+        section,
+        createPopupProductMetadataColumns(attributes, productContext),
+        errorDetails,
+        attributes,
+        productContext
+      );
+    } else {
+      renderGenericRows(section, attributes);
+    }
+    return;
+  }
   const actionBar = getDirectChildByClass(container, "popup-action-bar");
 
   if (actionBar) {
