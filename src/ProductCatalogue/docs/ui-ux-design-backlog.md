@@ -25,6 +25,20 @@ The demo branch prioritizes the accepted application, targeted regression fixes 
 | **FI-020 / FI-023** | Backend-dependent                                                      | Explicit cross-source Product relationships and authoritative mutation capabilities. No inferred relationships, candidate state or backend dispatch.                                                                                                                   |
 | **FI-018**          | Future deployment review                                               | Third-party deployability, environment assumptions, secrets, links, branding and licenses; not a demo UI redesign.                                                                                                                                                     |
 
+## PC-UX-02 — focus and reduced-motion consistency (candidate)
+
+The current UI-polish candidate establishes the shared `--pc-focus-ring` token for
+both Calcite themes. Native Overlap Picker buttons and the Data Sources Reset action
+retain their pointer-hover feedback while showing a distinct keyboard-only focus
+ring. Filter and Analyze disclosure indicators keep their existing transitions
+except when the system requests reduced motion.
+
+This is a **visual/accessibility-only candidate**, not a new feature or completed
+browser acceptance. Confirm both themes, Tab/Shift+Tab, Enter/Escape,
+`prefers-reduced-motion`, and 100%/125%/150% browser zoom before marking it accepted.
+Product selection, source enabling/reset, disclosure state, loading, MapView and
+all async/request boundaries are unchanged.
+
 ## Accepted interaction boundaries
 
 The details below are preservation constraints. A new task must use current code and feature tests from its explicit commit before modifying them.

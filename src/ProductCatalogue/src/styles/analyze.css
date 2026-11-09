@@ -647,3 +647,10 @@ body.pc-analyze-route {
 .analyze-package-member + .analyze-package-member {
   margin-top: 0.375rem;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .analyze-dataset-list__summary::before,
+  .analyze-product-card__summary::before {
+    transition: none;
+  }
+}

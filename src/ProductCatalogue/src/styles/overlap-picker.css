@@ -32,7 +32,12 @@
 .overlap-picker__item:hover,
 .overlap-picker__item:focus-visible {
   background: var(--pc-button-secondary-bg-hover);
-  outline: none;
+}
+
+.overlap-picker__item:focus-visible {
+  /* Keep the ring inside the popup item so the ArcGIS popup cannot clip it. */
+  outline: 2px solid var(--pc-focus-ring);
+  outline-offset: -2px;
 }
 
 .overlap-picker__content {

@@ -5,6 +5,7 @@
    ========================================================= */
 
 html.calcite-mode-light {
+  --pc-focus-ring: var(--calcite-color-focus, var(--calcite-color-brand, #0079c1));
   --pc-surface: var(--calcite-color-surface-1);
   --pc-surface-alt: var(--calcite-color-surface-2);
   --pc-border: var(--calcite-color-border-1);
@@ -33,6 +34,7 @@ html.calcite-mode-light {
 }
 
 html.calcite-mode-dark {
+  --pc-focus-ring: var(--calcite-color-focus, var(--calcite-color-brand, #0079c1));
   --pc-surface: var(--calcite-color-surface-1);
   --pc-surface-alt: var(--calcite-color-surface-2);
   --pc-border: var(--calcite-color-border-1);

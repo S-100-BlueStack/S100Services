@@ -101,7 +101,11 @@
 .pc-data-source-panel__footer button:focus-visible {
   color: var(--calcite-color-brand-hover, #00619b);
   text-decoration: underline;
-  outline: none;
+}
+
+.pc-data-source-panel__footer button:focus-visible {
+  outline: 2px solid var(--pc-focus-ring);
+  outline-offset: 3px;
 }
 
 @media (max-width: 480px) {

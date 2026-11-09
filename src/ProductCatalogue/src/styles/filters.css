@@ -384,3 +384,9 @@
 .pc-filter-option--empty .pc-filter-option__count {
   color: var(--pc-text-muted);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-filter-field summary::after {
+    transition: none;
+  }
+}
