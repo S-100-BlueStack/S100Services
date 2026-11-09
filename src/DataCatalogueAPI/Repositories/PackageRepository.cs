@@ -136,6 +136,12 @@ namespace DataCatalague.Api.Repositories
             cancellationToken.ThrowIfCancellationRequested();
             var geometry = ParseQueryGeometry(json);
             using var connector = this.createGeodatabase();
+            return this.FindIntersectingAois(geometry, connector, cancellationToken);
+        }
+
+        /// <summary>Uses an existing ArcGIS read scope for spatial queries and subsequent page hydration.</summary>
+        private Dictionary<string, HashSet<string>> FindIntersectingAois(Geometry geometry, Geodatabase connector, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
             using var featureClass = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
             using var definition = featureClass.GetDefinition();
             var spatialReference = definition.GetSpatialReference();

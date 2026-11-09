@@ -166,19 +166,55 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
         return new(WorkspaceResponse.FromState(workspace), json);
     }
 
-    /// <summary>Returns a page of bound packages whose rectangular AOIs intersect this workspace.</summary>
+    /// <summary>Returns a page of bound packages whose current rectangular AOIs intersect this workspace.</summary>
     public async Task<PagedResponse<WorkspacePackageResponse>> GetPackagesAsync(string pipelineId, string workspaceId, int page, int pageSize, CancellationToken cancellationToken) {
         if (page < 1 || pageSize is < 1 or > PackageRepository.MaximumPageSize) { throw new InvalidDataException("Page must be positive and pageSize must be from 1 to 200."); }
-        var workspace = FindWorkspace(await GetPipelineAsync(pipelineId, cancellationToken), workspaceId);
-        return await dispatcher.ExecuteAsync(() => {
-            var polygon = coverage.GetWorkspaceGeometry(workspace.GeometryRef, cancellationToken);
-            var candidates = packages.FindWorkspacePackages(pipelineId, polygon, cancellationToken);
-            var offset = ((long)page - 1) * pageSize;
-            IReadOnlyList<WorkspacePackageResponse> items = offset >= candidates.Count ? [] : candidates.Skip((int)offset).Take(pageSize)
-                .Select(package => new WorkspacePackageResponse(package.Id!.Value, package.MetaData?.ShortId, JsonSerializer.Deserialize<JsonElement>(packages.ReadPackageAoi(package, cancellationToken)))).ToArray();
+        cancellationToken.ThrowIfCancellationRequested();
+        var total = Stopwatch.StartNew();
+        var eventStateMs = 0.0;
+        var queueWaitMs = 0.0;
+        var workspaceGeometryMs = 0.0;
+        var spatialQueryMs = 0.0;
+        var packageHydrationMs = 0.0;
+        var responseBuildMs = 0.0;
+        var matchCount = 0;
+        var returnedCount = 0;
+        var outcome = "Failed";
+        try {
+            var workspace = FindWorkspace(await GetPipelineAsync(pipelineId, cancellationToken), workspaceId);
+            eventStateMs = total.Elapsed.TotalMilliseconds;
+            var queuedAt = Stopwatch.GetTimestamp();
+            var pageData = await dispatcher.ExecuteAsync(() => {
+                queueWaitMs = Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds;
+                cancellationToken.ThrowIfCancellationRequested();
+                var geometryTimer = Stopwatch.StartNew();
+                Polygon polygon;
+                try { polygon = coverage.GetWorkspaceGeometry(workspace.GeometryRef, cancellationToken); }
+                finally { workspaceGeometryMs = geometryTimer.Elapsed.TotalMilliseconds; }
+                return packages.ReadWorkspacePackagePage(pipelineId, polygon, page, pageSize, cancellationToken, out spatialQueryMs, out packageHydrationMs);
+            });
+            matchCount = pageData.TotalCount;
+            var responseTimer = Stopwatch.StartNew();
+            IReadOnlyList<WorkspacePackageResponse> items;
+            try {
+                items = pageData.Items.Select(item => new WorkspacePackageResponse(
+                    item.PackageId, item.ShortId, JsonSerializer.Deserialize<JsonElement>(item.AoiJson))).ToArray();
+            }
+            finally { responseBuildMs = responseTimer.Elapsed.TotalMilliseconds; }
             cancellationToken.ThrowIfCancellationRequested();
-            return new PagedResponse<WorkspacePackageResponse> { Items = items, Page = page, PageSize = pageSize, TotalCount = candidates.Count };
-        });
+            returnedCount = items.Count;
+            outcome = "Succeeded";
+            return new PagedResponse<WorkspacePackageResponse> { Items = items, Page = page, PageSize = pageSize, TotalCount = matchCount };
+        }
+        catch (OperationCanceledException) {
+            outcome = "Canceled";
+            throw;
+        }
+        finally {
+            logger.LogInformation(
+                "Workspace packages read {Outcome}. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, Page: {Page}, PageSize: {PageSize}, Matches: {MatchCount}, Returned: {ReturnedCount}, EventStateMs: {EventStateMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceGeometryMs: {WorkspaceGeometryMs}, SpatialQueryMs: {SpatialQueryMs}, PackageHydrationMs: {PackageHydrationMs}, ResponseBuildMs: {ResponseBuildMs}, TotalMs: {TotalMs}.",
+                outcome, pipelineId, workspaceId, page, pageSize, matchCount, returnedCount, eventStateMs, queueWaitMs, workspaceGeometryMs, spatialQueryMs, packageHydrationMs, responseBuildMs, total.Elapsed.TotalMilliseconds);
+        }
     }
 
     private static Workspace FindWorkspace(PipelineState pipeline, string workspaceId) {

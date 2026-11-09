@@ -115,6 +115,23 @@ compare repeated warm requests, not one cold request. See
 [DC_BIND_PERF_01_VALIDATION.md](docs/DC_BIND_PERF_01_VALIDATION.md) for tests,
 limits, and baseline provenance.
 
+## Workspace Packages read performance
+
+`GET /api/v1/pipelines/{pipelineId}/workspaces/{workspaceId}/packages`
+retains its current Esri JSON response, authorization, spatial membership, Pipeline
+scoping, pagination and ordinal Package ordering. The spatial AOI query and the
+returned page's AOI geometry reads share one request-scoped Package geodatabase
+connection. Workspace coverage still uses the separate Dispatcher geodatabase
+configuration; there is no cross-request cache or geometry contract change.
+
+`Workspace packages read` logs event state, ArcGIS queue wait, Workspace geometry,
+Package spatial query, Package AOI hydration, DTO parsing and full service elapsed
+time. `Workspace packages result executed` logs MVC result execution (including
+JSON serialization and response writing). The latter is **not** a serializer-only
+benchmark. Concurrent frontend Workspace reads still contend for one STA ArcGIS
+worker. See [DC_PERF_02_VALIDATION.md](docs/DC_PERF_02_VALIDATION.md) for precise
+measurement definitions, regression tests and a repeatable local benchmark.
+
 ## Package search and pagination
 
 `GET /api/v1/packages` keeps the existing response envelope and accepts:

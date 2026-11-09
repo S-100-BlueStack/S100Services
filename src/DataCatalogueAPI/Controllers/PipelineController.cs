@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
 using DataCatalague.Api.Services;
+using DataCatalague.Api.Diagnostics;
 using System.ComponentModel.DataAnnotations;
 
 namespace DataCatalague.Api.Controllers.V1
@@ -152,6 +153,7 @@ namespace DataCatalague.Api.Controllers.V1
 
             /// <summary>Lists bound packages and their simple Esri JSON AOIs intersecting this workspace.</summary>
             [HttpGet("{id}/workspaces/{workspace}/packages")]
+            [TypeFilter(typeof(WorkspacePackagesResultTimingFilter))]
             [ProducesResponseType<PagedResponse<WorkspacePackageResponse>>(StatusCodes.Status200OK)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

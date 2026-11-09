@@ -130,7 +130,7 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         var package = await this.PackageAsync();
         var first = await this.PipelineAsync();
         var intersecting = await this.WorkspaceAsync(first.Id, Geometry, "Intersecting");
-        await this.WorkspaceAsync(first.Id, DistantGeometry, "Elsewhere");
+        var distantWorkspace = await this.WorkspaceAsync(first.Id, DistantGeometry, "Elsewhere");
         var alsoIntersecting = await this.WorkspaceAsync(first.Id, Geometry, "Intersecting again");
         var second = await this.PipelineAsync();
         var secondWorkspace = await this.WorkspaceAsync(second.Id, DistantGeometry, "Second pipeline area");
@@ -149,11 +149,12 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         Assert.Empty(before.Single(binding => binding.PipelineId == second.Id).Workspaces);
         Assert.Empty(before.Single(binding => binding.PipelineId == emptyPipeline.Id).Workspaces);
 
-        // A replaced AOI must affect the next read without a stale intersection cache.
-        using var replaced = await this.Client.PutAsJsonAsync($"/api/v1/packages/{package.Id}/geometry", new { aoi = DistantGeometry });
-        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        // Moving the AOI must exclude historical matches and select only the distant Workspace
+        // in each bound Pipeline, while leaving the Pipeline without Workspaces empty.
+        using var replaced = await this.Client.PutAsJsonAsync($"/api/v1/packages/{package.Id}/geometry", new { aoi = DistantGeometry, points = DistantDetailPoints });
+        await AssertGeometryReplacementSucceededAsync(replaced);
         var after = (await this.Client.GetFromJsonAsync<BindingResponse[]>(path))!;
-        Assert.Empty(after.Single(binding => binding.PipelineId == first.Id).Workspaces);
+        Assert.Equal(new[] { distantWorkspace.Id }, after.Single(binding => binding.PipelineId == first.Id).Workspaces.Select(workspace => workspace.Id));
         Assert.Equal(new[] { secondWorkspace.Id }, after.Single(binding => binding.PipelineId == second.Id).Workspaces.Select(workspace => workspace.Id));
         Assert.Empty(after.Single(binding => binding.PipelineId == emptyPipeline.Id).Workspaces);
     }
@@ -169,6 +170,62 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetIntersectionsAsync(package.Id, pipeline.Id, cancelled.Token));
+    }
+
+    [Fact]
+    public async Task Workspace_packages_recalculate_membership_after_AOI_replacement_and_preserve_pipeline_scope() {
+        await this.CategoryAsync();
+        var first = await this.PipelineAsync();
+        var second = await this.PipelineAsync();
+        var firstWorkspace = await this.WorkspaceAsync(first.Id);
+        var secondWorkspace = await this.WorkspaceAsync(second.Id);
+        var firstPackage = await this.PackageAsync();
+        var secondPackage = await this.PackageAsync();
+        await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = firstPackage.Id, pipelineId = first.Id });
+        await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = secondPackage.Id, pipelineId = second.Id });
+
+        var firstPath = $"/api/v1/pipelines/{first.Id}/workspaces/{firstWorkspace.Id}/packages";
+        var secondPath = $"/api/v1/pipelines/{second.Id}/workspaces/{secondWorkspace.Id}/packages";
+        // The subscription projection is asynchronous; wait for the created Packages to be visible.
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPath))!.TotalCount == 1
+            && (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(secondPath))!.TotalCount == 1);
+        var before = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPath))!;
+        Assert.Equal(firstPackage.Id, Assert.Single(before.Items).PackageId);
+        Assert.Equal(1, before.TotalCount);
+        Assert.Equal(secondPackage.Id, Assert.Single((await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(secondPath))!.Items).PackageId);
+        Assert.Equal(HttpStatusCode.NotFound, (await this.Client.GetAsync($"/api/v1/pipelines/{second.Id}/workspaces/{firstWorkspace.Id}/packages")).StatusCode);
+
+        // The new AOI is derived from distant detail points, not from any retained historical row.
+        using var replaced = await this.Client.PutAsJsonAsync($"/api/v1/packages/{firstPackage.Id}/geometry", new { aoi = DistantGeometry, points = DistantDetailPoints });
+        await AssertGeometryReplacementSucceededAsync(replaced);
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPath))!.TotalCount == 0);
+        var distant = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPath))!;
+        Assert.Equal(0, distant.TotalCount);
+        Assert.Empty(distant.Items);
+        Assert.Equal(secondPackage.Id, Assert.Single((await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(secondPath))!.Items).PackageId);
+
+        using var restored = await this.Client.PutAsJsonAsync($"/api/v1/packages/{firstPackage.Id}/geometry", new { aoi = Geometry, points = OriginalDetailPoints });
+        await AssertGeometryReplacementSucceededAsync(restored);
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPath))!.TotalCount == 1);
+        var current = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPath))!;
+        var item = Assert.Single(current.Items);
+        Assert.Equal(firstPackage.Id, item.PackageId);
+        var geometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{firstPackage.Id}/geometry"))!;
+        Assert.Equal(geometry.Aoi!.Value.GetRawText(), item.Aoi.GetRawText());
+    }
+
+    [Fact]
+    public async Task Cancelled_workspace_packages_read_does_not_enter_the_ArcGIS_queue() {
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        using var scope = this.App.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetPackagesAsync(pipeline.Id, workspace.Id, 1, 200, cancelled.Token));
     }
 
     [Fact]
@@ -204,5 +261,15 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
             var result = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path + "?pageSize=1"))!;
             return result.Items.Count == 1 && result.Items[0].Aoi.GetRawText() == current.Aoi!.Value.GetRawText();
         });
+    }
+
+    private const string DistantDetailPoints = "{\"points\":[[7.2,55.2],[7.8,55.8]],\"spatialReference\":{\"wkid\":4326}}";
+    private const string OriginalDetailPoints = "{\"points\":[[12.2,55.2],[12.8,55.8]],\"spatialReference\":{\"wkid\":4326}}";
+
+    private static async Task AssertGeometryReplacementSucceededAsync(HttpResponseMessage response) {
+        // Include the server's validation response so a future contract change is diagnosable from test output.
+        var error = response.StatusCode == HttpStatusCode.OK ? null : await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK,
+            $"Expected HTTP 200 OK for package geometry replacement, got {(int)response.StatusCode} {response.StatusCode}. Response: {error}");
     }
 }

@@ -1,14 +1,45 @@
 using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Domain;
+using System.Diagnostics;
 
 namespace DataCatalague.Api.Repositories;
 
 public partial class PackageRepository
 {
-    /// <summary>Finds bound packages whose current rectangular AOIs intersect the workspace, using the spatial index.</summary>
-    internal IReadOnlyList<PackageState> FindWorkspacePackages(string pipelineId, Polygon workspace, CancellationToken cancellationToken) {
-        var matches = this.FindIntersectingAois(workspace.ToJson(), cancellationToken);
+    /// <summary>Reads one workspace's membership and current AOIs without reopening the package geodatabase for each row.</summary>
+    internal (IReadOnlyList<(string PackageId, string? ShortId, string AoiJson)> Items, int TotalCount) ReadWorkspacePackagePage(
+        string pipelineId, Polygon workspace, int page, int pageSize, CancellationToken cancellationToken,
+        out double spatialQueryMs, out double packageHydrationMs) {
+        spatialQueryMs = 0;
+        packageHydrationMs = 0;
+        cancellationToken.ThrowIfCancellationRequested();
+        var queryTimer = Stopwatch.StartNew();
+        using var connector = this.createGeodatabase();
+        IReadOnlyList<PackageState> matches;
+        try { matches = this.FindWorkspacePackages(pipelineId, workspace, connector, cancellationToken); }
+        finally { spatialQueryMs = queryTimer.Elapsed.TotalMilliseconds; }
+
+        var hydrationTimer = Stopwatch.StartNew();
+        try {
+            var offset = ((long)page - 1) * pageSize;
+            if (offset >= matches.Count) { return ([], matches.Count); }
+            var items = new List<(string PackageId, string? ShortId, string AoiJson)>(Math.Min(pageSize, matches.Count));
+            foreach (var package in matches.Skip((int)offset).Take(pageSize)) {
+                cancellationToken.ThrowIfCancellationRequested();
+                // The spatial query has already checked that the current AOI reference matched.
+                // Hydrate only this page, preserving the stored geometry and its spatial reference.
+                items.Add((package.Id!.Value, package.MetaData?.ShortId, this.ReadAoi(connector, package, cancellationToken)));
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return (items, matches.Count);
+        }
+        finally { packageHydrationMs = hydrationTimer.Elapsed.TotalMilliseconds; }
+    }
+
+    private IReadOnlyList<PackageState> FindWorkspacePackages(string pipelineId, Polygon workspace, Geodatabase connector, CancellationToken cancellationToken) {
+        // A native polygon avoids JSON round-tripping while keeping the same ArcGIS spatial filter.
+        var matches = this.FindIntersectingAois(workspace, connector, cancellationToken);
         var candidates = new List<PackageState>();
         foreach (var match in matches) {
             cancellationToken.ThrowIfCancellationRequested();
