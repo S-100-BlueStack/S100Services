@@ -43,7 +43,10 @@
 }
 
 .esri-popup__main-container {
-  max-width: 360px !important;
+  box-sizing: border-box;
+  /* Give both map popups enough room for full ENC Product identifiers. */
+  width: min(400px, calc(100vw - 32px)) !important;
+  max-width: min(400px, calc(100vw - 32px)) !important;
   background: var(--pc-popup-surface);
   color: var(--pc-popup-text);
 }

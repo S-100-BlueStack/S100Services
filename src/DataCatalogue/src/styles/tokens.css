@@ -27,6 +27,7 @@ html.calcite-mode-light {
   --dc-notice-info-bg: #f3f8ff;
 
   --dc-color-brand: #456178;
+  --dc-focus-ring: var(--calcite-color-focus, var(--calcite-color-brand, #0079c1));
 
   --dc-color-priority-low-bg: #2f6b2f;
   --dc-color-priority-low-text: #ffffff;

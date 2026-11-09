@@ -40,6 +40,7 @@
   display: block;
   width: 42px;
   height: 42px;
+  object-fit: contain;
 }
 
 .navbar-title-link,
@@ -123,8 +124,13 @@
 }
 
 #last-updated {
+  display: inline-flex;
+  align-items: center;
+  min-width: 38px;
+  min-height: 32px;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -142,6 +148,7 @@
 }
 
 #filters-button[active],
+#preferences-button[active],
 #test-notice-button[active] {
   --calcite-color-foreground-1: rgb(255, 255, 255);
 }
@@ -244,83 +251,208 @@
   display: none;
 }
 
-/* Preferences use the existing compact popover styling, not a full-page settings view. */
-.dc-preferences {
-  display: grid;
-  gap: 0.5rem;
-  min-width: 15.5rem;
-  max-width: min(21rem, 90vw);
-  padding: 0.65rem;
-  color: var(--dc-text);
-  background: var(--dc-surface);
-  font-size: 0.79rem;
-}
-.dc-preferences h2,
-.dc-preferences h3 {
-  font-size: 0.82rem;
-  font-weight: 650;
-  margin: 0.2rem 0;
-}
-.dc-preferences__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  min-height: 1.8rem;
-}
-.dc-preferences__row select {
-  color: var(--dc-text);
-  background: var(--dc-surface);
-  border: 1px solid var(--dc-border);
-  padding: 0.15rem;
-}
-.dc-preferences__row input {
-  accent-color: var(--calcite-color-brand, #007ac2);
-}
-.dc-preferences__help {
-  margin: 0;
-  font-size: 0.73rem;
-  color: var(--dc-text-muted);
-}
-
-/* Preferences is an application-owned non-modal panel; no lazy popover anchor is required. */
+/* Keep Preferences in the same compact floating panel family as Product Catalogue. */
 .dc-preferences-popover {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  width: min(22rem, calc(100vw - 1.5rem));
-  max-height: min(75vh, 34rem);
-  overflow: auto;
-  border: 1px solid var(--dc-border);
-  background: var(--dc-surface);
+  position: fixed;
+  z-index: 1300;
+  top: calc(var(--dc-navbar-height) + 8px);
+  right: 12px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--dc-navbar-height) - 20px);
   color: var(--dc-text);
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-border);
+  border-radius: 2px;
   box-shadow: var(--dc-shadow);
 }
+
 .dc-preferences-popover[hidden] {
   display: none;
 }
+
+.dc-preferences-popover::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  right: 17px;
+  width: 12px;
+  height: 12px;
+  background: var(--dc-surface);
+  border-top: 1px solid var(--dc-border);
+  border-left: 1px solid var(--dc-border);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.dc-preferences {
+  max-height: inherit;
+  overflow-y: auto;
+  color: var(--dc-text);
+  background: var(--dc-surface);
+  font-size: 13px;
+}
+
 .dc-preferences__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dc-border);
 }
-.dc-preferences__close,
-.dc-preferences__reset-basemap {
-  padding: 0.2rem 0.35rem;
-  border: 1px solid var(--dc-border);
-  border-radius: 0;
-  background: var(--dc-surface);
-  color: var(--dc-text);
+
+.dc-preferences__header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dc-preferences__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--dc-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
   cursor: pointer;
 }
-.dc-preferences__close:focus-visible,
-.dc-preferences__reset-basemap:focus-visible {
-  outline: 2px solid var(--calcite-color-brand, #007ac2);
-  outline-offset: 1px;
+
+.dc-preferences__close:hover {
+  color: var(--dc-text);
+  background: var(--dc-surface-alt);
 }
+
+.dc-preferences__content {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.dc-preferences__group {
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.dc-preferences__group + .dc-preferences__group {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-preferences__group > h3 {
+  margin: 0 6px 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dc-preferences__group-description {
+  margin: 0 6px 4px;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.dc-preferences__setting,
+.dc-preferences__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px;
+  border-radius: 2px;
+}
+
+.dc-preferences__setting:hover,
+.dc-preferences__item:hover {
+  background: var(--dc-surface-alt);
+}
+
+.dc-preferences__copy {
+  min-width: 0;
+}
+
+.dc-preferences__copy h4 {
+  margin: 0;
+  color: var(--dc-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dc-preferences__copy p {
+  margin: 3px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.dc-preferences__theme-control,
+.dc-preferences__auto-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dc-preferences__theme-icon {
+  flex: 0 0 auto;
+  color: var(--dc-text-muted);
+}
+
+.dc-preferences__auto-save {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dc-preferences__switch {
+  flex: 0 0 auto;
+}
+
+.dc-preferences__reset-basemap {
+  padding: 2px 0;
+  color: var(--calcite-color-brand, #0079c1);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+  cursor: pointer;
+}
+
+.dc-preferences__reset-basemap:hover:not(:disabled) {
+  color: var(--calcite-color-brand-hover, #00619b);
+  text-decoration: underline;
+}
+
 .dc-preferences__reset-basemap:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
+}
+
+.dc-preferences button:focus-visible {
+  outline: 2px solid var(--dc-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .dc-preferences-popover {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .dc-preferences-popover::before {
+    right: 23px;
+  }
+
+  .dc-preferences__setting--basemap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dc-preferences__reset-basemap {
+    justify-self: start;
+  }
 }

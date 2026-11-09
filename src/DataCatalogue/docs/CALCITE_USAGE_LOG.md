@@ -1,3 +1,20 @@
+## DC-UX-02 — Preferences controls and navbar parity (2026-11-09)
+
+The application-owned Preferences panel now uses the public `calcite-switch`
+component for the theme toggle and independent Auto-save choices. `checked`,
+`label`, `calciteSwitchChange` and `setFocus` are public component contracts;
+`main.js` registers the component before navbar initialization completes.
+Light/dark theme and storage logic remain in DataCatalogue's existing services.
+
+The panel container, group headings, close button, basemap reset action and
+popover placement remain application-owned native DOM/CSS. This is intentional:
+ProductCatalogue's Preferences surface is a non-modal floating panel, while
+DataCatalogue requires its own persistence options and focus/dismissal
+lifecycle. CSS uses semantic `--dc-*` and documented `--calcite-*` colors, not
+private Calcite selectors or a copied ProductCatalogue stylesheet.
+
+---
+
 ## DC-UX-01 v4 — Map UI ownership and icon emphasis (2026-11-06)
 
 The application retains public Calcite `save`, `refresh` and `speech-bubble`
