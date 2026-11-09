@@ -15,24 +15,22 @@ import {
 
 const PREFERENCE_ITEMS = [
   {
-    key: PREFERENCE_PERSISTENCE_KEY.MAP_VIEWPOINT,
-    resetAction: "reset-map-view",
-    title: "Map view",
-    resetLabel: "Reset map view",
-    requiresMapContext: true,
-  },
-  {
     key: PREFERENCE_PERSISTENCE_KEY.BASEMAP,
     title: "Basemap",
-    resetAction: "reset-basemap",
-    resetLabel: "Use theme default",
     requiresBasemapContext: true,
   },
   {
+    key: PREFERENCE_PERSISTENCE_KEY.MAP_VIEWPOINT,
+    title: "Map view",
+    requiresMapContext: true,
+  },
+  {
+    key: PREFERENCE_PERSISTENCE_KEY.THEME,
+    title: "Theme",
+  },
+  {
     key: PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS,
-    resetAction: "reset-filters",
     title: "Filters",
-    resetLabel: "Reset filters",
     requiresMapContext: true,
   },
   {
@@ -40,15 +38,7 @@ const PREFERENCE_ITEMS = [
     title: "Scale hiding",
     persistenceLabel: "Save Scale hiding setting in this browser",
     noticeTitle: "Scale hiding",
-    resetAction: "reset-display-scale",
-    resetLabel: "Reset to OFF",
     requiresMapContext: true,
-  },
-  {
-    key: PREFERENCE_PERSISTENCE_KEY.THEME,
-    resetAction: "reset-theme",
-    title: "Theme",
-    resetLabel: "Reset to Light",
   },
 ];
 let activePanel = null;
@@ -113,47 +103,43 @@ export function initPreferencesPanel({
 
     panel.innerHTML = `
       <div class="pc-preferences-panel__header">
-        <div>
-          <h2>Preferences</h2>
-        </div>
-      </div>
-      <div class="pc-preferences-panel__content">
-        ${renderThemeSetting(getCurrentTheme())}
-        ${context.basemapSettings ? renderBasemapSetting(context.basemapSettings) : ""}
-        ${context.mapPreferences ? renderDisplayScaleSetting(context.mapPreferences) : ""}
-        <section class="pc-preferences-panel__group" aria-labelledby="preferences-saved-heading">
-        <h3 id="preferences-saved-heading">Saved preferences</h3>
-        <p>Choose which preferences are remembered. Turning Auto-save off removes the saved value.</p>
-        ${availableItems.map((item) => renderPreferenceItem(item, persistenceState)).join("")}
-        ${
-          document.body.classList.contains("pc-dashboard-route")
-            ? `
-          <section class="pc-preferences-panel__item">
-            <div class="pc-preferences-panel__copy">
-              <h4>Dashboard page size</h4>
-            </div>
-            <button type="button" class="pc-preferences-panel__reset"
-              data-preference-action="reset-dashboard-page-size">Reset to 50</button>
-          </section>`
-            : ""
-        }
+        <h2>Preferences</h2>
         <button
           type="button"
-          class="pc-preferences-panel__reset-all"
-          data-preference-action="reset-all"
-        >
-          <span>Reset available preferences</span>
-          <small>${
-            context.mapPreferences
-              ? "Reset map view, filters, Scale hiding, source selection, Basemap and Theme."
-              : context.basemapSettings
-                ? "Reset Basemap and Theme to their defaults."
-                : document.body.classList.contains("pc-dashboard-route")
-                  ? "Reset Theme and Dashboard page size to 50."
-                  : "Reset Theme to Light."
-          } Auto-save choices are unchanged.</small>
-        </button>
-      </section>
+          class="pc-preferences-panel__close"
+          data-preference-action="close-panel"
+          aria-label="Close Preferences"
+          title="Close Preferences"
+        ><calcite-icon icon="x" scale="s" aria-hidden="true"></calcite-icon></button>
+      </div>
+      <div class="pc-preferences-panel__content">
+        <section class="pc-preferences-panel__display" aria-labelledby="preferences-display-heading">
+          <h3 id="preferences-display-heading">Display</h3>
+          ${renderThemeSetting(getCurrentTheme())}
+          ${context.basemapSettings ? renderBasemapSetting(context.basemapSettings) : ""}
+          ${context.mapPreferences ? renderDisplayScaleSetting(context.mapPreferences) : ""}
+        </section>
+        <section class="pc-preferences-panel__group" aria-labelledby="preferences-saved-heading">
+          <h3 id="preferences-saved-heading">Saved preferences</h3>
+          <p>Auto-save remembers settings in this browser. Turning it off clears the saved value.</p>
+          ${availableItems.map((item) => renderPreferenceItem(item, persistenceState)).join("")}
+          <div class="pc-preferences-panel__restore-row">
+            <button
+              type="button"
+              class="pc-preferences-panel__restore"
+              data-preference-action="reset-all"
+              title="${
+                context.mapPreferences
+                  ? "Restore map view, filters, Scale hiding, source selection, Basemap and Theme."
+                  : context.basemapSettings
+                    ? "Restore Basemap and Theme to their defaults."
+                    : document.body.classList.contains("pc-dashboard-route")
+                      ? "Restore Theme and Dashboard page size to 50."
+                      : "Restore Theme to Light."
+              } Auto-save choices are unchanged."
+            >Restore defaults</button>
+          </div>
+        </section>
       <section class="pc-preferences-panel__introduction" aria-label="Introduction">
         <button
           type="button"
@@ -230,35 +216,17 @@ export function initPreferencesPanel({
 
   const handleAction = async (action) => {
     switch (action) {
+      case "close-panel":
+        setOpen(false, { restoreFocus: true });
+        break;
       case "start-introduction":
         setOpen(false);
         context.onStartIntroduction?.();
-        break;
-      case "reset-map-view":
-        await context.mapPreferences?.resetMapViewpoint();
-        noticeSuccess("Map view reset", null, { countAsUnread: false });
-        break;
-      case "reset-filters":
-        context.mapPreferences?.resetFilters();
-        noticeSuccess("Filters reset", null, { countAsUnread: false });
         break;
       case "reset-basemap":
         context.basemapSettings?.resetToThemeDefault();
         sync();
         noticeSuccess("Basemap reset", null, { countAsUnread: false });
-        break;
-      case "reset-display-scale":
-        context.mapPreferences?.resetDisplayScaleHidingPreference();
-        sync();
-        noticeSuccess("Scale hiding reset", null, { countAsUnread: false });
-        break;
-      case "reset-dashboard-page-size":
-        resetDashboardPageSizePreference();
-        break;
-      case "reset-theme":
-        resetThemePreference(context.themeView ?? context.view);
-        sync();
-        noticeSuccess("Theme reset", null, { countAsUnread: false });
         break;
       case "reset-all":
         if (context.mapPreferences) {
@@ -462,6 +430,12 @@ function renderBasemapSetting(settings) {
         <h4>Basemap</h4>
         <p id="preferences-basemap-status">${escapeHtml(getBasemapDescription(settings))}</p>
       </div>
+      <button
+        type="button"
+        class="pc-preferences-panel__theme-default"
+        data-preference-action="reset-basemap"
+        aria-label="Use theme default basemap"
+      >Use theme default</button>
     </section>
   `;
 }
@@ -507,16 +481,6 @@ function renderPreferenceItem(item, persistenceState) {
         ${checked ? "checked" : ""}
       ></calcite-switch>
       </label>
-      ${
-        item.resetAction
-          ? `<button
-              type="button"
-              class="pc-preferences-panel__reset"
-              data-preference-action="${escapeHtml(item.resetAction)}"
-              aria-label="${escapeHtml(`${item.resetLabel}: ${item.title}`)}"
-            >${escapeHtml(item.resetLabel)}</button>`
-          : ""
-      }
     </section>
   `;
 }
