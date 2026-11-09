@@ -396,16 +396,15 @@ namespace S100FC.ProductCatalogue
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
             var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var suppressedSurfaces = new List<string>();
-            var dataset = await this.CreateDatasetAsync(
-                result.ElectronicProduct,
-                result.Shape,
-                exportType,
-                applyEdits: false,
-                cancellationToken: cancellationToken,
-                requiredFeatureIds: requiredFeatureIds,
-                includedChangedFeatureIds: included,
-                suppressedMetadataSurfaces: suppressedSurfaces
-            );
+            var dataset = await SourceSnapshotFreshness.ReadWithRetryAsync(async token => {
+                // Each attempt owns a new dataset and fresh native cursors. Failed membership
+                // and suppression results must not leak into the replacement snapshot.
+                included.Clear();
+                suppressedSurfaces.Clear();
+                return await this.CreateDatasetAsync(result.ElectronicProduct, result.Shape, exportType, applyEdits: false, cancellationToken: token,
+                    requiredFeatureIds: requiredFeatureIds, includedChangedFeatureIds: included, suppressedMetadataSurfaces: suppressedSurfaces);
+            }, exception => Logger.Warning(exception,
+                "S-101 source snapshot rejected; refreshing and retrying once before creating candidates. DatasetName: {DatasetName}.", name), cancellationToken);
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
             return new VerifiedExportSnapshot(dataset, included.ToArray()) {
@@ -579,6 +578,7 @@ namespace S100FC.ProductCatalogue
                 foreach (var connectionSettings in this._connections.Where(entry => entry.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
                     var uri = connectionSettings.ConnectionFile!;
                     using var connection = this.OpenGeodatabase(uri);
+                    RefreshSourceVersion(connection, "ArchiveScan", null);
                     var productsForConnection = products
                         .Where(entry => this.Connection(entry.Value.productSpecification!.name!) == uri)
                         .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
@@ -788,7 +788,7 @@ namespace S100FC.ProductCatalogue
                     cancellationToken.ThrowIfCancellationRequested();
                     if (archiveTableTimer is not null)
                         archiveRowsRead++;
-                    var row = cursor.Current;
+                    using var row = cursor.Current;
 
                     string id;
                     try {
@@ -1328,7 +1328,7 @@ namespace S100FC.ProductCatalogue
                 var matches = new List<(ElectronicProduct Product, ArcGIS.Core.Geometry.Polygon Shape)>();
                 while (cursorS128.MoveNext()) {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var row = cursorS128.Current;
+                    using var row = cursorS128.Current;
                     if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                         continue;
 
@@ -1408,6 +1408,8 @@ namespace S100FC.ProductCatalogue
             var informationsTypesAdded = new HashSet<string>();
             var featureTypes = new List<YAML.Feature>();
             var featureTypesAdded = new HashSet<string>();
+            var requiredSourceIds = requiredFeatureIds?.Select(id => Guid.Parse(id)).ToHashSet() ?? [];
+            var sourceAttributes = new List<SourceSnapshotAttributes>();
             // Only verified DPC snapshots need per-source feature membership accounting.
             var featureTracker = requiredFeatureIds is null
                 ? null
@@ -1422,9 +1424,14 @@ namespace S100FC.ProductCatalogue
                 var emittedYamlFeatures = 0;
                 cancellationToken.ThrowIfCancellationRequested();
                 using Geodatabase connection = this.OpenGeodatabase(uri);
+                RefreshSourceVersion(connection, "CreateDataset", electronicProduct.datasetName);
 
                 var s101Uri = this.Connection("S-101") ?? throw new InvalidOperationException("No S-101 geodatabase connection is configured.");
-                using var s101Geodatabase = this.OpenGeodatabase(s101Uri);
+                // Coverage, topology and attributes normally share the same refreshed source.
+                using var s101Geodatabase = uri == s101Uri ? null : this.OpenGeodatabase(s101Uri);
+                if (s101Geodatabase is not null)
+                    RefreshSourceVersion(s101Geodatabase, "DataCoverage", electronicProduct.datasetName);
+                var coverageConnection = s101Geodatabase ?? connection;
 
                 using var loggerFactory = LoggerFactory.Create(builder => {
                     builder.SetMinimumLevel(LogLevel.Trace);
@@ -1441,7 +1448,7 @@ namespace S100FC.ProductCatalogue
                 var extent = shape?.Extent;
                 Logger.Information("Calling S101_QueryDataCoverage with compilationScale: {CompilationScale}, extent: {XMin},{YMin} to {XMax},{YMax}", compilationScale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
 
-                var filters = s101Geodatabase.S101_QueryDataCoverage(shape, compilationScale).Select(result => result.Filter).ToArray();
+                var filters = coverageConnection.S101_QueryDataCoverage(shape, compilationScale).Select(result => result.Filter).ToArray();
                 EncTopologyQueryFilters.UseCompilationScale(filters);
                 if (featureTracker is not null)
                     EncTopologyQueryFilters.PrepareForVerifiedSnapshot(filters);
@@ -1465,7 +1472,8 @@ namespace S100FC.ProductCatalogue
                     using var informationCursor = informationType.Search();
                     while (informationCursor.MoveNext()) {
                         cancellationToken.ThrowIfCancellationRequested();
-                        var current = informationCursor.Current;
+                        using var current = informationCursor.Current;
+                        CaptureSourceAttributes(current, informationType.GetName(), requiredSourceIds, sourceAttributes);
 
                         var uid = current.UID();
                         var name = Guid.Parse(uid).ToStableUInt64().ToString();
@@ -1511,7 +1519,8 @@ namespace S100FC.ProductCatalogue
                     using var featureCursor = featureType.Search();
                     while (featureCursor.MoveNext()) {
                         cancellationToken.ThrowIfCancellationRequested();
-                        var current = featureCursor.Current;
+                        using var current = featureCursor.Current;
+                        CaptureSourceAttributes(current, featureType.GetName(), requiredSourceIds, sourceAttributes);
 
                         var uid = current.UID();
                         var name = Guid.Parse(uid).ToStableUInt64().ToString();
@@ -1552,7 +1561,7 @@ namespace S100FC.ProductCatalogue
 
                 profiler?.Next("FeatureTables", featureTypes.Count);
                 //  Features
-                foreach (var def in connection.GetDefinitions<FeatureClassDefinition>()) {
+                foreach (var def in GetSourceFeatureClassDefinitions(connection)) {
                     cancellationToken.ThrowIfCancellationRequested();
                     var tableName = def.GetAliasName();
 
@@ -1584,7 +1593,7 @@ namespace S100FC.ProductCatalogue
 
                         while (featureCursor.MoveNext()) {
                             cancellationToken.ThrowIfCancellationRequested();
-                            var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
+                            using var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
                             var name = current.UID();
 
 
@@ -1607,6 +1616,7 @@ namespace S100FC.ProductCatalogue
                                     featureTracker!.RecordCollapsed(requiredSourceFeatureId);
                                 continue;
                             }
+                            CaptureSourceAttributes(current, def.GetName(), requiredSourceIds, sourceAttributes);
                             var shapetype = def.GetShapeType();
 
                             var prim = shapetype switch {
@@ -1649,6 +1659,7 @@ namespace S100FC.ProductCatalogue
                                         : string.Empty;
 
                                     var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+                                    EncFeatureNameDiagnostics.LogConversion(electronicProduct.datasetName!, Convert.ToString(current["GLOBALID"]), oid, foid, flatten, () => instance?.Flatten());
 
                                     var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
@@ -1717,7 +1728,7 @@ namespace S100FC.ProductCatalogue
 
                                                             while (attachmentCursor.MoveNext()) {
                                                                 cancellationToken.ThrowIfCancellationRequested();
-                                                                var curr = attachmentCursor.Current;
+                                                                using var curr = attachmentCursor.Current;
 
                                                                 var json = curr.FindField("json") != -1
                                                                     && curr["json"] != null
@@ -2159,6 +2170,7 @@ namespace S100FC.ProductCatalogue
                     Logger.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
+                VerifySourceAttributes(connection, electronicProduct.datasetName!, sourceAttributes, cancellationToken);
                 profiler?.Next("MembershipVerification", geometries.Count);
                 if (featureTracker is not null) {
                     // A selected but unexported source feature must fail this scan before its watermark advances.

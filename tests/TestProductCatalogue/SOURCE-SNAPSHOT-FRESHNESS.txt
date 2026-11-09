@@ -1,0 +1,95 @@
+S-101 source snapshot freshness
+
+Baseline and diagnosis
+  Based on ProductCatalogue-Context-20261109-125915274-9357e277.zip,
+  commit 7f0ff12bcdf6545731fb68ef36330dd797942381 plus its included uncommitted
+  changes. Existing feature-name diagnostics and package-send changes are kept.
+
+  The first-package and replacement-package paths call the same YAML builder.
+  A first-build-only stale YAML cache has not been established. Source reads
+  did not explicitly refresh the connected ArcGIS version, and several source
+  rows/definitions relied on finalization to release native resources. These
+  are plausible contributors to stale reads in a long-running worker, rather
+  than proof of the original server-side cause. Logs establish that the HIRSH
+  edit preceded the scan, so an export read before save does not explain it.
+
+Behavior
+  1. Refresh the configured S-101 transactional version on the existing ArcGIS
+     lane before archive scans and snapshot source tables/cursors are opened.
+     Do not reconcile, post, switch versions, or write to source tables.
+  2. Use the same source connection for coverage, topology and attributes when
+     their configured connection URI is identical.
+  3. Dispose the native row instances and feature-class definitions acquired
+     by these source/snapshot paths, including failures and cancellation.
+  4. For requested changed source GUIDs, retain the actual attribute and
+     association values consumed by the export. Before returning the snapshot,
+     compare these with the live open-ended archive records, in GUID batches
+     of at most 100 per source table. JSON whitespace/property order does not
+     cause mismatches. Feature GUIDs alone are no longer sufficient evidence.
+  5. If a changed row is stale, deleted during the read, or ambiguous, dispose
+     that attempt and rebuild once. Persistent mismatch raises a source error
+     before compiler execution or creation/discard of any package candidate.
+     Existing source-failure handling retains the prior pair and replay bounds
+     and allows other datasets to continue. This is not a minute-by-minute retry
+     loop: after two failures, existing failed-snapshot checkpoint rules apply.
+
+Constraints
+  Current archive verification follows DEFAULT archive semantics. A named
+  transactional source version is rejected when verifying versioned changed rows,
+  with a clear configuration error; no version is switched automatically.
+  Nonversioned table verification has no DEFAULT restriction. Non-versioning
+  stores skip the version API. Manual snapshots with no required
+  changed GUIDs still refresh the source, but do not perform archive comparison.
+  The comparison covers source attributes and outgoing bindings, not geometry
+  equality or verification of every YAML serialization rule. Existing topology
+  and membership validation remain in place. No cross-table/database atomicity
+  is claimed; a concurrent save can cause one safe retry or a source failure.
+  No system-DB schema, S-128 publication behavior, public API or dependency changes.
+  Diagnostics remain independently configurable. No diagnostic flag is needed
+  for source refresh, archive verification or the bounded retry.
+
+Integration
+  Put the matching BAT and ZIP together outside or inside the repository and
+  double-click the BAT. It verifies the S100Services working-tree root at
+  C:\source\S-100-BlueStack\S100Services, extracts only the six changed files,
+  stages exactly those paths and prints git status. It never changes branches.
+  Rebuild and deploy the worker with its ProductManagerCore.dll, then restart
+  the service. No migration or source-geodatabase command is required.
+
+  Replace src/ProductManagerCore/ProductManagerGDB.cs.
+  Create src/ProductManagerCore/ProductManagerGDB.SourceSnapshot.cs.
+  Create src/ProductManagerCore/SourceSnapshotFreshness.cs.
+  Create tests/TestProductCatalogue/SourceSnapshotFreshnessTests.cs.
+  Replace tests/TestProductManager/TestProductManager.csproj (test link only).
+  Create tests/TestProductCatalogue/SOURCE-SNAPSHOT-FRESHNESS.txt.
+
+Validation
+  Focused deterministic tests cover old names with matching IDs, binding
+  changes, missing current archive rows, JSON equivalence, later live edits,
+  bounded retries, cancellation and non-staleness failures. They are linked
+  into the existing TestProductManager project; this snapshot has no separate
+  TestProductCatalogue.csproj.
+
+  On Windows with .NET 10 and matching ArcGIS Pro SDK/runtime:
+    dotnet restore Nexus.slnx
+    dotnet build Nexus.slnx -c Debug -p:Platform=x64
+    dotnet test tests/TestProductManager/TestProductManager.csproj -c Debug -p:Platform=x64 --no-build --filter FullyQualifiedName~SourceSnapshotFreshnessTests
+    dotnet test tests/TestProductManager/TestProductManager.csproj -c Debug -p:Platform=x64 --no-build
+
+  Restore, build, xUnit, ArcGIS integration and BAT execution could not be run
+  in the Linux delivery environment: .NET SDK, ArcGIS and Windows are absent.
+  ZIP bytes/list and BAT staging list are compared before delivery.
+
+Server acceptance
+  Make one name edit on a dataset not edited since worker startup. Check YAML
+  after its first build, without making a second edit as a workaround. Look for:
+    S-101 source version refreshed before read.
+    S-101 source snapshot bindings verified against current archive.
+  A detected stale read additionally logs:
+    S-101 source snapshot rejected; refreshing and retrying once before creating candidates.
+  Retain the full job log if the first-build YAML is still wrong; a passing
+  source-binding comparison then directs investigation toward conversion or
+  serialization rather than a stale attribute read.
+
+Suggested commit
+  Refresh S-101 source reads and reject stale snapshot bindings
