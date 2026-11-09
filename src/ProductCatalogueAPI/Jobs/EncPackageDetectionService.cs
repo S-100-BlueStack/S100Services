@@ -132,7 +132,9 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> ScanAsync(DateTime lowerBound) {
             lowerBound = DpcArchiveBaseline.Clamp(lowerBound, baselineUtc);
             if (!completeScans.TryGetValue(lowerBound, out var result)) {
-                result = await _products.GetPendingEditsAsync(lowerBound, scanStartedUtc);
+                result = _products is IArchiveScanSource cancellableArchive
+                    ? await cancellableArchive.ReadPendingEditsAsync(lowerBound, scanStartedUtc, cancellationToken)
+                    : await _products.GetPendingEditsAsync(lowerBound, scanStartedUtc);
                 cancellationToken.ThrowIfCancellationRequested();
                 foreach (var (source, rows) in result) {
                     foreach (var (featureId, row) in rows) {
@@ -156,6 +158,37 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             await packages.MarkReplayAsync(incomplete.SourceDatasetName, incomplete.ScanFromUtc, cancellationToken);
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
         var snapshotAttempts = await packages.GetSnapshotAttemptBoundsAsync(cancellationToken);
+        IArchiveChangeScan? archiveHistory = null;
+        if (_products is IArchiveScanSource archiveSource) {
+            var inspectedNames = pending.Keys.Concat(replay.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var historicalPackages = await packages.GetActiveAsync(inspectedNames, cancellationToken, includeSourceYaml: false);
+            var lowerBounds = historicalPackages.Values.SelectMany(package => new[] { package.ScanFromUtc, package.DetectedAtUtc })
+                .Concat(replay.Values)
+                .Concat(snapshotAttempts.Where(entry => inspectedNames.Contains(entry.Key, StringComparer.OrdinalIgnoreCase)).Select(entry => entry.Value))
+                .Append(sinceUtc);
+            var comparisonBounds = lowerBounds.Select(bound => DpcArchiveBaseline.Clamp(DateTime.SpecifyKind(bound, DateTimeKind.Utc), baselineUtc)).Distinct().ToArray();
+            archiveHistory = archiveSource.OpenArchiveScan(comparisonBounds.Min(), scanStartedUtc, comparisonBounds);
+        }
+        await using var retainedHistory = archiveHistory;
+        var sourceScans = new Dictionary<(DateTime FromUtc, string Source), Dictionary<string, ArchiveRow>>();
+        async Task<Dictionary<string, ArchiveRow>> ScanSourceAsync(DateTime lowerBound, string sourceName) {
+            lowerBound = DpcArchiveBaseline.Clamp(DateTime.SpecifyKind(lowerBound, DateTimeKind.Utc), baselineUtc);
+            // Preserve the existing product-manager contract for implementations without reusable history.
+            if (retainedHistory is null || completeScans.ContainsKey(lowerBound))
+                return (await ScanAsync(lowerBound)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
+            var key = (lowerBound, sourceName.ToUpperInvariant());
+            if (!sourceScans.TryGetValue(key, out var rows)) {
+                logger.LogInformation("ENC source archive comparison started. SourceDatasetName: {SourceDatasetName}. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}.", sourceName, lowerBound, scanStartedUtc);
+                rows = await retainedHistory.ReadAsync(lowerBound, sourceName, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var (featureId, row) in rows)
+                    if (row.EditDate is null || row.EditDate.Value.Kind != DateTimeKind.Utc || row.EditDate > clock.GetUtcNow().UtcDateTime.AddMinutes(5))
+                        throw new InvalidOperationException($"Invalid ENC archive timestamp for '{sourceName}', feature '{featureId}'. The watermark and candidates were preserved.");
+                sourceScans.Add(key, rows);
+                logger.LogInformation("ENC source archive comparison finished. SourceDatasetName: {SourceDatasetName}. ChangedFeatureCount: {ChangedFeatureCount}.", sourceName, rows.Count);
+            }
+            return rows;
+        }
         if (replay.Count > 0) {
             var activeReplay = await packages.GetActiveAsync(replay.Keys, cancellationToken);
             var mappedS57 = replay.Keys.ToDictionary(name => name,
@@ -198,15 +231,14 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     // older cumulative baseline durable without composing it every minute.
                     if (snapshotAttempts.TryGetValue(entry.Key, out var attemptedThroughUtc) &&
                         (!activeReplay.TryGetValue(entry.Key, out var attemptedPackage) || attemptedPackage.DetectedAtUtc <= attemptedThroughUtc)) {
-                        var newerChanges = (await ScanAsync(attemptedThroughUtc)).GetValueOrDefault(entry.Key);
+                        var newerChanges = await ScanSourceAsync(attemptedThroughUtc, entry.Key);
                         if (newerChanges is null || !newerChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
                             pending.Remove(entry.Key);
                             logger.LogInformation("ENC failed snapshot is awaiting a new matching archive change. SourceDatasetName: {SourceDatasetName}. AttemptedThroughUtc: {AttemptedThroughUtc:O}.", entry.Key, attemptedThroughUtc);
                             continue;
                         }
                     }
-                    var replayed = await ScanAsync(group.Key);
-                    pending[entry.Key] = replayed.GetValueOrDefault(entry.Key) ?? new(StringComparer.OrdinalIgnoreCase);
+                    pending[entry.Key] = await ScanSourceAsync(group.Key, entry.Key);
                 }
             }
         }
@@ -237,12 +269,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         // Finish every required archive inspection before destructive candidate work. A later
         // replay/history scan failure must not leave earlier sources partly replaced.
         foreach (var existing in active.Values) {
-            await ScanAsync(existing.ScanFromUtc);
-            await ScanAsync(existing.DetectedAtUtc);
+            await ScanSourceAsync(existing.ScanFromUtc, existing.SourceDatasetName);
+            await ScanSourceAsync(existing.DetectedAtUtc, existing.SourceDatasetName);
         }
         foreach (var sourceName in pending.Keys) {
             if (snapshotAttempts.TryGetValue(sourceName, out var attemptedThroughUtc))
-                await ScanAsync(attemptedThroughUtc);
+                await ScanSourceAsync(attemptedThroughUtc, sourceName);
         }
         var retiredReplay = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         var failedSourceCount = 0;
@@ -262,7 +294,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
             if (snapshotAttempts.TryGetValue(sourceName, out var attemptedThroughUtc) &&
                 (!active.TryGetValue(sourceName, out var attemptedPackage) || attemptedPackage.DetectedAtUtc <= attemptedThroughUtc)) {
-                var newerChanges = (await ScanAsync(attemptedThroughUtc)).GetValueOrDefault(sourceName);
+                var newerChanges = await ScanSourceAsync(attemptedThroughUtc, sourceName);
                 if (newerChanges is null || !newerChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
                     logger.LogInformation("ENC failed snapshot is awaiting a new matching archive change. SourceDatasetName: {SourceDatasetName}. AttemptedThroughUtc: {AttemptedThroughUtc:O}.", sourceName, attemptedThroughUtc);
                     continue;
@@ -287,13 +319,13 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 }
                 // The snapshot timestamp identifies the source state already encoded. The
                 // surviving cumulative summary can have older timestamps after a partial revert.
-                snapshotChanges = (await ScanAsync(existing.DetectedAtUtc)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
+                snapshotChanges = await ScanSourceAsync(existing.DetectedAtUtc, sourceName);
                 if (!snapshotChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
                     await RecoverIncompletePackageAsync(existing, cancellationToken);
                     retiredReplay[sourceName] = packageScanFromUtc;
                     continue;
                 }
-                packageChanges = (await ScanAsync(existing.ScanFromUtc)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
+                packageChanges = await ScanSourceAsync(existing.ScanFromUtc, sourceName);
                 packageScanFromUtc = existing.ScanFromUtc;
                 previous = existing;
             }

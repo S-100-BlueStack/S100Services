@@ -41,6 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestProductCatalogue\DpcArchiveHistoryTests.cs" Link="DpcRegression\DpcArchiveHistoryTests.cs" />
     <Compile Include="..\TestProductCatalogue\DpcRunAsyncTests.cs" Link="DpcRegression\DpcRunAsyncTests.cs" />
     <Compile Include="..\TestProductCatalogue\DpcSqlTransactionTests.cs" Link="DpcRegression\DpcSqlTransactionTests.cs" />
     <Compile Include="..\TestProductCatalogue\EncPackagePauseStatusTests.cs" Link="DpcRegression\EncPackagePauseStatusTests.cs" />

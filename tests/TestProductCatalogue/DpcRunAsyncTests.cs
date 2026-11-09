@@ -19,6 +19,54 @@ namespace TestProductCatalogueAPI;
 /// <summary>Runs the real detector and export service with bounded archive versions and isolated persistence/encoder boundaries.</summary>
 public sealed class DpcRunAsyncTests
 {
+    /// <summary>Distinct package windows use source-specific reader calls and still build the same paired replacements.</summary>
+    [Fact]
+    public async Task ReusableHistoryRoutesEachPackageWindowWithoutWholeDatabaseRescans() {
+        var f = await DpcRunFixture.CreateAsync(reusableArchive: true);
+        const string second = "101DK002";
+        f.Archive.AddSource(second, 1000);
+        f.Archive.AddFeature(second, DpcRunFixture.A, 0);
+        foreach (var source in new[] { DpcRunFixture.Source, second })
+            f.Archive.Edit(source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        await f.RunAsync();
+        var index = 0;
+        foreach (var package in f.Packages.Active.Values) {
+            package.ScanFromUtc = DpcRunFixture.Utc(8).AddMinutes(++index);
+            package.DetectedAtUtc = DpcRunFixture.Utc(10).AddMinutes(index);
+            f.Archive.Edit(package.SourceDatasetName, DpcRunFixture.A, DpcRunFixture.Utc(11), 2);
+        }
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Equal(2, f.WholeArchiveReads);
+        Assert.Equal(4, f.SourceArchiveReads.Count);
+        Assert.Equal(4, f.SourceArchiveReads.Distinct().Count());
+        Assert.Equal(DpcRunFixture.Utc(8).AddMinutes(1), f.HistoryBounds.Last().From);
+        Assert.Equal(DpcRunFixture.Utc(12), f.HistoryBounds.Last().Through);
+        Assert.Equal(2, f.DisposedHistoryReaders);
+        Assert.Equal(8, f.Engine.Requests.Count);
+        Assert.Equal(DpcRunFixture.Utc(12), await f.WatermarkAsync());
+        Assert.All(f.Packages.Active.Values, package => Assert.Contains("A=2", package.DatasetYaml));
+    }
+
+    /// <summary>A failed reusable comparison must finish before any existing candidate is discarded or rebuilt.</summary>
+    [Fact]
+    public async Task ReusableHistoryFailurePreservesCheckpointAndExistingPair() {
+        var f = await DpcRunFixture.CreateAsync(reusableArchive: true);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        await f.RunAsync();
+        var package = f.Packages.Active[DpcRunFixture.Source];
+        package.DetectedAtUtc = DpcRunFixture.Utc(10).AddMinutes(1);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(11), 2);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        f.Archive.FailFrom = package.DetectedAtUtc;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.RunAsync());
+        Assert.Same(package, f.Packages.Active[DpcRunFixture.Source]);
+        Assert.Equal(0, f.Packages.PairedDiscards);
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.Equal(DpcRunFixture.Utc(10), await f.WatermarkAsync());
+        Assert.Equal(2, f.DisposedHistoryReaders);
+    }
+
     /// <summary>A manual request creates both members without depending on an archive edit or advancing DPC.</summary>
     [Fact]
     public async Task ManualExportBuildsThePairWithoutNewEdits() {
@@ -885,13 +933,23 @@ internal sealed class DpcRunFixture
     internal string? MappingOverride;
     internal readonly HashSet<Guid> PublishedPackageIds = [];
 
-    private DpcRunFixture() {
+    internal int WholeArchiveReads;
+    internal int DisposedHistoryReaders;
+    internal readonly List<(DateTime From, DateTime Through)> HistoryBounds = [];
+    internal readonly List<(DateTime From, string Source)> SourceArchiveReads = [];
+
+    private DpcRunFixture(bool reusableArchive = false) {
         Packages = new(Workflow, Clock);
         Engine = new(Packages);
-        var products = DpcProxy<IElectronicProductManager>.Create((method, args) => {
+        Func<MethodInfo, object?[], object?> invoke = (method, args) => {
             var name = args.FirstOrDefault() as string ?? string.Empty;
             switch (method.Name) {
+                case nameof(IArchiveScanSource.OpenArchiveScan):
+                    HistoryBounds.Add(((DateTime)args[0]!, (DateTime)args[1]!));
+                    return new FixtureHistoryReader(this, (DateTime)args[1]!);
+                case nameof(IArchiveScanSource.ReadPendingEditsAsync):
                 case nameof(IElectronicProductManager.GetPendingEditsAsync):
+                    WholeArchiveReads++;
                     return Task.FromResult(Archive.Scan((DateTime)args[0]!, (DateTime)args[1]!));
                 case nameof(IElectronicProductManager.GetMappedElectronicProducts):
                     IReadOnlyList<S100FC.S128.FeatureTypes.ElectronicProduct> mapped = [Product(MappingOverride ?? (name.StartsWith("101", StringComparison.Ordinal) ? name[3..] : "101" + name))];
@@ -918,12 +976,15 @@ internal sealed class DpcRunFixture
                 case "get_OutputFolder": return "isolated-output";
                 default: throw new NotSupportedException(method.Name);
             }
-        });
+        };
+        IElectronicProductManager products = reusableArchive
+            ? DpcProxy<IReusableDpcTestProducts>.Create(invoke)
+            : DpcProxy<IElectronicProductManager>.Create(invoke);
         Manager = new DpcManager(products);
     }
 
-    internal static async Task<DpcRunFixture> CreateAsync(bool initializeCheckpoint = true) {
-        var f = new DpcRunFixture();
+    internal static async Task<DpcRunFixture> CreateAsync(bool initializeCheckpoint = true, bool reusableArchive = false) {
+        var f = new DpcRunFixture(reusableArchive);
         f.Archive.AddSource(Source, 1000);
         f.Archive.AddFeature(Source, A, 0);
         f.Archive.AddFeature(Source, B, 0);
@@ -960,11 +1021,25 @@ internal sealed class DpcRunFixture
     private static S100FC.S128.FeatureTypes.ElectronicProduct Product(string name) => new() {
         datasetName = name, productSpecification = new() { name = name.StartsWith("101", StringComparison.Ordinal) ? "S-101" : "S-57" }
     };
+    /// <summary>Models the optional reader boundary while using the independent archive fixture for exact comparisons.</summary>
+    private sealed class FixtureHistoryReader(DpcRunFixture fixture, DateTime throughUtc) : IArchiveChangeScan {
+        /// <inheritdoc/>
+        public Task<Dictionary<string, ArchiveRow>> ReadAsync(DateTime sinceUtc, string sourceName, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            fixture.SourceArchiveReads.Add((sinceUtc, sourceName));
+            return Task.FromResult(fixture.Archive.Scan(sinceUtc, throughUtc).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase));
+        }
+        /// <inheritdoc/>
+        public ValueTask DisposeAsync() { fixture.DisposedHistoryReaders++; return ValueTask.CompletedTask; }
+    }
     private sealed class DpcManager(IElectronicProductManager products) : IProductManager {
         public IElectronicProductManager ElectronicProductManager => products;
         public INauticalProductManager NauticalProductManager => throw new NotSupportedException();
     }
 }
+
+/// <summary>Allows the same coordinator fixture to opt into reusable archive reads without changing legacy-manager scenarios.</summary>
+public interface IReusableDpcTestProducts : IElectronicProductManager, IArchiveScanSource { }
 
 /// <summary>Strict proxy boundaries fail on unexpected publication, attachment or unbounded archive operations.</summary>
 public class DpcProxy<T> : DispatchProxy where T : class
