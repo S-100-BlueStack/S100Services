@@ -1659,7 +1659,6 @@ namespace S100FC.ProductCatalogue
                                         : string.Empty;
 
                                     var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
-                                    EncFeatureNameDiagnostics.LogConversion(electronicProduct.datasetName!, Convert.ToString(current["GLOBALID"]), oid, foid, flatten, () => instance?.Flatten());
 
                                     var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
