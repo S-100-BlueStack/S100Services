@@ -65,7 +65,7 @@ export function createSelectedJobStore() {
 export function normalizeSelectedJob(job = {}) {
   return {
     jobId: normalizeOptionalString(job.jobId ?? job.id),
-    jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Job",
+    jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Package",
     objectId: normalizeObjectId(job.objectId),
     geometryType: normalizeOptionalString(job.geometryType ?? job.geometry?.type),
     priority: normalizeOptionalString(job.priority),

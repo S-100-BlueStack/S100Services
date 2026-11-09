@@ -30,13 +30,13 @@ export function createStartupController({
       });
 
       await runStartupStage({
-        label: "Jobs load",
+        label: "Packages load",
         startupRequestId: currentStartupRequestId,
         task: () => ensureStartupJobsReady({ startupRequestId: currentStartupRequestId }),
       });
 
       await runStartupStage({
-        label: "Job map rendering",
+        label: "Package map rendering",
         startupRequestId: currentStartupRequestId,
         task: () => ensureStartupJobMapReady({ startupRequestId: currentStartupRequestId }),
       });
@@ -142,15 +142,15 @@ export function createStartupController({
 
     if (startupState.jobsReady) {
       startupLoader.markDataReceived({
-        text: "Jobs already loaded.",
+        text: "Packages already loaded.",
         progress: 0.58,
       });
 
       return startupState.jobs;
     }
 
-    startupLoader.setText("Loading Jobs...");
-    startupLoader.setDetail("The required Jobs list is loading from the mock backend.");
+    startupLoader.setText("Loading Packages...");
+    startupLoader.setDetail("The required Packages list is loading from the mock backend.");
     startupLoader.setProgress(0.42);
 
     const jobsResult = await jobStore.loadJobs();
@@ -168,7 +168,7 @@ export function createStartupController({
     startupState.jobMapReady = false;
 
     startupLoader.markDataReceived({
-      text: "Jobs loaded.",
+      text: "Packages loaded.",
       progress: 0.58,
     });
 
@@ -179,7 +179,7 @@ export function createStartupController({
     throwIfStaleStartup(expectedStartupRequestId);
 
     if (startupState.jobMapReady) {
-      startupLoader.setText("Job map layers already rendered.");
+      startupLoader.setText("Package map layers already rendered.");
       startupLoader.setDetail("");
       startupLoader.setProgress(0.94);
 
@@ -190,7 +190,7 @@ export function createStartupController({
     }
 
     startupLoader.startRendering({
-      text: "Rendering Jobs on the map...",
+      text: "Rendering Packages on the map...",
       progress: 0.68,
     });
 
@@ -201,7 +201,7 @@ export function createStartupController({
     throwIfStaleStartup(expectedStartupRequestId);
 
     if (!jobMapResult.ok) {
-      throw jobMapResult.error || new Error("Job map layers could not be loaded.");
+      throw jobMapResult.error || new Error("Package map layers could not be loaded.");
     }
 
     startupState.jobMapReady = true;
@@ -253,7 +253,7 @@ export function createStartupController({
 
 function normalizeStartupJobs(jobs) {
   if (!Array.isArray(jobs)) {
-    throw new Error("Jobs loader returned an invalid result.");
+    throw new Error("Packages loader returned an invalid result.");
   }
 
   return jobs;
@@ -275,11 +275,11 @@ function createStartupLoadingText(startupState) {
   }
 
   if (!startupState.jobsReady) {
-    return "Loading Jobs...";
+    return "Loading Packages...";
   }
 
   if (!startupState.jobMapReady) {
-    return "Rendering Jobs on the map...";
+    return "Rendering Packages on the map...";
   }
 
   return "Starting DataCatalogue...";

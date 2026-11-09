@@ -8,7 +8,7 @@ import {
   getActiveJobFilterSummary,
   hasActiveJobFilters,
   normalizeJobFilters,
-  shouldRevealDoneJobsForFilters,
+  shouldRevealCompletedJobsForFilters,
 } from "./jobFilters.js";
 
 const JOBS = Object.freeze([
@@ -30,6 +30,12 @@ const JOBS = Object.freeze([
     priority: "high",
     relatedAoiIds: ["{AOI-2}"],
   },
+  {
+    id: "job-4",
+    status: "noUpdate",
+    priority: "medium",
+    relatedAoiIds: ["{AOI-3}"],
+  },
 ]);
 
 test("createDefaultJobFilters creates an inactive filter state", () => {
@@ -44,14 +50,14 @@ test("normalizeJobFilters removes invalid status and priority values", () => {
   assert.deepEqual(
     normalizeJobFilters({
       activeOnly: true,
-      statusValues: ["todo", "unknown", "done", "todo"],
+      statusValues: ["todo", "unknown", "done", "noUpdate", "todo"],
       priorityValues: ["high", "bad-value"],
     }),
     {
       activeOnly: true,
       highPriorityOnly: false,
       withRelatedAoisOnly: false,
-      statusValues: ["todo", "done"],
+      statusValues: ["done", "noUpdate"],
       priorityValues: ["high"],
     }
   );
@@ -80,7 +86,7 @@ test("filterJobs applies quick filters and explicit multi-select filters", () =>
   );
 });
 
-test("filterJobsForVisibleJobSet hides Done Jobs by default", () => {
+test("filterJobsForVisibleJobSet hides both completed statuses by default", () => {
   assert.deepEqual(
     filterJobsForVisibleJobSet(JOBS).map((job) => job.id),
     ["job-1", "job-2"]
@@ -106,23 +112,23 @@ test("filterJobsForVisibleJobSet keeps contradictory Active and Done filters emp
   );
 });
 
-test("shouldRevealDoneJobsForFilters only reveals Done Jobs for explicit Done status filter", () => {
+test("shouldRevealCompletedJobsForFilters only reveals Done Jobs for explicit Done status filter", () => {
   assert.equal(
-    shouldRevealDoneJobsForFilters({
+    shouldRevealCompletedJobsForFilters({
       statusValues: ["done"],
     }),
     true
   );
 
   assert.equal(
-    shouldRevealDoneJobsForFilters({
+    shouldRevealCompletedJobsForFilters({
       activeOnly: true,
     }),
     false
   );
 
   assert.equal(
-    shouldRevealDoneJobsForFilters({
+    shouldRevealCompletedJobsForFilters({
       priorityValues: ["high"],
     }),
     false
@@ -135,6 +141,22 @@ test("getActiveJobFilterSummary describes active filters", () => {
       activeOnly: true,
       priorityValues: ["high", "medium"],
     }),
-    "Active Jobs, 2 priority filter"
+    "Open Packages, 2 priority filter"
   );
+});
+
+test("No update is completed, independently searchable and excluded from open Packages", () => {
+  assert.deepEqual(
+    filterJobs(JOBS, { statusValues: ["noUpdate"] }).map((item) => item.id),
+    ["job-4"]
+  );
+  assert.deepEqual(
+    filterJobs(JOBS, { activeOnly: true }).map((item) => item.id),
+    ["job-1", "job-2"]
+  );
+  assert.deepEqual(
+    filterJobsForVisibleJobSet(JOBS, { statusValues: ["noUpdate"] }).map((item) => item.id),
+    ["job-4"]
+  );
+  assert.equal(shouldRevealCompletedJobsForFilters({ statusValues: ["noUpdate"] }), true);
 });

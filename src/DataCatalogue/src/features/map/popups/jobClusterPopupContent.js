@@ -14,7 +14,7 @@ export function createJobClusterPickerContent({ view } = {}) {
       if (!view) {
         renderClusterPickerMessage({
           container,
-          message: "Zoom in to inspect individual Jobs.",
+          message: "Zoom in to inspect individual Packages.",
         });
 
         return container;
@@ -22,7 +22,7 @@ export function createJobClusterPickerContent({ view } = {}) {
 
       renderClusterPickerMessage({
         container,
-        message: "Loading Jobs...",
+        message: "Loading Packages...",
       });
 
       void renderClusterJobs({
@@ -46,7 +46,7 @@ async function renderClusterJobs({ container, view, clusterGraphic }) {
     if (features.length === 0) {
       renderClusterPickerMessage({
         container,
-        message: "No visible Jobs could be resolved for this cluster.",
+        message: "No visible Packages could be resolved for this cluster.",
       });
 
       return;
@@ -61,7 +61,7 @@ async function renderClusterJobs({ container, view, clusterGraphic }) {
   } catch (error) {
     renderClusterPickerMessage({
       container,
-      message: error.message || "The Jobs in this cluster could not be loaded.",
+      message: error.message || "The Packages in this cluster could not be loaded.",
     });
   }
 }
@@ -225,6 +225,7 @@ function getStatusRank(feature) {
     case "inProgress":
       return 1;
     case "done":
+    case "noUpdate":
       return 2;
     default:
       return 3;
@@ -232,7 +233,7 @@ function getStatusRank(feature) {
 }
 
 function getFeatureTitle(feature) {
-  return normalizeOptionalString(feature.attributes?.[JOB_LAYER_FIELD.TITLE]) || "Untitled Job";
+  return normalizeOptionalString(feature.attributes?.[JOB_LAYER_FIELD.TITLE]) || "Untitled Package";
 }
 
 function getFeatureSubtitle(feature) {

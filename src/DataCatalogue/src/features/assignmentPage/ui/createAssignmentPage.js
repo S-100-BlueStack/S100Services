@@ -1,6 +1,7 @@
 import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
 import { renderPackageDescriptions } from "./renderPackageDescriptions.js";
 import { createPipelineRow } from "./createPipelineRow.js";
+import { matchesLoadedPackage } from "../state/matchesLoadedPackage.js";
 import { severityLabel } from "../../../shared/domain/severity.js";
 import { createQueryLifecycle } from "../state/createQueryLifecycle.js";
 import {
@@ -42,37 +43,39 @@ export function createAssignmentPage({
           <label>Status<select data-status><option value="">All statuses</option><option>Assigned</option><option>Not assigned</option></select></label>
           <label class="dc-assignment-grow">Feature name<input type="search" data-search placeholder="Search NM / KP" autocomplete="off"></label>
         </form>
+        <p data-category-status role="status"></p>
         <p data-list-status role="status"></p>
         <div class="dc-assignment-scroll" data-features></div>
-        <footer class="dc-assignment-toolbar"><button type="button" data-feature-prev>Previous</button><span data-feature-page></span><button type="button" data-feature-next>Next</button><button type="button" data-feature-retry>Reload list</button></footer>
+        <footer class="dc-assignment-toolbar"><button type="button" data-feature-prev>Previous</button><span data-feature-page></span><button type="button" data-feature-next>Next</button><button class="dc-assignment-icon-action dc-feature-list-refresh" type="button" data-feature-retry aria-label="Refresh Packages" title="Refresh Packages"><calcite-icon icon="refresh" scale="s" aria-hidden="true"></calcite-icon></button></footer>
       </section>
-      <section class="dc-assignment-panel dc-information-panel" aria-label="Feature information">
-        <p data-selection-status role="status">Select a Feature to view its information.</p>
-        <button type="button" data-selection-retry hidden>Retry Feature</button>
-        <div class="dc-assignment-scroll" data-information></div>
-      </section>
-    </div>
-    <div class="dc-assignment-column dc-assignment-column--right">
       <section class="dc-assignment-panel dc-work-stream-panel" data-work-stream-panel aria-label="Work stream assignments">
         <div class="dc-assignment-toolbar dc-assignment-panel-toolbar">
-          <span data-draft-status role="status"></span>
           <span class="dc-assignment-muted" data-active-count></span>
-          <span class="dc-assignment-toolbar-spacer"></span>
           <button type="button" data-work-stream-mode aria-pressed="false">Show active</button>
           <button type="button" data-reconcile hidden>Check saved bindings</button>
           <button type="button" data-abandon hidden>Discard local draft</button>
-          <button type="button" data-save disabled>Save</button>
+          <span class="dc-assignment-toolbar-spacer"></span>
+          <span data-draft-status role="status"></span>
+          <button class="dc-assignment-icon-action dc-binding-save" type="button" data-save disabled aria-label="Save bindings" title="Save bindings"><calcite-icon icon="save" scale="m" aria-hidden="true"></calcite-icon></button>
         </div>
         <p data-save-error role="alert"></p>
         <p data-work-stream-status role="status">Select a Feature to edit assignments.</p>
         <div class="dc-assignment-scroll" data-work-streams></div>
         <div class="dc-assignment-toolbar dc-work-stream-reload">
-          <button type="button" data-work-stream-retry>Reload Work streams</button>
+          <button type="button" data-work-stream-retry hidden>Retry pipelines</button>
         </div>
+      </section>
+    </div>
+    <div class="dc-assignment-column dc-assignment-column--right">
+      <section class="dc-assignment-panel dc-information-panel" aria-label="Feature information">
+        <h2 class="dc-information-panel__name" data-package-name></h2>
+        <div class="dc-information-panel__bindings" data-saved-bindings></div>
+        <p data-selection-status role="status">Select a Feature to view its information.</p>
+        <button type="button" data-selection-retry hidden>Retry Feature</button>
+        <div class="dc-assignment-scroll" data-information></div>
       </section>
       <section class="dc-assignment-panel dc-assignment-map-panel" aria-label="Assignment map">
         <p data-map-empty>Select a Feature to focus its geometry.</p>
-        <button type="button" data-map-focus hidden disabled>Focus Workspaces</button>
         <div class="dc-assignment-map-stage">
           <div class="dc-assignment-map" data-map></div>
           <div class="dc-basemap-control dc-basemap-control--assignment" data-basemap-host></div>
@@ -85,7 +88,6 @@ export function createAssignmentPage({
           <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__feature" aria-hidden="true"></span>Selected Feature</span>
           <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-assigned" aria-hidden="true"></span>Assigned Work stream</span>
           <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-context" aria-hidden="true"></span>Unassigned context</span>
-          <span class="dc-assignment-muted">Map reflects draft assignments</span>
         </div>
       </section>
     </div>
@@ -94,23 +96,25 @@ export function createAssignmentPage({
   element.innerHTML = live
     ? markup.replaceAll("Feature", "Package").replaceAll("Work stream", "Pipeline")
     : markup;
+  if (live) element.className += " dc-assignment-page--live";
 
   const get = createRequiredTargetGetter((name) => element.querySelector(`[data-${name}]`));
   if (live) {
-    get("search").disabled = true;
-    get("search").closest("label").hidden = true;
-    get("type").previousSibling.textContent = "Category";
+    get("search").placeholder = "Search this page";
+    get("search").setAttribute("aria-label", "Search Packages on this page");
+    get("search").previousSibling.textContent = "";
+    get("type").previousSibling.textContent = "";
+    get("type").setAttribute("aria-label", "Package category");
+    get("status").previousSibling.textContent = "";
+    get("status").setAttribute("aria-label", "Package assignment status");
     get("type").replaceChildren(new Option("All categories", ""));
-    get("map-empty").textContent = "Select a Package to view its AOI and saved intersecting Workspaces.";
-    get("map-focus").textContent = "Focus geography";
-    get("map-focus").hidden = false;
+    get("map-empty").textContent = "Select a Package to view geography.";
+    get("work-stream-mode").hidden = true;
     element.querySelector(".dc-assignment-legend").innerHTML = `
       <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-package-aoi" aria-hidden="true"></span>Package AOI</span>
       <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-package-detail" aria-hidden="true"></span>Detailed Features</span>
       <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-context" aria-hidden="true"></span>Saved Workspaces</span>
     `;
-    element.querySelector(".dc-prototype-toolbar > span").textContent =
-      "Live API · Automatic Workspaces · Manual overrides pending API support";
     for (const name of ["fail-load", "fail-save", "reset"]) get(name).hidden = true;
   }
   const basemapSelector = basemapSettings
@@ -120,9 +124,12 @@ export function createAssignmentPage({
   const listen = (node, name, handler) =>
     node.addEventListener(name, handler, { signal: abort.signal });
   const session = createAssignmentSession({ services });
+  const mapRetryControl = get("map-retry");
   let alive = true;
   const categoryRequests = createQueryLifecycle();
   const featureRequests = createQueryLifecycle();
+  let featureRequestController = null;
+  const packageSummaries = new Map();
   const workStreamRequests = createQueryLifecycle();
   let featurePage = 0;
   let workStreamMode = WORK_STREAM_LIST_MODE.ALL;
@@ -130,6 +137,8 @@ export function createAssignmentPage({
   let displayedId = null;
   let requestedId = null;
   let rows = [];
+  let loadedPage = null;
+  const pipelineNames = new Map();
   let rowsFeatureId = null;
   let workStreamsRequestPending = false;
   const featureRows = new Map();
@@ -157,6 +166,8 @@ export function createAssignmentPage({
   }
 
   function makeMap() {
+    map?.view?.ui?.remove?.(mapRetryControl);
+    get("map").parentElement?.append(mapRetryControl);
     basemapSelector?.setView(null);
     map?.destroy();
     map = null;
@@ -174,6 +185,7 @@ export function createAssignmentPage({
         },
       });
       basemapSelector?.setView(map.view ?? null);
+      map.view?.ui?.add?.(mapRetryControl, { position: "top-right", index: 2 });
       syncMap(session.snapshot());
     } catch {
       get("map-status").textContent = "Map initialization failed. Retry map when ready.";
@@ -183,7 +195,6 @@ export function createAssignmentPage({
   function syncMap(state) {
     if (live) {
       map?.selectContext(state.feature, state.record);
-      get("map-focus").disabled = !state.feature;
       return;
     }
     void map?.selectFeature(state.feature);
@@ -199,7 +210,7 @@ export function createAssignmentPage({
     return {
       type: get("type").value,
       status: get("status").value,
-      search: get("search").value,
+      search: live ? "" : get("search").value,
       page: featurePage,
       pageSize: 25,
     };
@@ -207,8 +218,11 @@ export function createAssignmentPage({
 
   async function loadFeatures() {
     clearTimeout(searchTimer);
+    featureRequestController?.abort();
+    const controller = new AbortController();
+    featureRequestController = controller;
     const isCurrent = featureRequests.begin();
-    const query = filterQuery();
+    const query = { ...filterQuery(), signal: controller.signal };
     currentQuery = query;
     get("list-status").textContent = `Loading ${entityName}s…`;
     get("feature-prev").disabled = true;
@@ -219,48 +233,110 @@ export function createAssignmentPage({
       const result = await services.features.search(query);
       if (!isCurrent()) return;
       featurePage = result.page;
-      const nextRows = [];
-
-      for (const feature of result.items) {
-        let button = featureRows.get(feature.id);
-        if (!button) {
-          button = document.createElement("button");
-          featureRows.set(feature.id, button);
-        }
-        button.type = "button";
-        button.className = "dc-feature-row";
-        button.dataset.featureId = feature.id;
-        const name = document.createElement("span");
-        name.textContent = feature.name;
-        const status = document.createElement("span");
-        status.className = `dc-assignment-status ${feature.status === "Assigned" ? "is-assigned" : feature.status === "Not assigned" ? "is-unassigned" : ""}`;
-        status.textContent = feature.status;
-        button.replaceChildren(name, status);
-        nextRows.push(button);
-      }
-
-      reconcileRows(get("features"), nextRows, get("search"));
-      const visibleIds = new Set(result.items.map((item) => item.id));
-      for (const id of featureRows.keys()) {
-        if (!visibleIds.has(id)) featureRows.delete(id);
-      }
-
-      get("list-status").textContent =
-        `${result.total} ${entityName}s${result.total ? "" : " — no matches"}`;
-      get("feature-page").textContent = result.total
-        ? `Page ${result.page + 1} of ${Math.ceil(result.total / result.pageSize)}`
-        : "No results";
-      get("feature-prev").disabled = !result.page;
-      get("feature-next").disabled = (result.page + 1) * result.pageSize >= result.total;
-      syncSelection(session.snapshot());
+      loadedPage = result;
+      // List pagination must never fan out into one bindings request per Package.
+      // Previously inspected Package summaries remain available across pages.
+      renderFeatureRows(result);
     } catch (error) {
       if (isCurrent()) {
+        loadedPage = null;
         get("list-status").textContent = error.message;
         get("features").replaceChildren();
       }
     } finally {
       if (isCurrent()) get("features").setAttribute("aria-busy", "false");
     }
+  }
+
+  function rememberSavedBindings(state) {
+    if (!live || !state.feature?.id || state.loading || state.saving || state.selectionError)
+      return;
+    if (state.reconciliationRequired) {
+      // A timed-out write may have committed; previously read bindings are not authoritative.
+      packageSummaries.delete(state.feature.id);
+      return;
+    }
+    if (!state.record?.relations) return;
+    const pipelineIds = Object.entries(state.record.relations)
+      .filter(([, binding]) => binding?.active)
+      .map(([pipelineId]) => pipelineId);
+    packageSummaries.set(state.feature.id, {
+      status: pipelineIds.length ? "Assigned" : "Not assigned",
+      pipelineIds,
+    });
+  }
+
+  function updateFeatureRowSummary(button, fallbackStatus = "") {
+    const summary = packageSummaries.get(button.dataset.featureId);
+    const status = summary?.status ?? fallbackStatus;
+    const badge = button.children[0]?.children[1];
+    if (badge) {
+      badge.textContent = status;
+      badge.hidden = !status;
+      badge.className = `dc-assignment-status ${status === "Assigned" ? "is-assigned" : status === "Not assigned" ? "is-unassigned" : ""}`;
+    }
+    if (!live) return;
+    const pipelineSummary = button.children[0]?.children[0]?.children[1];
+    if (!pipelineSummary) return;
+    const savedPipelines = (summary?.pipelineIds ?? []).map((id) => pipelineNames.get(id) ?? id);
+    pipelineSummary.textContent = savedPipelines.join(", ");
+    pipelineSummary.title = pipelineSummary.textContent;
+    pipelineSummary.hidden = !savedPipelines.length;
+  }
+
+  function renderFeatureRows(result) {
+    const query = live ? get("search").value : "";
+    const matches = live
+      ? result.items.filter((item) => matchesLoadedPackage(item, query))
+      : result.items;
+    const nextRows = [];
+
+    for (const feature of matches) {
+      let button = featureRows.get(feature.id);
+      if (!button) {
+        button = document.createElement("button");
+        featureRows.set(feature.id, button);
+      }
+      button.type = "button";
+      button.className = "dc-feature-row";
+      button.dataset.featureId = feature.id;
+      const top = document.createElement("span");
+      top.className = "dc-feature-row__primary";
+      const name = document.createElement("span");
+      name.textContent = feature.name;
+      const status = document.createElement("span");
+      status.className = "dc-assignment-status";
+      if (live) {
+        const identity = document.createElement("span");
+        identity.className = "dc-feature-row__identity";
+        const pipelines = document.createElement("span");
+        pipelines.className = "dc-feature-row__pipelines";
+        identity.append(name, pipelines);
+        top.append(identity, status);
+      } else {
+        top.append(name, status);
+      }
+      button.replaceChildren(top);
+      updateFeatureRowSummary(button, feature.status);
+      nextRows.push(button);
+    }
+
+    reconcileRows(get("features"), nextRows, get("search"));
+    const visibleIds = new Set(matches.map((item) => item.id));
+    for (const id of featureRows.keys()) {
+      if (!visibleIds.has(id)) featureRows.delete(id);
+    }
+
+    get("list-status").textContent =
+      live && query.trim()
+        ? `${matches.length} matching on this page${matches.length ? "" : " — try another page"}`
+        : `${result.total} ${entityName}s${result.total ? "" : " — no matches"}`;
+    get("feature-page").textContent = result.total
+      ? `Page ${result.page + 1} of ${Math.ceil(result.total / result.pageSize)}`
+      : "No results";
+    get("feature-prev").disabled = !result.page;
+    get("feature-next").disabled = (result.page + 1) * result.pageSize >= result.total;
+    syncSelection(session.snapshot());
   }
 
   function workStreamIds(state) {
@@ -298,6 +374,7 @@ export function createAssignmentPage({
     const scopedIds = workStreamIds(state);
     lastScopeKey = JSON.stringify([state.feature.id, workStreamMode, scopedIds]);
     get("work-stream-status").textContent = `Loading ${assignmentName}s…`;
+    get("work-stream-retry").hidden = true;
     workStreamsRequestPending = true;
     setWorkStreamsBusy(true);
 
@@ -305,11 +382,18 @@ export function createAssignmentPage({
       const result = await services.workStreams.list({ ids: scopedIds });
       if (!isCurrent() || state.feature.id !== session.snapshot().feature?.id) return;
 
+      for (const workStream of result.items) {
+        pipelineNames.set(String(workStream.id), workStream.name);
+      }
       rows = result.items.map((workStream) => {
         if (!workStreamRows.has(workStream.id)) {
           workStreamRows.set(
             workStream.id,
-            (live ? createPipelineRow : createWorkStreamRow)(workStream, session)
+            live
+              ? createPipelineRow(workStream, session, {
+                  listWorkspaces: services.workspaces?.list,
+                })
+              : createWorkStreamRow(workStream, session)
           );
         }
         return workStreamRows.get(workStream.id);
@@ -325,23 +409,35 @@ export function createAssignmentPage({
       );
 
       const visibleIds = new Set(result.items.map((item) => item.id));
-      for (const id of workStreamRows.keys()) {
-        if (!visibleIds.has(id)) workStreamRows.delete(id);
+      for (const [id, row] of workStreamRows) {
+        if (!visibleIds.has(id)) {
+          row.destroy?.();
+          workStreamRows.delete(id);
+        }
       }
 
       get("work-stream-status").textContent = result.total
         ? live
-          ? `${result.total} Pipelines. Workspaces follow AOI overlap; manual overrides require backend support.`
+          ? ""
           : `${result.total} Work streams. Any Work stream may be assigned.`
         : workStreamMode === WORK_STREAM_LIST_MODE.ACTIVE
           ? `No active ${assignmentName} assignments.`
           : `No ${assignmentName}s are available.`;
+      get("work-stream-retry").hidden = true;
+      if (live) {
+        const current = session.snapshot();
+        renderSavedBindings(current);
+        // Resolved Pipeline names also update previously visited Package rows.
+        for (const row of featureRows.values()) updateFeatureRowSummary(row);
+      }
     } catch (error) {
       if (isCurrent()) {
         get("work-stream-status").textContent = error.message;
+        get("work-stream-retry").hidden = false;
         // Old rows must not be mistaken for bindings of a newly selected Package.
         if (rowsFeatureId !== state.feature.id) {
           rows = [];
+          for (const row of workStreamRows.values()) row.destroy?.();
           workStreamRows.clear();
           get("work-streams").replaceChildren();
           rowsFeatureId = null;
@@ -362,12 +458,42 @@ export function createAssignmentPage({
 
     if (state.loading || state.selectionError) return;
     if (state.feature) {
-      const matches = matchesFeature(
-        { ...state.feature, status: assignmentStatus(state.record) },
-        currentQuery
-      );
-      get("selection-status").textContent =
-        `${state.feature.name} · ${assignmentStatus(state.record)}${matches ? "" : " · Outside the current filter; your editing context remains open."}`;
+      const matches =
+        matchesFeature(
+          { ...state.feature, status: assignmentStatus(state.record) },
+          currentQuery
+        ) &&
+        (!live || matchesLoadedPackage(state.feature, get("search").value));
+      get("selection-status").textContent = live
+        ? matches
+          ? ""
+          : "Outside the current filter; selection retained."
+        : `${state.feature.name} · ${assignmentStatus(state.record)}${matches ? "" : " · Outside the current filter; your editing context remains open."}`;
+    }
+  }
+
+  function renderSavedBindings(state) {
+    if (!live) return;
+    get("package-name").textContent = state.feature?.name ?? "";
+    const container = get("saved-bindings");
+    container.replaceChildren();
+    if (!state.feature) return;
+
+    for (const [pipelineId, binding] of Object.entries(state.record?.relations ?? {})) {
+      if (!binding?.active) continue;
+      const line = document.createElement("div");
+      line.className = "dc-information-panel__binding";
+      const name = document.createElement("strong");
+      name.textContent = pipelineNames.get(pipelineId) ?? pipelineId;
+      const workspaces = Array.isArray(binding.workspaces) ? binding.workspaces : [];
+      const workspaceNames = workspaces.map((item) => item.name).filter(Boolean);
+      line.append(name);
+      if (workspaceNames.length) {
+        const details = document.createElement("span");
+        details.textContent = ` · ${workspaceNames.join(", ")}`;
+        line.append(details);
+      }
+      container.append(line);
     }
   }
 
@@ -375,28 +501,25 @@ export function createAssignmentPage({
     get("information").replaceChildren();
     if (!feature) return;
 
+    const fields = live
+      ? [
+          ["Title", feature.title],
+          ["Category", feature.category],
+          ["Severity", severityLabel(feature.severity)],
+          ["Details", feature.details],
+          ["Nautical charts", feature.nauticalCharts],
+          ["Publication", feature.publication],
+        ]
+      : [
+          ["ID", feature.sourceId],
+          ["Title", feature.title],
+          ["References", feature.references],
+          ["Details", feature.details],
+          ["Nautical charts", feature.nauticalCharts],
+          ["Publication", feature.publication],
+        ];
     const dl = document.createElement("dl");
-    for (const [label, value] of [
-      ["ID", live ? feature.packageId : feature.sourceId],
-      ...(live
-        ? [
-            ["Short ID", feature.shortId],
-            ["Category", feature.category],
-            ["Severity", severityLabel(feature.severity)],
-            [
-              "AOI reference",
-              feature.geometryRef
-                ? `${feature.geometryRef.featureClass} / ${feature.geometryRef.globalId}`
-                : null,
-            ],
-          ]
-        : []),
-      ["Title", feature.title],
-      ["References", feature.references],
-      ["Details", feature.details],
-      ["Nautical charts", feature.nauticalCharts],
-      ["Publication", feature.publication],
-    ]) {
+    for (const [label, value] of fields) {
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
@@ -419,13 +542,15 @@ export function createAssignmentPage({
       state.reconciliationRequired ||
       resetting ||
       Boolean(state.validationError);
+    get("save").classList.toggle("is-actionable", !get("save").disabled);
     get("reconcile").hidden = !state.reconciliationRequired;
     get("reconcile").disabled = state.saving || state.loading || resetting;
     get("abandon").hidden = !state.reconciliationRequired;
     get("abandon").disabled = state.saving || state.loading || resetting;
     get("reconcile").textContent =
       state.saving && state.reconciliationRequired ? "Checking…" : "Check saved bindings";
-    get("save").textContent = state.saving ? "Saving…" : "Save";
+    get("save").title = state.saving ? "Saving bindings" : "Save bindings";
+    get("save").setAttribute("aria-label", get("save").title);
     get("draft-status").textContent = state.feature
       ? state.reconciliationRequired
         ? "Verify saved bindings"
@@ -434,12 +559,12 @@ export function createAssignmentPage({
           : state.dirty
             ? "Unsaved changes"
             : live
-              ? "Loaded binding state"
+              ? ""
               : "Saved state"
       : "";
     get("save-error").textContent =
       state.feature && !state.selectionError
-        ? state.error || state.validationError || state.record?.saveMessage || ""
+        ? state.error || state.validationError || (live ? "" : state.record?.saveMessage) || ""
         : "";
     get("selection-status").textContent = state.loading
       ? `Loading ${entityName}…`
@@ -451,20 +576,27 @@ export function createAssignmentPage({
         ? `${assignmentName} assignments for ${state.feature.name}`
         : `${assignmentName} assignments`
     );
-    get("active-count").textContent = state.draft
-      ? live
-        ? `${state.draft.activeIds.length} selected Pipelines`
-        : `${state.draft.activeIds.length} active · ${state.draft.comments.length} draft comments`
-      : "";
+    get("active-count").textContent =
+      state.draft && !live
+        ? `${state.draft.activeIds.length} active · ${state.draft.comments.length} draft comments`
+        : "";
     get("map-empty").hidden = state.loading || Boolean(state.feature);
     get("information").setAttribute("aria-busy", String(state.loading));
-    get("map-focus").disabled = state.loading || !state.feature;
     get("work-stream-mode").disabled = !state.feature || state.loading || resetting;
     get("work-stream-retry").disabled = !state.feature || state.loading || resetting;
     get("reset").disabled = state.loading || state.saving || resetting;
 
     syncWorkStreamMode(state);
     syncSelection(state);
+    if (!state.loading) {
+      rememberSavedBindings(state);
+      renderSavedBindings(state);
+      const selectedRow = featureRows.get(state.feature?.id);
+      if (selectedRow) {
+        const fallback = loadedPage?.items.find((item) => item.id === state.feature.id)?.status;
+        updateFeatureRowSummary(selectedRow, fallback);
+      }
+    }
     // A pending selection still refers to the previous committed Package, not an empty one.
     if (!state.loading && !state.selectionError) syncMap(state);
 
@@ -484,9 +616,11 @@ export function createAssignmentPage({
       if (!state.feature) {
         rows = [];
         rowsFeatureId = null;
+        for (const row of workStreamRows.values()) row.destroy?.();
         workStreamRows.clear();
         get("work-streams").replaceChildren();
         get("work-stream-status").textContent = `Select a ${entityName} to edit assignments.`;
+        get("work-stream-retry").hidden = true;
         setWorkStreamsBusy(false);
       } else {
         // Retain previous rows until the new Pipeline catalogue has loaded; never flash
@@ -530,7 +664,12 @@ export function createAssignmentPage({
   for (const field of ["type", "status", "search"]) {
     listen(get(field), field === "search" ? "input" : "change", () => {
       clearTimeout(searchTimer);
+      if (live && field === "search") {
+        if (loadedPage) renderFeatureRows(loadedPage);
+        return;
+      }
       featureRequests.invalidate();
+      featureRequestController?.abort();
       featurePage = 0;
       searchTimer = setTimeout(() => void loadFeatures(), field === "search" ? 180 : 0);
     });
@@ -577,8 +716,7 @@ export function createAssignmentPage({
     const saved = await session.save();
     if (alive && (saved || live)) void loadFeatures();
   });
-  listen(get("map-retry"), "click", createMapRetryHandler(makeMap));
-  listen(get("map-focus"), "click", () => void map?.focus?.());
+  listen(mapRetryControl, "click", createMapRetryHandler(makeMap));
   listen(get("fail-load"), "click", () => {
     services.testing.failNext("load");
     get("test-status").textContent = "The next mock load will fail once.";
@@ -593,7 +731,7 @@ export function createAssignmentPage({
       !(await guard.allow()) ||
       !alive ||
       !window.confirm(
-        "Reset this prototype's saved assignments and comments? Jobs and preferences will be kept."
+        "Reset this prototype's saved assignments and comments? Packages and preferences will be kept."
       )
     ) {
       return;
@@ -635,7 +773,7 @@ export function createAssignmentPage({
     try {
       const categories = await services.categories({ signal: abort.signal });
       if (!isCurrent()) return;
-      get("test-status").textContent = "";
+      get("category-status").textContent = "";
       const selected = get("type").value;
       get("type").replaceChildren(
         new Option("All categories", ""),
@@ -645,7 +783,7 @@ export function createAssignmentPage({
       get("type").title = "";
     } catch (error) {
       if (isCurrent())
-        get("test-status").textContent = `Category filters unavailable: ${error.message}`;
+        get("category-status").textContent = `Category filters unavailable: ${error.message}`;
     }
   }
   listen(get("feature-retry"), "click", () => void loadCategories());
@@ -660,6 +798,11 @@ export function createAssignmentPage({
     selectPackage(id, { notify = true } = {}) {
       return live ? selectFeature(id, { notify }) : Promise.resolve(false);
     },
+    getSelectedPackageShortId(expectedId = null) {
+      const feature = session.snapshot().feature;
+      if (!live || !feature || (expectedId && feature.id !== expectedId)) return null;
+      return typeof feature.shortId === "string" && feature.shortId.trim() ? feature.shortId : null;
+    },
     hasUnsavedDraft() {
       return session.snapshot().dirty;
     },
@@ -670,13 +813,18 @@ export function createAssignmentPage({
       alive = false;
       categoryRequests.destroy();
       featureRequests.destroy();
+      featureRequestController?.abort();
+      packageSummaries.clear();
       workStreamRequests.destroy();
       mapGeneration++;
       clearTimeout(searchTimer);
       abort.abort();
       guard.destroy();
       unsubscribe();
+      for (const row of workStreamRows.values()) row.destroy?.();
+      workStreamRows.clear();
       session.destroy();
+      map?.view?.ui?.remove?.(mapRetryControl);
       map?.destroy();
       basemapSelector?.destroy();
       element.remove();

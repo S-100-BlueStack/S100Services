@@ -100,7 +100,7 @@ test("live assignment rejects comments and unsupported search without performing
   const { services, calls } = fixture();
   await assert.rejects(
     services.assignments.save("p", { activeIds: [], comments: [{ text: "demo" }] }),
-    /demo mode/
+    /cannot be saved by this API/
   );
   await assert.rejects(services.features.search({ search: "NM" }), /not supported/);
   assert.deepEqual(calls, []);
@@ -282,4 +282,117 @@ test("an explicit local abandonment unlocks navigation without claiming server r
   assert.equal(session.snapshot().dirty, false);
   assert.equal(calls.filter((call) => call.startsWith("remove:")).length, 0);
   held.resolve();
+});
+
+test("Workspace preview mutations are rejected before any network writes", async () => {
+  const { services, calls } = fixture();
+  await assert.rejects(
+    services.assignments.save("p", {
+      activeIds: ["a"],
+      comments: [],
+      workspaceOverrides: { a: { "not-automatched": true } },
+    }),
+    /preview-only/
+  );
+  assert.deepEqual(calls, []);
+});
+
+test("Workspace selection catalogue collects every page for the requested Pipeline", async () => {
+  const requests = [];
+  const services = createLiveAssignmentServices({
+    workspaces: async (query) => {
+      requests.push(query);
+      return {
+        page: query.page,
+        pageSize: query.pageSize,
+        total: 201,
+        items: Array.from({ length: query.page === 0 ? 200 : 1 }, (_, i) => ({
+          id: `w${query.page * 200 + i}`,
+          key: JSON.stringify(["p", `w${query.page * 200 + i}`]),
+          name: `Workspace ${query.page * 200 + i}`,
+          pipelineId: "p",
+        })),
+      };
+    },
+  });
+  const result = await services.workspaces.list({ pipelineId: "p" });
+  assert.equal(result.items.length, 201);
+  assert.deepEqual(
+    requests.map((value) => [value.pipelineId, value.page, value.pageSize]),
+    [
+      ["p", 0, 200],
+      ["p", 1, 200],
+    ]
+  );
+});
+
+test("Workspace selection catalogue rejects cross-Pipeline entries", async () => {
+  const services = createLiveAssignmentServices({
+    workspaces: async () => ({
+      page: 0,
+      pageSize: 200,
+      total: 1,
+      items: [{ id: "w", key: "other/w", name: "Not in requested Pipeline", pipelineId: "other" }],
+    }),
+  });
+  await assert.rejects(services.workspaces.list({ pipelineId: "p" }), /different Pipeline scope/);
+});
+
+test("unfiltered Package pages never invent assignment status or bindings", async () => {
+  const services = createLiveAssignmentServices({
+    packages: async () => ({
+      items: [{ id: "p", category: "cat" }],
+      total: 1,
+      page: 0,
+      pageSize: 25,
+    }),
+  });
+  const result = await services.features.search({});
+  assert.equal(result.items[0].status, "");
+});
+
+test("Package pages never fan out into binding reads before selection", async () => {
+  const calls = [];
+  const services = createLiveAssignmentServices({
+    packages: async () => {
+      calls.push("packages");
+      return {
+        items: Array.from({ length: 25 }, (_, index) => ({ id: `pkg-${index}` })),
+        page: 0,
+        pageSize: 25,
+        total: 25,
+      };
+    },
+    pipelines: async () => {
+      calls.push("pipelines");
+      return [];
+    },
+    bindings: async (id) => {
+      calls.push(`bindings:${id}`);
+      return id === "pkg-0" ? [{ id: "binding-0", pipelineId: "enc", workspaces: [] }] : [];
+    },
+  });
+  const listing = await services.features.search({});
+  assert.equal(listing.items.length, 25);
+  assert.deepEqual(calls, ["packages"]);
+  assert.equal(services.features.bindingSummaries, undefined);
+  const chosen = await services.assignments.load("pkg-0");
+  assert.deepEqual(Object.keys(chosen.relations), ["enc"]);
+  assert.deepEqual(calls, ["packages", "bindings:pkg-0"]);
+});
+
+test("Package binding reads remain isolated to the requested identity", async () => {
+  const calls = [];
+  const services = createLiveAssignmentServices({
+    bindings: async (id, { signal }) => {
+      calls.push({ id, signal });
+      return [{ id: `binding-${id}`, pipelineId: "enc", workspaces: [] }];
+    },
+  });
+  const controller = new AbortController();
+  const record = await services.assignments.load("pkg-7", { signal: controller.signal });
+  assert.deepEqual(Object.keys(record.relations), ["enc"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id, "pkg-7");
+  assert.ok(calls[0].signal instanceof AbortSignal);
 });

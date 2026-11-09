@@ -46,6 +46,6 @@ export async function replaceJobLayerFeatures({
   ].find((result) => result.error);
 
   if (failedEdit) {
-    throw new Error(failedEdit.error?.message || "Job layer edits failed.");
+    throw new Error(failedEdit.error?.message || "Package layer edits failed.");
   }
 }

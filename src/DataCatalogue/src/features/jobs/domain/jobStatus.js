@@ -1,40 +1,30 @@
 export const JOB_STATUS = Object.freeze({
   TODO: "todo",
-  IN_PROGRESS: "inProgress",
+  IN_PROGRESS: "inProgress", // Legacy mock input; not an actionable status.
   DONE: "done",
+  NO_UPDATE: "noUpdate",
 });
 
 export const JOB_STATUS_OPTIONS = Object.freeze([
-  {
-    value: JOB_STATUS.TODO,
-    label: "To do",
-  },
-  {
-    value: JOB_STATUS.IN_PROGRESS,
-    label: "In Progress",
-  },
-  {
-    value: JOB_STATUS.DONE,
-    label: "Done",
-  },
+  { value: JOB_STATUS.DONE, label: "Done" },
+  { value: JOB_STATUS.NO_UPDATE, label: "No update" },
 ]);
 
-const JOB_STATUS_LABEL_BY_VALUE = new Map(
-  JOB_STATUS_OPTIONS.map((option) => [option.value, option.label])
-);
+const VALID_STATUSES = new Set(Object.values(JOB_STATUS));
+const TERMINAL_STATUSES = new Set([JOB_STATUS.DONE, JOB_STATUS.NO_UPDATE]);
 
 export function normalizeJobStatus(value) {
-  if (JOB_STATUS_LABEL_BY_VALUE.has(value)) {
-    return value;
-  }
-
-  return JOB_STATUS.TODO;
+  return VALID_STATUSES.has(value) ? value : JOB_STATUS.TODO;
 }
 
 export function getJobStatusLabel(value) {
-  return JOB_STATUS_LABEL_BY_VALUE.get(value) ?? "To do";
+  return JOB_STATUS_OPTIONS.find((item) => item.value === value)?.label ?? "Open";
 }
 
 export function isActiveJobStatus(value) {
-  return value !== JOB_STATUS.DONE;
+  return !TERMINAL_STATUSES.has(value);
+}
+
+export function isCompletedJobStatus(value) {
+  return TERMINAL_STATUSES.has(value);
 }

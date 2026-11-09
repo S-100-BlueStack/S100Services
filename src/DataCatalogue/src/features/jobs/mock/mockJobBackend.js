@@ -58,14 +58,14 @@ let generatedJobCounter = 1;
 
 export async function loadMockJobs() {
   await simulateLatency();
-  maybeFail(mockConfig.loadFailureRate, "Mock Jobs could not be loaded.");
+  maybeFail(mockConfig.loadFailureRate, "Mock Packages could not be loaded.");
 
   return jobs.map(cloneJob);
 }
 
 export async function updateMockJobStatus(jobId, nextStatus) {
   await simulateLatency();
-  maybeFail(mockConfig.mutationFailureRate, "Mock Job status update failed.");
+  maybeFail(mockConfig.mutationFailureRate, "Mock Package status update failed.");
 
   const normalizedStatus = normalizeJobStatus(nextStatus);
   const jobIndex = jobs.findIndex((job) => job.id === jobId);
@@ -124,7 +124,7 @@ function createFollowUpJob(sourceJob) {
   const generatedJob = normalizeJob({
     id: createGeneratedJobId(),
     title: `Follow-up: ${sourceJob.title}`,
-    summary: "Automatically created by the mock backend to simulate cyclic Job work.",
+    summary: "Automatically created by the mock backend to simulate cyclic Package work.",
     createdAt: createdAt.toISOString(),
     deadline: deadline.toISOString(),
     priority: sourceJob.priority === JOB_PRIORITY.HIGH ? JOB_PRIORITY.MEDIUM : sourceJob.priority,

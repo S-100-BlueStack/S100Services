@@ -82,7 +82,7 @@ test("createJobLayerFeatureData creates stable popup and renderer attributes", (
 
   assert.equal(pointAttributes[JOB_LAYER_FIELD.OBJECT_ID], 1);
   assert.equal(pointAttributes[JOB_LAYER_FIELD.JOB_ID], "job-point");
-  assert.equal(pointAttributes[JOB_LAYER_FIELD.STATUS_LABEL], "To do");
+  assert.equal(pointAttributes[JOB_LAYER_FIELD.STATUS_LABEL], "Open");
   assert.equal(pointAttributes[JOB_LAYER_FIELD.PRIORITY_LABEL], "High");
   assert.equal(pointAttributes[JOB_LAYER_FIELD.RELATED_AOI_COUNT], 1);
   assert.equal(pointAttributes[JOB_LAYER_FIELD.RENDER_CLASS], JOB_RENDER_CLASS.ACTIVE_HIGH);
@@ -108,5 +108,14 @@ test("getJobRenderClass keeps Done Jobs visually separate from priority", () => 
       status: "todo",
     }),
     JOB_RENDER_CLASS.ACTIVE_LOW
+  );
+});
+
+test("No update uses the completed render class and its exact status label", () => {
+  assert.equal(getJobRenderClass({ priority: "high", status: "noUpdate" }), JOB_RENDER_CLASS.DONE);
+  const job = { ...JOBS[0], status: "noUpdate" };
+  assert.equal(
+    createJobLayerFeatureData([job]).pointFeatures[0].attributes[JOB_LAYER_FIELD.STATUS_LABEL],
+    "No update"
   );
 });

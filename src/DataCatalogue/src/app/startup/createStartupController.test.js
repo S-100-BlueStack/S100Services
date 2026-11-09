@@ -57,9 +57,9 @@ test("startup controller loads map, Jobs and Job map layers in order", async () 
   assert.deepEqual(getStageCallOrder(calls), [
     "retry:map workspace",
     "map:start",
-    "retry:Jobs load",
+    "retry:Packages load",
     "jobs:load",
-    "retry:Job map rendering",
+    "retry:Package map rendering",
     "map:refreshJobData",
     "paint",
   ]);
@@ -102,7 +102,7 @@ test("startup retry after Jobs load failure reuses the ready map workspace", asy
   assert.equal(mapController.startCalls.length, 1);
   assert.equal(jobStore.loadCalls.length, 2);
   assert.equal(mapController.refreshCalls.length, 1);
-  assert.equal(loader.startLoadingCalls[1], "Loading Jobs...");
+  assert.equal(loader.startLoadingCalls[1], "Loading Packages...");
   assert.equal(loader.failCalls.length, 1);
 });
 
@@ -143,7 +143,7 @@ test("startup retry after Job map rendering failure reuses loaded map and Jobs",
   assert.equal(mapController.startCalls.length, 1);
   assert.equal(jobStore.loadCalls.length, 1);
   assert.equal(mapController.refreshCalls.length, 2);
-  assert.equal(loader.startLoadingCalls[1], "Rendering Jobs on the map...");
+  assert.equal(loader.startLoadingCalls[1], "Rendering Packages on the map...");
   assert.equal(loader.failCalls.length, 1);
 });
 
@@ -173,7 +173,7 @@ test("startup controller rejects invalid Jobs load results before rendering Job 
   const result = await controller.runStartup();
 
   assert.equal(result.ok, false);
-  assert.equal(result.error.message, "Jobs loader returned an invalid result.");
+  assert.equal(result.error.message, "Packages loader returned an invalid result.");
   assert.equal(mapController.startCalls.length, 1);
   assert.equal(jobStore.loadCalls.length, 1);
   assert.equal(mapController.refreshCalls.length, 0);

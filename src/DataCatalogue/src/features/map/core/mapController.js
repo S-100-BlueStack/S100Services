@@ -4,10 +4,7 @@ import { createPackageGraphics } from "../packages/createPackageGraphics.js";
 import { createPackageGeometryOverlay } from "../packages/createPackageGeometryOverlay.js";
 import { createWorkspaceGraphics } from "../workspaces/createWorkspaceGraphics.js";
 import { createWorkspaceCoverageStatus } from "../workspaces/createWorkspaceCoverageStatus.js";
-import {
-  createWorkspaceOverlay,
-  workspaceOverlayMessage,
-} from "../workspaces/createWorkspaceOverlay.js";
+import { createWorkspaceOverlay } from "../workspaces/createWorkspaceOverlay.js";
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { validateAoiFeatureLayer } from "../../aoi/services/aoiService.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
@@ -397,7 +394,9 @@ export function createMapController({
         return Promise.resolve();
       }
       selectedPackageId = nextId;
-      return packageOverlay?.setPackage(nextId, { autoFocus: Boolean(nextId) }) ?? Promise.resolve();
+      return (
+        packageOverlay?.setPackage(nextId, { autoFocus: Boolean(nextId) }) ?? Promise.resolve()
+      );
     }
     return clearHoverAfterSelection(
       jobHighlightController?.highlightJob(selectedJob) ?? Promise.resolve()
@@ -523,7 +522,7 @@ export function createMapController({
   }
 
   async function refreshJobData({ jobs } = {}) {
-    // Live Package AOIs are independent GraphicsLayer overlays, never mock Job features.
+    // Live Package AOIs are independent GraphicsLayer overlays, never mock Package features.
     if (runtimeConfig?.sourceMode === "live" || !jobLayerUpdateQueue) {
       return {
         ok: true,
@@ -555,7 +554,7 @@ export function createMapController({
     } catch (error) {
       return {
         ok: false,
-        error: normalizeError(error, "Job map data could not be refreshed."),
+        error: normalizeError(error, "Package map data could not be refreshed."),
       };
     }
   }
@@ -754,7 +753,7 @@ export function createMapController({
       }
 
       if (!result.ok) {
-        onJobLayerError?.(normalizeError(result.error, "Job geometry could not be loaded."));
+        onJobLayerError?.(normalizeError(result.error, "Package geometry could not be loaded."));
       }
     });
   }
@@ -885,7 +884,7 @@ export function createMapController({
         status: MAP_STATUS.WARNING,
         title: "No AOIs match the overview filter",
         message:
-          "The active AOI overview and Job filters do not match any AOIs. Clear filters to show all AOIs.",
+          "The active AOI overview and Package filters do not match any AOIs. Clear filters to show all AOIs.",
       });
 
       return;

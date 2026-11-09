@@ -13,7 +13,7 @@ export function createJobPopupActions() {
   return [
     {
       id: JOB_POPUP_ACTION.SHOW_JOB_DETAILS,
-      title: "Show Job details",
+      title: "Show Package details",
       icon: "information",
     },
   ];
@@ -89,7 +89,7 @@ export function createJobSelectionFromGraphic(graphic) {
 
   return {
     jobId: normalizeOptionalString(attributes[JOB_LAYER_FIELD.JOB_ID]),
-    jobTitle: normalizeOptionalString(attributes[JOB_LAYER_FIELD.TITLE]) || "Selected Job",
+    jobTitle: normalizeOptionalString(attributes[JOB_LAYER_FIELD.TITLE]) || "Selected Package",
     objectId: attributes[JOB_LAYER_FIELD.OBJECT_ID],
     geometryType: normalizeOptionalString(
       attributes[JOB_LAYER_FIELD.GEOMETRY_TYPE] ?? graphic?.geometry?.type

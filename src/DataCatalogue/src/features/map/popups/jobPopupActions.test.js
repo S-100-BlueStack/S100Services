@@ -78,7 +78,7 @@ test("createJobSelectionFromGraphic uses fallback title for missing title", () =
 
   assert.deepEqual(selectedJob, {
     jobId: "job-002",
-    jobTitle: "Selected Job",
+    jobTitle: "Selected Package",
     objectId: 2,
     geometryType: "point",
     priority: "",
@@ -95,7 +95,7 @@ test("createJobSelectionFromGraphic returns empty Job id when graphic is missing
 
   assert.deepEqual(selectedJob, {
     jobId: "",
-    jobTitle: "Selected Job",
+    jobTitle: "Selected Package",
     objectId: undefined,
     geometryType: "",
     priority: "",

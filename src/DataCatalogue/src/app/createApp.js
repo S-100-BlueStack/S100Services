@@ -125,7 +125,7 @@ export async function createApp(rootElement) {
     },
     onJobLayerError(error) {
       showErrorNoticeAfterStartup({
-        title: "Job geometry could not be loaded",
+        title: "Package geometry could not be loaded",
         message: error.message,
       });
     },
@@ -161,14 +161,14 @@ export async function createApp(rootElement) {
         .then((result) => {
           if (!result.ok) {
             showErrorNotice({
-              title: "Related Jobs could not be shown on the map",
+              title: "Related Packages could not be shown on the map",
               message: result.error.message,
             });
           }
         })
         .catch((error) => {
           showErrorNotice({
-            title: "Related Jobs could not be shown on the map",
+            title: "Related Packages could not be shown on the map",
             message: error.message,
           });
         });
@@ -190,8 +190,8 @@ export async function createApp(rootElement) {
 
       if (!normalizedSelectedJob.jobId) {
         showErrorNotice({
-          title: "Job selection failed",
-          message: "The selected Job does not expose a usable identifier.",
+          title: "Package selection failed",
+          message: "The selected Package does not expose a usable identifier.",
         });
 
         return;
@@ -223,7 +223,7 @@ export async function createApp(rootElement) {
   const shellElement = document.createElement("div");
   shellElement.className = `data-catalogue-app${live ? " data-catalogue-app--live" : ""}`;
   blockShellForStartup(workspace.element);
-  // Live Jobs are available immediately, independently of map geometry loading.
+  // Live Packages are available immediately, independently of map geometry loading.
   navbar.jobsButton.disabled = !live;
   navbar.filtersButton.disabled = true;
   shellElement.append(navbar.element, jobsWorkflowHost, noticeRegion);
@@ -265,12 +265,12 @@ export async function createApp(rootElement) {
         onWorkspacesLoaded(workspaces) {
           workspaceJobColorSync.setCatalogue(workspaces);
           void mapController.setWorkspaceCatalog(workspaces, { reload: true, autoFocus: false });
-          // Jobs belong to every Workspace, regardless of which Pipelines are shown on the map.
+          // Packages belong to every Workspace, regardless of which Pipelines are shown on the map.
           resetJobsPanelContext();
           const wasLoaded = hasLoadedJobCatalogue;
           liveJobs.setWorkspaces(workspaces);
           hasLoadedJobCatalogue = true;
-          // Only the first catalogue load can be joined by a pending Jobs read.
+          // Only the first catalogue load can be joined by a pending Packages read.
           // Later catalogue reloads must supersede any read using older scopes.
           if (wasLoaded || !jobStore.getSnapshot().isLoading) {
             void jobStore.loadJobs({ clear: true });
@@ -316,7 +316,7 @@ export async function createApp(rootElement) {
   });
 
   if (live) {
-    // Job Details is also opened from the list, not only from map popups.
+    // Package Details is also opened from the list, not only from map popups.
     // Repeated details rerenders do not refetch geometry for an unchanged Package.
     jobsPanel.element.addEventListener(
       "data-catalogue:job-details-mode-changed",
@@ -377,8 +377,8 @@ export async function createApp(rootElement) {
 
       if (!normalizedSelectedJob.jobId) {
         showErrorNotice({
-          title: "Job map focus failed",
-          message: "The selected Job does not expose a usable identifier.",
+          title: "Package map focus failed",
+          message: "The selected Package does not expose a usable identifier.",
         });
 
         return;
@@ -393,14 +393,14 @@ export async function createApp(rootElement) {
         .then((result) => {
           if (!result.ok) {
             showErrorNotice({
-              title: "Job map focus failed",
+              title: "Package map focus failed",
               message: result.error.message,
             });
           }
         })
         .catch((error) => {
           showErrorNotice({
-            title: "Job map focus failed",
+            title: "Package map focus failed",
             message: error.message,
           });
         });
@@ -473,15 +473,6 @@ export async function createApp(rootElement) {
     { signal: appEventAbortController.signal }
   );
 
-  jobsPanel.resetStatusesButton?.addEventListener(
-    "click",
-    () => {
-      liveJobs.resetStatuses();
-      void jobStore.loadJobs({ clear: true });
-    },
-    { signal: appEventAbortController.signal }
-  );
-
   navbar.jobsButton.addEventListener("click", () => jobsPanelActions.toggle(), {
     signal: appEventAbortController.signal,
   });
@@ -536,7 +527,7 @@ export async function createApp(rootElement) {
   function applySelectedJobMapHighlights(selectedJob) {
     void mapController.highlightJob(selectedJob).catch((error) => {
       showErrorNotice({
-        title: "Job highlight failed",
+        title: "Package highlight failed",
         message: error.message,
       });
     });

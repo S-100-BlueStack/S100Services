@@ -15,22 +15,22 @@ export const JOB_CLUSTER_PRESET_OPTIONS = Object.freeze([
   {
     value: JOB_CLUSTER_PRESET.OFF,
     label: "Off",
-    description: "Show individual Job points.",
+    description: "Show individual Package points.",
   },
   {
     value: JOB_CLUSTER_PRESET.SMALL,
     label: "Small",
-    description: "Use a smaller Job point clustering radius.",
+    description: "Use a smaller Package point clustering radius.",
   },
   {
     value: JOB_CLUSTER_PRESET.MEDIUM,
     label: "Medium",
-    description: "Use ArcGIS-style basic Job point clustering.",
+    description: "Use ArcGIS-style basic Package point clustering.",
   },
   {
     value: JOB_CLUSTER_PRESET.LARGE,
     label: "Large",
-    description: "Use a larger Job point clustering radius.",
+    description: "Use a larger Package point clustering radius.",
   },
 ]);
 
@@ -38,7 +38,7 @@ export const JOB_CLUSTER_STYLE_OPTIONS = Object.freeze([
   {
     value: JOB_CLUSTER_STYLE.COUNT,
     label: "Count",
-    description: "Show clusters as simple Job counts.",
+    description: "Show clusters as simple Package counts.",
   },
   {
     value: JOB_CLUSTER_STYLE.PRIORITY_PIE,
@@ -48,7 +48,7 @@ export const JOB_CLUSTER_STYLE_OPTIONS = Object.freeze([
   {
     value: JOB_CLUSTER_STYLE.PRIORITY_GROUPS,
     label: "Priority groups",
-    description: "Cluster Low, Medium and High priority Jobs separately.",
+    description: "Cluster Low, Medium and High priority Packages separately.",
   },
 ]);
 

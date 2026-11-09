@@ -1,3 +1,8 @@
+import { collectPages } from "../../../shared/api/catalogueService.js";
+import {
+  workspacePreviewChangeCount,
+  WORKSPACE_PREVIEW_UNSAVED_MESSAGE,
+} from "../domain/workspacePreview.js";
 import {
   BindingRequestTimeoutError,
   withBindingRequestDeadline,
@@ -67,6 +72,8 @@ export function createLiveAssignmentServices(
       return bindingRecord(await readBindings(id));
     },
     save(id, draft) {
+      if (workspacePreviewChangeCount(draft))
+        return Promise.reject(new Error(WORKSPACE_PREVIEW_UNSAVED_MESSAGE));
       if (pending.has(id)) return pending.get(id);
       const desired = [...new Set(draft.activeIds)];
       const operation = saveBindings(id, desired, draft.comments).finally(() => pending.delete(id));
@@ -76,7 +83,7 @@ export function createLiveAssignmentServices(
   };
 
   async function saveBindings(id, desired, comments = []) {
-    if (comments.length) throw new Error("Comments are available only in demo mode.");
+    if (comments.length) throw new Error("Binding comments cannot be saved by this API.");
     // Preflight is always authoritative. A previous unsuccessful response may have committed.
     const existing = await readBindings(id);
     const current = new Set(existing.map((binding) => binding.pipelineId));
@@ -166,7 +173,7 @@ export function createLiveAssignmentServices(
           items: result.items.map((item) => ({
             ...item,
             type: item.category,
-            status: status || "Select to view bindings",
+            status: status || "",
           })),
         };
       },
@@ -179,6 +186,20 @@ export function createLiveAssignmentServices(
       async list({ ids = null, signal } = {}) {
         const pipelines = await catalogue.pipelines({ signal });
         const items = ids === null ? pipelines : pipelines.filter((item) => ids.includes(item.id));
+        return { items, total: items.length };
+      },
+    },
+    workspaces: {
+      async list({ pipelineId, signal } = {}) {
+        if (typeof pipelineId !== "string" || !pipelineId.trim())
+          throw new Error("Pipeline ID is required for Workspace listing.");
+        const items = await collectPages(
+          ({ page, pageSize, signal: requestSignal }) =>
+            catalogue.workspaces({ pipelineId, page, pageSize, signal: requestSignal }),
+          { signal }
+        );
+        if (items.some((item) => item.pipelineId !== pipelineId))
+          throw new Error("Workspace catalogue returned a different Pipeline scope.");
         return { items, total: items.length };
       },
     },

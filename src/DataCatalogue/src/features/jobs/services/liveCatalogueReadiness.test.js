@@ -81,7 +81,6 @@ async function withCatalogueFixture(
       return { id, shortId: "NM1000", severity: "0" };
     },
   };
-  let visibility;
   const adapter = createLiveJobServiceAdapter({
     catalogue,
     ensureWorkspaces: () => visibility.ensureLoaded(),
@@ -89,7 +88,7 @@ async function withCatalogueFixture(
   const store = createJobStore({ service: createJobService({ adapter }) });
   const container = new TestElement("div");
   let hasLoadedJobCatalogue = false;
-  visibility = createPipelineVisibility({
+  const visibility = createPipelineVisibility({
     catalogue,
     container,
     onChange() {},

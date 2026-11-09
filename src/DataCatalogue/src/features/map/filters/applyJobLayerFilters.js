@@ -1,7 +1,7 @@
 import { JOB_PRIORITY } from "../../jobs/domain/jobPriority.js";
 import {
   normalizeJobFilters,
-  shouldRevealDoneJobsForFilters,
+  shouldRevealCompletedJobsForFilters,
 } from "../../jobs/domain/jobFilters.js";
 import { JOB_STATUS } from "../../jobs/domain/jobStatus.js";
 import { JOB_LAYER_FIELD } from "../layers/jobLayerFeatureData.js";
@@ -32,12 +32,16 @@ export function createJobLayerDefinitionExpression(filters = {}, { scopedJobIds 
   const normalizedScope = normalizeScopedJobIds(scopedJobIds);
   const expressionParts = [];
 
-  if (!shouldRevealDoneJobsForFilters(normalizedFilters)) {
-    expressionParts.push(`${JOB_LAYER_FIELD.STATUS} <> '${escapeSqlString(JOB_STATUS.DONE)}'`);
+  if (!shouldRevealCompletedJobsForFilters(normalizedFilters)) {
+    expressionParts.push(
+      `${JOB_LAYER_FIELD.STATUS} NOT IN ('${escapeSqlString(JOB_STATUS.DONE)}', '${escapeSqlString(JOB_STATUS.NO_UPDATE)}')`
+    );
   }
 
   if (normalizedFilters.activeOnly) {
-    expressionParts.push(`${JOB_LAYER_FIELD.STATUS} <> '${escapeSqlString(JOB_STATUS.DONE)}'`);
+    expressionParts.push(
+      `${JOB_LAYER_FIELD.STATUS} NOT IN ('${escapeSqlString(JOB_STATUS.DONE)}', '${escapeSqlString(JOB_STATUS.NO_UPDATE)}')`
+    );
   }
 
   if (normalizedFilters.highPriorityOnly) {

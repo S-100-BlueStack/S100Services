@@ -17,9 +17,10 @@
 
 .header-center {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  align-self: stretch;
   flex: 0 0 auto;
-  gap: 24px;
+  gap: 30px;
   min-width: 0;
   font-size: 16px;
   font-weight: 600;
@@ -45,7 +46,8 @@
 .navbar-title-link:visited {
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
+  position: relative;
+  align-self: stretch;
   padding: 0 2px;
   color: inherit;
   line-height: 1;
@@ -57,8 +59,35 @@
 .navbar-title-link:focus,
 .navbar-title-link:active {
   color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  text-decoration: none;
+}
+
+/* The active route uses the full-height underline treatment from Product Catalogue. */
+.navbar-title-link::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 180ms ease-out;
+  pointer-events: none;
+}
+.navbar-title-link[aria-current="page"]::after,
+.navbar-title-link:not([aria-current="page"]):hover::after,
+.navbar-title-link:not([aria-current="page"]):focus-visible::after {
+  transform: scaleX(1);
+}
+.navbar-title-link:focus-visible {
+  outline: 2px solid white;
+  outline-offset: -4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .navbar-title-link::after {
+    transition: none;
+  }
 }
 
 .navbar-panel-button {
@@ -210,25 +239,7 @@
   border-radius: 0;
 }
 
-/* Page navigation stays in the header; map tools belong to the left Action Bar. */
-.navbar-nav-link,
-.navbar-nav-link:visited {
-  color: #fff;
-  text-decoration: none;
-  font-size: 0.88rem;
-  font-weight: 500;
-  padding: 0.45rem 0.6rem;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-}
-.navbar-nav-link:hover,
-.navbar-nav-link[aria-current="page"] {
-  border-bottom-color: currentColor;
-}
-.navbar-nav-link:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: -2px;
-}
+/* Both navbar routes use the same title typography and active underline. */
 #header > #jobs-toggle[hidden] {
   display: none;
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createJobList } from "./jobList.js";
+import { createJobsOverlay } from "../../../app/ui/createJobsOverlay.js";
 import { createJobStore } from "../state/jobStore.js";
 
 class TestElement {
@@ -113,9 +114,9 @@ function assertRefreshIconButton(root, { disabled = false } = {}) {
   assert.equal(buttons[0].type, "button");
   assert.equal(
     buttons[0].attributes.get("aria-label"),
-    disabled ? "Refreshing Jobs" : "Refresh Jobs"
+    disabled ? "Refreshing Packages" : "Refresh Packages"
   );
-  assert.equal(buttons[0].title, disabled ? "Refreshing Jobs" : "Refresh Jobs");
+  assert.equal(buttons[0].title, disabled ? "Refreshing Packages" : "Refresh Packages");
   assert.equal(buttons[0].disabled, disabled);
   assert.equal(buttons[0].textContent, "");
   assert.equal(findByTag(buttons[0], "calcite-icon")[0].icon, "refresh");
@@ -204,7 +205,7 @@ test("Live Job Details show unique context and editable status without duplicate
       findByClass(view.element, "job-details__package-title")[0].textContent,
       "Harbour notice"
     );
-    assert.equal(findByClass(view.element, "job-details__status")[0].textContent, "To do");
+    assert.equal(findByClass(view.element, "job-details__status")[0].textContent, "Open");
     assert.equal(
       findByClass(view.element, "job-card__priority")[0].textContent,
       "Severity 9007199254740993"
@@ -216,8 +217,7 @@ test("Live Job Details show unique context and editable status without duplicate
     assert.equal(findByClass(view.element, "job-details__hint").length, 0);
     assert.equal(findByClass(view.element, "job-details__section-title").length, 0);
     assert.equal(findByClass(view.element, "job-details__aoi-list").length, 0);
-    assert.equal(findByClass(view.element, "job-status-button").length, 3);
-    assertRefreshIconButton(view.element);
+    assert.equal(findByClass(view.element, "job-status-button").length, 2);
     assert.ok(!elementText(view.element).includes('["package","enc","east"]'));
 
     view.showJobListFromDetails();
@@ -226,18 +226,21 @@ test("Live Job Details show unique context and editable status without duplicate
   });
 });
 
-test("Jobs list Refresh is icon-only for both live and mock modes", () => {
+test("Packages header Refresh is icon-only and remains mounted across detail navigation", () => {
   withDocument(() => {
     for (const source of ["live", "mock"]) {
-      const { store } = fixture(source);
-      const view = createJobList({ store, sourceMode: source });
-      assertRefreshIconButton(view.element);
-      view.destroy();
+      const { store, job } = fixture(source);
+      const overlay = createJobsOverlay({ jobStore: store, sourceMode: source });
+      const original = assertRefreshIconButton(overlay.element);
+      overlay.showJobDetails({ jobId: job.id });
+      assert.equal(assertRefreshIconButton(overlay.element), original);
+      assert.equal(findByClass(overlay.element, "job-list__refresh-button").length, 1);
+      overlay.destroy();
     }
   });
 });
 
-test("Busy Jobs Refresh remains visibly disabled with an accessible label", () => {
+test("Busy Packages header Refresh remains disabled with an accessible label", () => {
   withDocument(() => {
     const { store } = fixture("live");
     const getSnapshot = store.getSnapshot;
@@ -246,32 +249,20 @@ test("Busy Jobs Refresh remains visibly disabled with an accessible label", () =
       listener(store.getSnapshot());
       return () => {};
     };
-    const view = createJobList({ store, sourceMode: "live" });
-    assertRefreshIconButton(view.element, { disabled: true });
-    findByClass(view.element, "job-card__details-action")[0].dispatchEvent({ type: "click" });
-    assertRefreshIconButton(view.element, { disabled: true });
-    view.destroy();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    assertRefreshIconButton(overlay.element, { disabled: true });
+    overlay.destroy();
   });
 });
 
-test("Missing Job details retain an icon-only Refresh recovery action", () => {
+test("Missing Package details have Back and retained header Refresh recovery", () => {
   withDocument(() => {
     const { store } = fixture("live");
-    const view = createJobList({ store, sourceMode: "live" });
-    void view.showJobDetails({ jobId: "missing-job" });
-    assert.equal(findByClass(view.element, "job-list__state--error").length, 1);
-    assertRefreshIconButton(view.element);
-    view.destroy();
-  });
-});
-
-test("Jobs detail Refresh stays icon-only in mock mode", () => {
-  withDocument(() => {
-    const { store } = fixture("mock");
-    const view = createJobList({ store, sourceMode: "mock" });
-    findByClass(view.element, "job-card__details-action")[0].dispatchEvent({ type: "click" });
-    assertRefreshIconButton(view.element);
-    view.destroy();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    void overlay.showJobDetails({ jobId: "missing-job" });
+    assert.equal(findByClass(overlay.element, "job-list__state--error").length, 1);
+    assertRefreshIconButton(overlay.element);
+    overlay.destroy();
   });
 });
 
@@ -294,7 +285,9 @@ test("Mock Jobs retain expansion, AOI details and existing map actions", () => {
     );
     assert.equal(findByClass(view.element, "job-details__aoi-item").length, 1);
     assert.ok(
-      findByClass(view.element, "job-details__fact-label").some((e) => e.textContent === "Job ID")
+      findByClass(view.element, "job-details__fact-label").some(
+        (e) => e.textContent === "Package ID"
+      )
     );
     view.destroy();
   });
@@ -454,19 +447,19 @@ test("keyboard status focus survives a store emission replacing the live Job car
     };
     const view = createJobList({ store, sourceMode: "live" });
     const first = findByClass(view.element, "job-status-button").find(
-      (button) => button.dataset.jobFocus === "status:inProgress"
+      (button) => button.dataset.jobFocus === "status:done"
     );
     first.focus();
     view.element.dispatchEvent({ type: "keydown" });
-    publish({ jobs: [{ ...job, status: "inProgress" }], isLoading: false, error: null });
+    publish({ jobs: [{ ...job, status: "todo" }], isLoading: false, error: null });
     assert.notEqual(globalThis.document.activeElement, first);
-    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "status:inProgress");
+    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "status:done");
     assert.equal(globalThis.document.activeElement.disabled, false);
     view.destroy();
   });
 });
 
-test("keyboard Refresh focus survives the loading state and completion", () => {
+test("Keyboard focus stays on the retained header Refresh across list rerenders", () => {
   withDocument(() => {
     const { job } = fixture("live");
     let publish;
@@ -478,19 +471,20 @@ test("keyboard Refresh focus survives the loading state and completion", () => {
         return () => {};
       },
     };
-    const view = createJobList({ store, sourceMode: "live" });
-    assertRefreshIconButton(view.element).focus();
-    view.element.dispatchEvent({ type: "keydown" });
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const refresh = assertRefreshIconButton(overlay.element);
+    refresh.focus();
     publish({ jobs: [job], isLoading: true, error: null });
-    assert.equal(globalThis.document.activeElement, view.element);
+    assert.equal(globalThis.document.activeElement, refresh);
+    assert.equal(refresh.disabled, true);
     publish({ jobs: [job], isLoading: false, error: null });
-    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "refresh");
-    assert.equal(globalThis.document.activeElement.disabled, false);
-    view.destroy();
+    assert.equal(globalThis.document.activeElement, refresh);
+    assert.equal(refresh.disabled, false);
+    overlay.destroy();
   });
 });
 
-test("disappearing focused Job moves focus to the panel Refresh control", () => {
+test("Disappearing focused Package falls back to the stable list container", () => {
   withDocument(() => {
     const { job } = fixture("mock");
     let publish;
@@ -506,7 +500,56 @@ test("disappearing focused Job moves focus to the panel Refresh control", () => 
     findByClass(view.element, "job-status-button")[0].focus();
     view.element.dispatchEvent({ type: "keydown" });
     publish({ jobs: [], isLoading: false, error: null });
-    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "refresh");
+    assert.equal(globalThis.document.activeElement, view.element);
     view.destroy();
+  });
+});
+
+test("Done and No update can each be set and toggled off without hiding the current card", async () => {
+  await withAsyncDocument(async () => {
+    const job = fixture("live").job;
+    const mutations = [];
+    const store = createJobStore({
+      service: {
+        loadJobs: async () => ({ ok: true, data: { jobs: [job] } }),
+        updateJobStatus: async (id, status) => {
+          mutations.push([id, status]);
+          return { ok: true, data: { job: { ...job, id, status }, createdJobs: [] } };
+        },
+      },
+    });
+    await store.loadJobs();
+    const view = createJobList({ store, sourceMode: "live" });
+    try {
+      for (const [action, expectedStatus] of [
+        ["status:done", "done"],
+        ["status:noUpdate", "noUpdate"],
+        ["status:noUpdate", "todo"],
+        ["status:noUpdate", "noUpdate"],
+        ["status:done", "done"],
+        ["status:done", "todo"],
+      ]) {
+        const button = findByClass(view.element, "job-status-button").find(
+          (item) => item.dataset.jobFocus === action
+        );
+        button.dispatchEvent({ type: "click" });
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(store.getSnapshot().jobs[0].status, expectedStatus);
+        assert.equal(findByClass(view.element, "job-card").length, 1);
+        assert.equal(
+          findByClass(view.element, "job-status-button").filter(
+            (item) => item.attributes.get("aria-pressed") === "true"
+          ).length,
+          expectedStatus === "todo" ? 0 : 1
+        );
+      }
+      assert.deepEqual(
+        mutations.map((item) => item[1]),
+        ["done", "noUpdate", "todo", "noUpdate", "done", "todo"]
+      );
+    } finally {
+      view.destroy();
+      store.destroy();
+    }
   });
 });

@@ -308,7 +308,7 @@ const POLYGON_JOB_SPECS = Object.freeze([
     id: "job-006",
     title: "Confirm Danish Straits follow-up polygon",
     summary:
-      "Validate completed work around the Danish Straits and close the Job if no AOIs remain affected.",
+      "Validate completed work around the Danish Straits and close the Package if no AOIs remain affected.",
     createdAtDays: -14,
     deadlineDays: -1,
     priority: JOB_PRIORITY.LOW,

@@ -1,3 +1,112 @@
+## DC-UX-01 v5 — Selection-owned summaries and full-height map (2026-11-06)
+
+The live Package list no longer performs a separate per-row bindings read.
+`features/assignments/services/liveAssignmentServices.js` exposes only the
+verified paged Package list and the selected Package's `assignments.load`, Save
+and reconcile boundaries. The assignment page stores a small in-memory summary
+indexed by canonical Package ID after the existing session publishes verified
+saved bindings. Each entry contains confirmed assignment status and saved
+Pipeline IDs, never Workspace draft checkboxes. Names use the Pipeline catalogue
+already loaded in the selected Package workflow. The list renderer reads this
+cache on page, filter and selection changes without additional API calls.
+
+A successful Save/reconcile refreshes the selected summary; an uncertain write
+invalidates it until authoritative readback. A failed or superseded Package
+selection cannot publish a new entry. Cache entries last only while the page
+is alive and may become stale if another user changes bindings; reselecting a
+Package performs a new authoritative read. Backend batch/list summaries remain
+an optional future optimization, not an active frontend read path.
+
+The live assignment CSS places the existing MapView in the entire center column
+(`grid-row: 1 / 3`); on narrower screens the prior stacked details/map layout
+is retained. Both maps use the same scoped 10px bottom margin beneath their
+native Zoom control before the public MapView.ui basemap host. No private
+Calcite/ArcGIS shadow DOM, geometry lifecycle or SDK component API was changed.
+
+The v4 description below documents superseded per-page hydration behavior.
+
+---
+
+## DC-UX-01 v4 — Page-summary read ownership and map-tool lifecycle (2026-11-06)
+
+`liveAssignmentServices.features.bindingSummaries` owns the bounded read-only
+hydration of a displayed Package page (Pipeline display names and Package-scoped
+bindings, maximum four concurrent requests). The assignment UI owns only the
+current page's summary presentation, separate from the authoritative selected
+Package session. The page lifecycle aborts superseded/teardown reads and checks
+its generation before publication. This temporary N+1 read path is isolated so
+an eventual backend summary endpoint can replace it without changing the list UI.
+
+The shared basemap control moves its application-owned host into each existing
+`MapView.ui` top-right at index 1; assignment Retry is registered at index 2.
+Native Zoom remains index 0. Hosts are removed before View replacement/disposal.
+The public `MapView.ui.add` API owns alignment instead of absolute CSS offsets;
+no MapView migration or private component DOM manipulation is required.
+
+Browser document titles are coordinated with accepted navigation state and
+selected Package short ID; discarded/superseded route intents cannot publish a
+new title. Package details and saved-binding-map boundaries are unchanged.
+
+---
+
+## DC-UX-01 v3 — Layout and draft interaction boundaries (2026-11-06)
+
+The live assignment page is a CSS three-column placement of the **existing**
+Package list, Pipeline/Workspace rows, Package details and persistent MapView.
+The empty center-top grid cell is not a new workflow or API surface.
+
+`createPipelineRow` renders nested Workspace checkboxes automatically when their
+Pipeline is selected; `createAssignmentSession` still owns all local draft
+changes. Both automatic overlap and saved coverage come only from authoritative
+binding records; checkbox drafts do not alter map graphics or backend.
+A lightweight, icon-triggered binding comment uses `draft.comments` in the same
+session. Because live comment writes are unverified, the session validates and
+blocks Save with pending comments, rather than issuing a fake or unrelated write.
+
+Map actions use the public `MapView.ui.move("zoom", "top-right")` API and the
+shared `arcgis-expand` basemap selector; no MapView re-creation or shadow DOM
+manipulation was introduced. Headers and action icons remain application-owned
+semantic elements. Do not infer backend status/assignment from a Package list
+response that lacks binding details.
+
+---
+
+## DC-UX-01 v2 — Workspace preview owner (2026-11-06)
+
+The live Package assignment rows lazy-load the existing Pipeline-scoped Workspace
+catalogue through `liveAssignmentServices.workspaces.list`, which calls the existing
+v1 Workspace list API via `collectPages`. `assignmentDraft.js` and
+`workspacePreview.js` maintain explicit local deviations from saved auto-matched
+Workspace IDs. `createAssignmentSession` owns that draft and guards selection,
+Save, reset and stale publication. The Pipeline row is only presentation/lazy read;
+its async generation/abort prevents a previous Package response from rendering in
+a newer context. The existing `liveAssignmentServices.assignments.save` refuses
+Workspace preview mutations even if a caller bypasses the UI. No Workspace
+mutation endpoint has been invented. Saved record, authoritative map overlays,
+and contextual Jobs remain unaffected by previews. Real persistence requires the
+separately owned OVERRIDE-01 backend contract.
+
+---
+
+## DC-UX-01 — Presentation-only status and assignment layout (2026-11-06)
+
+The internal Job domain/store continues to identify contextual work by
+Package/Pipeline/Workspace. `jobStatus.js` owns the only two selectable
+terminal actions, Done and No update; both map to the same completed
+visibility/render class while their exact statuses remain distinct. The UI
+maps older input statuses to Open. The overlay header owns a stable native
+Refresh button so list and detail re-renders do not destroy it.
+
+`assignmentPage/state/matchesLoadedPackage.js` implements pure, local
+matching for the fetched Package page. The verified live API adapter does not
+receive a search term and remains the owner of server paging/filter contracts.
+The assignment UI only displays the authoritative `record.relations` saved
+Pipeline/Workspace names, not draft checkbox membership. Native layout and
+CSS reorder panels without moving SDK layers or recreating maps. The live
+map suppresses routine coverage summaries but retains actionable errors.
+
+---
+
 ## DC-API-06 — Selected Package geometry boundary (2026-11-05)
 
 - `shared/api/catalogueService.js` reads the verified

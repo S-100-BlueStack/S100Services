@@ -10,7 +10,7 @@ export function normalizeJob(rawJob) {
 
   return {
     id: String(rawJob.id),
-    title: String(rawJob.title || "Untitled Job"),
+    title: String(rawJob.title || "Untitled Package"),
     summary: String(rawJob.summary || ""),
     createdAt: normalizeDateString(rawJob.createdAt, new Date().toISOString()),
     deadline: rawJob.deadline ? normalizeDateString(rawJob.deadline, null) : null,

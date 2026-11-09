@@ -209,7 +209,7 @@ function createJobFilterPopoverContent({
   const aoiOverviewSection = createFilterSection({
     title: "AOI overview",
     description:
-      "Controls which AOIs are visible on the map. Current Job filters are applied first.",
+      "Controls which AOIs are visible on the map. Current Package filters are applied first.",
   });
   aoiOverviewSection.body.classList.add("data-catalogue-filters__button-grid");
 
@@ -246,12 +246,12 @@ function createJobFilterPopoverContent({
   const quickFilterSection = createFilterSection({
     title: "Quick filters",
     description:
-      "Toggle common Job filters. Multiple quick filters can be active at the same time.",
+      "Toggle common Package filters. Multiple quick filters can be active at the same time.",
   });
   quickFilterSection.body.classList.add("data-catalogue-filters__button-grid--three");
 
   const activeOnlyButton = createToggleButton({
-    label: "Active Jobs",
+    label: "Open Packages",
     onChange(checked) {
       jobFilterStore.setFilters({
         activeOnly: checked,
@@ -267,7 +267,7 @@ function createJobFilterPopoverContent({
     },
   });
   const withRelatedAoisOnlyButton = createToggleButton({
-    label: "Jobs with AOIs",
+    label: "Packages with AOIs",
     onChange(checked) {
       jobFilterStore.setFilters({
         withRelatedAoisOnly: checked,
@@ -282,9 +282,9 @@ function createJobFilterPopoverContent({
   );
 
   const statusSection = createFilterSection({
-    title: "Job status",
+    title: "Package status",
     description:
-      "Show Jobs matching one or more selected statuses. Done Jobs are hidden by default unless Done is selected.",
+      "Show Packages matching one or more selected statuses. Completed Packages are hidden by default. Select Done or No update to show them.",
   });
   statusSection.body.classList.add("data-catalogue-filters__button-grid--three");
 
@@ -306,8 +306,8 @@ function createJobFilterPopoverContent({
   statusSection.body.append(...statusButtons.map((button) => button.buttonElement));
 
   const prioritySection = createFilterSection({
-    title: "Job priority",
-    description: "Show Jobs matching one or more selected priorities.",
+    title: "Package priority",
+    description: "Show Packages matching one or more selected priorities.",
   });
   prioritySection.body.classList.add("data-catalogue-filters__button-grid--three");
 
@@ -329,8 +329,8 @@ function createJobFilterPopoverContent({
   prioritySection.body.append(...priorityButtons.map((button) => button.buttonElement));
 
   const clusteringSection = createFilterSection({
-    title: "Job point clustering radius",
-    description: "Controls how close Job points must be before they cluster on the map.",
+    title: "Package point clustering radius",
+    description: "Controls how close Package points must be before they cluster on the map.",
   });
   clusteringSection.body.classList.add("data-catalogue-filters__button-grid--four");
 
@@ -353,8 +353,8 @@ function createJobFilterPopoverContent({
   clusteringSection.body.append(...clusterPresetButtons.map((button) => button.buttonElement));
 
   const clusterStyleSection = createFilterSection({
-    title: "Job point cluster style",
-    description: "Controls how Job point clusters are visualized on the map.",
+    title: "Package point cluster style",
+    description: "Controls how Package point clusters are visualized on the map.",
   });
   clusterStyleSection.body.classList.add("data-catalogue-filters__button-grid--three");
 
@@ -392,7 +392,7 @@ function createJobFilterPopoverContent({
     withRelatedAoisOnlyButton.buttonElement.remove();
     const hint = document.createElement("p");
     hint.textContent =
-      "Filters apply to Jobs from all loaded Workspaces, regardless of map visibility. Severity bands and map filters are unavailable. Status is mock-only.";
+      "Filters apply to Packages from all loaded Workspaces, regardless of map visibility. Severity bands and map filters are unavailable. Status is mock-only.";
     scrollElement.prepend(hint);
   }
   contentElement.append(headerElement, summaryElement, scrollElement);
@@ -603,7 +603,7 @@ function getCombinedFilterSummary({ jobFilters, aoiMapFilters }) {
   const parts = [];
 
   if (normalizedJobFilters && normalizedJobFilters !== "No filters active") {
-    parts.push(`Jobs: ${normalizedJobFilters}`);
+    parts.push(`Packages: ${normalizedJobFilters}`);
   }
 
   if (normalizedAoiMapFilters && normalizedAoiMapFilters !== "All AOIs") {

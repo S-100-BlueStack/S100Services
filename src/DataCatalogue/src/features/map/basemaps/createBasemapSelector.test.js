@@ -88,3 +88,41 @@ test("The ArcGIS Basemap Gallery offers four choices regardless of the active th
     f.destroy();
   }
 });
+
+test("basemap control joins the MapView top-right tools and follows view replacement", async () => {
+  const f = fixture();
+  const calls = [];
+  const first = {
+    ui: {
+      add(node, options) {
+        calls.push(["add-first", node, options]);
+      },
+      remove(node) {
+        calls.push(["remove-first", node]);
+      },
+    },
+  };
+  const second = {
+    ui: {
+      add(node, options) {
+        calls.push(["add-second", node, options]);
+      },
+      remove(node) {
+        calls.push(["remove-second", node]);
+      },
+    },
+  };
+  try {
+    await f.ready();
+    f.selector.setView(first);
+    f.selector.setView(second);
+    assert.deepEqual(calls.slice(0, 3), [
+      ["add-first", f.container, { position: "top-right", index: 1 }],
+      ["remove-first", f.container],
+      ["add-second", f.container, { position: "top-right", index: 1 }],
+    ]);
+  } finally {
+    f.destroy();
+  }
+  assert.deepEqual(calls.at(-1), ["remove-second", f.container]);
+});

@@ -28,8 +28,10 @@ test("Work stream pagination targets are not part of the assignment-page contrac
   assert.equal(REQUIRED_ASSIGNMENT_PAGE_TARGETS.includes("work-stream-next"), false);
 });
 
-test("Live map focus is declared so assignment page initialization cannot fail", () => {
-  assert.equal(REQUIRED_ASSIGNMENT_PAGE_TARGETS.includes("map-focus"), true);
+test("Package selection details expose stable name and saved bindings targets", () => {
+  assert.equal(REQUIRED_ASSIGNMENT_PAGE_TARGETS.includes("map-focus"), false);
   const get = createRequiredTargetGetter((name) => ({ name }));
-  assert.equal(get("map-focus").name, "map-focus");
+  assert.equal(get("package-name").name, "package-name");
+  assert.equal(get("saved-bindings").name, "saved-bindings");
+  assert.equal(get("category-status").name, "category-status");
 });

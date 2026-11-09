@@ -474,14 +474,18 @@ html.calcite-mode-dark .data-catalogue-map {
   height: 0.55rem;
 }
 .dc-basemap-control {
-  position: absolute;
-  z-index: 6;
-  top: 0.5rem;
-  right: 0.5rem;
+  /* MapView.ui owns positioning and spacing with the native Zoom control. */
+  --dc-map-tool-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   display: block;
-  background: transparent;
+  width: 32px;
+  height: 32px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-map-tool-shadow);
 }
 .dc-basemap-expand {
+  display: block;
+  width: 32px;
+  height: 32px;
   --calcite-action-background-color: var(--dc-surface);
 }
 .dc-basemap-gallery {
@@ -503,4 +507,10 @@ html.calcite-mode-dark .data-catalogue-map {
   white-space: nowrap;
   box-shadow: none;
   transform: none;
+}
+
+/* Keep a gap beneath the native Zoom component before the Basemap control. */
+.dc-map-shell .esri-ui-top-right .esri-zoom,
+.dc-assignment-map-stage .esri-ui-top-right .esri-zoom {
+  margin: 0 0 10px;
 }

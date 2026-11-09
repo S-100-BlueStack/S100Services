@@ -179,7 +179,7 @@ async function resolveJobs({ jobs, jobService }) {
   }
 
   if (!jobService?.loadJobs) {
-    return createErrorResult(new Error("Job service is not available."), {
+    return createErrorResult(new Error("Package service is not available."), {
       source: "relation-service",
     });
   }

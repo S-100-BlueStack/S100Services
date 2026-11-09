@@ -1,3 +1,8 @@
+import {
+  WORKSPACE_PREVIEW_UNSAVED_MESSAGE,
+  workspacePreviewChangeCount,
+} from "./workspacePreview.js";
+
 export function assignmentStatus(record) {
   return Object.values(record?.relations ?? {}).some((relation) => relation.active)
     ? "Assigned"
@@ -8,6 +13,7 @@ export function createDraft(record) {
   return {
     activeIds: Object.keys(record.relations).filter((id) => record.relations[id].active),
     comments: [],
+    workspaceOverrides: {},
   };
 }
 
@@ -16,7 +22,8 @@ export function isDirty(record, draft) {
   const original = createDraft(record).activeIds.sort();
   return (
     JSON.stringify(original) !== JSON.stringify([...draft.activeIds].sort()) ||
-    draft.comments.length > 0
+    draft.comments.length > 0 ||
+    workspacePreviewChangeCount(draft) > 0
   );
 }
 
@@ -30,10 +37,13 @@ export function inactiveCommentWorkStreamIds(draft) {
   ];
 }
 
-export function assignmentDraftError(draft) {
+export function assignmentDraftError(draft, { allowComments = true } = {}) {
+  if (!allowComments && draft?.comments.length)
+    return "Binding comments are draft-only until the API supports saving them. Clear comments before saving.";
   const workStreamIds = inactiveCommentWorkStreamIds(draft);
-  if (!workStreamIds.length) return "";
-  return `Assign ${workStreamIds.join(", ")} again or remove its unsaved draft comments before saving.`;
+  if (workStreamIds.length)
+    return `Assign ${workStreamIds.join(", ")} again or remove its unsaved draft comments before saving.`;
+  return workspacePreviewChangeCount(draft) ? WORKSPACE_PREVIEW_UNSAVED_MESSAGE : "";
 }
 
 export function applyDraft(record, draft, { author, createdAt, createId }) {

@@ -48,21 +48,17 @@ test("Workspace selection and deliberate focus notify the map independently of J
     maps = [],
     loads = [],
     focuses = [];
-  let resets = 0;
   const scope = createWorkspaceScope({
     catalogue: { workspaces: async () => ({ items: [workspace], page: 0, total: 1 }) },
     adapter: {
       setScope: (value) => selected.push(value),
-      resetStatuses: () => {
-        resets++;
-      },
     },
     store: { loadJobs: async (options) => loads.push(options) },
     onScopeChange: (value, options) => maps.push({ value, options }),
     onFocus: () => focuses.push(true),
   });
   await new Promise(setImmediate);
-  const [label, focus, reload, reset] = scope.element.children;
+  const [label, focus, reload] = scope.element.children;
   const select = label.children[0];
   assert.equal(selected.length, 0);
   assert.equal(focus.disabled, true);
@@ -74,9 +70,7 @@ test("Workspace selection and deliberate focus notify the map independently of J
   focus.dispatchEvent(new Event("click"));
   assert.equal(focuses.length, 1);
   assert.equal(loads.length, 1);
-  reset.dispatchEvent(new Event("click"));
-  assert.equal(resets, 1);
-  assert.equal(loads.length, 2);
+  assert.equal(scope.element.children.length, 4);
   assert.equal(maps.length, 1);
   reload.dispatchEvent(new Event("click"));
   await new Promise(setImmediate);

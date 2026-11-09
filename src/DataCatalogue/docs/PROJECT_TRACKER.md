@@ -1,3 +1,164 @@
+## DC-UX-01 v5 — Selected-Package summary cache and full-height map (2026-11-06)
+
+Status: focused correction of the controlled v4 candidate. Authoritative baseline remains
+`2d596754d43d00352fe0adfac9b0f8420fb817c8`; controlled v4 candidate ZIP
+SHA-256: `2A36FC68CA108822D6EE059D6D06E7A537E8715FE179522D2FE5105CBDEEC41F`.
+
+- Reverted the v4 per-page bindings hydration following browser feedback that it
+  stalled the application. Package paging/filtering now uses only the ordinary
+  Package list request. Selecting a Package retains the existing single
+  Package-detail and bindings loads; no background `bindingSummaries` API seam
+  or extra Pipeline-name catalogue read runs for the Package list.
+- The live assignment view retains each successfully loaded Package's saved
+  binding status and Pipeline IDs in a page-lifetime in-memory cache. Pipeline
+  names are resolved from the existing Pipeline catalogue loaded for selection.
+  Previously inspected rows retain their summaries when another Package is
+  chosen or a list page/filter changes. Uninspected rows must not invent status
+  or Pipeline bindings. Draft checkboxes do not change saved summaries.
+  A confirmed Save or reconciliation updates the cache; an uncertain write
+  invalidates the affected summary. Reselecting a Package reads current data.
+- The live assignment map now spans both grid rows in the center column, using
+  the formerly empty upper-middle space. The existing two-column narrow-screen
+  layout retains details above the map. Native ArcGIS Zoom controls receive a
+  10px gap before the basemap gallery on both maps; action ownership, dimensions
+  and MapView lifecycle are unchanged.
+- Saved-binding and comment API limitations, Package details, navbar, filters,
+  Save, status buttons and other v4 behavior remain unchanged. No backend,
+  contracts, dependencies or authentication changes were made.
+
+The following v4 section documents the preceding candidate's superseded
+per-page read behavior; it is not the implementation target for v5.
+
+---
+
+## DC-UX-01 v4 — Browser feedback refinement (2026-11-06)
+
+Status: controlled candidate on v3; awaiting local browser and full quality-gate
+acceptance. The authoritative repository baseline remains
+`2d596754d43d00352fe0adfac9b0f8420fb817c8`; the controlled v3 ZIP has
+SHA-256 `8F7651349123E7EC4DFB90337A5352CDF7D989AC4687DD1D36EEA5419A009DA9`.
+
+- Package assignment list now hydrates saved status and Pipeline names for each
+  Package on the currently loaded server page, not only the selected Package.
+  The existing per-Package binding GET is used with four concurrent workers,
+  abortable generations, and honest errors. This is an interim per-page read
+  path, not a backend search or batch-contract substitute. Pipeline names sit
+  beside the Package short ID instead of consuming a separate line.
+- Package-list Refresh sits next to Next. Binding Save uses a larger icon with
+  brand color only when actionable, beside `Unsaved changes`; the comment icon
+  is slightly larger. Removed demo-style helper copy from binding rows without
+  changing the temporary, unsupported backend-write semantics.
+- Both map controls share ArcGIS-managed upper-right alignment and consistent
+  32px basemap/Retry surfaces with an elevation shadow. Browser acceptance of
+  real Zoom component sizing and popup alignment remains pending.
+- Browser tab titles now use `Data Catalogue`, `Package assignment` and
+  `Package assignment: {shortId}`, based on the current accepted route/selection.
+  The right-hand Package details presentation is preserved.
+- Backend follow-ups: a paged Package binding-summary/bulk endpoint for large
+  lists; manual Workspace overrides; durable binding comments; completed Package
+  history. No backend endpoint, persistence, authorization, or dependencies changed.
+
+---
+
+## DC-UX-01 v3 — Browser feedback correction (2026-11-06)
+
+Status: controlled frontend candidate; local browser review, full `npm run check`
+and commit pending. This corrects v2, not a new backend contract.
+
+- Live Package assignment uses three columns as reviewed: Packages top-left,
+  bindings bottom-left, map bottom-middle, details right full-height. The upper-middle
+  cell is intentionally unused until a real backend-backed purpose is confirmed.
+- Inline Category/Status/search filters have no visible extra labels. Refresh and Save
+  present accessible icon-only actions. `Select to view bindings`, success summaries
+  and instructional Workspace-preview text were removed.
+- Active Pipeline rows display the Workspace list directly, with saved auto-matches
+  checked by default. Manual inclusion/exclusion remains a reversible _unsaved draft_
+  until OVERRIDE-01 backend endpoints/readback are verified. No reset button or hidden
+  drop-down; the user returns checkboxes to saved values to cancel an override.
+- Pipeline `speech-bubble` opens an anchored comment draft. Live Save is blocked while
+  comments are unsaved to avoid misrepresenting a missing COMMENT-01 backend write.
+  No mock persistence or new contract was added for the live workflow.
+- Selected Package rows may show actual saved Pipeline names and assignment status;
+  other rows cannot have these facts invented from the current list response.
+- Both MapViews place zoom at upper-right, with basemap controls (and assignment
+  Retry) below. Header navigation follows the ProductCatalogue active underline and
+  uses `Data Catalogue` and matching route typography. Preferences remains DC-UX-02.
+- v2 user validation: lint passed after the separate caught-error correction; the
+  user supplied a 420-test run with 416 pass and four **outdated label expectations**.
+  The separate test patch updates them. v3 still requires local full check.
+
+---
+
+## DC-UX-01 v2 — Workspace selection preview and lint follow-up (2026-11-06)
+
+The user confirmed that Pipeline bindings should auto-select overlapping Workspaces but
+must also permit manually including or excluding individual Workspaces, even when their
+geography does not intersect the Package AOI. The live v1 backend has no durable
+Package/Pipeline/Workspace override contract. The frontend now exposes a **clearly labeled,
+read-only-backend Workspace preview editor** under each Pipeline: its checkboxes initialize
+from saved automatic membership, list all Workspaces in that Pipeline (on demand), and
+allow reversible local inclusion/exclusion draft choices. Preview changes are **not saved**,
+cannot alter map/Jobs membership, and block Pipeline Save until reset. No unsupported
+Workspace mutation is sent; leaving with pending previews uses the existing unsaved-draft
+confirmation. This is an interim UI to validate the interaction, not fulfillment of
+persistent OVERRIDE-01. Backend read/write/reconciliation and effective-membership
+propagation to Jobs remain required.
+
+Two unrelated lint warnings reported from the v1 candidate were corrected:
+`prefer-const` in `liveCatalogueReadiness.test.js` and an unused import in
+`mapController.js`. The reported `preserve-caught-error` error in
+`features/map/packages/createPackageGeometrySource.js` cannot safely be changed
+from the pinned handoff because that file was absent from the 418-file export;
+its current local source must be supplied to complete that correction.
+
+---
+
+## DC-UX-01 — Package-oriented UI cleanup (candidate, 2026-11-06)
+
+Authoritative source: local `main` commit `2d596754d43d00352fe0adfac9b0f8420fb817c8`,
+exported by `git archive` with 418 SHA-256-verified tracked files. This is an
+uncommitted frontend-only candidate; historical sections below are retained as
+context and must not override the baseline.
+
+- The main-map user interface says **Packages** instead of Jobs. Internal `Job`
+  identities, event names and the three-part Package/Pipeline/Workspace scope
+  remain unchanged. Package status actions are **Done** and **No update** only:
+  mutually exclusive, reversible and visually pressed when selected. Reset
+  statuses and mock-state narration are removed; one icon-only Refresh resides
+  in the stable panel header. Just-completed cards remain visible until a
+  refresh/panel close, unless a filter changes their eligibility.
+- Both terminal states count as completed for map colors, list filtering and
+  hidden-count behavior. Existing `todo` and `inProgress` inputs remain valid
+  _internally_ and display as **Open**, not as selectable status actions.
+  Status storage remains transient and per full Job tuple, not a backend write.
+- Pipeline/Workspace visibility has no redundant count banner. Package
+  assignment uses a compact Package selector and bindings on the left, saved
+  binding names and ordered Package details above the map on the right. The
+  details contain Title, Category, Severity, Details, Nautical charts and
+  Publication; technical IDs, AOI references and References are removed from
+  the visual details. Removed controls: Show active, permanent Reload pipelines
+  and Focus geography. The Pipeline retry remains visible on errors only.
+- Free-text **Search this page** matches name, short ID and title among the
+  currently fetched Package page; it neither performs backend text search nor
+  filters other pages, descriptions or the global total. It makes no extra API
+  calls. Category/Status continue using existing server filters.
+- The assignment map keeps saved geography, lifecycle and real errors; regular
+  “Showing selected…” narration is removed. No ProductCatalogue or backend
+  files were changed. Shared navbar/Preferences visual alignment is a separate
+  future DC-UX-02 scope.
+- **Backend follow-up:** durable Done/No update transitions, completion history,
+  server-side search, status filtering, stable sort/pagination and effective
+  historical membership require a backend-owned contract. Do not represent
+  current temporary mock status or page-local search as that contract.
+- **Verification note:** targeted local Node tests run in this offline candidate;
+  `npm run check` requires a complete local dependency installation. The pinned
+  export contains `createLiveCatalogueMap.js` references to
+  `features/map/packages/`, but that directory is absent in the 418-file
+  export; verify this source/import completeness in the local checkout before
+  claiming a successful build. See `DC_UX_01_VALIDATION.md`.
+
+---
+
 ## DC-API-06 — Package AOI and detailed geometry (implementation candidate, 2026-11-05)
 
 **Frontend baseline:** `f36b9956f9d5d9b35addf71b9d90eacd32e19948`.

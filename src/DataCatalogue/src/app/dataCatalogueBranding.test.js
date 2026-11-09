@@ -18,8 +18,8 @@ function collectFiles(directory) {
 }
 
 test("page title, navbar and startup loader use DataCatalogue branding", () => {
-  assert.match(read("index.html"), /<title>DataCatalogue<\/title>/);
-  assert.match(read("public/components/navbar.html"), />DataCatalogue<\/a>/);
+  assert.match(read("index.html"), /<title>Data Catalogue<\/title>/);
+  assert.match(read("public/components/navbar.html"), />Data Catalogue<\/a>/);
   assert.match(read("src/shared/ui/startupLoader.js"), /textContent = "DataCatalogue"/);
 });
 
@@ -41,7 +41,7 @@ test("navbar Jobs control and overlay retain matching accessible identifiers", (
   assert.ok(overlay.includes(`panelElement.id = "${panelId}"`));
   assert.ok(overlay.includes('"aria-labelledby", "data-catalogue-jobs-title"'));
   assert.ok(overlay.includes('titleElement.id = "data-catalogue-jobs-title"'));
-  assert.match(navbar, /<calcite-action[^>]+id="jobs-toggle"[^>]+text="Jobs"/);
+  assert.match(navbar, /<calcite-action[^>]+id="jobs-toggle"[^>]+text="Packages"/);
   assert.match(read("src/app/ui/createMapWorkspace.js"), /calcite-action-bar/);
 });
 

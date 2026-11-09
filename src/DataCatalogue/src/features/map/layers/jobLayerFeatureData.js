@@ -1,5 +1,5 @@
 import { getJobPriorityLabel, JOB_PRIORITY } from "../../jobs/domain/jobPriority.js";
-import { getJobStatusLabel, JOB_STATUS } from "../../jobs/domain/jobStatus.js";
+import { getJobStatusLabel, isCompletedJobStatus } from "../../jobs/domain/jobStatus.js";
 
 export const JOB_LAYER_FIELD = Object.freeze({
   OBJECT_ID: "ObjectID",
@@ -39,7 +39,7 @@ export function createJobLayerFields() {
     },
     {
       name: JOB_LAYER_FIELD.JOB_ID,
-      alias: "Job ID",
+      alias: "Package ID",
       type: "string",
     },
     {
@@ -146,7 +146,7 @@ export function createJobLayerFeatureData(jobs = []) {
 }
 
 export function getJobRenderClass(job) {
-  if (job?.status === JOB_STATUS.DONE) {
+  if (isCompletedJobStatus(job?.status)) {
     return JOB_RENDER_CLASS.DONE;
   }
 
@@ -165,7 +165,7 @@ function createJobAttributes({ job, objectId, geometryType }) {
   return {
     [JOB_LAYER_FIELD.OBJECT_ID]: objectId,
     [JOB_LAYER_FIELD.JOB_ID]: normalizeOptionalString(job.id),
-    [JOB_LAYER_FIELD.TITLE]: normalizeOptionalString(job.title) || "Untitled Job",
+    [JOB_LAYER_FIELD.TITLE]: normalizeOptionalString(job.title) || "Untitled Package",
     [JOB_LAYER_FIELD.SUMMARY]: normalizeOptionalString(job.summary),
     [JOB_LAYER_FIELD.STATUS]: normalizeOptionalString(job.status),
     [JOB_LAYER_FIELD.STATUS_LABEL]: getJobStatusLabel(job.status),

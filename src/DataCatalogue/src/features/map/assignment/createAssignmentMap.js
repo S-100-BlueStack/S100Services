@@ -24,6 +24,7 @@ export function createAssignmentMap({
     layers: [featureLayer],
     viewOptions: { popup: null, popupEnabled: false },
   });
+  view.ui.move("zoom", "top-right");
 
   let alive = true;
   let generation = 0;

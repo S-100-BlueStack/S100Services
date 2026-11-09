@@ -90,14 +90,14 @@ export function createMapSyncCoordinator({
 
       if (!scopeResult.ok) {
         showErrorNotice({
-          title: "Related Jobs could not be refreshed on the map",
+          title: "Related Packages could not be refreshed on the map",
           message: scopeResult.error.message,
         });
       }
     } catch (error) {
       if (refreshRequestId === refreshRequestSequence) {
         showErrorNotice({
-          title: "Related Jobs could not be refreshed on the map",
+          title: "Related Packages could not be refreshed on the map",
           message: error.message,
         });
       }
@@ -134,14 +134,14 @@ export function createMapSyncCoordinator({
 
         if (!scopeResult.ok) {
           showErrorNotice({
-            title: "Job map focus could not be refreshed",
+            title: "Package map focus could not be refreshed",
             message: scopeResult.error.message,
           });
         }
       } catch (error) {
         if (refreshRequestId === refreshRequestSequence) {
           showErrorNotice({
-            title: "Job map focus could not be refreshed",
+            title: "Package map focus could not be refreshed",
             message: error.message,
           });
         }
@@ -160,7 +160,7 @@ export function createMapSyncCoordinator({
       }
 
       showErrorNotice({
-        title: "Job highlight failed",
+        title: "Package highlight failed",
         message: error.message,
       });
     }

@@ -6,7 +6,7 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange,
   const label = document.createElement("label");
   label.textContent = "Workspace";
   const select = document.createElement("select");
-  select.setAttribute("aria-label", "Pipeline and Workspace for Jobs");
+  select.setAttribute("aria-label", "Pipeline and Workspace for Packages");
   select.append(new Option("Select a Workspace", ""));
   label.append(select);
   const focus = document.createElement("button");
@@ -16,12 +16,9 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange,
   const reload = document.createElement("button");
   reload.type = "button";
   reload.textContent = "Reload Workspaces";
-  const reset = document.createElement("button");
-  reset.type = "button";
-  reset.textContent = "Reset mock statuses";
   const message = document.createElement("p");
   message.setAttribute("role", "status");
-  element.append(label, focus, reload, reset, message);
+  element.append(label, focus, reload, message);
   let workspaces = [];
   let alive = true;
   let generation = 0;
@@ -60,7 +57,7 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange,
       }
       select.value = workspaces.some((workspace) => workspace.key === previous) ? previous : "";
       if (previous) applyScope({ reload: true, autoFocus: false });
-      message.textContent = `${workspaces.length} Workspaces. Jobs and filters cover only the selected Workspace. Status is simulated in memory and is never saved to the API.`;
+      message.textContent = "";
     } catch (error) {
       if (alive && current === generation) {
         message.textContent = `Workspaces unavailable: ${error.message}`;
@@ -75,10 +72,6 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange,
   select.addEventListener("change", () => applyScope());
   focus.addEventListener("click", () => onFocus?.());
   reload.addEventListener("click", () => void load());
-  reset.addEventListener("click", () => {
-    adapter.resetStatuses();
-    void store.loadJobs({ clear: true });
-  });
   void load();
   return {
     element,

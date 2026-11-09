@@ -139,7 +139,7 @@ export function workspaceOverlayMessage(state) {
     state.status === "loading"
       ? `Loading ${state.total} Workspace polygon${state.total === 1 ? "" : "s"}…`
       : state.total
-        ? `${state.count} of ${state.total} Workspace polygons displayed. Workspace outlines show coverage; colors indicate open Jobs on the main map.`
+        ? `${state.count} of ${state.total} Workspace polygons displayed. Workspace outlines show coverage; colors indicate open Packages on the main map.`
         : "",
     ...failures,
     state.failures.length > 3

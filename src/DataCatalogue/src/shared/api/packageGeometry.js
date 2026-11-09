@@ -55,11 +55,14 @@ function curveMember(value, sr, budget, depth = 0) {
       throw new Error("Package geometry exceeds the supported curve display limit.");
     if (value.length >= 2 && value.slice(0, 2).every(Number.isFinite)) {
       coordinateBudget(budget);
-      return [...coordinate(value, sr), ...value.slice(2).map((n) => {
-        if (typeof n !== "number" || !Number.isFinite(n))
-          throw new Error("Package geometry has an invalid curve parameter.");
-        return n;
-      })];
+      return [
+        ...coordinate(value, sr),
+        ...value.slice(2).map((n) => {
+          if (typeof n !== "number" || !Number.isFinite(n))
+            throw new Error("Package geometry has an invalid curve parameter.");
+          return n;
+        }),
+      ];
     }
     return value.map((item) => curveMember(item, sr, budget, depth + 1));
   }
@@ -95,9 +98,11 @@ function coordinateGroups(value, name, sr, budget, { ring = false, curved = fals
       }
       const area = points.slice(1).reduce((sum, point, index) => {
         const previous = points[index];
-        return sum +
+        return (
+          sum +
           (previous[0] - first[0]) * (point[1] - first[1]) -
-          (point[0] - first[0]) * (previous[1] - first[1]);
+          (point[0] - first[0]) * (previous[1] - first[1])
+        );
       }, 0);
       if (!Number.isFinite(area) || area === 0) {
         throw new Error("Package polygon ring has no finite area.");
@@ -154,7 +159,11 @@ function pointOrMultipoint(value, budget) {
     const [x, y] = coordinate([value.x, value.y], sr);
     return { x, y, spatialReference: sr };
   }
-  if (!Array.isArray(value.points) || !value.points.length || value.points.length > MAX_COORDINATES) {
+  if (
+    !Array.isArray(value.points) ||
+    !value.points.length ||
+    value.points.length > MAX_COORDINATES
+  ) {
     throw new Error("Package multipoint requires coordinates.");
   }
   return {
@@ -183,7 +192,11 @@ export function normalizePackageGeometry(value) {
   const aoi = value.aoi == null ? null : polygon(value.aoi, "AOI", budget);
   const details = value.detailedGeometry;
   if (details == null) return { aoi, detailedGeometry: null };
-  if (!record(details) || !Array.isArray(details.points) || details.points.length > MAX_GEOMETRY_PARTS) {
+  if (
+    !record(details) ||
+    !Array.isArray(details.points) ||
+    details.points.length > MAX_GEOMETRY_PARTS
+  ) {
     throw new Error("API returned invalid detailed Package geometry.");
   }
   return {

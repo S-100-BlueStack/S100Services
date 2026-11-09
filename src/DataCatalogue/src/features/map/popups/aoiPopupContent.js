@@ -161,7 +161,7 @@ async function renderAoiJobSummary({
     if (shouldApply()) {
       renderMessageState({
         containerElement,
-        message: "Job summary is unavailable because this AOI has no usable identifier.",
+        message: "Package summary is unavailable because this AOI has no usable identifier.",
       });
     }
 
@@ -172,7 +172,7 @@ async function renderAoiJobSummary({
     if (shouldApply()) {
       renderMessageState({
         containerElement,
-        message: "Job summary could not be loaded because the relation service is unavailable.",
+        message: "Package summary could not be loaded because the relation service is unavailable.",
       });
     }
 
@@ -215,7 +215,7 @@ async function renderAoiJobSummary({
 
     renderMessageState({
       containerElement,
-      message: error?.message || "Job summary could not be loaded.",
+      message: error?.message || "Package summary could not be loaded.",
     });
   }
 }
@@ -223,7 +223,7 @@ async function renderAoiJobSummary({
 function createSummaryContainer() {
   const containerElement = document.createElement("section");
   containerElement.className = "data-catalogue-aoi-popup-summary";
-  containerElement.setAttribute("aria-label", "Related Jobs summary");
+  containerElement.setAttribute("aria-label", "Related Packages summary");
 
   return containerElement;
 }
@@ -231,7 +231,7 @@ function createSummaryContainer() {
 function renderLoadingState(containerElement) {
   renderMessageState({
     containerElement,
-    message: "Loading related Jobs...",
+    message: "Loading related Packages...",
   });
 }
 
@@ -252,15 +252,15 @@ function renderSummaryState({ containerElement, summary, filtersActive }) {
   metricsElement.className = "data-catalogue-aoi-popup-summary__metrics";
   metricsElement.append(
     createMetricElement({
-      label: "Related Jobs",
+      label: "Related Packages",
       value: summary.total,
     }),
     createMetricElement({
-      label: "Active Jobs",
+      label: "Open Packages",
       value: summary.active,
     }),
     createMetricElement({
-      label: "High-priority active Jobs",
+      label: "High-priority open Packages",
       value: summary.activeHighPriority,
     })
   );
@@ -270,7 +270,7 @@ function renderSummaryState({ containerElement, summary, filtersActive }) {
   hintElement.textContent =
     summary.total > 0
       ? getSummaryHint({ filtersActive })
-      : "No related Jobs match the current Job filters for this AOI.";
+      : "No related Packages match the current Package filters for this AOI.";
 
   containerElement.replaceChildren(titleElement, metricsElement, hintElement);
 }
@@ -278,7 +278,7 @@ function renderSummaryState({ containerElement, summary, filtersActive }) {
 function createTitleElement() {
   const titleElement = document.createElement("h3");
   titleElement.className = "data-catalogue-aoi-popup-summary__title";
-  titleElement.textContent = "Related Jobs";
+  titleElement.textContent = "Related Packages";
 
   return titleElement;
 }
@@ -302,10 +302,10 @@ function createMetricElement({ label, value }) {
 
 function getSummaryHint({ filtersActive }) {
   if (filtersActive) {
-    return "Counts reflect the active Job filters.";
+    return "Counts reflect the active Package filters.";
   }
 
-  return "Done Jobs are hidden by default unless the Done filter is active.";
+  return "Completed Packages are hidden by default unless a terminal status filter is active.";
 }
 
 function resolveJobFilters(getJobFilters) {

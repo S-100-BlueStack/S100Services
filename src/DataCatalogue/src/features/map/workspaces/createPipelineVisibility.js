@@ -18,7 +18,7 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
   message.setAttribute("role", "status");
   const legend = document.createElement("div");
   legend.className = "dc-workspace-status-legend";
-  legend.setAttribute("aria-label", "Workspace open Job counts");
+  legend.setAttribute("aria-label", "Workspace open Package counts");
   for (const item of WORKSPACE_JOB_COLOR_LEVELS) {
     const entry = document.createElement("span");
     const swatch = document.createElement("i");
@@ -47,9 +47,7 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
   }
 
   function updateMessage() {
-    message.textContent = groups.length
-      ? `${enabledPipelines.size} / ${groups.length} Pipelines · ${visible().length} Workspaces visible`
-      : "No Workspaces available.";
+    message.textContent = groups.length ? "" : "No Workspaces available.";
   }
 
   function render() {
@@ -132,7 +130,7 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
         enabledWorkspaces = new Set(preserveWorkspaceSelection(next, groups, enabledWorkspaces));
         groups = next;
         render();
-        // Jobs use the complete, verified catalogue rather than map visibility.
+        // Packages use the complete, verified catalogue rather than map visibility.
         onWorkspacesLoaded?.(groups.flatMap((group) => group.workspaces));
         loaded = true;
         notify({ autoFocus: false });
@@ -152,7 +150,7 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
 
   function ensureLoaded() {
     if (loaded) return Promise.resolve({ ok: true });
-    // The Jobs reader joins an in-flight initial read rather than sending duplicates.
+    // The Packages reader joins an in-flight initial read rather than sending duplicates.
     return pending ?? reload();
   }
 

@@ -22,7 +22,7 @@ test("createJobServiceAdapter creates an unavailable HTTP adapter seam", async (
 
   assert.equal(adapter.source, JOB_SERVICE_ADAPTER_SOURCE.HTTP);
   assert.equal(result.ok, false);
-  assert.equal(result.error.message, "Job backend is not configured yet.");
+  assert.equal(result.error.message, "Package backend is not configured yet.");
   assert.equal(result.error.status, 501);
   assert.equal(result.error.code, "JOB_HTTP_ADAPTER_UNAVAILABLE");
   assert.equal(result.meta.source, JOB_SERVICE_ADAPTER_SOURCE.HTTP);

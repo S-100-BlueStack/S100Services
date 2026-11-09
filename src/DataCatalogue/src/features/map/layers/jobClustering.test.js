@@ -14,7 +14,7 @@ test("createCountJobPointFeatureReduction creates Esri-style medium point cluste
   assert.equal(featureReduction.clusterRadius, undefined);
   assert.equal(featureReduction.clusterMinSize, 16.5);
   assert.equal(featureReduction.clusterMaxSize, undefined);
-  assert.equal(featureReduction.popupTemplate.title, "{cluster_count} Jobs in this cluster");
+  assert.equal(featureReduction.popupTemplate.title, "{cluster_count} Packages in this cluster");
   assert.equal(featureReduction.popupTemplate.actions.length, 0);
   assert.equal(featureReduction.popupTemplate.content.length, 1);
   assert.deepEqual(featureReduction.labelingInfo, [
@@ -65,13 +65,13 @@ test("createCountJobPointFeatureReduction returns null when clustering is off", 
 test("createJobClusterPopupTemplate exposes compact picker content and cluster count formatting", () => {
   const popupTemplate = createJobClusterPopupTemplate();
 
-  assert.equal(popupTemplate.title, "{cluster_count} Jobs in this cluster");
+  assert.equal(popupTemplate.title, "{cluster_count} Packages in this cluster");
   assert.equal(popupTemplate.actions.length, 0);
   assert.equal(popupTemplate.content.length, 1);
   assert.deepEqual(popupTemplate.fieldInfos, [
     {
       fieldName: "cluster_count",
-      label: "Jobs",
+      label: "Packages",
       format: {
         places: 0,
         digitSeparator: true,

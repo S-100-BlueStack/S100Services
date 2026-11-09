@@ -36,11 +36,11 @@ export function createAoiJobSummaryRenderer(
   return {
     type: "class-breaks",
     valueExpression: createAoiJobSeverityExpression(severityEntries, { idField }),
-    valueExpressionTitle: "AOI Job status",
+    valueExpressionTitle: "AOI Package status",
     defaultSymbol: createAoiFillSymbol(AOI_RENDERER_SEVERITY.NONE),
-    defaultLabel: "No active Jobs",
+    defaultLabel: "No open Packages",
     legendOptions: {
-      title: "AOI Job status",
+      title: "AOI Package status",
       order: "descending-values",
     },
     classBreakInfos: [
@@ -48,19 +48,19 @@ export function createAoiJobSummaryRenderer(
         minValue: AOI_RENDERER_SEVERITY.NONE,
         maxValue: AOI_RENDERER_SEVERITY.NONE,
         symbol: createAoiFillSymbol(AOI_RENDERER_SEVERITY.NONE),
-        label: "No active Jobs",
+        label: "No open Packages",
       },
       {
         minValue: AOI_RENDERER_SEVERITY.ACTIVE,
         maxValue: AOI_RENDERER_SEVERITY.ACTIVE,
         symbol: createAoiFillSymbol(AOI_RENDERER_SEVERITY.ACTIVE),
-        label: "Active Jobs",
+        label: "Open Packages",
       },
       {
         minValue: AOI_RENDERER_SEVERITY.HIGH,
         maxValue: AOI_RENDERER_SEVERITY.HIGH,
         symbol: createAoiFillSymbol(AOI_RENDERER_SEVERITY.HIGH),
-        label: "High-priority active Jobs",
+        label: "High-priority open Packages",
       },
     ],
   };

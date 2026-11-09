@@ -3,11 +3,17 @@ import {
   filterJobs,
   getActiveJobFilterSummary,
   hasActiveJobFilters,
-  shouldRevealDoneJobsForFilters,
+  shouldRevealCompletedJobsForFilters,
 } from "../domain/jobFilters.js";
 import { getJobGeometryTypeLabel } from "../domain/jobModel.js";
 import { getJobPriorityLabel } from "../domain/jobPriority.js";
-import { JOB_STATUS, JOB_STATUS_OPTIONS, getJobStatusLabel } from "../domain/jobStatus.js";
+import {
+  JOB_STATUS,
+  JOB_STATUS_OPTIONS,
+  getJobStatusLabel,
+  isCompletedJobStatus,
+  isActiveJobStatus,
+} from "../domain/jobStatus.js";
 import {
   showErrorNotice,
   showInfoNotice,
@@ -45,18 +51,18 @@ export function createJobList({
   let viewMode = JOB_LIST_VIEW_MODE.LIST;
   let shouldNotifySelectionClearedOnBack = false;
   const expandedJobIds = new Set();
-  const visibleDoneJobIds = new Set();
+  const visibleCompletedJobIds = new Set();
   const pendingMutationJobIds = new Set();
 
   async function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
-    const result = await loadJobs(store, visibleDoneJobIds, {
+    const result = await loadJobs(store, visibleCompletedJobIds, {
       showErrorNoticeOnFailure: false,
     });
 
     if (!alive || result.stale) return result;
     if (!result.ok) {
       showErrorNotice({
-        title: source === "manual" ? "Refresh failed" : "Jobs could not be loaded",
+        title: source === "manual" ? "Refresh failed" : "Packages could not be loaded",
         message: result.error.message,
       });
 
@@ -65,8 +71,8 @@ export function createJobList({
 
     if (showSuccessNoticeOnSuccess) {
       showSuccessNotice({
-        title: "Jobs refreshed",
-        message: "The current Jobs list has been refreshed.",
+        title: "Packages refreshed",
+        message: "The current Packages list has been refreshed.",
       });
     }
 
@@ -143,7 +149,7 @@ export function createJobList({
     selectedJobId = normalizedJobId;
     viewMode = JOB_LIST_VIEW_MODE.DETAILS;
     shouldNotifySelectionClearedOnBack = false;
-    makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+    makeSelectedCompletedJobVisible(visibleCompletedJobIds, currentState.jobs, selectedJobId);
     render();
     focusJobDetails(rootElement, selectedJobId);
   };
@@ -163,7 +169,7 @@ export function createJobList({
       selectedJobId,
       viewMode,
       expandedJobIds,
-      visibleDoneJobIds,
+      visibleCompletedJobIds,
       pendingMutationJobIds,
       clearAoiFilter,
       clearJobFilters,
@@ -186,14 +192,14 @@ export function createJobList({
 
   const unsubscribeJobs = store.subscribe((state) => {
     currentState = state;
-    makeSelectedDoneJobVisible(visibleDoneJobIds, state.jobs, selectedJobId);
+    makeSelectedCompletedJobVisible(visibleCompletedJobIds, state.jobs, selectedJobId);
     removeInvisibleExpandedJobs(
       expandedJobIds,
       getFilteredScopedJobs(state.jobs, aoiFilter, jobFilters),
-      visibleDoneJobIds,
+      visibleCompletedJobIds,
       jobFilters
     );
-    removeMissingVisibleDoneJobs(visibleDoneJobIds, state.jobs);
+    removeMissingVisibleCompletedJobs(visibleCompletedJobIds, state.jobs);
     render();
   });
 
@@ -203,7 +209,7 @@ export function createJobList({
       removeInvisibleExpandedJobs(
         expandedJobIds,
         getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
-        visibleDoneJobIds,
+        visibleCompletedJobIds,
         jobFilters
       );
       render();
@@ -211,9 +217,10 @@ export function createJobList({
 
   return {
     element: rootElement,
-    refreshJobs() {
+    refreshJobs({ manual = false } = {}) {
       return runJobsRefresh({
-        source: "panel-open",
+        source: manual ? "manual" : "panel-open",
+        showSuccessNoticeOnSuccess: manual,
       });
     },
     showJobsForAoi(selectedAoi) {
@@ -224,7 +231,7 @@ export function createJobList({
       expandedJobIds.clear();
 
       if (currentState.jobs.length === 0 && !currentState.isLoading) {
-        return loadJobs(store, visibleDoneJobIds);
+        return loadJobs(store, visibleCompletedJobIds);
       }
 
       render();
@@ -249,16 +256,16 @@ export function createJobList({
       expandedJobIds.add(selectedJobId);
 
       if (currentState.jobs.length === 0 && !currentState.isLoading) {
-        const result = await loadJobs(store, visibleDoneJobIds);
+        const result = await loadJobs(store, visibleCompletedJobIds);
 
-        makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+        makeSelectedCompletedJobVisible(visibleCompletedJobIds, currentState.jobs, selectedJobId);
         render();
         focusJobDetails(rootElement, selectedJobId);
 
         return result;
       }
 
-      makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+      makeSelectedCompletedJobVisible(visibleCompletedJobIds, currentState.jobs, selectedJobId);
       render();
       focusJobDetails(rootElement, selectedJobId);
 
@@ -270,12 +277,12 @@ export function createJobList({
     clearAoiFilter,
     clearSelectedJob,
     hideCompletedJobs() {
-      visibleDoneJobIds.clear();
-      makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+      visibleCompletedJobIds.clear();
+      makeSelectedCompletedJobVisible(visibleCompletedJobIds, currentState.jobs, selectedJobId);
       removeInvisibleExpandedJobs(
         expandedJobIds,
         getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
-        visibleDoneJobIds,
+        visibleCompletedJobIds,
         jobFilters
       );
       render();
@@ -290,14 +297,14 @@ export function createJobList({
   };
 }
 
-async function loadJobs(store, visibleDoneJobIds, { showErrorNoticeOnFailure = true } = {}) {
-  visibleDoneJobIds.clear();
+async function loadJobs(store, visibleCompletedJobIds, { showErrorNoticeOnFailure = true } = {}) {
+  visibleCompletedJobIds.clear();
 
   const result = await store.loadJobs();
 
   if (!result.stale && !result.ok && showErrorNoticeOnFailure) {
     showErrorNotice({
-      title: "Jobs could not be loaded",
+      title: "Packages could not be loaded",
       message: result.error.message,
     });
   }
@@ -315,7 +322,7 @@ function renderJobList({
   selectedJobId,
   viewMode,
   expandedJobIds,
-  visibleDoneJobIds,
+  visibleCompletedJobIds,
   pendingMutationJobIds,
   clearAoiFilter,
   clearJobFilters,
@@ -332,7 +339,7 @@ function renderJobList({
       state,
       store,
       selectedJobId,
-      visibleDoneJobIds,
+      visibleCompletedJobIds,
       pendingMutationJobIds,
       runJobsRefresh,
       render,
@@ -346,8 +353,12 @@ function renderJobList({
 
   const scopedJobs = getScopedJobs(state.jobs, aoiFilter);
   const filteredScopedJobs = filterJobs(scopedJobs, jobFilters);
-  const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleDoneJobIds, jobFilters);
-  const hiddenDoneCount = getHiddenDoneCount(filteredScopedJobs, visibleDoneJobIds, jobFilters);
+  const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleCompletedJobIds, jobFilters);
+  const hiddenCompletedCount = getHiddenCompletedCount(
+    filteredScopedJobs,
+    visibleCompletedJobIds,
+    jobFilters
+  );
   const contentElements = [];
 
   if (aoiFilter) {
@@ -367,7 +378,7 @@ function renderJobList({
     rootElement.replaceChildren(
       ...contentElements,
       createErrorState({
-        title: "Jobs are unavailable",
+        title: "Packages are unavailable",
         message: state.error.message,
         isLoading: state.isLoading,
         onRetry() {
@@ -379,13 +390,10 @@ function renderJobList({
   }
 
   const toolbarElement = createListToolbar({
-    state,
     visibleJobs,
-    hiddenDoneCount,
-    jobFilters,
+    hiddenCompletedCount,
     expandedJobIds,
     sourceMode,
-    runJobsRefresh,
     render,
   });
 
@@ -394,7 +402,7 @@ function renderJobList({
   if (state.error) {
     contentElements.push(
       createInlineErrorState({
-        title: "Latest Jobs operation failed",
+        title: "Latest Packages operation failed",
         message: state.error.message,
         isLoading: state.isLoading,
         onRetry() {
@@ -408,7 +416,7 @@ function renderJobList({
   }
 
   if (visibleJobs.length === 0) {
-    contentElements.push(createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }));
+    contentElements.push(createEmptyState({ hiddenCompletedCount, aoiFilter, jobFilters }));
     rootElement.replaceChildren(...contentElements);
     return;
   }
@@ -423,7 +431,7 @@ function renderJobList({
         selectedJobId,
         store,
         expandedJobIds,
-        visibleDoneJobIds,
+        visibleCompletedJobIds,
         pendingMutationJobIds,
         render,
         openJobDetailsFromList,
@@ -440,7 +448,7 @@ function renderJobDetailsView({
   state,
   store,
   selectedJobId,
-  visibleDoneJobIds,
+  visibleCompletedJobIds,
   pendingMutationJobIds,
   runJobsRefresh,
   render,
@@ -459,7 +467,7 @@ function renderJobDetailsView({
   if (state.error && state.jobs.length === 0) {
     rootElement.replaceChildren(
       createErrorState({
-        title: "Jobs are unavailable",
+        title: "Packages are unavailable",
         message: state.error.message,
         isLoading: state.isLoading,
         onRetry() {
@@ -474,8 +482,6 @@ function renderJobDetailsView({
     rootElement.replaceChildren(
       createSelectedJobMissingState({
         selectedJobId,
-        isLoading: state.isLoading,
-        runJobsRefresh,
         showJobListFromDetails,
       })
     );
@@ -485,8 +491,6 @@ function renderJobDetailsView({
   contentElements.push(
     createJobDetailsHeader({
       job: selectedJob,
-      isLoading: state.isLoading,
-      runJobsRefresh,
       requestJobMapFocus,
       clearJobMapFocus,
     })
@@ -495,7 +499,7 @@ function renderJobDetailsView({
   if (state.error) {
     contentElements.push(
       createInlineErrorState({
-        title: "Latest Jobs operation failed",
+        title: "Latest Packages operation failed",
         message: state.error.message,
         isLoading: state.isLoading,
         onRetry() {
@@ -518,7 +522,7 @@ function renderJobDetailsView({
     createJobDetailsStatusSection({
       job: selectedJob,
       store,
-      visibleDoneJobIds,
+      visibleCompletedJobIds,
       pendingMutationJobIds,
       render,
     }),
@@ -530,13 +534,7 @@ function renderJobDetailsView({
   rootElement.replaceChildren(...contentElements);
 }
 
-function createJobDetailsHeader({
-  job,
-  isLoading,
-  runJobsRefresh,
-  requestJobMapFocus,
-  clearJobMapFocus,
-}) {
+function createJobDetailsHeader({ job, requestJobMapFocus, clearJobMapFocus }) {
   const headerElement = document.createElement("div");
   headerElement.className = "job-details__header";
 
@@ -545,7 +543,7 @@ function createJobDetailsHeader({
 
   const eyebrowElement = document.createElement("p");
   eyebrowElement.className = "job-details__eyebrow";
-  eyebrowElement.textContent = "Selected Job";
+  eyebrowElement.textContent = "Selected Package";
 
   const livePresentation = getLiveJobPresentation(job);
   const titleElement = document.createElement("h3");
@@ -573,26 +571,16 @@ function createJobDetailsHeader({
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-details__header-actions";
 
-  if (livePresentation) {
-    const refreshButton = createRefreshIconButton({ isLoading });
-    refreshButton.addEventListener("click", () => {
-      void runJobsRefresh({ source: "details-refresh", showSuccessNoticeOnSuccess: true });
-    });
-    actionsElement.append(refreshButton);
-  } else {
+  if (!livePresentation) {
     const focusMapButton = createToolbarButton("Focus map");
-    focusMapButton.title = "Filter the map to this Job and highlight related AOIs";
+    focusMapButton.title = "Filter the map to this Package and highlight related AOIs";
     focusMapButton.addEventListener("click", () => requestJobMapFocus?.(job));
 
     const clearMapFocusButton = createToolbarButton("Clear map focus");
-    clearMapFocusButton.title = "Return the map to the normal Job context";
+    clearMapFocusButton.title = "Return the map to the normal Package context";
     clearMapFocusButton.addEventListener("click", () => clearJobMapFocus?.());
 
-    const refreshButton = createRefreshIconButton({ isLoading });
-    refreshButton.addEventListener("click", () => {
-      void runJobsRefresh({ source: "details-refresh", showSuccessNoticeOnSuccess: true });
-    });
-    actionsElement.append(focusMapButton, clearMapFocusButton, refreshButton);
+    actionsElement.append(focusMapButton, clearMapFocusButton);
   }
   headerElement.append(titleGroupElement, actionsElement);
 
@@ -625,7 +613,7 @@ function createJobDetailsFactSection(job) {
     }
   } else {
     factGridElement.append(
-      createJobDetailFact("Job ID", job.id),
+      createJobDetailFact("Package ID", job.id),
       createJobDetailFact("Created", formatDate(job.createdAt)),
       createJobDetailFact("Deadline", formatDate(job.deadline)),
       createJobDetailFact("Status", getJobStatusLabel(job.status)),
@@ -643,7 +631,7 @@ function createJobDetailsFactSection(job) {
 function createJobDetailsStatusSection({
   job,
   store,
-  visibleDoneJobIds,
+  visibleCompletedJobIds,
   pendingMutationJobIds,
   render,
 }) {
@@ -654,17 +642,17 @@ function createJobDetailsStatusSection({
   hintElement.textContent =
     job.source === "live"
       ? "Temporary status · not saved to the API."
-      : "Status changes are saved through the current Jobs service.";
+      : "Status changes are saved through the current Packages service.";
 
   const actionsElement = createStatusActions({
     job,
-    visibleDoneJobIds,
+    visibleCompletedJobIds,
     pendingMutationJobIds,
     store,
     render,
   });
   actionsElement.setAttribute("role", "group");
-  actionsElement.setAttribute("aria-label", "Update Job status");
+  actionsElement.setAttribute("aria-label", "Update Package status");
   if (job.source === "live") {
     sectionElement.classList.add("job-details__section--live-status");
     sectionElement.append(actionsElement);
@@ -681,7 +669,7 @@ function createJobDetailsAoiSection(job) {
   if (job.relatedAoiIds.length === 0) {
     const emptyElement = document.createElement("p");
     emptyElement.className = "job-details__empty";
-    emptyElement.textContent = "No related AOIs registered for this Job.";
+    emptyElement.textContent = "No related AOIs registered for this Package.";
     sectionElement.append(emptyElement);
 
     return sectionElement;
@@ -733,12 +721,7 @@ function createJobDetailFact(label, value) {
   return factElement;
 }
 
-function createSelectedJobMissingState({
-  selectedJobId,
-  isLoading,
-  runJobsRefresh,
-  showJobListFromDetails,
-}) {
+function createSelectedJobMissingState({ selectedJobId, showJobListFromDetails }) {
   const containerElement = document.createElement("div");
   containerElement.className = "job-list__state job-list__state--error";
   containerElement.setAttribute("role", "alert");
@@ -746,11 +729,11 @@ function createSelectedJobMissingState({
   const contentElement = document.createElement("div");
   contentElement.className = "job-list__state-content";
   contentElement.append(
-    createStateTitle("Selected Job is unavailable"),
+    createStateTitle("Selected Package is unavailable"),
     createStateMessage(
       selectedJobId
-        ? "The selected Job is not present in the current Jobs snapshot."
-        : "No Job is selected."
+        ? "The selected Package is not present in the current Packages snapshot."
+        : "No Package is selected."
     )
   );
 
@@ -761,18 +744,10 @@ function createSelectedJobMissingState({
   backButton.scale = "s";
   backButton.kind = "neutral";
   backButton.appearance = "outline";
-  backButton.textContent = "Back to Jobs";
+  backButton.textContent = "Back to Packages";
   backButton.addEventListener("click", showJobListFromDetails);
 
-  const refreshButton = createRefreshIconButton({ isLoading });
-  refreshButton.addEventListener("click", () => {
-    void runJobsRefresh({
-      source: "details-missing-refresh",
-      showSuccessNoticeOnSuccess: true,
-    });
-  });
-
-  actionsElement.append(backButton, refreshButton);
+  actionsElement.append(backButton);
   containerElement.append(contentElement, actionsElement);
 
   return containerElement;
@@ -797,21 +772,23 @@ function getScopedJobs(jobs, aoiFilter) {
   });
 }
 
-function getVisibleJobs(jobs, visibleDoneJobIds, jobFilters) {
-  const revealDoneJobs = shouldRevealDoneJobsForFilters(jobFilters);
+function getVisibleJobs(jobs, visibleCompletedJobIds, jobFilters) {
+  const revealCompletedJobs = shouldRevealCompletedJobsForFilters(jobFilters);
 
   return jobs.filter(
-    (job) => revealDoneJobs || job.status !== JOB_STATUS.DONE || visibleDoneJobIds.has(job.id)
+    (job) =>
+      revealCompletedJobs || isActiveJobStatus(job.status) || visibleCompletedJobIds.has(job.id)
   );
 }
 
-function getHiddenDoneCount(jobs, visibleDoneJobIds, jobFilters) {
-  if (shouldRevealDoneJobsForFilters(jobFilters)) {
+function getHiddenCompletedCount(jobs, visibleCompletedJobIds, jobFilters) {
+  if (shouldRevealCompletedJobsForFilters(jobFilters)) {
     return 0;
   }
 
-  return jobs.filter((job) => job.status === JOB_STATUS.DONE && !visibleDoneJobIds.has(job.id))
-    .length;
+  return jobs.filter(
+    (job) => isCompletedJobStatus(job.status) && !visibleCompletedJobIds.has(job.id)
+  ).length;
 }
 
 function getJobById(jobs, jobId) {
@@ -824,21 +801,21 @@ function getJobById(jobs, jobId) {
   return jobs.find((job) => job.id === normalizedJobId) ?? null;
 }
 
-function makeSelectedDoneJobVisible(visibleDoneJobIds, jobs, selectedJobId) {
+function makeSelectedCompletedJobVisible(visibleCompletedJobIds, jobs, selectedJobId) {
   if (!selectedJobId) {
     return;
   }
 
   const selectedJob = jobs.find((job) => job.id === selectedJobId);
 
-  if (selectedJob?.status === JOB_STATUS.DONE) {
-    visibleDoneJobIds.add(selectedJobId);
+  if (isCompletedJobStatus(selectedJob?.status)) {
+    visibleCompletedJobIds.add(selectedJobId);
   }
 }
 
-function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleDoneJobIds, jobFilters) {
+function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleCompletedJobIds, jobFilters) {
   const visibleJobIds = new Set(
-    getVisibleJobs(jobs, visibleDoneJobIds, jobFilters).map((job) => job.id)
+    getVisibleJobs(jobs, visibleCompletedJobIds, jobFilters).map((job) => job.id)
   );
 
   for (const jobId of expandedJobIds) {
@@ -848,12 +825,12 @@ function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleDoneJobIds, jo
   }
 }
 
-function removeMissingVisibleDoneJobs(visibleDoneJobIds, jobs) {
+function removeMissingVisibleCompletedJobs(visibleCompletedJobIds, jobs) {
   const jobIds = new Set(jobs.map((job) => job.id));
 
-  for (const jobId of visibleDoneJobIds) {
+  for (const jobId of visibleCompletedJobIds) {
     if (!jobIds.has(jobId)) {
-      visibleDoneJobIds.delete(jobId);
+      visibleCompletedJobIds.delete(jobId);
     }
   }
 }
@@ -868,7 +845,7 @@ function createAoiFilterScope({ aoiFilter, clearAoiFilter }) {
 
   const labelElement = document.createElement("p");
   labelElement.className = "job-list__scope-label";
-  labelElement.textContent = "Jobs for selected AOI";
+  labelElement.textContent = "Packages for selected AOI";
 
   const titleElement = document.createElement("p");
   titleElement.className = "job-list__scope-title";
@@ -911,13 +888,10 @@ function createJobFilterScope({ jobFilters, clearJobFilters }) {
 }
 
 function createListToolbar({
-  state,
   visibleJobs,
-  hiddenDoneCount,
-  jobFilters,
+  hiddenCompletedCount,
   expandedJobIds,
   sourceMode,
-  runJobsRefresh,
   render,
 }) {
   const toolbarElement = document.createElement("div");
@@ -928,37 +902,19 @@ function createListToolbar({
 
   const countElement = document.createElement("p");
   countElement.className = "job-list__count";
-  countElement.textContent = `${visibleJobs.length} visible Jobs`;
-
-  const hiddenDoneElement = document.createElement("p");
-  hiddenDoneElement.className = "job-list__hidden-done-count";
-  hiddenDoneElement.textContent = getDoneVisibilityText({
-    hiddenDoneCount,
-    jobFilters,
-  });
+  countElement.textContent = `${visibleJobs.length} visible Packages`;
 
   countGroupElement.append(countElement);
-  if (sourceMode !== "live" || hiddenDoneCount > 0 || shouldRevealDoneJobsForFilters(jobFilters)) {
-    countGroupElement.append(hiddenDoneElement);
+  if (hiddenCompletedCount > 0) {
+    const hiddenCount = document.createElement("p");
+    hiddenCount.className = "job-list__hidden-done-count";
+    hiddenCount.textContent = `${hiddenCompletedCount} completed hidden`;
+    countGroupElement.append(hiddenCount);
   }
 
   const toolbarActionsElement = document.createElement("div");
   toolbarActionsElement.className = "job-list__toolbar-actions";
 
-  const refreshActionsElement = document.createElement("div");
-  refreshActionsElement.className = "job-list__toolbar-action-row";
-
-  const refreshButton = createRefreshIconButton({ isLoading: state.isLoading });
-  refreshButton.addEventListener("click", async () => {
-    await runJobsRefresh({
-      source: "manual",
-      showSuccessNoticeOnSuccess: true,
-    });
-  });
-
-  refreshActionsElement.appendChild(refreshButton);
-
-  toolbarActionsElement.append(refreshActionsElement);
   if (sourceMode !== "live") {
     const expandActionsElement = document.createElement("div");
     expandActionsElement.className = "job-list__toolbar-action-row";
@@ -989,39 +945,12 @@ function createListToolbar({
   return toolbarElement;
 }
 
-function getDoneVisibilityText({ hiddenDoneCount, jobFilters }) {
-  if (shouldRevealDoneJobsForFilters(jobFilters)) {
-    return "Done filter active";
-  }
-
-  return hiddenDoneCount > 0 ? `${hiddenDoneCount} Done hidden` : "Done Jobs hidden";
-}
-
 function areAllVisibleJobsExpanded(visibleJobs, expandedJobIds) {
   return visibleJobs.length > 0 && visibleJobs.every((job) => expandedJobIds.has(job.id));
 }
 
 function hasExpandedVisibleJobs(visibleJobs, expandedJobIds) {
   return visibleJobs.some((job) => expandedJobIds.has(job.id));
-}
-
-function createRefreshIconButton({ isLoading = false } = {}) {
-  const buttonElement = document.createElement("button");
-  const label = isLoading ? "Refreshing Jobs" : "Refresh Jobs";
-  buttonElement.type = "button";
-  buttonElement.className = "job-list__refresh-button";
-  buttonElement.dataset.jobFocus = "refresh";
-  buttonElement.disabled = isLoading;
-  buttonElement.title = label;
-  buttonElement.setAttribute("aria-label", label);
-
-  const iconElement = document.createElement("calcite-icon");
-  iconElement.icon = "refresh";
-  iconElement.scale = "s";
-  iconElement.setAttribute("aria-hidden", "true");
-  buttonElement.append(iconElement);
-
-  return buttonElement;
 }
 
 function createToolbarButton(label) {
@@ -1040,7 +969,7 @@ function createJobCard({
   selectedJobId,
   store,
   expandedJobIds,
-  visibleDoneJobIds,
+  visibleCompletedJobIds,
   pendingMutationJobIds,
   render,
   openJobDetailsFromList,
@@ -1057,7 +986,7 @@ function createJobCard({
 
   if (isSelected) {
     cardElement.classList.add("job-card--selected");
-    cardElement.setAttribute("aria-label", `Selected Job: ${job.title}`);
+    cardElement.setAttribute("aria-label", `Selected Package: ${job.title}`);
   }
 
   cardElement.appendChild(
@@ -1065,7 +994,7 @@ function createJobCard({
       job,
       isExpanded,
       expandedJobIds,
-      visibleDoneJobIds,
+      visibleCompletedJobIds,
       pendingMutationJobIds,
       store,
       render,
@@ -1084,7 +1013,7 @@ function createJobCardSummary({
   job,
   isExpanded,
   expandedJobIds,
-  visibleDoneJobIds,
+  visibleCompletedJobIds,
   pendingMutationJobIds,
   store,
   render,
@@ -1106,7 +1035,7 @@ function createJobCardSummary({
   bottomRowElement.append(
     createStatusActions({
       job,
-      visibleDoneJobIds,
+      visibleCompletedJobIds,
       pendingMutationJobIds,
       store,
       render,
@@ -1126,8 +1055,8 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
   detailsButton.className = "job-card__details-action";
   detailsButton.dataset.jobFocus = "details";
   detailsButton.icon = "information";
-  detailsButton.text = "Open Job details";
-  detailsButton.title = "Open Job details";
+  detailsButton.text = "Open Package details";
+  detailsButton.title = "Open Package details";
   detailsButton.addEventListener("click", () => {
     openJobDetailsFromList(job.id);
   });
@@ -1154,8 +1083,8 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
     expandButton.className = "job-card__expand-action";
     expandButton.dataset.jobFocus = "expand";
     expandButton.icon = isExpanded ? "chevron-up" : "chevron-down";
-    expandButton.text = isExpanded ? "Collapse Job card" : "Expand Job card";
-    expandButton.title = isExpanded ? "Collapse Job card" : "Expand Job card";
+    expandButton.text = isExpanded ? "Collapse Package card" : "Expand Package card";
+    expandButton.title = isExpanded ? "Collapse Package card" : "Expand Package card";
     expandButton.addEventListener("click", () => {
       if (isExpanded) {
         expandedJobIds.delete(job.id);
@@ -1285,7 +1214,13 @@ function getAffectedAoiImpact(aoiCount) {
   return "high";
 }
 
-function createStatusActions({ job, visibleDoneJobIds, pendingMutationJobIds, store, render }) {
+function createStatusActions({
+  job,
+  visibleCompletedJobIds,
+  pendingMutationJobIds,
+  store,
+  render,
+}) {
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-card__actions";
 
@@ -1294,7 +1229,7 @@ function createStatusActions({ job, visibleDoneJobIds, pendingMutationJobIds, st
       createStatusButton({
         job,
         statusOption,
-        visibleDoneJobIds,
+        visibleCompletedJobIds,
         pendingMutationJobIds,
         store,
         render,
@@ -1321,7 +1256,7 @@ function createJobCardDetails(job) {
 function createStatusButton({
   job,
   statusOption,
-  visibleDoneJobIds,
+  visibleCompletedJobIds,
   pendingMutationJobIds,
   store,
   render,
@@ -1333,40 +1268,42 @@ function createStatusButton({
   buttonElement.className = "job-status-button";
   buttonElement.dataset.jobFocus = `status:${statusOption.value}`;
   buttonElement.scale = "s";
-  buttonElement.kind = "brand";
+  buttonElement.kind = isActive ? "brand" : "neutral";
   buttonElement.appearance = isActive ? "solid" : "outline";
   buttonElement.disabled = isPending;
   buttonElement.textContent = statusOption.label;
+  buttonElement.setAttribute("aria-pressed", String(isActive));
 
   installPointerFocusSuppression(buttonElement);
 
   if (isActive) {
     buttonElement.classList.add("job-status-button--active");
-    buttonElement.setAttribute("aria-current", "true");
   }
 
   buttonElement.addEventListener("click", async () => {
-    if (isActive || pendingMutationJobIds.has(job.id)) {
+    if (pendingMutationJobIds.has(job.id)) {
       return;
     }
 
     pendingMutationJobIds.add(job.id);
+    const wasVisible = visibleCompletedJobIds.has(job.id);
 
-    if (statusOption.value === JOB_STATUS.DONE) {
-      visibleDoneJobIds.add(job.id);
+    if (isCompletedJobStatus(statusOption.value)) {
+      visibleCompletedJobIds.add(job.id);
     }
 
-    const result = await store.updateJobStatus(job.id, statusOption.value);
+    const nextStatus = isActive ? JOB_STATUS.TODO : statusOption.value;
+    const result = await store.updateJobStatus(job.id, nextStatus);
 
     pendingMutationJobIds.delete(job.id);
     if (render() === false) return;
 
     if (result.stale) return;
     if (!result.ok) {
-      visibleDoneJobIds.delete(job.id);
+      if (!wasVisible) visibleCompletedJobIds.delete(job.id);
 
       showErrorNotice({
-        title: "Job update failed",
+        title: "Package update failed",
         message: result.error.message,
       });
 
@@ -1374,15 +1311,17 @@ function createStatusButton({
     }
 
     showSuccessNotice({
-      title: job.source === "live" ? "Mock Job status updated" : "Job status updated",
-      message: `${result.data.job.title} is now ${statusOption.label}.`,
+      title: job.source === "live" ? "Temporary Package status changed" : "Package status changed",
+      message: isActive
+        ? `${result.data.job.title} is open again.`
+        : `${result.data.job.title} is now ${statusOption.label}.`,
     });
 
     if (Array.isArray(result.data.createdJobs) && result.data.createdJobs.length > 0) {
       showInfoNotice({
-        title: "New Job queued",
+        title: "New Package queued",
         message:
-          "The mock backend created new work. It will appear after refresh or when the Jobs panel is reopened.",
+          "The mock backend created new work. It will appear after refresh or when the Packages panel is reopened.",
       });
     }
   });
@@ -1395,8 +1334,8 @@ function createLoadingState() {
   containerElement.className = "job-list__state job-list__state--loading";
   containerElement.setAttribute("role", "status");
 
-  const titleElement = createStateTitle("Loading Jobs...");
-  const messageElement = createStateMessage("Loading the current Jobs list.");
+  const titleElement = createStateTitle("Loading Packages...");
+  const messageElement = createStateMessage("Loading the current Packages list.");
 
   containerElement.append(titleElement, messageElement);
 
@@ -1479,34 +1418,35 @@ function createStateMessage(text) {
   return messageElement;
 }
 
-function createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }) {
+function createEmptyState({ hiddenCompletedCount, aoiFilter, jobFilters }) {
   const element = document.createElement("p");
   element.className = "job-list__state";
 
   if (aoiFilter && hasActiveJobFilters(jobFilters)) {
-    element.textContent = "No related Jobs match the active filters for this AOI.";
+    element.textContent = "No related Packages match the active filters for this AOI.";
     return element;
   }
 
   if (hasActiveJobFilters(jobFilters)) {
-    element.textContent = "No Jobs match the active filters.";
+    element.textContent = "No Packages match the active filters.";
     return element;
   }
 
-  if (aoiFilter && hiddenDoneCount > 0) {
-    element.textContent = "Only Done related Jobs were found. Done Jobs are hidden by default.";
+  if (aoiFilter && hiddenCompletedCount > 0) {
+    element.textContent =
+      "Only completed related Packages were found. Use a status filter to show them.";
     return element;
   }
 
   if (aoiFilter) {
-    element.textContent = "No related active Jobs found for this AOI.";
+    element.textContent = "No related open Packages found for this AOI.";
     return element;
   }
 
   element.textContent =
-    hiddenDoneCount > 0
-      ? "No active Jobs found. Done Jobs are hidden by default."
-      : "No Jobs found.";
+    hiddenCompletedCount > 0
+      ? "No open Packages found. Use a status filter to show completed entries."
+      : "No Packages found.";
 
   return element;
 }
@@ -1562,7 +1502,7 @@ function createJobMapFocusClearedEvent() {
 function createJobMapFocusPayload(job = {}) {
   return {
     jobId: normalizeOptionalString(job.jobId ?? job.id),
-    jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Job",
+    jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Package",
     geometryType: normalizeOptionalString(job.geometryType ?? job.geometry?.type),
     priority: normalizeOptionalString(job.priority),
     relatedAoiIds: normalizeRelatedAoiIdsForEvent(job.relatedAoiIds),

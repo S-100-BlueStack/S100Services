@@ -1,3 +1,98 @@
+## DC-UX-01 v5 — Package summaries use existing selected reads (2026-11-06)
+
+V4 per-page `GET /api/v1/dispatcher/bindings?packageId=...` fan-out was removed
+because browser testing showed unacceptable list load performance. The frontend
+now reads bindings only when the user selects a Package or invokes an existing
+Save/reconciliation workflow, and retains the last verified Pipeline names and
+assignment status for inspected Packages within the current page session.
+Uninspected Packages cannot show authoritative Pipeline names from the v1 list
+response without an additional verified contract. No new backend API is assumed.
+A future batch/page summary endpoint could support population of every row if
+needed, but it is not used by this candidate.
+
+The v4 section below is historical and superseded for this frontend candidate.
+
+---
+
+## DC-UX-01 v4 — Read-only binding summary fan-out (2026-11-06)
+
+The v1 Package listing still has no bundled assignment status or Pipeline-name
+summary. The frontend now supports visible-page hydration using the already
+verified `GET /api/v1/dispatcher/bindings?packageId=...` plus Pipeline catalogue
+names. It caps concurrent detail reads at four and aborts superseded batches.
+This is client-side request orchestration, not a backend bulk endpoint. The
+Package list remains paged and user search is limited to the loaded page; neither
+full catalogue search nor historical completion pagination has been added.
+
+A future backend batch/page summary route (PAGE-01 follow-up) should return
+Package identity, authoritative assignment flag and saved Pipeline names with
+consistent snapshot/paging semantics, avoiding per-page N+1 intersection reads.
+Workspace-overrides (OVERRIDE-01) and binding comments (COMMENT-01) still lack
+verified persistence contracts; the UI must not send invented writes.
+
+---
+
+## DC-UX-01 v3 — Binding comment and Workspace draft UI (2026-11-06)
+
+The frontend now exposes Pipeline comment drafts and always-visible nested
+Workspace selection previews, but the **v1 executable backend remains unchanged**.
+`OVERRIDE-01`: provide explicit effective Workspace override read/write semantics
+(scoped to Package, Pipeline, Workspace) preserving automatic overlap. The UI
+must later reconcile saved and draft selections against that authoritative state.
+`COMMENT-01`: define a binding-scoped comment read/write contract, identity,
+permissions, author/time and history semantics before enabling live comment Save.
+Until then, the frontend blocks saving a draft with comments and never calls an
+undocumented route. Existing Package listing supplies no per-row Pipeline name
+summary; binding details can be shown for the selected Package after an
+existing authoritative read, not assumed for the whole page.
+
+---
+
+## DC-UX-01 v2 — Workspace override contract still missing (2026-11-06)
+
+The current `GET /api/v1/workspaces` supports `pipelineId` and paging, so the
+frontend can show all selectable Workspaces within a Pipeline and pre-check the
+saved auto-intersection memberships returned by `GET /api/v1/dispatcher/bindings`.
+Those are **verified reads**, not a manual assignment API. Neither the current
+`POST /api/v1/dispatcher/bindings` (Package + Pipeline) nor a Workspace ownership
+lock operation may be used to persist manual Package–Workspace includes/excludes.
+
+The new editor is explicitly preview-only. Pending manual changes block Pipeline
+Save and remain in the draft until reset/discard; the authoritative binding
+response, assignment map and Jobs retain only backend-calculated membership.
+A backend implementation must supply per-Package/Pipeline override read/write
+(including version/preconditions), effective membership consistently for both
+bindings and Workspace Package paging, and server-authoritative reconciliation.
+Do not describe preview checkbox changes as committed state. See `OVERRIDE-01`
+in `DC_API_BACKEND_GAPS.md`.
+
+---
+
+## DC-UX-01 — Verified filtering capabilities and deferred history (2026-11-06)
+
+The pinned backend `PackageController.GetPackages` (`GET /api/v1/packages`)
+accepts `category`, `geometry`, `hasPipeline`, `pipelineId`, `page` and
+`pageSize`. It does **not** accept free-text terms, a saved workflow status,
+completion dates, or historical-status filters. Source: local `main` commit
+`2d596754d43d00352fe0adfac9b0f8420fb817c8` (read-only backend export).
+
+The frontend Package assignment selector provides **Search this page** over
+only the received names, short IDs and titles. This is a page-local view
+filter, not an API query, deep-description search or a claim that a Package is
+absent from the full catalogue. Category and binding-status queries retain
+existing server-side filtering and pagination.
+
+The main-map `Done` and `No update` actions update the existing temporary
+context-scoped mock status adapter and return to internal open state when
+pressed again. The UI name **Packages** does not change the underlying Job
+identity `(packageId, pipelineId, workspaceId)` or create a persisted Package
+status. Historical discovery requires agreement with the backend owner on
+status ownership, terminal timestamps, reversible transitions, filtering,
+stable ordering, pagination and authorization across old and current records.
+No routes or request/response properties have been fabricated.
+
+---
+
 ## DC-API-06 — Verified read-only Package geometry (2026-11-05)
 
 Backend source snapshot: `8960c5f815d4a4bb3a1af6733406250d024b2334`.

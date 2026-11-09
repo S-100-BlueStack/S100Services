@@ -48,6 +48,9 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
   const jobsWorkflowHost = new Element();
   jobsWorkflowHost.append(workspace.element, startupLoader.element);
   const shellElement = new Element();
+  const documentRef = { title: "Initial title" };
+  let notifySelectedPackage;
+  let selectedShortId = null;
   let creates = 0;
   let activations = 0;
   let destroys = 0;
@@ -56,6 +59,9 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
   const page = {
     element: new Element(),
     allowLeave: async () => true,
+    getSelectedPackageShortId() {
+      return selectedShortId;
+    },
     activate() {
       activations++;
     },
@@ -67,8 +73,9 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
     shellElement,
     jobsWorkflowHost,
     navbar,
-    createPage() {
+    createPage({ onPackageSelected }) {
       creates++;
+      notifySelectedPackage = onPackageSelected;
       return page;
     },
     onOpenJobs:
@@ -77,6 +84,7 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
         jobsActions++;
       }),
     isJobsStartupComplete: () => jobsStartupComplete,
+    documentRef,
   });
   return {
     navigation,
@@ -86,6 +94,11 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
     button,
     startupLoader,
     jobsWorkflowHost,
+    documentRef,
+    selectedPackage(id, shortId) {
+      selectedShortId = shortId;
+      notifySelectedPackage?.(id);
+    },
     setStartupComplete(value) {
       jobsStartupComplete = value;
       navigation.syncJobsButtonState();
@@ -317,6 +330,7 @@ test("Direct Package URL opens assignment and selects the decoded Package identi
     replaceState() {},
   };
   const selected = [];
+  const documentRef = { title: "" };
   const navigation = createWorkflowNavigation({
     shellElement: new Element(),
     jobsWorkflowHost: new Element(),
@@ -328,6 +342,7 @@ test("Direct Package URL opens assignment and selects the decoded Package identi
     },
     locationRef,
     historyRef,
+    documentRef,
     windowRef: new EventTarget(),
     onOpenJobs() {},
     createPage({ onPackageSelected }) {
@@ -335,6 +350,9 @@ test("Direct Package URL opens assignment and selects the decoded Package identi
         element: new Element(),
         activate() {},
         allowLeave: async () => true,
+        getSelectedPackageShortId(id) {
+          return id === "one/two" ? "NM260123" : null;
+        },
         async selectPackage(id) {
           selected.push(id);
           onPackageSelected(id);
@@ -349,7 +367,23 @@ test("Direct Package URL opens assignment and selects the decoded Package identi
     assert.deepEqual(selected, ["one/two"]);
     assert.deepEqual(pushes, []);
     assert.equal(button.attributes.get("aria-current"), "page");
+    assert.equal(documentRef.title, "Package assignment: NM260123");
   } finally {
     navigation.destroy();
+  }
+});
+
+test("browser title follows the main map, assignment and selected Package short ID", async () => {
+  const f = fixture();
+  try {
+    assert.equal(f.documentRef.title, "Data Catalogue");
+    await f.navigation.openAssignment();
+    assert.equal(f.documentRef.title, "Package assignment");
+    f.selectedPackage("canonical-id-1", "NM260041");
+    assert.equal(f.documentRef.title, "Package assignment: NM260041");
+    await f.navigation.openJobs();
+    assert.equal(f.documentRef.title, "Data Catalogue");
+  } finally {
+    f.navigation.destroy();
   }
 });

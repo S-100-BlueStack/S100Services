@@ -7,10 +7,8 @@ import {
 } from "../packages/createPackageGeometryOverlay.js";
 import { createWorkspaceGeometrySource } from "../workspaces/createWorkspaceGeometrySource.js";
 import { createWorkspaceGraphics } from "../workspaces/createWorkspaceGraphics.js";
-import {
-  createWorkspaceOverlay,
-  workspaceOverlayMessage,
-} from "../workspaces/createWorkspaceOverlay.js";
+import { createWorkspaceOverlay } from "../workspaces/createWorkspaceOverlay.js";
+import { formatWorkspaceMapFailures } from "./formatWorkspaceMapFailures.js";
 import { liveAssignmentMapContext } from "./liveAssignmentMapContext.js";
 
 export function createLiveCatalogueMap({
@@ -27,6 +25,7 @@ export function createLiveCatalogueMap({
     positionSlot: "assignment",
     viewOptions: { popup: null, popupEnabled: false },
   });
+  view.ui.move("zoom", "top-right");
   let alive = true;
   let selected = false;
   let mapError = "";
@@ -40,13 +39,15 @@ export function createLiveCatalogueMap({
     onStatus(
       [
         contextError,
-        selected
-          ? "Showing the selected Package geometry and Workspaces from saved bindings."
-          : "Select a Package to display its AOI and saved intersecting Workspaces.",
-        selected ? packageGeometryMessage(packageState) : "",
-        selected && !geometryState.total ? "No saved intersecting Workspaces to display." : "",
+        selected && packageState.status === "error" ? packageGeometryMessage(packageState) : "",
         packageMapError,
-        mapError || workspaceOverlayMessage(geometryState),
+        mapError,
+        selected &&
+        (geometryState.status === "error" ||
+          geometryState.failures.length ||
+          geometryState.navigationError)
+          ? formatWorkspaceMapFailures(geometryState)
+          : "",
       ]
         .filter(Boolean)
         .join(" ")

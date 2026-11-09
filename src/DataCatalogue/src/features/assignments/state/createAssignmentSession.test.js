@@ -293,3 +293,32 @@ test("A synchronous catalogue exception leaves the prior selection intact", asyn
   assert.equal(session.snapshot().loading, false);
   assert.match(session.snapshot().selectionError, /Invalid catalogue response/);
 });
+
+test("Live Workspace preview is reversible, blocks Save, and never sends an unsupported mutation", async () => {
+  let saves = 0;
+  const service = {
+    source: "live",
+    features: { get: async (id) => ({ id }) },
+    assignments: {
+      load: async () => ({ relations: { p: { active: true, workspaces: [{ id: "w1" }] } } }),
+      save: async () => {
+        saves++;
+        return { relations: {} };
+      },
+    },
+  };
+  const session = createAssignmentSession({ services: service });
+  await session.select("item");
+  assert.equal(session.setWorkspacePreview("p", "w1", false), true);
+  assert.equal(session.setWorkspacePreview("p", "w2", true), true);
+  assert.equal(session.snapshot().dirty, true);
+  assert.match(session.snapshot().validationError, /preview-only/);
+  assert.equal(await session.save(), false);
+  assert.equal(saves, 0);
+  session.resetWorkspacePreview("p");
+  assert.deepEqual(session.snapshot().draft.workspaceOverrides, {});
+  assert.equal(session.snapshot().dirty, false);
+  assert.equal(session.snapshot().validationError, "");
+  assert.equal(session.setWorkspacePreview("not-selected", "w1", false), false);
+  session.destroy();
+});

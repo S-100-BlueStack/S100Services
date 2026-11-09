@@ -20,14 +20,9 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   const titleElement = document.createElement("h2");
   titleElement.id = "data-catalogue-jobs-title";
   titleElement.className = "data-catalogue-overlay-panel__title";
-  titleElement.textContent = "Jobs";
+  titleElement.textContent = "Packages";
 
-  const subtitleElement = document.createElement("p");
-  subtitleElement.className = "data-catalogue-overlay-panel__subtitle";
-  subtitleElement.textContent =
-    sourceMode === "live" ? "Live Packages · Mock status" : "Mock backend";
-
-  titleGroupElement.append(titleElement, subtitleElement);
+  titleGroupElement.append(titleElement);
 
   const headerActionsElement = document.createElement("div");
   headerActionsElement.className = "data-catalogue-overlay-panel__header-actions";
@@ -35,8 +30,8 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   const backButton = document.createElement("calcite-action");
   backButton.className = "data-catalogue-overlay-panel__back";
   backButton.icon = "arrow-left";
-  backButton.text = "Back to Jobs";
-  backButton.title = "Back to Jobs";
+  backButton.text = "Back to Packages";
+  backButton.title = "Back to Packages";
   backButton.hidden = true;
   backButton.setAttribute("aria-hidden", "true");
   backButton.addEventListener("click", () => {
@@ -46,17 +41,22 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   const closeButton = document.createElement("calcite-action");
   closeButton.className = "data-catalogue-overlay-panel__close";
   closeButton.icon = "x";
-  closeButton.text = "Close Jobs panel";
-  closeButton.title = "Close Jobs panel";
+  closeButton.text = "Close Packages panel";
+  closeButton.title = "Close Packages panel";
 
-  const resetStatusesButton = sourceMode === "live" ? document.createElement("button") : null;
-  if (resetStatusesButton) {
-    resetStatusesButton.type = "button";
-    resetStatusesButton.className = "dc-jobs-reset-statuses";
-    resetStatusesButton.textContent = "Reset statuses";
-    resetStatusesButton.title = "Reset temporary Job statuses";
-    headerActionsElement.append(resetStatusesButton);
-  }
+  // The header action remains mounted across list/detail rerenders for stable keyboard focus.
+  const refreshButton = document.createElement("button");
+  refreshButton.type = "button";
+  refreshButton.className = "job-list__refresh-button";
+  refreshButton.title = "Refresh Packages";
+  refreshButton.setAttribute("aria-label", "Refresh Packages");
+  const icon = document.createElement("calcite-icon");
+  icon.icon = "refresh";
+  icon.scale = "s";
+  icon.setAttribute("aria-hidden", "true");
+  refreshButton.append(icon);
+  refreshButton.addEventListener("click", () => void jobList.refreshJobs({ manual: true }));
+  headerActionsElement.append(refreshButton);
   headerActionsElement.append(backButton, closeButton);
   headerElement.append(titleGroupElement, headerActionsElement);
   panelElement.append(headerElement, jobList.element);
@@ -72,6 +72,13 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
 
   headerResizeObserver?.observe(headerElement);
 
+  const unsubscribeLoading = jobStore?.subscribe?.((state) => {
+    refreshButton.disabled = state.isLoading;
+    const label = state.isLoading ? "Refreshing Packages" : "Refresh Packages";
+    refreshButton.title = label;
+    refreshButton.setAttribute("aria-label", label);
+  });
+
   jobList.element.addEventListener("data-catalogue:job-details-mode-changed", (event) => {
     const isDetailsMode = Boolean(event.detail?.isDetailsMode);
 
@@ -83,7 +90,7 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   return {
     element: panelElement,
     closeButton,
-    resetStatusesButton,
+    refreshButton,
     refreshJobs() {
       return jobList.refreshJobs();
     },
@@ -104,6 +111,7 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
     },
     destroy() {
       headerResizeObserver?.disconnect();
+      unsubscribeLoading?.();
       jobList.destroy();
     },
   };

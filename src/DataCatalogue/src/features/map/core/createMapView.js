@@ -33,9 +33,8 @@ export function createMapView({ container, runtimeConfig, mapConfig, basemapSett
     },
   });
 
-  // Floating Pipelines/Jobs panels occupy the left part of the live map. Keep
-  // the standard zoom controls accessible on the unobstructed right side.
-  if (runtimeConfig?.sourceMode === "live") view.ui.move("zoom", "bottom-right");
+  // Keep zoom controls at the same top-right position as the assignment map.
+  view.ui.move("zoom", "top-right");
 
   configurePopupDefaults(view);
 

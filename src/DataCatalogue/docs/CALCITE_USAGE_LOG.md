@@ -1,3 +1,54 @@
+## DC-UX-01 v4 — Map UI ownership and icon emphasis (2026-11-06)
+
+The application retains public Calcite `save`, `refresh` and `speech-bubble`
+icons in application-owned native buttons (keyboard and accessible names remain
+native). The Save icon uses a larger public icon scale and brand-color state only
+when the existing draft/session validation permits Save; the binding comment
+icon is slightly larger and keeps its anchored native editor.
+
+For maps, `view.ui.add(host, { position: "top-right", index: 1 })` registers the
+existing public `arcgis-expand` basemap component beneath native Zoom, with
+assignment Retry at index 2. Controls use public `visualScale = "m"`,
+application-owned 32px host dimensions and shared light/dark surface/shadow.
+This avoids absolute offsets, deprecated Expand widgets, and shadow-DOM hacks.
+
+---
+
+## DC-UX-01 v3 — Compact icon actions, nested Workspaces and map controls (2026-11-06)
+
+- The Pipeline comment trigger uses Calcite `speech-bubble` via a native
+  icon-only button to avoid visually heavy button chrome and retain native
+  keyboard focus, click and title semantics. The anchored text editor uses a
+  native textarea and close button, not private Calcite popover shadow DOM.
+- Live Workspace checkboxes are nested directly in the Pipeline row, matching
+  the main-map Pipeline hierarchy. Automatic reads are scoped to selected
+  Pipelines. Native labels/checkboxes preserve keyboard input and don't require
+  a Calcite accordion or private selectors.
+- Package-list Refresh, Pipeline Save and mounted main Packages Refresh use
+  native buttons styled as icon-only controls with public Calcite icons and
+  `aria-label`/`title`, to preserve stable element identity across updates.
+- Main and assignment maps move ArcGIS zoom via public `MapView.ui.move` to
+  `top-right`. Basemap actions use the public `arcgis-expand.visualScale = "m"`
+  property (available from ArcGIS 5.0). CSS aligns the app-owned overlay hosts;
+  no ArcGIS/Calcite internal shadow DOM is accessed. Real browser size alignment
+  remains a manual QA check.
+- Navbar route links are native links, retaining actual navigation semantics.
+  The full-height active underline and reduced-motion guard are adapted from
+  ProductCatalogue's header styles, not a custom Calcite navigation element.
+
+---
+
+## DC-UX-01 v2 — Workspace override preview editor (2026-11-06)
+
+The compact Pipeline row uses native checkbox and expand/collapse buttons for
+Workspace choice preview. This preserves existing keyboard/tab/focus behavior
+without relying on Calcite shadow-DOM internals. The Workspace catalogue is
+loaded on demand per Pipeline, and state is owned by the assignment session.
+Blue selection/outline tokens use public `--calcite-*` properties. Browser
+verification of light/dark and keyboard behavior remains required.
+
+---
+
 ## DC-API-06 Package geometry visualization (2026-11-05)
 
 The assignment-map geometry legend uses the existing application-owned,
@@ -168,3 +219,14 @@ its existing native Save control. Jobs uses stable `data-job-focus` markers on
 public `calcite-button`/`calcite-action` hosts and native Refresh buttons to
 restore logical keyboard focus after re-rendering. There are no private Calcite
 shadow-DOM selectors, new component dependencies, or changes to theme tokens.
+
+### DC-UX-01 — Persistent header Refresh and compact assignment controls (2026-11-06)
+
+The Packages header uses an application-owned native icon-only `button` with a
+public `calcite-icon`, `aria-label`, disabled/loading state and
+`:focus-visible`, rather than manipulating a Calcite action's shadow root. The
+Done/No update toggles continue using public `calcite-button` `kind`,
+`appearance` and `aria-pressed` attributes. Package assignment keeps native
+form inputs and structural CSS for precise desktop layout; no private
+Calcite internals or new components are introduced. The permanent Pipeline
+reload control is replaced by an accessible error-only Retry action.

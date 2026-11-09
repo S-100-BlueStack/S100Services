@@ -50,7 +50,7 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
     expand.collapseTooltip = "Close basemaps";
     expand.label = "Basemaps";
     expand.mode = "floating";
-    expand.visualScale = "s";
+    expand.visualScale = "m";
 
     const gallery = document.createElement("arcgis-basemap-gallery");
     gallery.className = "dc-basemap-gallery";
@@ -89,7 +89,12 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
   return {
     setView(view) {
       if (!alive || currentView === view) return;
+      currentView?.ui?.remove?.(container);
       currentView = view ?? null;
+      if (currentView?.ui?.add) {
+        // ArcGIS owns the zoom/basemap alignment. Do not position this host by pixels.
+        currentView.ui.add(container, { position: "top-right", index: 1 });
+      }
       const token = ++generation;
       if (ui) {
         ui.gallery.view = currentView;
@@ -102,6 +107,7 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
       if (!alive) return;
       alive = false;
       generation++;
+      currentView?.ui?.remove?.(container);
       unsubscribe();
       if (ui) {
         ui.gallery.removeEventListener("arcgisPropertyChange", ui.onGalleryChanged);

@@ -15,18 +15,18 @@ export const AOI_MAP_FILTER_MODE_OPTIONS = Object.freeze([
   }),
   Object.freeze({
     value: AOI_MAP_FILTER_MODE.WITH_VISIBLE_JOBS,
-    label: "AOIs with visible Jobs",
-    description: "Show AOIs that have Jobs in the current visible Job set.",
+    label: "AOIs with visible Packages",
+    description: "Show AOIs that have Packages in the current visible Package set.",
   }),
   Object.freeze({
     value: AOI_MAP_FILTER_MODE.WITH_ACTIVE_JOBS,
-    label: "AOIs with active Jobs",
-    description: "Show AOIs that have related Jobs that are not Done.",
+    label: "AOIs with open Packages",
+    description: "Show AOIs that have related Packages that are not Done or No update.",
   }),
   Object.freeze({
     value: AOI_MAP_FILTER_MODE.WITH_HIGH_PRIORITY_JOBS,
-    label: "AOIs with high-priority Jobs",
-    description: "Show AOIs that have active high-priority Jobs.",
+    label: "AOIs with high-priority Packages",
+    description: "Show AOIs that have active high-priority Packages.",
   }),
 ]);
 

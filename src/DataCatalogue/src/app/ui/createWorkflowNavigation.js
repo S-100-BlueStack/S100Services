@@ -29,6 +29,7 @@ export function createWorkflowNavigation({
   locationRef = globalThis.location,
   historyRef = globalThis.history,
   windowRef = globalThis.window,
+  documentRef = globalThis.document,
 }) {
   const abort = new AbortController();
   const button = navbar.element.querySelector("#feature-assignment-toggle");
@@ -53,9 +54,21 @@ export function createWorkflowNavigation({
     acceptedPath = path;
   }
 
+  function syncDocumentTitle() {
+    if (!documentRef) return;
+    if (!active) {
+      documentRef.title = "Data Catalogue";
+      return;
+    }
+    const route = parseWorkflowPath(acceptedPath);
+    const shortId = page?.getSelectedPackageShortId?.(route.packageId);
+    documentRef.title = shortId ? `Package assignment: ${shortId}` : "Package assignment";
+  }
+
   function syncNavigation() {
     button.setAttribute("aria-current", active ? "page" : "false");
     home.setAttribute("aria-current", active ? "false" : "page");
+    syncDocumentTitle();
   }
 
   function sameIntent(a, b) {
@@ -114,7 +127,10 @@ export function createWorkflowNavigation({
       if (intent.assignment && !page) {
         page = createPage({
           onPackageSelected(id) {
-            if (alive && active && !transitioning) setRoute(assignmentPath(id));
+            if (alive && active && !transitioning) {
+              setRoute(assignmentPath(id));
+              syncDocumentTitle();
+            }
           },
         });
         shellElement.append(page.element);
@@ -145,6 +161,7 @@ export function createWorkflowNavigation({
 
       if (intent.fromHistory) acceptedPath = intent.path;
       else setRoute(intent.assignment ? assignmentPath() : "/");
+      syncDocumentTitle();
       return true;
     } catch (error) {
       if (isCurrent()) {

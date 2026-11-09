@@ -13,14 +13,14 @@ test("createJobFilterStore stores, normalizes and clears filters", () => {
 
   store.setFilters({
     activeOnly: true,
-    statusValues: ["todo", "bad-value"],
+    statusValues: ["noUpdate", "bad-value"],
   });
 
   assert.deepEqual(store.getSnapshot().filters, {
     activeOnly: true,
     highPriorityOnly: false,
     withRelatedAoisOnly: false,
-    statusValues: ["todo"],
+    statusValues: ["noUpdate"],
     priorityValues: [],
   });
 

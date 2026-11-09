@@ -12,7 +12,10 @@ export function createScopedJobStatusAdapter() {
       return values.get(scopedJobId(context)) ?? JOB_STATUS.TODO;
     },
     set(context, status) {
-      if (!JOB_STATUS_OPTIONS.some((option) => option.value === status))
+      if (
+        status !== JOB_STATUS.TODO &&
+        !JOB_STATUS_OPTIONS.some((option) => option.value === status)
+      )
         throw new Error("Unknown mock Job status.");
       values.set(scopedJobId(context), status);
       return status;

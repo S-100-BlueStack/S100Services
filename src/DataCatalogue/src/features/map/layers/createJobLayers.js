@@ -14,7 +14,7 @@ export function createJobLayers() {
   const polygonLayer = createJobPolygonLayer();
   const pointLayer = createJobPointLayer({
     id: "data-catalogue-job-point-layer",
-    title: "Job points",
+    title: "Package points",
     visible: true,
     renderer: createJobPointRenderer(),
   });
@@ -37,7 +37,7 @@ export function createJobLayers() {
 function createJobPolygonLayer() {
   return new FeatureLayer({
     id: "data-catalogue-job-polygon-layer",
-    title: "Job polygons",
+    title: "Package polygons",
     source: [],
     fields: createJobLayerFields(),
     objectIdField: JOB_LAYER_FIELD.OBJECT_ID,
@@ -56,19 +56,19 @@ function createPriorityPointLayers() {
   return {
     [JOB_PRIORITY.LOW]: createJobPointLayer({
       id: "data-catalogue-job-point-layer-low-priority",
-      title: "Low priority Job points",
+      title: "Low priority Package points",
       visible: false,
       renderer: createJobPriorityPointRenderer(),
     }),
     [JOB_PRIORITY.MEDIUM]: createJobPointLayer({
       id: "data-catalogue-job-point-layer-medium-priority",
-      title: "Medium priority Job points",
+      title: "Medium priority Package points",
       visible: false,
       renderer: createJobPriorityPointRenderer(),
     }),
     [JOB_PRIORITY.HIGH]: createJobPointLayer({
       id: "data-catalogue-job-point-layer-high-priority",
-      title: "High priority Job points",
+      title: "High priority Package points",
       visible: false,
       renderer: createJobPriorityPointRenderer(),
     }),

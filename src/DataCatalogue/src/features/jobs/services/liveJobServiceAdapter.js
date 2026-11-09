@@ -36,7 +36,9 @@ export function createLiveJobServiceAdapter({
     async loadJobs({ signal } = {}) {
       if (scopes === null) {
         if (typeof ensureWorkspaces !== "function") {
-          throw new Error("Workspace catalogue has not loaded. Retry Jobs when it is available.");
+          throw new Error(
+            "Workspace catalogue has not loaded. Retry Packages when it is available."
+          );
         }
         const prerequisite = await ensureWorkspaces();
         signal?.throwIfAborted();
@@ -44,7 +46,7 @@ export function createLiveJobServiceAdapter({
           throw prerequisite?.error ?? new Error("Workspace catalogue could not be loaded.");
         }
         if (scopes === null) {
-          throw new Error("Workspace catalogue did not provide an authoritative Job scope.");
+          throw new Error("Workspace catalogue did not provide an authoritative Package scope.");
         }
       }
       const selected = scopes;
@@ -117,7 +119,7 @@ export function createLiveJobServiceAdapter({
       const job = jobs.get(id);
       if (!job)
         throw new Error(
-          "Job is no longer in the loaded Workspace catalogue. Reload Jobs before updating status."
+          "Package is no longer in the loaded Workspace catalogue. Refresh Packages before updating status."
         );
       const next = { ...job, status: statuses.set(job, status) };
       jobs.set(id, next);

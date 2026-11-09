@@ -17,8 +17,8 @@ export function createUnavailableHttpJobServiceAdapter() {
 function createUnavailableHttpAdapterError() {
   return {
     name: "JobServiceAdapterError",
-    message: "HTTP Job adapter is not configured yet.",
-    userMessage: "Job backend is not configured yet.",
+    message: "HTTP Package adapter is not configured yet.",
+    userMessage: "Package backend is not configured yet.",
     status: 501,
     code: "JOB_HTTP_ADAPTER_UNAVAILABLE",
   };

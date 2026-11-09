@@ -106,7 +106,7 @@ export async function applyJobPointClustering({
 
 export function createJobClusterPopupTemplate({ view } = {}) {
   return {
-    title: `{cluster_count} Jobs in this cluster`,
+    title: `{cluster_count} Packages in this cluster`,
     outFields: ["*"],
     content: [
       createJobClusterPickerContent({
@@ -117,7 +117,7 @@ export function createJobClusterPopupTemplate({ view } = {}) {
     fieldInfos: [
       {
         fieldName: "cluster_count",
-        label: "Jobs",
+        label: "Packages",
         format: {
           places: 0,
           digitSeparator: true,

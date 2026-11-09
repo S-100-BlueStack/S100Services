@@ -17,26 +17,26 @@ export function createJobPointRenderer() {
     type: "unique-value",
     field: JOB_LAYER_FIELD.RENDER_CLASS,
     defaultSymbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_MEDIUM),
-    defaultLabel: "Active Jobs",
+    defaultLabel: "Active Packages",
     uniqueValueInfos: [
       {
         value: JOB_RENDER_CLASS.ACTIVE_LOW,
-        label: "Low-priority active Jobs",
+        label: "Low-priority active Packages",
         symbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_LOW),
       },
       {
         value: JOB_RENDER_CLASS.ACTIVE_MEDIUM,
-        label: "Medium-priority active Jobs",
+        label: "Medium-priority active Packages",
         symbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_MEDIUM),
       },
       {
         value: JOB_RENDER_CLASS.ACTIVE_HIGH,
-        label: "High-priority active Jobs",
+        label: "High-priority active Packages",
         symbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_HIGH),
       },
       {
         value: JOB_RENDER_CLASS.DONE,
-        label: "Done Jobs",
+        label: "Completed Packages",
         symbol: createPointSymbol(JOB_RENDER_CLASS.DONE),
       },
     ],
@@ -74,26 +74,26 @@ export function createJobPolygonRenderer() {
     type: "unique-value",
     field: JOB_LAYER_FIELD.RENDER_CLASS,
     defaultSymbol: createPolygonSymbol(JOB_RENDER_CLASS.ACTIVE_MEDIUM),
-    defaultLabel: "Active Jobs",
+    defaultLabel: "Active Packages",
     uniqueValueInfos: [
       {
         value: JOB_RENDER_CLASS.ACTIVE_LOW,
-        label: "Low-priority active Jobs",
+        label: "Low-priority active Packages",
         symbol: createPolygonSymbol(JOB_RENDER_CLASS.ACTIVE_LOW),
       },
       {
         value: JOB_RENDER_CLASS.ACTIVE_MEDIUM,
-        label: "Medium-priority active Jobs",
+        label: "Medium-priority active Packages",
         symbol: createPolygonSymbol(JOB_RENDER_CLASS.ACTIVE_MEDIUM),
       },
       {
         value: JOB_RENDER_CLASS.ACTIVE_HIGH,
-        label: "High-priority active Jobs",
+        label: "High-priority active Packages",
         symbol: createPolygonSymbol(JOB_RENDER_CLASS.ACTIVE_HIGH),
       },
       {
         value: JOB_RENDER_CLASS.DONE,
-        label: "Done Jobs",
+        label: "Completed Packages",
         symbol: createPolygonSymbol(JOB_RENDER_CLASS.DONE),
       },
     ],

@@ -1,5 +1,5 @@
 import { JOB_PRIORITY, JOB_PRIORITY_OPTIONS } from "./jobPriority.js";
-import { JOB_STATUS, JOB_STATUS_OPTIONS } from "./jobStatus.js";
+import { JOB_STATUS_OPTIONS, isActiveJobStatus, isCompletedJobStatus } from "./jobStatus.js";
 
 const VALID_STATUS_VALUES = new Set(JOB_STATUS_OPTIONS.map((option) => option.value));
 const VALID_PRIORITY_VALUES = new Set(JOB_PRIORITY_OPTIONS.map((option) => option.value));
@@ -32,7 +32,7 @@ export function filterJobs(jobs = [], filters = createDefaultJobFilters()) {
   const priorityValues = new Set(normalizedFilters.priorityValues);
 
   return normalizeArray(jobs).filter((job) => {
-    if (normalizedFilters.activeOnly && job.status === JOB_STATUS.DONE) {
+    if (normalizedFilters.activeOnly && !isActiveJobStatus(job.status)) {
       return false;
     }
 
@@ -59,11 +59,11 @@ export function filterJobs(jobs = [], filters = createDefaultJobFilters()) {
 export function filterJobsForVisibleJobSet(jobs = [], filters = createDefaultJobFilters()) {
   const filteredJobs = filterJobs(jobs, filters);
 
-  if (shouldRevealDoneJobsForFilters(filters)) {
+  if (shouldRevealCompletedJobsForFilters(filters)) {
     return filteredJobs;
   }
 
-  return filteredJobs.filter((job) => job.status !== JOB_STATUS.DONE);
+  return filteredJobs.filter((job) => isActiveJobStatus(job.status));
 }
 
 export function hasActiveJobFilters(filters = createDefaultJobFilters()) {
@@ -78,10 +78,10 @@ export function hasActiveJobFilters(filters = createDefaultJobFilters()) {
   );
 }
 
-export function shouldRevealDoneJobsForFilters(filters = createDefaultJobFilters()) {
+export function shouldRevealCompletedJobsForFilters(filters = createDefaultJobFilters()) {
   const normalizedFilters = normalizeJobFilters(filters);
 
-  return normalizedFilters.statusValues.includes(JOB_STATUS.DONE);
+  return normalizedFilters.statusValues.some((status) => isCompletedJobStatus(status));
 }
 
 export function getActiveJobFilterSummary(filters = createDefaultJobFilters()) {
@@ -89,7 +89,7 @@ export function getActiveJobFilterSummary(filters = createDefaultJobFilters()) {
   const summaryParts = [];
 
   if (normalizedFilters.activeOnly) {
-    summaryParts.push("Active Jobs");
+    summaryParts.push("Open Packages");
   }
 
   if (normalizedFilters.highPriorityOnly) {
@@ -97,7 +97,7 @@ export function getActiveJobFilterSummary(filters = createDefaultJobFilters()) {
   }
 
   if (normalizedFilters.withRelatedAoisOnly) {
-    summaryParts.push("Jobs with AOIs");
+    summaryParts.push("Packages with AOIs");
   }
 
   if (normalizedFilters.statusValues.length > 0) {
@@ -132,3 +132,5 @@ function normalizeOptionalString(value) {
 
   return String(value).trim();
 }
+
+export const shouldRevealDoneJobsForFilters = shouldRevealCompletedJobsForFilters;

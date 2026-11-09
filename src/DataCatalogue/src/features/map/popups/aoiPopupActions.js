@@ -10,7 +10,7 @@ export function createAoiPopupActions() {
   return [
     {
       id: AOI_POPUP_ACTION.SHOW_RELATED_JOBS,
-      title: "Show related Jobs",
+      title: "Show related Packages",
       icon: "list",
     },
   ];
