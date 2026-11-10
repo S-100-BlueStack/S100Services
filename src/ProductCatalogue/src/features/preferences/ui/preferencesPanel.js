@@ -41,6 +41,7 @@ const PREFERENCE_ITEMS = [
     requiresMapContext: true,
   },
 ];
+const POPOVER_ID = "preferences";
 let activePanel = null;
 
 export function initPreferencesPanel({
@@ -50,6 +51,7 @@ export function initPreferencesPanel({
   onStartIntroduction,
   themeView,
   basemapSettings,
+  navbarPopoverCoordinator,
 } = {}) {
   if (activePanel) {
     activePanel.updateContext({
@@ -59,6 +61,7 @@ export function initPreferencesPanel({
       onStartIntroduction,
       themeView,
       basemapSettings,
+      navbarPopoverCoordinator,
     });
     return activePanel.api;
   }
@@ -87,6 +90,8 @@ export function initPreferencesPanel({
   const isOpen = () => !panel.hidden;
   let displayScaleControlHandle = null;
   let unsubscribeBasemapSettings = null;
+  let currentNavbarCoordinator = null;
+  let unregisterPopover = null;
   const render = () => {
     const focusedIdentity = panel.contains(document.activeElement)
       ? document.activeElement.dataset.preferenceFocus
@@ -193,7 +198,7 @@ export function initPreferencesPanel({
   // Owner subscribers may run later in the same persistence event dispatch.
   const persistenceHandle = onPreferencePersistenceChanged(() => queueMicrotask(sync));
 
-  const setOpen = (open, { restoreFocus = false } = {}) => {
+  const setOpen = (open, { restoreFocus = false, focusInitial = true } = {}) => {
     const wasOpen = isOpen();
     panel.hidden = !open;
     button.toggleAttribute("active", open);
@@ -206,8 +211,10 @@ export function initPreferencesPanel({
       const initialFocus =
         panel.querySelector("#preferences-dark-mode") ??
         panel.querySelector("[data-preference-action]");
-      if (initialFocus?.setFocus) void initialFocus.setFocus();
-      else initialFocus?.focus();
+      if (focusInitial) {
+        if (initialFocus?.setFocus) void initialFocus.setFocus();
+        else initialFocus?.focus();
+      }
     } else if (wasOpen && restoreFocus) {
       button.setFocus?.();
       if (!button.setFocus) button.focus();
@@ -217,10 +224,10 @@ export function initPreferencesPanel({
   const handleAction = async (action) => {
     switch (action) {
       case "close-panel":
-        setOpen(false, { restoreFocus: true });
+        close({ restoreFocus: true });
         break;
       case "start-introduction":
-        setOpen(false);
+        close({ restoreFocus: false });
         context.onStartIntroduction?.();
         break;
       case "reset-basemap":
@@ -251,11 +258,21 @@ export function initPreferencesPanel({
     sync();
   };
 
+  const close = ({ restoreFocus = true } = {}) => {
+    if (currentNavbarCoordinator) {
+      return currentNavbarCoordinator.close(POPOVER_ID, { restoreFocus });
+    }
+    if (!isOpen()) return false;
+    setOpen(false, { restoreFocus });
+    return true;
+  };
+
   button.setAttribute("aria-controls", panel.id);
   button.setAttribute("aria-expanded", "false");
   button.addEventListener("click", (event) => {
     event.stopPropagation();
-    setOpen(!isOpen(), { restoreFocus: true });
+    if (currentNavbarCoordinator) currentNavbarCoordinator.toggle(POPOVER_ID);
+    else setOpen(!isOpen(), { restoreFocus: true });
   });
 
   panel.addEventListener("click", (event) => {
@@ -302,7 +319,14 @@ export function initPreferencesPanel({
 
   const handleDocumentClick = (event) => {
     const target = getTargetElement(event);
-    if (!target || panel.hidden || panel.contains(target) || button.contains(target)) return;
+    if (
+      currentNavbarCoordinator ||
+      !target ||
+      panel.hidden ||
+      panel.contains(target) ||
+      button.contains(target)
+    )
+      return;
     setOpen(false);
   };
   const handleResize = () => {
@@ -322,7 +346,7 @@ export function initPreferencesPanel({
   window.addEventListener("resize", handleResize);
 
   const api = {
-    close: () => setOpen(false, { restoreFocus: true }),
+    close,
     updateContext(nextContext = {}) {
       activePanel?.updateContext(nextContext);
     },
@@ -330,6 +354,9 @@ export function initPreferencesPanel({
       displayScaleControlHandle?.remove();
       unsubscribeBasemapSettings?.();
       persistenceHandle.remove();
+      unregisterPopover?.();
+      unregisterPopover = null;
+      currentNavbarCoordinator = null;
       document.removeEventListener("keydown", handleKeydown);
       document.removeEventListener("click", handleDocumentClick);
       window.removeEventListener("resize", handleResize);
@@ -341,6 +368,21 @@ export function initPreferencesPanel({
   activePanel = {
     api,
     updateContext(nextContext = {}) {
+      if (
+        Object.prototype.hasOwnProperty.call(nextContext, "navbarPopoverCoordinator") &&
+        nextContext.navbarPopoverCoordinator !== undefined &&
+        nextContext.navbarPopoverCoordinator !== currentNavbarCoordinator
+      ) {
+        unregisterPopover?.();
+        currentNavbarCoordinator = nextContext.navbarPopoverCoordinator ?? null;
+        unregisterPopover = currentNavbarCoordinator?.register(POPOVER_ID, {
+          open: ({ focusInitial = true } = {}) => setOpen(true, { focusInitial }),
+          close: ({ restoreFocus = false } = {}) => setOpen(false, { restoreFocus }),
+          isOpen,
+          containsTarget: (target) =>
+            Boolean(target && (panel.contains(target) || button.contains(target))),
+        });
+      }
       if (Object.prototype.hasOwnProperty.call(nextContext, "basemapSettings")) {
         if (context.basemapSettings !== nextContext.basemapSettings) {
           unsubscribeBasemapSettings?.();
@@ -378,6 +420,7 @@ export function initPreferencesPanel({
     onStartIntroduction,
     themeView,
     basemapSettings,
+    navbarPopoverCoordinator,
   });
   render();
   return api;

@@ -200,3 +200,37 @@ test("mouse help follows the pointer and allows adjacent Tools items to take hov
     assert.equal(doc.body.children.length, 2);
   });
 });
+
+test("pointer-restored focus does not pin popup help after leaving the action", () => {
+  withDom(({ doc, createAnchor }) => {
+    const anchor = createAnchor();
+    anchor.matches = (selector) => selector === ":focus-visible" && false;
+    const help = bindPopupActionHelp(anchor, "Discard the package");
+
+    // The confirmation dialog returns focus after a mouse Cancel; this is not
+    // a keyboard focus indication and should not create an enduring tooltip.
+    anchor.emit("focusin");
+    assert.equal(doc.body.children.length, 1);
+    anchor.emit("pointerenter");
+    assert.equal(doc.body.children.length, 2);
+    anchor.emit("pointerdown");
+    anchor.emit("pointerleave");
+    assert.equal(doc.body.children.length, 1);
+
+    anchor.emit("pointerenter");
+    anchor.emit("pointerleave");
+    assert.equal(doc.body.children.length, 1, "repeat hover still dismisses on leave");
+
+    anchor.emit("focusout");
+    anchor.matches = (selector) => selector === ":focus-visible";
+    anchor.emit("focusin");
+    assert.equal(doc.body.children.length, 2, "keyboard focus still displays help");
+    anchor.emit("pointerenter");
+    anchor.emit("pointerleave");
+    assert.equal(doc.body.children.length, 2, "keyboard-focused help remains available");
+    anchor.emit("pointerdown");
+    anchor.emit("pointerleave");
+    assert.equal(doc.body.children.length, 1, "pointer input releases keyboard-held help");
+    help.destroy();
+  });
+});

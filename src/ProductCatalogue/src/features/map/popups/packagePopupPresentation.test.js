@@ -308,6 +308,7 @@ test("verified live Pause and Discard dispatch only through the package session"
   });
   const controls = createPopupActionGroups({
     ...options,
+    confirmDiscard: async () => true,
     packageActions: {
       projection: () => state,
       invoke: async (operation) => {

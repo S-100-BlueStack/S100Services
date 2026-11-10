@@ -94,6 +94,7 @@ function createProductAddForm(productCatalog, productItems) {
     placeholder: "Search or type product name",
     showDefaultHelp: false,
     overlayResults: true,
+    suppressResultsOnCommit: true,
     products: productCatalog?.products ?? [],
     excludedProductNames:
       productCatalog?.excludedProductNames ?? productItems.map((item) => item.datasetName),

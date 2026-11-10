@@ -5,8 +5,11 @@ import {
   restoreReviewPickerInteraction,
 } from "./reviewPickerInteraction.js";
 
-function pickerWithInput({ value = "", inputFocused = true } = {}) {
+function pickerWithInput({ value = "", inputFocused = true, committed = false } = {}) {
+  const results = { hidden: false };
   const input = {
+    dataset: {},
+    attributes: {},
     value,
     selectionStart: 2,
     selectionEnd: 4,
@@ -16,15 +19,24 @@ function pickerWithInput({ value = "", inputFocused = true } = {}) {
     setSelectionRange(start, end) {
       input.selection = [start, end];
     },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    closest(selector) {
+      return selector === ".pc-product-picker" ? picker : null;
+    },
   };
-  const picker = { querySelector: () => input };
+  const picker = {
+    dataset: committed ? { productPickerCommitted: "true" } : {},
+    querySelector: (selector) => (selector === ".pc-product-picker__results" ? results : input),
+  };
   const focused = inputFocused ? input : {};
   focused.closest = (selector) => (selector === ".pc-product-picker" ? picker : null);
   const page = {
     contains: (element) => element === focused,
     querySelector: (selector) => (selector === ".pc-product-picker__input" ? input : null),
   };
-  return { page, input, focused };
+  return { page, input, focused, picker, results };
 }
 
 test("Review preserves newer focused picker typing and caret across a synchronous rerender", () => {
@@ -60,4 +72,24 @@ test("Review does not focus a removed picker when the replacement is unavailable
   const interaction = captureReviewPickerInteraction(prior.page, prior.focused);
   restoreReviewPickerInteraction({ querySelector: () => null }, interaction);
   assert.equal(prior.input.value, "new text");
+});
+
+test("Review selection keeps the replacement input focused with a closed dropdown across rerenders", () => {
+  const prior = pickerWithInput({ value: "PRIMARY", committed: true });
+  const interaction = captureReviewPickerInteraction(prior.page, prior.focused);
+  assert.equal(interaction.committed, true);
+  assert.equal(interaction.draft, null);
+
+  const afterAdd = pickerWithInput();
+  restoreReviewPickerInteraction(afterAdd.page, interaction);
+  assert.equal(afterAdd.input.dataset.productPickerSuppressResults, "true");
+  assert.equal(afterAdd.input.attributes["aria-expanded"], "false");
+  assert.equal(afterAdd.results.hidden, true);
+  assert.deepEqual(afterAdd.input.focusOptions, { preventScroll: true });
+
+  const subsequentInteraction = captureReviewPickerInteraction(afterAdd.page, afterAdd.focused);
+  const afterStatusLoad = pickerWithInput();
+  restoreReviewPickerInteraction(afterStatusLoad.page, subsequentInteraction);
+  assert.equal(afterStatusLoad.input.dataset.productPickerSuppressResults, "true");
+  assert.equal(afterStatusLoad.results.hidden, true);
 });

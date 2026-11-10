@@ -81,9 +81,13 @@ independent content failures.
 REG-03 picker input preservation: when the sidebar is synchronously reconstructed while
 its Product picker input is active, Review retains the in-progress text, caret range
 and keyboard focus on the replacement input without scrolling. A suggestion selection
-continues to transfer focus but does not revive an obsolete query. Focus outside the
-picker is never redirected to it. Analyze's already accepted picker behavior remains
-unchanged.
+continues to transfer focus but does not revive an obsolete query. After a valid
+Product selection, its replacement input stays focused while suggestions remain closed
+through subsequent sidebar renders. Clicking the already focused input reopens suggestions
+on the first click; typing or pressing ArrowDown also resumes the picker. Pointer selection
+and keyboard focus restoration do not require an extra blur/refocus. Focus outside the picker
+is never redirected to it. Analyze's
+already accepted picker behavior remains unchanged.
 
 Per-Product History, IC-ENC, and Validation toggles still update the authoritative Review state and
 rerender the board and sidebar. Before that specific synchronous render, Review captures the Product

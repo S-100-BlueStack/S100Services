@@ -1,3 +1,5 @@
+import { VISIBLE_FOCUS_CLASS } from "../focus/visibleFocus.js";
+
 let nextHelpId = 0;
 let activeHelp = null;
 
@@ -74,9 +76,20 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
   }
 
   function onFocus() {
-    focused = true;
+    // Focus restored after a pointer-activated dialog must not pin hover help.
+    // Keyboard focus still presents the same help and remains accessible.
+    focused = !popup || isVisibleFocus(anchor);
+    if (!focused) {
+      if (!hovered) hide();
+      return;
+    }
     dismissed = false;
     show();
+  }
+
+  function onPointerDown() {
+    // Limit this behavior to popup help; other controls retain their focus policy.
+    if (popup) focused = false;
   }
 
   function onBlur() {
@@ -95,6 +108,7 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
     hide();
   }
 
+  anchor.addEventListener("pointerdown", onPointerDown);
   anchor.addEventListener("pointerenter", onPointerEnter);
   anchor.addEventListener("pointermove", onPointerMove);
   anchor.addEventListener("pointerleave", onPointerLeave);
@@ -121,6 +135,7 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
       if (disposed) return;
       disposed = true;
       hide();
+      anchor.removeEventListener("pointerdown", onPointerDown);
       anchor.removeEventListener("pointerenter", onPointerEnter);
       anchor.removeEventListener("pointermove", onPointerMove);
       anchor.removeEventListener("pointerleave", onPointerLeave);
@@ -131,6 +146,15 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
       if (popup) anchor.removeAttribute("data-popup-help");
     },
   };
+}
+
+function isVisibleFocus(anchor) {
+  // :focus-visible distinguishes keyboard focus from pointer-driven restoration.
+  // Honor the application's explicit visible-focus class for its programmatic controls.
+  return (
+    (typeof anchor.matches === "function" ? anchor.matches(":focus-visible") : true) ||
+    anchor.classList?.contains(VISIBLE_FOCUS_CLASS) === true
+  );
 }
 
 export function hideActiveHelpTooltip() {

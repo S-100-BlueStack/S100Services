@@ -89,7 +89,13 @@ help and no competing native `title` tooltip. Send and Accept share one stable s
 never appearing simultaneously. Product Collection remains in the popup header.
 
 For an ENC package, live Pause/Resume and Discard are available **only** when the
-current backend package action snapshot and session authorize them. Send/Accept
+current backend package action snapshot and session authorize them. Discard first opens
+our shared confirmation dialog, with Cancel as the safe default. Neither cancellation
+nor dismissing the dialog sends a mutation. Cancel restores focus to the initiating
+control; mouse activation does not force the keyboard-focus indicator or pin a tooltip.
+Keyboard activation retains visible focus and accessible help. Confirmation revalidates the current
+Product selection and backend-authorized action before entering the existing
+asynchronous package Discard/Worker flow. Send/Accept
 remain disabled in ordinary/production operation; a separately configured, explicitly
 local development simulation may present them but makes no backend mutation.
 For a standalone or synthetic Product without a verified workflow action contract,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createNavbarPopoverCoordinator } from "../../../shared/ui/navbarPopoverCoordinator.js";
 import {
   BASEMAP_SELECTION_STORAGE_KEY,
   createBasemapSettings,
@@ -577,5 +578,46 @@ test("Main-map Restore defaults reuses existing owners and preserves Auto-save s
   } finally {
     api.destroy();
     persistence.setPreferencePersistenceEnabled("attributeFilters", true);
+  }
+});
+
+test("Main map Preferences joins navbar popover coordination after shared UI bootstraps", () => {
+  const coordinator = createNavbarPopoverCoordinator({ eventTarget: document });
+  let sourcesOpen = false;
+  coordinator.register("data-sources", {
+    open() {
+      sourcesOpen = true;
+    },
+    close() {
+      sourcesOpen = false;
+    },
+    isOpen() {
+      return sourcesOpen;
+    },
+    containsTarget: () => false,
+  });
+  coordinator.start();
+  const { api, panel, button } = mount({}, "main");
+  try {
+    // The shared Preferences panel already exists when the map initializes.
+    api.updateContext({ navbarPopoverCoordinator: coordinator });
+    assert.equal(panel.hidden, false);
+    coordinator.open("data-sources");
+    assert.equal(panel.hidden, true);
+    assert.equal(sourcesOpen, true);
+
+    button.dispatchEvent(event("click", button));
+    assert.equal(sourcesOpen, false);
+    assert.equal(panel.hidden, false);
+    assert.equal(coordinator.getActiveId(), "preferences");
+
+    coordinator.open("data-sources");
+    assert.equal(panel.hidden, true);
+    assert.equal(sourcesOpen, true);
+    coordinator.closeAll();
+    assert.equal(sourcesOpen, false);
+  } finally {
+    api.destroy();
+    coordinator.destroy();
   }
 });

@@ -22,9 +22,11 @@ The coordinator installs one document click listener and one document keydown li
 Repeated openings do not add listeners. Outside click and Escape close only the active registered
 popover. The participant restores focus to the correct trigger after keyboard or toggle closure.
 
-Only intentionally registered navbar popovers participate. Product search, Preferences, Product
-History, popup action menus, and other independent panels keep their existing close priorities and
-are not closed automatically.
+Only intentionally registered navbar popovers participate. On Main Map, Filters, Data sources,
+and Preferences share mutual exclusion and Escape/outside-click ownership; Preferences registers
+with the already created coordinator when Main-map context becomes available. On Analyze, Review,
+and Dashboard it retains its independent panel lifecycle. Product search, Product History,
+popup action menus, and other independent panels keep their existing close priorities.
 
 ## Shared scrollbar contract
 

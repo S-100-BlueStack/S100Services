@@ -78,9 +78,10 @@ export function registerConfirmDialog() {
     });
   });
 
-  cancelButton.addEventListener("click", () => {
+  cancelButton.addEventListener("click", (event) => {
     closeActivePopover(false, {
-      visibleFocus: true,
+      // Mouse dismissal restores focus without presenting a keyboard-focus ring.
+      visibleFocus: event.detail === 0,
     });
   });
 

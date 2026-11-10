@@ -60,6 +60,26 @@ Cancel-first focus, Escape/return focus, and light/dark presentation.
 No full Product Catalogue application or screen-reader verification is implied
 by this commit. Future corrections should be specific, reproduced real-usage findings.
 
+## PC-UX-R01A - real-usage stability corrections (candidate, local acceptance pending)
+
+The November 10 real-usage walkthrough identified accidental Discard, concurrent Main-map
+navbar panels and a Review picker that reopened suggestions after selection. The R01A
+implementation candidate adds an app-owned confirmation for verified package Discard,
+registers Main-map Preferences with the existing navbar popover coordinator, and preserves
+Review's focused-but-closed picker state through asynchronous sidebar rerenders.
+
+Browser feedback on candidate v1 accepted the Discard confirmation and Preferences exclusion,
+but identified two follow-up focus issues: Cancel left the Discard tooltip pinned, and Review
+required a blur/refocus before opening the picker after a committed selection. Candidate v2
+keeps pointer-restored focus without a persistent tooltip, preserves keyboard-visible help,
+and allows the already focused Review picker to reopen by one click or ArrowDown.
+
+This section records a proposed correction, **not** a committed change or a complete browser pass.
+Verify Cancel/Confirm and worker outcome independently, Sources/Filters/Preferences
+mutual exclusion, pointer/keyboard focus and Escape, Review repeat-selection without blur,
+and rapid status updates in both themes. SDK 6.0 readiness and Calcite version changes are a
+separate branch/workstream and must not be mixed into the R01A acceptance.
+
 ## Accepted interaction boundaries
 
 The details below are preservation constraints. A new task must use current code and feature tests from its explicit commit before modifying them.

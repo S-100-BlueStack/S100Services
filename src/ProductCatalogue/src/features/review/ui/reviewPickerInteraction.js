@@ -7,11 +7,15 @@ export function captureReviewPickerInteraction(page, activeElement = document.ac
 
   const input = picker.querySelector(".pc-product-picker__input");
   const inputFocused = activeElement === input;
+  const committed =
+    picker.dataset?.productPickerCommitted === "true" ||
+    input?.dataset?.productPickerSuppressResults === "true";
   return {
-    // Selecting a suggestion clears the old picker; do not resurrect its query.
-    draft: inputFocused ? input.value : null,
-    selectionStart: inputFocused ? input.selectionStart : null,
-    selectionEnd: inputFocused ? input.selectionEnd : null,
+    // Preserve typing, but not a selected Product's old query, across rerenders.
+    draft: inputFocused && !committed ? input.value : null,
+    selectionStart: inputFocused && !committed ? input.selectionStart : null,
+    selectionEnd: inputFocused && !committed ? input.selectionEnd : null,
+    committed,
   };
 }
 
@@ -21,7 +25,18 @@ export function restoreReviewPickerInteraction(page, interaction) {
   if (!replacement) return;
 
   if (interaction.draft !== null) replacement.value = interaction.draft;
+  if (interaction.committed) {
+    // Focusing the replacement input must not reopen the suggestions after Add.
+    replacement.dataset.productPickerSuppressResults = "true";
+  }
   replacement.focus({ preventScroll: true });
+  if (interaction.committed) {
+    const results = replacement
+      .closest?.(".pc-product-picker")
+      ?.querySelector?.(".pc-product-picker__results");
+    if (results) results.hidden = true;
+    replacement.setAttribute("aria-expanded", "false");
+  }
   if (
     interaction.draft !== null &&
     Number.isInteger(interaction.selectionStart) &&

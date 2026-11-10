@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
 import { createPopup } from "./createPopup.js";
+import { registerConfirmDialog } from "../../../shared/ui/confirm/services/confirmService.js";
 import {
   refreshOpenProductPopup,
   registerPopupSourceStatusRefreshHandler,
@@ -13,6 +14,26 @@ import { createActionButton, updateActionButton, disposeActionButton } from "./p
 import { createPopupProductMetadataColumns } from "./popupProductMetadata.js";
 
 // A public DOM test double: no Calcite/ArcGIS internals or browser behavior is emulated.
+function mountConfirmDialog(document) {
+  const popover = document.createElement("div");
+  popover.id = "confirm-popover";
+  popover.hidden = true;
+  const card = document.createElement("div");
+  card.className = "confirm-popover__card";
+  const title = document.createElement("h2");
+  title.id = "confirm-popover-title";
+  const message = document.createElement("p");
+  message.id = "confirm-popover-message";
+  const cancelButton = document.createElement("button");
+  cancelButton.id = "confirm-popover-cancel";
+  const confirmButton = document.createElement("button");
+  confirmButton.id = "confirm-popover-confirm";
+  card.append(title, message, cancelButton, confirmButton);
+  popover.appendChild(card);
+  document.body.appendChild(popover);
+  return { popover, title, message, cancelButton, confirmButton };
+}
+
 function createHarness() {
   class Target {
     listeners = new Map();
@@ -370,8 +391,50 @@ test("completed Discard updates current popup attributes without closing the pop
     const section = popup.querySelector(".popup-section");
     const discardButton = popup.querySelectorAll(".popup-action-bar__action")[1];
     assert.equal(discardButton.getAttribute("aria-disabled"), "false");
+    const confirmation = mountConfirmDialog(h.doc);
+    registerConfirmDialog();
     discardButton.click();
     await h.settle();
+    assert.equal(confirmation.popover.hidden, false);
+    assert.equal(confirmation.title.textContent, "Discard package?");
+    assert.equal(discarded, false);
+    assert.equal(
+      h.requests.filter((item) => item.url === "/electronicproducts/packages/PRIMARY/discard")
+        .length,
+      0
+    );
+    confirmation.cancelButton.click();
+    await h.settle();
+    h.frames();
+    h.frames();
+    assert.equal(discarded, false);
+    assert.equal(confirmation.popover.hidden, true);
+    assert.equal(
+      discardButton.classList.contains("is-visible-focused"),
+      false,
+      "mouse Cancel restores focus without forcing keyboard-visible focus"
+    );
+    discardButton.click();
+    await h.settle();
+    assert.equal(confirmation.popover.hidden, false);
+    confirmation.cancelButton.emit("click", { detail: 0 });
+    await h.settle();
+    h.frames();
+    h.frames();
+    await h.settle();
+    assert.equal(discarded, false);
+    assert.equal(confirmation.popover.hidden, true);
+    assert.equal(
+      discardButton.classList.contains("is-visible-focused"),
+      true,
+      "keyboard Cancel restores visible focus to the initiating action"
+    );
+    discardButton.click();
+    await h.settle();
+    assert.equal(confirmation.popover.hidden, false);
+    confirmation.confirmButton.click();
+    await h.settle();
+    assert.equal(confirmation.popover.hidden, true);
     assert.equal(discarded, true);
     assert.equal(getColumns()[0].item.edition, 1);
     assert.equal(getColumns()[0].item.errorMessage, undefined);

@@ -112,6 +112,7 @@ export function initMap() {
     view,
     dataSourceController: dataSourceRuntime.controller,
     basemapSettings: basemapExperience.settings,
+    navbarPopoverCoordinator,
   });
   const productHistoryPanel = initProductHistoryPanel({
     view,

@@ -9,6 +9,7 @@ import {
   resolveProductContext,
 } from "../../products/domain/productContext.js";
 import { openAnalyzePage, openReviewPage, openProductHistory } from "./popupProductActions.js";
+import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 
 /** All Products expose the same popup controls; only verified owners may dispatch. */
 export function createPopupActionGroups({
@@ -16,6 +17,7 @@ export function createPopupActionGroups({
   graphic,
   productContext,
   packageActions,
+  confirmDiscard = confirmAction,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
   if (!context) return [];
@@ -63,7 +65,24 @@ export function createPopupActionGroups({
       action.disabled = false;
       action.disabledReason = null;
       action.availability = { ...action.availability, dispatchImplemented: true };
-      action.onClick = () => packageActions.invoke(action.operation);
+      action.onClick = async ({ anchorElement } = {}) => {
+        if (action.operation === "discard") {
+          const confirmed = await confirmDiscard({
+            title: "Discard package?",
+            message: "Discard the S-101 and S-57 package candidates? This cannot be undone.",
+            confirmText: "Discard",
+            anchorElement,
+          });
+          if (!confirmed) return false;
+        }
+        // A confirmation may outlive the selected popup or a backend status refresh.
+        if (
+          !isCurrent() ||
+          packageActions.projection()?.actionEligibility?.[action.operation] !== true
+        )
+          return false;
+        return packageActions.invoke(action.operation);
+      };
     }
   }
 

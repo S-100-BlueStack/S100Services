@@ -16,6 +16,7 @@ export function createProductPickerForm({
   helpText = "Select an existing product, or type a product name manually.",
   showDefaultHelp = true,
   overlayResults = false,
+  suppressResultsOnCommit = false,
   products = [],
   excludedProductNames = [],
   loading = false,
@@ -109,6 +110,12 @@ export function createProductPickerForm({
     help.classList.remove("is-error");
   };
 
+  const markSelectionCommitted = () => {
+    form.dataset.productPickerCommitted = "true";
+    // Review keeps results closed when focus returns from a selected suggestion.
+    if (suppressResultsOnCommit) input.dataset.productPickerSuppressResults = "true";
+  };
+
   const closeResults = () => {
     results.hidden = true;
     input.setAttribute("aria-expanded", "false");
@@ -126,6 +133,7 @@ export function createProductPickerForm({
       loading,
       error,
       onSelect(productName) {
+        markSelectionCommitted();
         dispatchProductAdd(form, eventName, [productName]);
         input.value = "";
         resetMessage();
@@ -137,8 +145,22 @@ export function createProductPickerForm({
     input.setAttribute("aria-expanded", "true");
   };
 
-  input.addEventListener("focus", openResults);
+  input.addEventListener("focus", () => {
+    if (input.dataset.productPickerSuppressResults !== "true") openResults();
+  });
+  if (suppressResultsOnCommit) {
+    input.addEventListener("click", () => {
+      // A selected Product leaves this input focused; a second click has no focus event.
+      // Reopen on that click without requiring the user to blur and refocus the field.
+      if (!results.hidden) return;
+      delete input.dataset.productPickerSuppressResults;
+      delete form.dataset.productPickerCommitted;
+      openResults();
+    });
+  }
   input.addEventListener("input", () => {
+    delete input.dataset.productPickerSuppressResults;
+    delete form.dataset.productPickerCommitted;
     resetMessage();
     openResults();
   });
@@ -149,7 +171,12 @@ export function createProductPickerForm({
       return;
     }
 
-    if (event.key === "ArrowDown" && !results.hidden) {
+    if (event.key === "ArrowDown" && (suppressResultsOnCommit || !results.hidden)) {
+      if (results.hidden) {
+        delete input.dataset.productPickerSuppressResults;
+        delete form.dataset.productPickerCommitted;
+        openResults();
+      }
       const firstOption = results.querySelector(".pc-product-picker__option");
       firstOption?.focus();
       event.preventDefault();
@@ -192,6 +219,8 @@ export function createProductPickerForm({
     window.setTimeout(() => {
       if (!form.contains(document.activeElement)) {
         closeResults();
+        delete input.dataset.productPickerSuppressResults;
+        delete form.dataset.productPickerCommitted;
       }
     }, 0);
   });
@@ -223,6 +252,7 @@ export function createProductPickerForm({
       return;
     }
 
+    markSelectionCommitted();
     dispatchProductAdd(form, eventName, validation.productNames);
     input.value = "";
     resetMessage();
