@@ -283,3 +283,15 @@ request lifecycle and focus/scroll contracts are maintained in this README.
 ## FI-043 selection visibility
 
 The Review sidebar displays accepted local Product selections immediately while the existing Product session resolves canonical work units and loads content. Pending rows are provisional UI composition, not synthetic successful backend payloads. Previous canonical content overrides and workspace-wide content intent must survive alias resolution, intermediate interactions, superseded requests and Refresh. The picker remains keyboard-usable after a selection-triggered render.
+
+## FI-016 presentation-only status and error polish
+
+Review content cards retain their existing presentation state contract (`content`, `empty`,
+`unavailable`, `failed`). The renderer exposes that state on the card's application-owned
+`data-review-content-state` attribute. Only `failed` receives a subdued error treatment;
+unknown, empty, and unavailable states must not be styled as failed.
+
+The shared notice center uses Calcite notice severity `danger` for errors. The Dashboard
+last-successful-result refresh error uses the existing light/dark notice error background.
+These are visual-only changes: do not change ProductState/EncPackageStatus palettes, source
+identity, backend error classification, workflow permissions or the deferred error-only filter.

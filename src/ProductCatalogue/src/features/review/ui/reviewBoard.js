@@ -217,6 +217,7 @@ function createReviewContentCard(product, contentType) {
       contentType,
       title: "Internal validation",
       status: presentation.status,
+      state: presentation.state,
     });
     if (product.artifactWarning)
       card.body.appendChild(createContentStateMessage(product.artifactWarning));
@@ -256,6 +257,7 @@ function createHistoryReviewCard(product) {
     contentType: REVIEW_CONTENT_TYPES.HISTORY,
     title: "History",
     status: presentation.status,
+    state: presentation.state,
   });
 
   if (product.history?.endpointAvailable) {
@@ -286,6 +288,7 @@ function createStateReviewCard({ product, contentType, title, presentation }) {
     contentType,
     title,
     status: presentation.status,
+    state: presentation.state,
   });
 
   card.body.appendChild(createContentStateMessage(presentation.message));
@@ -293,10 +296,11 @@ function createStateReviewCard({ product, contentType, title, presentation }) {
   return card.root;
 }
 
-function createContentCardShell({ product, contentType, title, status }) {
+function createContentCardShell({ product, contentType, title, status, state }) {
   const card = document.createElement("section");
   card.className = `pc-review-content-card pc-review-content-card--${normalizeType(contentType)}`;
   card.dataset.reviewContentType = contentType;
+  card.dataset.reviewContentState = state;
   card.setAttribute("aria-label", `${product.datasetName} ${title}`);
 
   const header = document.createElement("div");

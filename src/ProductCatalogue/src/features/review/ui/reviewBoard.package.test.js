@@ -92,6 +92,11 @@ test("board has one package column with two ordered member sections and one ordi
     /Member status 11 · Edition: 7 · Update: 4/
   );
   assert.equal(byClass(columns[0], "pc-review-content-card").length, 6);
+  assert.ok(
+    byClass(columns[0], "pc-review-content-card").every((card) =>
+      ["content", "empty", "unavailable", "failed"].includes(card.dataset.reviewContentState)
+    )
+  );
   assert.equal(byClass(columns[1], "pc-review-content-card").length, 3);
   for (const section of sections) {
     const headers = byClass(section, "pc-review-member__header");

@@ -1067,7 +1067,7 @@ body.pc-dashboard-route #last-updated {
   min-width: 0;
   padding: 7px 10px;
   color: var(--pc-text);
-  background: var(--pc-notice-danger-bg, var(--pc-surface));
+  background: var(--pc-notice-error-bg, var(--pc-surface));
   border: 1px solid color-mix(in srgb, #d83020 45%, var(--pc-border));
   font-size: 12px;
   line-height: 1.35;

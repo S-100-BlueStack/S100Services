@@ -42,7 +42,7 @@
   border-left: 4px solid #2ecc71;
 }
 
-.notice-error {
+.notice-danger {
   border-left: 4px solid #e74c3c;
   background: var(--pc-notice-error-bg);
 }

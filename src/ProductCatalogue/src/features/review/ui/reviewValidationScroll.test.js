@@ -65,6 +65,7 @@ for (const count of [0, 1, 5, 6, 20]) {
     const card = createValidationCard(product, REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS);
     const body = byClass(card, "pc-review-content-card__body")[0];
     const bounded = count > 5;
+    assert.equal(card.dataset.reviewContentState, count > 0 ? "content" : "empty");
 
     assert.equal(
       byClass(card, "pc-review-content-card--validation-bounded").length,
@@ -99,6 +100,7 @@ for (const count of [0, 1, 5, 6, 20]) {
 test("Review failed validation leaves the normal error card and no scroll region", () => {
   const product = { ...createProduct(20), artifactError: "Read failed" };
   const card = createValidationCard(product, REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS);
+  assert.equal(card.dataset.reviewContentState, "failed");
   assert.equal(byClass(card, "pc-review-content-card--validation-bounded").length, 0);
   assert.equal(byClass(card, "pc-review-content-card__artifact").length, 0);
   assert.ok(descendants(card).some((node) => node.textContent === "Read failed"));
