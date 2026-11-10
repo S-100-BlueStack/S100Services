@@ -1,5 +1,6 @@
 using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
+using System.Diagnostics;
 using S100FC;
 using S100FC.S840.FeatureTypes;
 
@@ -52,6 +53,35 @@ public partial class DispatchRepository
             geometries[index] = ReadCoverage(fc, globalIdField, references[index], cancellationToken);
         }
         return geometries;
+    }
+
+    /// <summary>Reads independent workspace references within one feature-class scope.</summary>
+    internal IReadOnlyList<WorkspaceGeometryReadResult> ReadWorkspaceGeometryBatch(
+        IReadOnlyList<WorkspaceGeometryRead> reads, out double scopeOpenMs) {
+        scopeOpenMs = 0;
+        if (reads.Count == 0) { return []; }
+        var setup = Stopwatch.StartNew();
+        using var connector = this.createGeodatabase();
+        using var fc = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
+        using var definition = fc.GetDefinition();
+        var globalIdField = definition.GetGlobalIDField();
+        scopeOpenMs = setup.Elapsed.TotalMilliseconds;
+
+        var results = new WorkspaceGeometryReadResult[reads.Count];
+        for (var index = 0; index < reads.Count; index++) {
+            var read = reads[index];
+            var timer = Stopwatch.StartNew();
+            try {
+                read.CancellationToken.ThrowIfCancellationRequested();
+                var polygon = ReadCoverage(fc, globalIdField, read.Reference, read.CancellationToken);
+                results[index] = new(polygon, timer.Elapsed.TotalMilliseconds, null);
+            }
+            catch (Exception exception) {
+                // A missing or canceled Workspace must not fail a different HTTP request.
+                results[index] = new(null, timer.Elapsed.TotalMilliseconds, exception);
+            }
+        }
+        return results;
     }
 
     /// <summary>Removes unreferenced geometry after a failed workspace event write.</summary>

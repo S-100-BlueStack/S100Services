@@ -10,7 +10,7 @@ using System.Diagnostics;
 namespace DataCatalague.Api.Services;
 
 /// <summary>Coordinates pipeline workspace events and geometry operations on the ArcGIS thread.</summary>
-public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap streams, ICommandService<PipelineState> commands, DispatchRepository coverage, PackageRepository packages, ArcGisDispatcher dispatcher, ILogger<WorkspaceService> logger)
+public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap streams, ICommandService<PipelineState> commands, DispatchRepository coverage, PackageRepository packages, ArcGisDispatcher dispatcher, WorkspacePackageReadBatcher readBatcher, ILogger<WorkspaceService> logger)
 {
     // The current host has one in-memory event store. Eventuous still checks stream
     // versions; this gate also prevents two local requests allocating duplicate coverage.
@@ -173,6 +173,10 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
         var total = Stopwatch.StartNew();
         var eventStateMs = 0.0;
         var queueWaitMs = 0.0;
+        var batchWaitMs = 0.0;
+        var batchSize = 0;
+        var workspaceScopeMs = 0.0;
+        var packageScopeMs = 0.0;
         var workspaceGeometryMs = 0.0;
         var spatialQueryMs = 0.0;
         var packageHydrationMs = 0.0;
@@ -183,16 +187,15 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
         try {
             var workspace = FindWorkspace(await GetPipelineAsync(pipelineId, cancellationToken), workspaceId);
             eventStateMs = total.Elapsed.TotalMilliseconds;
-            var queuedAt = Stopwatch.GetTimestamp();
-            var pageData = await dispatcher.ExecuteAsync(() => {
-                queueWaitMs = Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds;
-                cancellationToken.ThrowIfCancellationRequested();
-                var geometryTimer = Stopwatch.StartNew();
-                Polygon polygon;
-                try { polygon = coverage.GetWorkspaceGeometry(workspace.GeometryRef, cancellationToken); }
-                finally { workspaceGeometryMs = geometryTimer.Elapsed.TotalMilliseconds; }
-                return packages.ReadWorkspacePackagePage(pipelineId, polygon, page, pageSize, cancellationToken, out spatialQueryMs, out packageHydrationMs);
-            });
+            var pageData = await readBatcher.ReadAsync(pipelineId, workspace.GeometryRef, page, pageSize, cancellationToken);
+            batchSize = pageData.BatchSize;
+            batchWaitMs = pageData.BatchWaitMs;
+            queueWaitMs = pageData.ArcGisQueueWaitMs;
+            workspaceScopeMs = pageData.WorkspaceScopeMs;
+            workspaceGeometryMs = pageData.WorkspaceGeometryMs;
+            packageScopeMs = pageData.PackageScopeMs;
+            spatialQueryMs = pageData.SpatialQueryMs;
+            packageHydrationMs = pageData.PackageHydrationMs;
             matchCount = pageData.TotalCount;
             var responseTimer = Stopwatch.StartNew();
             IReadOnlyList<WorkspacePackageResponse> items;
@@ -212,8 +215,8 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
         }
         finally {
             logger.LogInformation(
-                "Workspace packages read {Outcome}. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, Page: {Page}, PageSize: {PageSize}, Matches: {MatchCount}, Returned: {ReturnedCount}, EventStateMs: {EventStateMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceGeometryMs: {WorkspaceGeometryMs}, SpatialQueryMs: {SpatialQueryMs}, PackageHydrationMs: {PackageHydrationMs}, ResponseBuildMs: {ResponseBuildMs}, TotalMs: {TotalMs}.",
-                outcome, pipelineId, workspaceId, page, pageSize, matchCount, returnedCount, eventStateMs, queueWaitMs, workspaceGeometryMs, spatialQueryMs, packageHydrationMs, responseBuildMs, total.Elapsed.TotalMilliseconds);
+                "Workspace packages read {Outcome}. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, Page: {Page}, PageSize: {PageSize}, Matches: {MatchCount}, Returned: {ReturnedCount}, BatchSize: {BatchSize}, EventStateMs: {EventStateMs}, BatchWaitMs: {BatchWaitMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceScopeMs: {WorkspaceScopeMs}, WorkspaceGeometryMs: {WorkspaceGeometryMs}, PackageScopeMs: {PackageScopeMs}, SpatialQueryMs: {SpatialQueryMs}, PackageHydrationMs: {PackageHydrationMs}, ResponseBuildMs: {ResponseBuildMs}, TotalMs: {TotalMs}.",
+                outcome, pipelineId, workspaceId, page, pageSize, matchCount, returnedCount, batchSize, eventStateMs, batchWaitMs, queueWaitMs, workspaceScopeMs, workspaceGeometryMs, packageScopeMs, spatialQueryMs, packageHydrationMs, responseBuildMs, total.Elapsed.TotalMilliseconds);
         }
     }
 

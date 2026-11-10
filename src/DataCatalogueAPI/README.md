@@ -129,8 +129,17 @@ Package spatial query, Package AOI hydration, DTO parsing and full service elaps
 time. `Workspace packages result executed` logs MVC result execution (including
 JSON serialization and response writing). The latter is **not** a serializer-only
 benchmark. Concurrent frontend Workspace reads still contend for one STA ArcGIS
-worker. See [DC_PERF_02_VALIDATION.md](docs/DC_PERF_02_VALIDATION.md) for precise
-measurement definitions, regression tests and a repeatable local benchmark.
+worker. See [DC_PERF_02_VALIDATION.md](docs/DC_PERF_02_VALIDATION.md) for its
+accepted request-scoped read performance baseline.
+
+DC-PERF-03 proposes a bounded internal read batcher (up to four requests, six-millisecond
+collection window) while retaining the same HTTP contract and per-request cancellation.
+The two configured geodatabases remain separate. During one dispatcher action, Workspace
+polygon reads share a Workspace connection/feature class, and spatial Package reads share
+a Package connection/feature class. `Workspace packages read` now also reports `BatchSize`,
+`BatchWaitMs`, `WorkspaceScopeMs` and `PackageScopeMs`; shared setup timings must not be
+summed across request records. This is a candidate pending local acceptance, not a
+verified HTTP speedup. See [DC_PERF_03_VALIDATION.md](docs/DC_PERF_03_VALIDATION.md).
 
 ## Package search and pagination
 

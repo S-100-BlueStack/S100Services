@@ -144,6 +144,12 @@ namespace DataCatalague.Api.Repositories
             cancellationToken.ThrowIfCancellationRequested();
             using var featureClass = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
             using var definition = featureClass.GetDefinition();
+            return this.FindIntersectingAois(geometry, featureClass, definition, cancellationToken);
+        }
+
+        /// <summary>Reuses a caller-owned feature class while querying several Workspaces.</summary>
+        private Dictionary<string, HashSet<string>> FindIntersectingAois(
+            Geometry geometry, FeatureClass featureClass, FeatureClassDefinition definition, CancellationToken cancellationToken) {
             var spatialReference = definition.GetSpatialReference();
             if (spatialReference is null || spatialReference.IsUnknown) {
                 throw new InvalidOperationException("The package AOI feature class must have a known spatial reference.");

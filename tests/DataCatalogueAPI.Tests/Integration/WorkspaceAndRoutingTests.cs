@@ -263,6 +263,120 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         });
     }
 
+    [Fact]
+    public async Task Concurrent_workspace_package_reads_isolate_pipelines_and_empty_memberships() {
+        await this.CategoryAsync();
+        var first = await this.PipelineAsync();
+        var second = await this.PipelineAsync();
+        var firstNear = await this.WorkspaceAsync(first.Id);
+        var firstFar = await this.WorkspaceAsync(first.Id, DistantGeometry, "First distant");
+        var secondNear = await this.WorkspaceAsync(second.Id);
+        var secondFar = await this.WorkspaceAsync(second.Id, DistantGeometry, "Second distant");
+        var nearPackage = await this.PackageAsync();
+        var farPackage = await this.PackageAsync(DistantGeometry);
+        await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = nearPackage.Id, pipelineId = first.Id });
+        await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = farPackage.Id, pipelineId = second.Id });
+
+        var urls = new[] {
+            $"/api/v1/pipelines/{first.Id}/workspaces/{firstNear.Id}/packages?page=1&pageSize=1",
+            $"/api/v1/pipelines/{first.Id}/workspaces/{firstFar.Id}/packages?page=1&pageSize=1",
+            $"/api/v1/pipelines/{second.Id}/workspaces/{secondNear.Id}/packages?page=1&pageSize=1",
+            $"/api/v1/pipelines/{second.Id}/workspaces/{secondFar.Id}/packages?page=1&pageSize=1",
+        };
+        await this.App.EventuallyAsync(async () => {
+            var pages = await Task.WhenAll(urls.Select(url => this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(url)));
+            return pages[0]!.TotalCount == 1 && pages[1]!.TotalCount == 0
+                && pages[2]!.TotalCount == 0 && pages[3]!.TotalCount == 1;
+        });
+
+        // Repeat a full burst: all four HTTP results must retain their own Pipeline and AOI.
+        var results = await Task.WhenAll(urls.Select(url => this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(url)));
+        Assert.Equal(nearPackage.Id, Assert.Single(results[0]!.Items).PackageId);
+        Assert.Empty(results[1]!.Items);
+        Assert.Empty(results[2]!.Items);
+        Assert.Equal(farPackage.Id, Assert.Single(results[3]!.Items).PackageId);
+        Assert.All(results, result => {
+            Assert.Equal(1, result!.Page);
+            Assert.Equal(1, result.PageSize);
+        });
+        Assert.True(results[0]!.Items[0].Aoi.TryGetProperty("spatialReference", out _));
+        Assert.True(results[3]!.Items[0].Aoi.TryGetProperty("spatialReference", out _));
+    }
+
+    [Fact]
+    public async Task Concurrent_workspace_package_pages_preserve_order_and_failed_request_isolation() {
+        await this.CategoryAsync();
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        var packageIds = new List<string>();
+        for (var index = 0; index < 3; index++) {
+            var package = await this.PackageAsync();
+            packageIds.Add(package.Id);
+            await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        }
+        var path = $"/api/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}/packages";
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path))!.TotalCount == 3);
+
+        var results = await Task.WhenAll(Enumerable.Range(1, 4).Select(page =>
+            this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path + $"?page={page}&pageSize=1")));
+        var ordered = packageIds.Order(StringComparer.Ordinal).ToArray();
+        for (var index = 0; index < 3; index++) {
+            Assert.Equal(3, results[index]!.TotalCount);
+            Assert.Equal(index + 1, results[index]!.Page);
+            Assert.Equal(ordered[index], Assert.Single(results[index]!.Items).PackageId);
+        }
+        Assert.Equal(3, results[3]!.TotalCount);
+        Assert.Empty(results[3]!.Items);
+
+        // A rejected Workspace request must not invalidate a concurrent valid page.
+        var missing = this.Client.GetAsync($"/api/v1/pipelines/{pipeline.Id}/workspaces/{Guid.NewGuid():D}/packages");
+        var validTask = this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path + "?page=2&pageSize=1");
+        using var missingResult = await missing;
+        var valid = await validTask;
+        Assert.Equal(HttpStatusCode.NotFound, missingResult.StatusCode);
+        Assert.Equal(ordered[1], Assert.Single(valid!.Items).PackageId);
+    }
+
+    [Fact]
+    public async Task Cancelling_one_queued_workspace_package_read_keeps_another_request_valid() {
+        await this.CategoryAsync();
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        var package = await this.PackageAsync();
+        await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        var path = $"/api/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}/packages";
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path))!.TotalCount == 1);
+
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        // Hold the shared dispatcher briefly so cancellation happens while a read is pending.
+        // A sibling read must still complete after that dispatcher work is released.
+        var blocked = this.Runtime.Dispatcher.ExecuteAsync(() => {
+            entered.Set();
+            return release.Wait(TimeSpan.FromSeconds(5));
+        });
+        try {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(3)));
+            using var cancelled = new CancellationTokenSource();
+            using var scope = this.App.Services.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+            var canceledRead = service.GetPackagesAsync(pipeline.Id, workspace.Id, 1, 1, cancelled.Token);
+            var validRead = service.GetPackagesAsync(pipeline.Id, workspace.Id, 1, 1, CancellationToken.None);
+            await Task.Delay(20);
+            cancelled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledRead);
+            release.Set();
+            Assert.True(await blocked);
+            Assert.Equal(package.Id, Assert.Single((await validRead).Items).PackageId);
+        }
+        finally {
+            release.Set();
+            await blocked;
+        }
+    }
+
     private const string DistantDetailPoints = "{\"points\":[[7.2,55.2],[7.8,55.8]],\"spatialReference\":{\"wkid\":4326}}";
     private const string OriginalDetailPoints = "{\"points\":[[12.2,55.2],[12.8,55.8]],\"spatialReference\":{\"wkid\":4326}}";
 

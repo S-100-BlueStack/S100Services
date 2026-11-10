@@ -7,39 +7,75 @@ namespace DataCatalague.Api.Repositories;
 
 public partial class PackageRepository
 {
-    /// <summary>Reads one workspace's membership and current AOIs without reopening the package geodatabase for each row.</summary>
+    /// <summary>Reads one Workspace using the same semantics as a multi-Workspace batch.</summary>
     internal (IReadOnlyList<(string PackageId, string? ShortId, string AoiJson)> Items, int TotalCount) ReadWorkspacePackagePage(
         string pipelineId, Polygon workspace, int page, int pageSize, CancellationToken cancellationToken,
         out double spatialQueryMs, out double packageHydrationMs) {
-        spatialQueryMs = 0;
-        packageHydrationMs = 0;
-        cancellationToken.ThrowIfCancellationRequested();
-        var queryTimer = Stopwatch.StartNew();
-        using var connector = this.createGeodatabase();
-        IReadOnlyList<PackageState> matches;
-        try { matches = this.FindWorkspacePackages(pipelineId, workspace, connector, cancellationToken); }
-        finally { spatialQueryMs = queryTimer.Elapsed.TotalMilliseconds; }
-
-        var hydrationTimer = Stopwatch.StartNew();
-        try {
-            var offset = ((long)page - 1) * pageSize;
-            if (offset >= matches.Count) { return ([], matches.Count); }
-            var items = new List<(string PackageId, string? ShortId, string AoiJson)>(Math.Min(pageSize, matches.Count));
-            foreach (var package in matches.Skip((int)offset).Take(pageSize)) {
-                cancellationToken.ThrowIfCancellationRequested();
-                // The spatial query has already checked that the current AOI reference matched.
-                // Hydrate only this page, preserving the stored geometry and its spatial reference.
-                items.Add((package.Id!.Value, package.MetaData?.ShortId, this.ReadAoi(connector, package, cancellationToken)));
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            return (items, matches.Count);
-        }
-        finally { packageHydrationMs = hydrationTimer.Elapsed.TotalMilliseconds; }
+        var result = this.ReadWorkspacePackagePages([new(pipelineId, workspace, page, pageSize, cancellationToken)], out _)[0];
+        spatialQueryMs = result.SpatialQueryMs;
+        packageHydrationMs = result.PackageHydrationMs;
+        if (result.Error is { } exception) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw(); }
+        return (result.Items, result.TotalCount);
     }
 
-    private IReadOnlyList<PackageState> FindWorkspacePackages(string pipelineId, Polygon workspace, Geodatabase connector, CancellationToken cancellationToken) {
-        // A native polygon avoids JSON round-tripping while keeping the same ArcGIS spatial filter.
-        var matches = this.FindIntersectingAois(workspace, connector, cancellationToken);
+    /// <summary>Reads independent Workspace package pages with one connection and spatial feature class.</summary>
+    internal IReadOnlyList<WorkspacePackagePageReadResult> ReadWorkspacePackagePages(
+        IReadOnlyList<WorkspacePackagePageQuery> reads, out double scopeOpenMs) {
+        ArgumentNullException.ThrowIfNull(reads);
+        scopeOpenMs = 0;
+        if (reads.Count == 0) { return []; }
+        var setup = Stopwatch.StartNew();
+        using var connector = this.createGeodatabase();
+        using var fc = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
+        using var definition = fc.GetDefinition();
+        scopeOpenMs = setup.Elapsed.TotalMilliseconds;
+        var results = new WorkspacePackagePageReadResult[reads.Count];
+
+        for (var index = 0; index < reads.Count; index++) {
+            var read = reads[index];
+            var spatialQueryMs = 0.0;
+            var packageHydrationMs = 0.0;
+            try {
+                read.CancellationToken.ThrowIfCancellationRequested();
+                var queryTimer = Stopwatch.StartNew();
+                IReadOnlyList<PackageState> matches;
+                try {
+                    matches = this.FindWorkspacePackages(read.PipelineId, read.Geometry, fc, definition, read.CancellationToken);
+                }
+                finally { spatialQueryMs = queryTimer.Elapsed.TotalMilliseconds; }
+
+                var hydrationTimer = Stopwatch.StartNew();
+                IReadOnlyList<(string PackageId, string? ShortId, string AoiJson)> items;
+                try {
+                    var offset = ((long)read.Page - 1) * read.PageSize;
+                    if (offset >= matches.Count) { items = []; }
+                    else {
+                        var pageItems = new List<(string PackageId, string? ShortId, string AoiJson)>(Math.Min(read.PageSize, matches.Count));
+                        foreach (var package in matches.Skip((int)offset).Take(read.PageSize)) {
+                            read.CancellationToken.ThrowIfCancellationRequested();
+                            // Only the current AOI references that passed the spatial filter are hydrated.
+                            pageItems.Add((package.Id!.Value, package.MetaData?.ShortId, this.ReadAoi(connector, package, read.CancellationToken)));
+                        }
+                        items = pageItems;
+                    }
+                    read.CancellationToken.ThrowIfCancellationRequested();
+                }
+                finally { packageHydrationMs = hydrationTimer.Elapsed.TotalMilliseconds; }
+                results[index] = new(items, matches.Count, spatialQueryMs, packageHydrationMs, null);
+            }
+            catch (Exception exception) {
+                // A missing AOI or a canceled caller must not invalidate another page in the batch.
+                results[index] = new([], 0, spatialQueryMs, packageHydrationMs, exception);
+            }
+        }
+        return results;
+    }
+
+    private IReadOnlyList<PackageState> FindWorkspacePackages(
+        string pipelineId, Polygon workspace, FeatureClass featureClass, FeatureClassDefinition definition, CancellationToken cancellationToken) {
+        // Filter the indexed AOI rows using the requested Workspace polygon, then retain
+        // active Pipeline bindings and current AOI references exactly as in the single read.
+        var matches = this.FindIntersectingAois(workspace, featureClass, definition, cancellationToken);
         var candidates = new List<PackageState>();
         foreach (var match in matches) {
             cancellationToken.ThrowIfCancellationRequested();

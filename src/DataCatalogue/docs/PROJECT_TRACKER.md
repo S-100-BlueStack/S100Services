@@ -1,3 +1,29 @@
+## DC-PERF-03 — Bounded Workspace Packages read batching (candidate, 2026-11-09)
+
+Authoritative commit-pinned baseline: `dfd38deb3990c184f6c096486650364d8c7802c3`.
+DC-PERF-02 was accepted on `ef93e3b914c164bc6a08ebbe0fe11eb28e9e1ec8`;
+no exported DataCatalogue paths changed in the intervening commits.
+
+- The existing Jobs/main-map Workspace-Packages requests remain at four concurrent
+  frontend workers. Their HTTP contract, Pipeline scoping, per-Workspace membership,
+  exact current AOI, pagination, auth, and stale-load cancellation are unchanged.
+- A bounded backend read scheduler groups up to four Workspace-Packages requests
+  within six milliseconds. Each group runs on the existing STA ArcGIS dispatcher,
+  sharing one Workspace and one Package read scope while preserving individual
+  request cancellation, results and error handling. No new API endpoint or cache.
+- New backend timings distinguish batch collection, STA queue, shared connection
+  setup, Workspace lookup, spatial query, Package hydration and HTTP response.
+  Previously observed 924 ms mean queue wait is not a predicted speedup.
+- Additional focused integration tests cover parallel Pipeline isolation,
+  empty/nonempty memberships, concurrent pagination and isolated cancellation.
+  Full Windows x64 build,
+  tests and browser benchmark remain required before acceptance.
+
+See `src/DataCatalogueAPI/docs/DC_PERF_03_VALIDATION.md` for current validation
+steps and limitations. This candidate must not be considered committed.
+
+---
+
 ## DC-UX-02 — Navbar and Preferences visual consistency (candidate, 2026-11-09)
 
 Implementation source: verified `git archive` export from `main` at

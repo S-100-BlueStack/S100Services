@@ -36,6 +36,7 @@ public static class ApplicationServicesConfiguration
         services.AddTransient<DataCatalague.Api.Services.PackageCreationService>();
         services.AddTransient<DataCatalague.Api.Services.DispatcherResourceService>();
         services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();
+        services.AddSingleton<DataCatalague.Api.Services.WorkspacePackageReadBatcher>();
         services.AddTransient<DataCatalague.Api.Services.WorkspaceService>();
         services.AddSingleton<PipelineAssignmentIndex>();
         services.AddTransient<DataCatalague.Api.Services.PipelineAssignmentService>();
