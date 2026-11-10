@@ -55,6 +55,9 @@ public static class RequestPipelineConfiguration
             };
         });
 
+        // Translate client disconnects inside Serilog logging so they are not logged as server errors.
+        app.UseMiddleware<ClientCancellationMiddleware>();
+
         app.UseHttpsRedirection();
         app.UseRouting();
         if (app.Environment.IsDevelopment()) {

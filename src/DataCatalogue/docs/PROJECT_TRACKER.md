@@ -1,3 +1,26 @@
+## DC-CANCEL-01 — Expected HTTP client cancellation handling (candidate, 2026-11-10)
+
+Authoritative commit-pinned baseline: `f10d9fca276aab93fff645cf0d181efac3a5ef72`
+(99/99 exported source-file checksums verified). Supersedes the previous known
+DC-PERF-03 commit `790fa8854473df21d47d8c9cc18f9282c2240a80` for this task.
+
+- Rapid Package selection caused expected `OperationCanceledException` from Package
+  geometry and bindings reads. Serilog request logging reported `500` Error entries
+  even though the outer ASP.NET Core request completion recorded `499`.
+- Add narrow middleware immediately inside Serilog request logging: translate only
+  `OperationCanceledException` with `HttpContext.RequestAborted` canceled to a
+  bodyless `499` when headers have not started, and suppress status-code pages.
+  Other cancellation and application errors retain their existing exception paths.
+- No changes to controllers, request contracts, authentication, Package storage,
+  ArcGIS dispatching, frontend, or dependencies.
+- Five native-runtime-independent xUnit tests cover aborted and non-aborted requests,
+  unrelated failures, and successful responses. Windows x64 build/test and browser
+  log verification are required before accepting the candidate.
+
+See `src/DataCatalogueAPI/docs/DC_CANCEL_01_VALIDATION.md` for acceptance steps.
+
+---
+
 ## DC-PERF-03 — Bounded Workspace Packages read batching (candidate, 2026-11-09)
 
 Authoritative commit-pinned baseline: `dfd38deb3990c184f6c096486650364d8c7802c3`.

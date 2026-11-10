@@ -546,6 +546,18 @@ changed without a rebuild. A bootstrap logger catches startup failures before th
 `UseSerilogRequestLogging` collapses the per-request ASP.NET Core noise into a single enriched
 event, including the resolved API version.
 
+**Client cancellation.** `ClientCancellationMiddleware` runs immediately inside Serilog
+request logging. If a downstream operation throws `OperationCanceledException` **and**
+`HttpContext.RequestAborted` is canceled, the middleware marks the request `499`
+(Client Closed Request) before Serilog completes its request log, without writing a
+response body. Status-code pages are disabled for that request. Cancellation that is
+not tied to a disconnected client, and unrelated exceptions even after a disconnect,
+continue to the existing exception handling and are not silently suppressed. If
+response headers have already started, they cannot be replaced with `499`; the
+middleware still stops expected cancellation exceptions from propagating. No
+controller, authentication, API contract or ArcGIS cancellation behavior changes.
+See `docs/DC_CANCEL_01_VALIDATION.md` for verification and browser checks.
+
 **HTTPS.** `UseHttpsRedirection` with a 308 (method-preserving) redirect, plus HSTS outside
 Development. For production, configure Kestrel endpoints via environment variables or a
 `Kestrel:Endpoints` configuration section rather than `launchSettings.json`, which is a
