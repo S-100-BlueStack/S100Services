@@ -29,20 +29,33 @@ The project aimed to implement the S-100 standard within ArcGIS Pro to improve t
 
 ## Project Structure
 
-The [project structure](https://binarybytez.com/understanding-clean-architecture/) is designed to promote separation of concerns and modularity, making it easier to understand, test, and maintain the application.
+`S100Services` is a multi-application repository, not the generic
+`Application/Core/Infrastructure/UI` folder layout used in an earlier version of
+this README. At the 2026-11-10 documentation snapshot (`63c89ff0`), the tracked
+source and test directories include:
 
+```text
+src/
+  DataCatalogue/
+  DataCatalogueAPI/
+  JobManager/
+  ProductCatalogue/
+  ProductCatalogueAPI/
+  ProductManagerCore/
+tests/
+  DataCatalogueAPI.Tests/
+  EncMetadataTopology/
+  EncRecovery/
+  ProductHistory/
+  TestProductCatalogue/
+  TestProductManager/
 ```
-├── src
-│   ├── Application             # Contains all kind of applications and plugins
-│   ├── Core                    # Contains the core business logic, domain models, view models, etc.
-│   ├── Infrastructure          # Contains infrastructure concerns such as data access, external services, etc.
-│   └── UI                      # Contains the user interface layer, including controllers, views, extensions, etc.
-├── tests
-│   ├── Core.Tests              # Contains unit tests for the core layer
-│   ├── Infrastructure.Tests    # Contains unit tests for the infrastructure layer
-│   └── UI.Tests                # Contains unit tests for the UI layer
-└── README.md                   # Project documentation (you are here!)
-```
+
+This is a directory inventory, not a claim that every project is deployed or
+that its runtime contracts are interchangeable. Read the repository
+[`AGENTS.md`](AGENTS.md), the selected application's `AGENTS.md`, and its current
+README and architecture documentation before changing code. Use the explicit
+Git baseline from the task rather than assuming this inventory is always current.
 
 ## Contacts
 Jens Søe Christiansen jesoe@gst.dk

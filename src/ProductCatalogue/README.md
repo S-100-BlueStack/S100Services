@@ -1,11 +1,13 @@
 # Product Catalogue frontend
 
-Current normalized backend baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+Historical normalized-workflow integration baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
 
-Read the [current contract matrix and adaptation report](docs/normalized-workflow-frontend-adaptation.md)
-for source transport, Export, diagnostics and verification. It supersedes older backend-contract notes.
+The [normalized-workflow adaptation report](docs/normalized-workflow-frontend-adaptation.md)
+records that integration phase. For current frontend behavior, use the explicit task baseline,
+[development contract](AGENTS.md), [invariants](docs/INVARIANTS.md) and the owning feature README.
+The [demo-readiness plan](docs/demo-readiness-plan.md) tracks verification rather than certifying a deployment.
 
-Product Catalogue is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
+Product Catalogue is an ArcGIS/Vite frontend for nautical-chart Products and ENC-package workflows. It loads source-owned AOIs and Product data through backend APIs, renders ArcGIS Graphics, and presents source- and capability-gated actions in the Product popup.
 
 ## Technology
 
@@ -33,18 +35,36 @@ The main map route owns product correction management, popup actions, map filter
 
 The Analyze route owns analysis/report display for selected products. The Review route owns side-by-side product review for multiple selected products.
 
-## Development contract and demo preparation (2026-10-26)
+## Development contract and demo preparation (2026-11-10)
 
-The authoritative baseline for the current documentation pass is `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. For future implementation tasks, use **the explicit baseline commit supplied by that task**, not this historical documentation baseline or the current branch by default.
+This documentation reconciliation uses the explicitly supplied committed snapshot
+`63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10). The earlier
+`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` reference was the October
+planning baseline, not the current default for future tasks. Always use the **explicit
+commit supplied by the next task** rather than either documentation snapshot.
 
-- [AI-assisted development rules](AGENTS.md) establish baseline verification, safe replacement files and truthful check reporting.
-- [Architecture invariants](docs/INVARIANTS.md) and [module ownership map](docs/MODULE_MAP.md) are navigation and preservation references; the current committed source and feature READMEs remain authoritative for behavior.
-- [Demo-readiness plan](docs/demo-readiness-plan.md) separates automated checks, browser regression testing and backend limitations.
-- [Frontend tracker](docs/frontend-hardening-tracker.md), [UI/UX backlog](docs/ui-ux-design-backlog.md) and [dated release review](docs/frontend-release-readiness-review.md) distinguish current planning from historical acceptance.
+- [AI development rules](AGENTS.md) govern baseline validation, source access and delivery.
+- [Architecture invariants](docs/INVARIANTS.md) and [module map](docs/MODULE_MAP.md)
+  identify preservation boundaries; baseline code/tests and owning feature READMEs
+  determine current implementation behavior.
+- [Demo readiness](docs/demo-readiness-plan.md), [hardening tracker](docs/frontend-hardening-tracker.md)
+  and [UI/UX backlog](docs/ui-ux-design-backlog.md) distinguish committed changes from full
+  manual browser/deployment acceptance.
 
-Recent accepted frontend UI changes: FI-027 navbar Product search/Locator (`a0fde73c58a554c58028c2220399e3ae1691121b`), FI-029 unified popup presentation (`dbc1466400d18b92d5589d8d7392bd27ae6be86c`), and FI-027 Locator hover contrast correction (`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`). The user reports no apparent regressions in the ENC-package popup after FI-029, but non-package Pause/Resume, Discard and Send/Accept dispatch is not verified or enabled without a supported backend contract. Full demo verification and consolidated FI-043 Introduction review are still pending.
+FI-027 navbar search, FI-029 unified popup presentation and FI-043 Introduction are accepted
+UI baselines. Subsequent November implementation commits cover aggregate `Package.Status`
+map/popup presentation (`54436f7`), Basemap Gallery (`d09a1db`), initial map readiness
+(`d400be0`), Analyze route loading (`1065291`), focus and reduced motion (`6f38fdb`),
+Preferences simplification (`1ac36e4`), responsive navbar and Dashboard calendar accessibility
+(`dfd38de`), and confirmation/Notice Center accessibility (`63c89ff0`). These commit
+records are **not evidence of a new full-system demo smoke**. Verify browser behavior,
+source permissions and server integrations independently.
 
-SDK upgrades, map labels/linked annotations, Sonda, Vitest, FeatureEffect and framework experiments are deliberately deferred until a separately approved experiment branch exists; this documentation update does not change dependencies or runtime behavior.
+Keep Product/package aggregate status distinct from S-101/S-57 Export Candidate status.
+The shared Pause/Resume, Discard, Send/Accept and Tools action row is not universal backend
+authorization: unsupported non-package mutations stay disabled. Preserve current workflows
+and defer SDK upgrades, React, new test frameworks, FeatureEffect, Sonda and map-label
+experiments to a separately approved scope.
 
 ## Terminology
 
@@ -54,36 +74,28 @@ Code may continue using stable technical identifiers such as `datasetName` where
 
 ## Stable frontend flows
 
-The following flows are implemented and considered stable frontend behavior for controlled user testing:
+These are implemented frontend surfaces to preserve during targeted demo stabilization;
+the list does not claim complete backend or browser/deployment acceptance:
 
-- map creation and product correction rendering
-- hover highlight
-- popup details
-- custom popup action bar
-- Freeze / Unfreeze
-- capability-gated Send to IC-ENC simulation
-- source-aware popup actions resolved through central Product context
-- flat `Export... > Edition / Update` menu
-- independently resolved S-57 and S-101 Edition/Update candidate exports
-- retained synthetic Paper Charts/S-102 fixtures for explicit source-boundary tests only
-- Cancel Export
-- popup export loading/conflict state
-- backend-authoritative Product operation state with local caching and reload recovery
-- asynchronous Export/Cancel Export polling, terminal notices and route refresh
-- silent auto-refresh
-- manual refresh button loading
-- popup-preserving compatible refresh without popup, icon or dropdown flashing
-- display-scale hiding
-- main map filters constrained to `Display scale`, `Status` and `Usage band`
-- Product search on the main map
-- Product History quick panel with collapsed event rows
-- Product Collection tray
-- Analyze page
-- Review workspace
-- shared Product catalog picker for Analyze and Review
-- Dashboard page with backend-driven activity data, Danish range builder, debounced server-side search, server-side filters, cursor pagination, actionable summary panels, polished Dashboard History panel, collapsed product history events, domain-oriented backend activity classification, summary cards and activity links
-- release-readiness keyboard hardening for route/panel close behavior
-- hover help/tooltips for common clickable controls and icon-only actions
+- Main-map AOI loading, ArcGIS Graphics, hover/overlap selection, modifier selection,
+  refresh reconciliation, scale hiding and source-aware Product identity.
+- Permanent Main-map navbar Product search and independent, on-demand geographic Locator.
+- Source-aware Data sources, Filter facets, contextual counts and persisted preferences.
+  ENC-package map colors and Package-status filters follow aggregate backend
+  `Package.Status`, not S-101/S-57 candidate statuses. Mixed-status hatches are retired.
+- One popup row with Pause/Resume, Discard, Send/Accept and Tools for resolved Products;
+  package actions require verified backend eligibility, and unsupported mutations fail closed.
+  The former Freeze/Export/Cancel Export endpoints remain internal compatibility contracts,
+  **not** a separate current popup action row.
+- Popup Product metadata, Package status and independent Export Candidate member states,
+  error-message details, confirmation focus/Escape and application-owned tooltips.
+- Product Collection, Product History/Timeline and source-aware Analyze/Review workspaces.
+- Dashboard range/calendar, committed filtering, sorting, cursor pagination, operational
+  summaries and route-local History panel.
+- Shared navbar, Theme/Preferences, Basemap Gallery on Main Map and Analyze, route-specific
+  onboarding, notices, light/dark interaction and reduced-motion behavior.
+- Initial Main-map and Analyze loading/readiness safeguards. Final acceptance still needs
+  a browser smoke with the actual basemap, source services and deployment environment.
 
 ## Important architecture
 
@@ -128,19 +140,35 @@ Popup action flow is documented in:
 src/features/map/popups/README.md
 ```
 
-Current popup action endpoint status:
+Current visible popup workflow:
 
-- S101 Freeze/Unfreeze use the existing upload routes; S57 is capability-blocked because those routes write S-101.
-- Send to IC-ENC is Disabled or Simulation only and requires ReadyForDistribution.
-- Edition and Update use `POST /export/{name}/newedition` and `/newupdate`.
-- Cancel Export uses `POST /export/{name}/cancel-export` with operation type `CancelExport`.
-- The backend resolves specification from the exact Product. No exportTarget query or `/jobs` suffix is sent.
-- Synthetic Paper Charts/S102 fixtures remain non-runtime test data with no handler or backend target.
-- Status uses `GET /jobs/{jobId}`; active discovery uses `GET /jobs/active?datasetName=...`.
+- Every resolved Product has the same compact icon-only presentation: Pause/Resume,
+  Discard, Send/Accept, and Tools. The owning source, backend action snapshot and current
+  Product state govern whether a button is enabled.
+- ENC-package Pause/Resume and Discard use the package-owned action session when the
+  backend authorizes them. Send/Accept is normally disabled and may be simulated only
+  in an explicitly configured local development environment, without backend mutation.
+- Non-package Products do **not** inherit package dispatch: controls remain disabled
+  unless a verified source-owned workflow contract supports them.
+- The Main-map package popup distinguishes aggregate `Package.Status` from S-101 and
+  S-57 Export Candidate ProductState. Candidate state does not determine map color
+  or the package Status filter.
 
-The dispatch guard validates registry capability, operation kind, handler and matching specification.
-The old BE-102 target-selection description is not the current controller contract.
-Export generates an unverified candidate; successful generation does not publish to S-128.
+Retained internal operation contracts (not the current visible action row):
+
+- S-101 Freeze/Unfreeze use existing upload routes; S-57 remains capability-blocked
+  because those routes write S-101.
+- Direct Edition/Update use `POST /export/{name}/newedition` and `/newupdate`;
+  Cancel Export uses `POST /export/{name}/cancel-export` with operation type `CancelExport`.
+- The backend resolves specification from the exact Product. No `exportTarget` query or
+  obsolete `/jobs` suffix is sent. Export produces an unverified candidate, not S-128 publication.
+- Historic Product job status uses `GET /jobs/{jobId}` and active lookup uses
+  `GET /jobs/active?datasetName=...`; package popup freshness has its own source-owned lifecycle.
+- Synthetic Paper Charts/S-102 fixtures are test-only and cannot use electronic
+  mutation dispatch.
+
+See [popup actions](src/features/map/popups/README.md) and
+[Data sources](src/features/dataSources/README.md) before changing either boundary.
 
 ### Product context and source-aware actions
 
@@ -204,25 +232,31 @@ source metadata may be shown secondarily when useful. Canonical route projection
 
 ### Main map filters
 
-Main map attribute filters are constrained to the intended operational filter set:
+Main-map filters use provider-specific dimensions:
 
-- `displayScale`
-- `status`
-- `usageBand`
+- `displayScale` and `usageBand`, when supported by the source;
+- `packageStatus` for ENC packages, matching only aggregate backend `Package.Status`;
+- `status` for single-product sources, matching their own ProductState.
 
-Status filter options come from the full product state/status endpoint, not only from statuses currently present in rendered map features. Statuses with no matching visible products remain listed with count `0`, so users can trust that the list represents all possible status values.
+The package options are the backend aggregate enum Idle, Ready, InTransit, Error and Hold;
+these values are **not** Export Candidate ProductState values. Source-appropriate option
+lists remain visible with contextual counts, including zero-count choices, and the
+package's default exclusion applies to aggregate Idle. See [filter contracts](src/features/map/filters/README.md).
 
 Product popup attribute rendering is hardened so first-load popup details do not fall back to showing all raw feature attributes when field metadata is not ready yet.
 
 ### Main map Product search
 
-The Main map has a route-local Product search overlay. FI-011B search is built from the currently active,
-committed frontend Graphics and their source-aware Product contexts. It does **not** query or reuse the
-Analyze/Review workspace catalog.
+Main-map Product search is permanently mounted in the Main-map **navbar**, alongside
+its separate expandable Locator control (FI-027). It indexes currently committed
+active frontend Graphics and their source-aware Product contexts, not the Analyze/Review
+workspace catalog or backend place search.
 
-Search opens the selected rendered Product's popup on the map. Disabled sources are absent because their
-Graphics are not part of the committed active Main map state. Product search is a map control, not global
-navigation, and stays out of the navbar to avoid layout conflicts on smaller screens.
+Selecting a currently valid, filter-visible Product navigates to its Graphic and opens
+its popup. Disabled sources are not indexed, and a stale or filtered-out result cannot
+open an unrelated Product. Geographic Locator owns place search/map navigation only,
+with no Product popup or marker side effect. See [Product search](src/features/map/search/README.md)
+and [Locator](src/features/map/locator/README.md).
 
 ### Dashboard
 
@@ -336,7 +370,7 @@ Controlled user testing showed that users need concise explanations of what acti
 
 The frontend provides hover help/tooltips for common clickable controls and icon-only actions. Tooltip text should explain consequence or context, not just duplicate the visible label. New clickable controls should include explicit text, an `aria-label`, or a tooltip entry in the global hover-help registry.
 
-FI-043 status: **Implemented; manual verification pending**.
+FI-043 status: **Developer-accepted** at `9280c650`, with Back/Forward replay correction accepted at `69b0d329`. A new full-system demo smoke is still pending.
 
 One shared Introduction owner provides route-specific guidance on Main map, Dashboard, Analyze
 and Review. Start introduction at the bottom of Preferences replays the current route. Existing
@@ -416,7 +450,7 @@ To activate a future source export operation:
 4. Keep endpoint mapping out of popup DOM and `popupActionConfig.js`.
 5. Add or adjust confirmation text and focused contract tests.
 
-Current implemented export leaves:
+Retained direct Export API operations (not the FI-029 visible popup row):
 
 ```text
 Edition -> POST /export/{name}/newedition
@@ -424,13 +458,21 @@ Update -> POST /export/{name}/newupdate
 Cancel Export -> POST /export/{name}/cancel-export
 ```
 
-Each request is resolved to the Product's own specification by the normalized backend.
+Any future UI activation requires an explicit new workflow decision and matching source-owned
+backend authority. Existing direct requests resolve to the Product's specification through
+the normalized backend; do not route package actions through these Product endpoints.
 
 ## Background job deployment direction
 
-ProductCatalogueAPI currently hosts both the Product Catalogue HTTP API and the Hangfire Server that executes Product Catalogue jobs.
+The earlier [BE-106 readiness review](docs/be-106-external-worker-readiness.md)
+recorded ProductCatalogueAPI as the HTTP/Hangfire host and proposed future
+JobPlatform worker extraction. That is a **dated backend snapshot**, not a
+fresh verification of the latest process or deployment topology. The later
+normalized workflow integration also established separate background ArcGIS
+execution boundaries. Verify current hosting against the explicit backend baseline
+before making worker, queue or process changes.
 
-BE-106 confirms the future direction without changing runtime:
+BE-106 records this direction without authorizing a new hosting change:
 
 - ProductCatalogueAPI remains the Product Catalogue API, enqueue and job-status owner;
 - Product Catalogue worker execution may later move to `JobPlatform.Worker`;
@@ -454,15 +496,20 @@ When adding a new logical map layer:
    src/features/map/config/layerDefinitions.js
    ```
 
-2. Reference the layer from:
+2. Register the layer through the current owning map/source architecture rather than
+   adding a non-existent `layerConfigs.js` file. Relevant verified locations include:
 
    ```txt
-   src/features/map/config/layerConfigs.js
+   src/features/map/core/layerRegistry.js
+   src/features/dataSources/config/dataSourceRegistry.js
+   src/features/dataSources/map/dataSourceMapAdapter.js
    ```
 
-3. Set capabilities explicitly.
-4. Ensure popup/filter/display-scale behavior checks layer capabilities.
-5. Avoid enabling product actions unless the layer truly supports product correction mutations.
+   The exact choice depends on whether the layer is source-owned or a static logical layer.
+
+3. Declare capabilities explicitly and maintain stable Product/source identity.
+4. Verify popup/filter/display-scale behavior against those capabilities.
+5. Keep unsupported Product/backend mutations disabled and fail closed.
 
 ## Synthetic source fixtures
 
@@ -624,11 +671,17 @@ npm run build
 npm run check
 ```
 
-Use `npm run check` before considering a ProductManager change ready.
+Run `npm run format` and `npm run check` locally before accepting a Product Catalogue documentation or frontend change. A full browser/deployment smoke is a separate gate.
 
 ## Current status
 
-Recent frontend work has focused on:
+The last planned general UI polish is committed at `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4`.
+Next work is targeted real-usage feedback and demo regression verification, not new UI features.
+For package aggregate status, navigation and accessibility changes since October, see the
+[hardening tracker](docs/frontend-hardening-tracker.md) and
+[UI/UX backlog](docs/ui-ux-design-backlog.md).
+
+The earlier implementation history below is preserved for reference:
 
 - custom popup action lifecycle
 - product operation state
@@ -664,9 +717,10 @@ The normalized workflow adaptation was accepted in the earlier integration at
 `aaf635571503c780517cfc3a76a4fa5e4894f447` and remains documented in
 `docs/normalized-workflow-frontend-adaptation.md`. Later UI changes are recorded above and in
 the frontend tracker; the current demo baseline still requires its own browser/deployment smoke.
-BE-108A Batch 1 is preserved in the historical adaptation record. Batch 2 producers/recovery,
-real distribution, production mock-source replacements, Dashboard report associations and
-global timeline remain separate backend work.
+BE-108A Batch 1 and the later developer-reported Batch 2 manual Export/recovery acceptance
+at `0cab4e4f08a88717c25794a85fb691e8d64a7fbd` are separate backend history,
+not evidence of frontend popup dispatch. Real distribution, production mock-source replacements,
+Dashboard report associations and the global timeline remain deferred.
 
 ## Shared Preferences
 

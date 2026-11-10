@@ -1,9 +1,10 @@
-# FI-030B — Initial map readiness (candidate)
+# FI-030B — Initial map readiness (implementation record)
 
 ## Scope and authority
 
-- Authoritative source snapshot: `2d596754d43d00352fe0adfac9b0f8420fb817c8` on `main`, clean for ProductCatalogue, verified from the supplied archive and SHA-256 manifest.
-- This change is a **candidate** pending local browser acceptance. It extends the FI-030 completion polish accepted in `ddfb26bb143c52ac80f1277bbe1de1ad8e87800c`.
+- Original implementation source: `2d596754d43d00352fe0adfac9b0f8420fb817c8`, verified from a supplied archive and SHA-256 manifest.
+- The Main-map readiness implementation was later committed at `d400be0` (2026-11-06); the Analyze direct-route follow-up at `1065291` (2026-11-09). This document records their intended contracts, not independent browser acceptance.
+- These changes extend the FI-030 completion hold accepted in `ddfb26bb143c52ac80f1277bbe1de1ad8e87800c`.
 - Scope: initial **Main Map** readiness only. No backend, source registry, API, map architecture, dependencies, Analyze, Dashboard or Review changes.
 
 ## Why the existing loader finished too early
@@ -42,7 +43,7 @@ Test against the built frontend from this exact candidate, ideally with **Networ
 
 Node tests cover success, visible layer readiness, idle-window restart, timeout, cancellation, failure and cleanup. They do **not** establish ArcGIS rendering behavior, network request timing, live services or complete page readiness. The developer runs `npm run format` and `npm run check` in the actual repository and performs the browser tests before committing.
 
-## Analyze direct-route follow-up (2026-11-09 candidate)
+## Analyze direct-route follow-up (2026-11-09 implementation)
 
 The separate Analyze bootstrap loader previously disappeared immediately after
 `view.when()`, before the explicit URL Products finished resolving. The Analyze data
@@ -59,6 +60,6 @@ Products after the first route load. The established load generation and cancell
 rules remain authoritative. Analyze's read-only popup correction is documented in
 [`src/features/analyze/README.md`](../src/features/analyze/README.md).
 
-This follow-up needs a fresh-cache browser check on the accepted frontend, including
-cold navigation with two Products, LayerView readiness, a later Product change, Popup
-metadata, focus/Escape, and no regression of Main Map popup actions.
+This committed follow-up still needs a fresh-cache browser check on the accepted frontend,
+including cold navigation with two Products, LayerView readiness, a later Product
+change, popup metadata, focus/Escape, and no regression of Main-map popup actions.

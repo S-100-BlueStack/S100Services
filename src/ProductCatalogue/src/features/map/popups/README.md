@@ -247,12 +247,16 @@ Metadata-only signatures preserve controls/selected text during unrelated action
 Changed metadata closes stale details and restores a matching focused member control; disconnect
 cleanup removes the overlay and its global listeners. No private Calcite/ArcGIS DOM is accessed.
 
-Package capabilities hide Freeze/Unfreeze, Send, Cancel Export and manual Edition/Update Export.
-No package action calls the single-product backend. Read refresh and Collection retain the
-existing source-aware behavior. Package-originated Analyze/Review/History navigation is disabled
-until the later package-aware workspace/history phase. Pause/Resume, Discard, Send/Accept, scheduling and package mutation contracts remain deferred.
-F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
-facet counts are active; F5 does not change their semantics.
+The former standalone Freeze/Unfreeze, Send, Cancel Export and manual Edition/Update
+controls are not exposed by the shared FI-029 popup row. Package actions are owned by
+`packageActionSession.js` and may execute only when the backend session authorizes them;
+Product-level compatibility routes are not substitutes. Package-aware Analyze/Review/History
+navigation was enabled by F6A-F6D, with supported destinations under Tools.
+
+November 2026 reconciliation: the package Status filter and map colors use aggregate
+`Package.Status` only; previous F1 member-status matching and F2 mixed-status CIM
+hatching are historical. F3 contextual facet counts remain, based on the current
+aggregate status dimension.
 
 ## Export state
 
@@ -496,13 +500,14 @@ destroys the monitor and invalidates pending detail completion. No additional fo
 or pageshow listener is installed. Package popups do not register Product-job watches or job-triggered Product-detail
 callbacks, and do not poll `jobs/active` or Hangfire jobs.
 
-Detail publication allows only `workUnitMetadata` and `exportMetadata`. Complete
-workflow/member map status, F1 filters, F2 symbols, F3 facets, geometry and source
+Detail publication allows only `workUnitMetadata` and `exportMetadata`. Package
+aggregate/member map status, filters, symbols, contextual facets, geometry and source
 identity remain owned by normal Main-map source refresh (10 minutes). Popup freshness
 does not fetch global AOIs. A member status without an active export therefore
 converges through normal source refresh. Non-package job discovery and targeted
-Graphic refresh remain unchanged. All package mutations remain unavailable. F6A-F6D subsequently enabled
-package-aware Analyze/Review/History navigation; F7A preserves that accepted behavior.
+Graphic refresh remain unchanged. F5 did not add mutations; subsequent package action
+sessions enabled backend-authorized Pause/Resume and Discard. F6A-F6D enabled
+package-aware Analyze/Review/History navigation; FI-029 preserves that boundary.
 
 ### F5 v2: normal source refresh and an open popup
 
@@ -526,8 +531,9 @@ publication checks connection, source/dataset/Product identity, layer/source obj
 identity, source visibility and Graphic membership using application state/public
 collection APIs. An invalid local callback unregisters its session.
 
-F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
-facet counts are active. F5 preserves their semantics and source-refresh ownership.
+The original F1 member-status filtering and F2 mixed-status hatching are superseded.
+The active Package-status filter and symbolization use backend aggregate `Package.Status`;
+F3 contextual counts and normal source-refresh ownership remain.
 
 ### F5 v3: shared publication generation
 

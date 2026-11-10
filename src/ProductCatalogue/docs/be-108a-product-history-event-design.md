@@ -2,7 +2,7 @@
 
 Documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`
 
-Status: **Batch 1 remains the accepted foundation. Batch 2 manual Export producers and recovery are implemented as an uncommitted candidate against `e06f8808677cf8f00b1e1a7621d40df4a9982a82`; local .NET, database-owner and runtime acceptance remain required. Section 18 supersedes the older Batch 2 operation vocabulary and hosting proposal.**
+Status reconciliation (2026-11-10): **Batch 1 is accepted. Batch 2 manual Export audit producers/recovery were reported accepted and committed at `0cab4e4f08a88717c25794a85fb691e8d64a7fbd` (2026-10-15).** The older uncommitted-candidate wording and test prerequisites in this design are historical. This documentation snapshot does not re-run .NET/database-owner/runtime verification, and it does not assert Package Export or Discard audit coverage. Section 18 records the Batch 2 operation and recovery design; new work must inspect the current backend owner and source.
 
 This document remains the source of truth for BE-108A. The original design is retained where it still applies; section 17 records the Batch 1 implementation after adaptation to the normalized Product workflow architecture.
 
@@ -52,9 +52,9 @@ Implemented and ported:
 
 Batch 1 does not connect Export or Rollback jobs to the event lifecycle and does not change normalized workflow writes to return state IDs.
 
-### Batch 2 - Producers and recovery
+### Batch 2 - Producers and recovery (historical plan)
 
-Planned only after Batch 1 is built, tested, and reviewed:
+The original post-Batch 1 scope was:
 
 - Export producer lifecycle;
 - Rollback producer lifecycle;
@@ -621,8 +621,8 @@ Batch 2 must begin with a fresh discovery pass against the then-current workflow
 
 ## 18. Batch 2 manual Export producers and recovery
 
-Implementation baseline: `e06f8808677cf8f00b1e1a7621d40df4a9982a82`.
-Candidate status: implemented; not built or run against .NET/SQL Server in the delivery environment.
+Original implementation baseline: `e06f8808677cf8f00b1e1a7621d40df4a9982a82`.
+Original candidate verification status: not built or run against .NET/SQL Server in the delivery environment. The developer subsequently reported acceptance and a commit at `0cab4e4f08a88717c25794a85fb691e8d64a7fbd`; this is not a new verification result from the documentation audit.
 
 ### 18.1 Supported operations and preserved boundaries
 

@@ -8,15 +8,11 @@ Do not use this file as runtime layer state. Runtime ArcGIS layers are registere
 Each logical layer must have a stable `id`, `layerKind`, and explicit capabilities. UI systems must
 check capabilities instead of assuming every graphic is a Product correction.
 
-Current logical layers:
-
-- `aoi`: existing combined AOI compatibility layer;
-- `paper-charts-products`: FI-011A Development-only Paper Charts mock layer;
-- `s102-products`: FI-011A Development-only S-102 mock layer.
-
-S-57 and S-101 do not have runtime layer definitions yet because their authoritative backend read
-contracts are not available. The current `aoi` layer must not be duplicated or inferred into those
-future logical sources.
+The retained logical definitions include the compatibility `aoi` layer and historical
+Paper Charts/S-102 synthetic mock layers. The latter are test-only fixtures, **not**
+selectable production sources. Runtime ENC-package AOI registration and targeted S-57/S-101
+workspace reads are owned by the source registry and its map adapter; do not infer
+these sources from the older static-layer catalog. See [Data sources](../../dataSources/README.md).
 
 Layer capabilities are used by:
 
@@ -145,10 +141,12 @@ capabilities: {
 }
 ```
 
-`supportsPopupActions` now means that the popup may render capability-safe custom action-bar content.
-For Paper Charts and S-102 this is currently the disabled `Export > Edition` / `Export > Update`
-placeholder surface. It does **not** mean that Product mutation workflows or Product Collection are
-supported.
+`supportsPopupActions` allows capability-safe custom popup content. The current FI-029
+popup presentation uses Pause/Resume, Discard, Send/Accept and Tools; test-only Paper Charts
+and S-102 contexts must keep unsupported mutations disabled. The older
+`Export > Edition` / `Export > Update` placeholders describe retained historical
+compatibility behavior, not the current visible action row. Product Collection
+uses its separate capability boundary.
 
 Product Collection has a separate capability boundary. The popup-header collection action resolves
 the selected Graphic through `features/products/domain/productContext.js` and checks the central

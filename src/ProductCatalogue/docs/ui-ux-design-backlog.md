@@ -1,13 +1,14 @@
 # Product Catalogue UI/UX design backlog
 
-**Documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
+**Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
+**Current documentation-audit snapshot:** `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10).
 **Purpose:** A compact index of _current UX decisions, accepted behavior and outstanding design work_. This is not a new manual acceptance report or an instruction to reopen completed tasks. Historical per-iteration plans and detailed original requirements are available in the Git history of this file.
 
 For current task status see the [frontend tracker](frontend-hardening-tracker.md); for the actual demonstration test matrix see [demo readiness](demo-readiness-plan.md); for preserved technical contracts see [invariants](INVARIANTS.md), [module ownership](MODULE_MAP.md) and the relevant feature README.
 
 ## Demo-first decision (2026-10-26)
 
-The demo branch prioritizes the accepted application, targeted regression fixes and truthful unavailable states. Do **not** introduce SDK/Calcite upgrades, map labels, Linked Annotations, Sonda, Vitest/Playwright migration, FeatureEffect, React or broad UI refactors as prerequisites for the demonstration.
+The demo branch prioritizes the accepted application, targeted regression fixes and truthful unavailable states. The planned general November UI-polish work is complete; new work is driven by observed browser usage and feedback. Do **not** introduce SDK/Calcite upgrades, map labels, Linked Annotations, Sonda, Vitest/Playwright migration, FeatureEffect, React or broad UI refactors as prerequisites for the demonstration.
 
 - **Verify next:** A representative Main-map/Dashboard/Analyze/Review browser/deployment demo smoke after accepted FI-043 and DSA-01–08 stabilization; do not reopen the accepted onboarding work.
 - **Preserve:** the accepted interaction contracts below, separate search workflows, Product identity, backend-owned status, generation-safe state, keyboard/focus/Escape and light/dark mode.
@@ -16,44 +17,48 @@ The demo branch prioritizes the accepted application, targeted regression fixes 
 
 ## Open UX and demo items
 
-| ID                  | Recorded status                                                        | Next acceptance boundary                                                                                                                                                                                                                                               |
-| ------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **FI-043**          | Accepted at `9280c650`; Back/Forward correction accepted at `69b0d329` | Preserve accepted onboarding; include representative route replay and focus/Escape in the separate full demo smoke. [Detailed onboarding contract](fi-043-onboarding-refresh.md).                                                                                      |
-| **FI-029**          | Shared UI committed (`dbc14664`); non-package dispatch unverified      | Same action presentation on all Products; disable unsupported operations, do not send them through package-only or historical Freeze/Export routes. [Popup workflow contract](../src/features/map/popups/README.md).                                                   |
-| **FI-030**          | Completion hold accepted; FI-030B readiness candidate                  | The visible 300 ms completion hold is accepted at `ddfb26bb`. FI-030B waits for the first stable MapView display on Main Map before completion; browser validation pending. Backend progress still needs a real contract. [FI-030B](fi-030b-initial-map-readiness.md). |
-| **FI-016**          | Backend-dependent                                                      | Obtain authoritative status/error definitions before changing the final symbology or enabling an error-only first-visit filter preset.                                                                                                                                 |
-| **FI-020 / FI-023** | Backend-dependent                                                      | Explicit cross-source Product relationships and authoritative mutation capabilities. No inferred relationships, candidate state or backend dispatch.                                                                                                                   |
-| **FI-018**          | Future deployment review                                               | Third-party deployability, environment assumptions, secrets, links, branding and licenses; not a demo UI redesign.                                                                                                                                                     |
+| ID                  | Recorded status                                                        | Next acceptance boundary                                                                                                                                                                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **FI-043**          | Accepted at `9280c650`; Back/Forward correction accepted at `69b0d329` | Preserve accepted onboarding; include representative route replay and focus/Escape in the separate full demo smoke. [Detailed onboarding contract](fi-043-onboarding-refresh.md).                                                                                                                     |
+| **FI-029**          | Shared UI committed (`dbc14664`); non-package dispatch unverified      | Same action presentation on all Products; disable unsupported operations, do not send them through package-only or historical Freeze/Export routes. [Popup workflow contract](../src/features/map/popups/README.md).                                                                                  |
+| **FI-030**          | Completion hold accepted; readiness implementation committed           | The 300 ms completion hold is accepted at `ddfb26bb`. Main-map readiness (`d400be0`) and Analyze direct-route readiness (`1065291`) are committed; full browser/deployment verification remains separate. Backend chunk progress still needs a contract. [FI-030B](fi-030b-initial-map-readiness.md). |
+| **FI-016**          | Backend-dependent                                                      | Obtain authoritative status/error definitions before changing the final symbology or enabling an error-only first-visit filter preset.                                                                                                                                                                |
+| **FI-020 / FI-023** | Backend-dependent                                                      | Explicit cross-source Product relationships and authoritative mutation capabilities. No inferred relationships, candidate state or backend dispatch.                                                                                                                                                  |
+| **FI-018**          | Future deployment review                                               | Third-party deployability, environment assumptions, secrets, links, branding and licenses; not a demo UI redesign.                                                                                                                                                                                    |
 
-## PC-UX-02 — focus and reduced-motion consistency (candidate)
+## PC-UX-02 — focus and reduced-motion consistency (implemented)
 
-The current UI-polish candidate establishes the shared `--pc-focus-ring` token for
-both Calcite themes. Native Overlap Picker buttons and the Data Sources Reset action
-retain their pointer-hover feedback while showing a distinct keyboard-only focus
-ring. Filter and Analyze disclosure indicators keep their existing transitions
-except when the system requests reduced motion.
+The focused accessibility and animation correction was committed at `6f38fdb`
+(2026-11-09). Shared `--pc-focus-ring` tokens, keyboard-only focus affordances
+and reduced-motion handling apply without changing Product selection, filtering,
+source enabling, loaders, or request ownership.
 
-This is a **visual/accessibility-only candidate**, not a new feature or completed
-browser acceptance. Confirm both themes, Tab/Shift+Tab, Enter/Escape,
-`prefers-reduced-motion`, and 100%/125%/150% browser zoom before marking it accepted.
-Product selection, source enabling/reset, disclosure state, loading, MapView and
-all async/request boundaries are unchanged.
+The commit proves an implementation snapshot, **not** complete real-browser acceptance.
+For regression checks, compare both themes, Tab/Shift+Tab, Enter/Escape,
+`prefers-reduced-motion`, and 100%/125%/150% zoom.
 
-## PC-UX-02B — Dashboard calendar and responsive navbar (candidate)
+## PC-UX-02B — Dashboard calendar and responsive navbar (implemented)
 
-This focused UI-only candidate addresses the documented small-screen navbar
-overflow on Dashboard/Analyze/Review and date-picker keyboard accessibility on
-Dashboard. At widths up to 820 px the non-map navbar wraps its actions below
-the horizontally navigable route links; Main Map retains its search-aware
-layout. Dashboard month navigation reuses its existing focused buttons instead
-of remounting them and gives each day a full English date accessible label,
-including selected/today information. The existing date, time, filtering,
-range-commit, Escape and request lifecycles are unchanged.
+The calendar and responsive navbar changes were committed at `dfd38de`
+(2026-11-09). At widths up to 820px, non-map route links and actions use a
+compact two-row layout; Main Map retains its separate search-aware layout.
+Dashboard date navigation preserves its focused buttons, and day controls expose
+complete English date labels without changing the committed-filter lifecycle.
 
-Local acceptance is still required on the authoritative baseline: verify
-Dashboard and Review at 320/390/500/650/820 px, keyboard navigation of both From
-and To calendars, 100%/125%/150% browser zoom, light/dark mode, and no Main Map
-navbar regression. This is not an SDK/Calcite upgrade or a new Dashboard feature.
+Browser regression checks remain: 320/390/500/650/820px on Dashboard and Review,
+From/To keyboard navigation, 100%/125%/150% zoom, both themes, and Main-map
+navbar behavior. Do not classify this committed work as an unimplemented candidate.
+
+## Final general accessibility polish (2026-11-10)
+
+The final confirmation and Notice Center polish was committed at `63c89ff0`.
+The confirmation dialog exposes an accessible dialog name and description,
+the notification close action is labeled `Close notifications`, and the dialog
+divider uses theme-aware CSS instead of hardcoded inline styling. Preserve
+Cancel-first focus, Escape/return focus, and light/dark presentation.
+
+No full Product Catalogue application or screen-reader verification is implied
+by this commit. Future corrections should be specific, reproduced real-usage findings.
 
 ## Accepted interaction boundaries
 
@@ -81,7 +86,7 @@ UI accepted at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`. One compact icon-only
 
 ### FI-030 - loading completion and real-progress discovery
 
-Accepted at `ddfb26bb143c52ac80f1277bbe1de1ad8e87800c`: the shared loader supports an opt-in 300 ms completion hold on Main Map and Analyze. The hold is skipped for fast hidden loads and reduced-motion users. An older completion timer cannot dismiss a newer loader session. FI-030B adds a **Main Map-only candidate** for initial MapView/visible-layer readiness; the original determinate bar stays visible at its last source-owned value through rendering (rather than switching to another animation), followed by a 500 ms stable frame and bounded fallback. Analyze and backend phase/chunk progress remain separate work. See [initial readiness](fi-030b-initial-map-readiness.md) and [accepted completion background](pc-th-01-fi-030-follow-up.md).
+Accepted at `ddfb26bb143c52ac80f1277bbe1de1ad8e87800c`: the shared loader supports an opt-in 300 ms completion hold on Main Map and Analyze. The hold is skipped for fast hidden loads and reduced-motion users. An older completion timer cannot dismiss a newer loader session. FI-030B initial Main-map rendering readiness was subsequently committed at `d400be0`, with a separate Analyze direct-route readiness correction at `1065291`. The original determinate bar stays visible at its last source-owned value through rendering, followed by a 500 ms stable frame and bounded fallback. Backend phase/chunk progress remains separate work; full browser smoke remains pending. See [initial readiness](fi-030b-initial-map-readiness.md) and [accepted completion background](pc-th-01-fi-030-follow-up.md).
 
 ### FI-031 - non-empty source startup invariant
 

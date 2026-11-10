@@ -1,5 +1,11 @@
 # Frontend release-readiness review
 
+> **Dated review, not a current certification:** The original smoke results and
+> October addendum below describe their recorded baselines. Subsequent November
+> changes include aggregate Package status, Basemap Gallery, initial loading and
+> accessibility polish. For the 2026-11-10 baseline and still-unverified full
+> browser/deployment pass, see [demo readiness](demo-readiness-plan.md).
+
 Review baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`
 
 This review focuses on Product Catalogue frontend readiness for controlled user testing. It identifies release risks, backend dependencies, smoke-test findings, and follow-up hardening work.

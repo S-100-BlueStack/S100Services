@@ -1,8 +1,12 @@
 # Product Catalogue backend contracts
 
-This document is a source-of-truth document for Product Catalogue backend integration work.
+This document records the backend integration contract decisions reviewed at the
+baseline below. It is a reference for their rationale, **not** an independently
+verified contract for the newest application revision. Read current backend
+controllers, DTOs, services and tests from the explicit task baseline before
+implementing or asserting runtime support.
 
-Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+Historical reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 The permanent BE-101 scope corrections are recorded in:

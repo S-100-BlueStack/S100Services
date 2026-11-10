@@ -6,6 +6,19 @@ This document describes the agreed target direction after the September 2026 Pro
 
 It is a product/workflow specification, not an API contract and not evidence of the current repository implementation.
 
+> **Implementation reconciliation (2026-11-10):** This document retains the original
+> September target decisions as historical requirements. They are **not** the active
+> Main-map filtering or symbolization contract: the November implementation uses
+> backend aggregate `Package.Status` for package Status filtering, map colors,
+> popup header/overlap status and the Package-status row. S-101/S-57 Export Candidate
+> ProductState and error details remain separate popup data; neither determines
+> package filtering or map color. Mixed-member CIM hatching was retired.
+> See [Data sources](../src/features/dataSources/README.md),
+> [filters](../src/features/map/filters/README.md) and
+> [popup actions](../src/features/map/popups/README.md). The original decisions in
+> sections 4 and 17 below are superseded for today's frontend presentation; do
+> not reimplement them without a new explicit architecture decision.
+
 The following labels are used throughout this document:
 
 - **Decided**: agreed target behavior.

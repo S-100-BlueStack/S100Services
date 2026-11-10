@@ -1,5 +1,13 @@
 # Normalized workflow frontend adaptation
 
+> **Historical integration record:** This document describes the initial normalized
+> S-57/S-101 transport adaptation. Its original F1/F2 member-status filter/hatching
+> and pre-FI-029 popup assumptions were superseded by the November 2026
+> aggregate `Package.Status` contracts and unified action row. For active UI
+> contracts, use [Data sources](../src/features/dataSources/README.md),
+> [filters](../src/features/map/filters/README.md) and
+> [popups](../src/features/map/popups/README.md).
+
 ## Authority and scope
 
 Implementation baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
