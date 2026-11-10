@@ -109,7 +109,8 @@ test("Pipeline Workspace checkboxes appear inline, auto-match and preview revers
     row = createPipelineRow({ id: "p", name: "Pipeline" }, session, {
       listWorkspaces: async () => workspaceCatalogue,
     });
-    const { editor, list, derived } = nodes(row);
+    const { editor, list, derived, closeComment } = nodes(row);
+    assert.equal(closeComment.textContent, "OK");
     const unsubscribe = session.subscribe(row.update);
     await flush();
     assert.equal(editor.hidden, false);

@@ -50,12 +50,13 @@ function fakeDom() {
     addEventListener(type, handler) {
       this.listeners ??= new Map();
       this.listeners.set(type, handler);
+      if (type === "click") (this.clickListeners ??= []).push(handler);
     }
     removeEventListener(type) {
       this.listeners?.delete(type);
     }
     click() {
-      this.listeners?.get("click")?.({ target: this });
+      for (const handler of this.clickListeners ?? []) handler({ target: this });
     }
     append(...nodes) {
       for (const node of nodes) {
@@ -159,7 +160,7 @@ async function flush() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("Switching Package retains the map and bindings until the next Package is ready", async () => {
+test("Switching Package clears displayed details and bindings while retaining committed map state", async () => {
   const dom = fakeDom();
   const nextPackage = deferred();
   const nextBindings = deferred();
@@ -202,14 +203,18 @@ test("Switching Package retains the map and bindings until the next Package is r
     assert.equal(dom.get("work-streams").children.length, 1);
     assert.equal(dom.get("map-empty").hidden, true);
     const before = [...mapSelections];
-    const visiblePipelines = [...dom.get("work-streams").children];
-
+    globalThis.document.activeElement = dom.get("work-streams").children[0];
     const pending = page.selectPackage("B");
     await flush();
+    assert.equal(globalThis.document.activeElement, dom.get("search"));
     assert.match(dom.get("selection-status").textContent, /Loading Package/);
     assert.equal(dom.get("map-empty").hidden, true);
     assert.deepEqual(mapSelections, before);
-    assert.deepEqual(dom.get("work-streams").children, visiblePipelines);
+    assert.deepEqual(dom.get("work-streams").children, []);
+    assert.equal(dom.get("package-name").textContent, "");
+    assert.deepEqual(dom.get("saved-bindings").children, []);
+    assert.deepEqual(dom.get("information").children, []);
+    assert.match(dom.get("work-stream-status").textContent, /Loading Pipelines/);
     assert.equal(dom.get("work-streams").inert, true);
 
     nextPackage.resolve(packageData("B"));
@@ -219,7 +224,7 @@ test("Switching Package retains the map and bindings until the next Package is r
     assert.equal(await pending, true);
     assert.deepEqual(mapSelections, [...before, "B"]);
     assert.match(dom.get("work-stream-status").textContent, /Loading Pipelines/);
-    assert.deepEqual(dom.get("work-streams").children, visiblePipelines);
+    assert.deepEqual(dom.get("work-streams").children, []);
     assert.equal(dom.get("work-streams").inert, true);
 
     nextPipelines.resolve({ items: [{ id: "ENC", name: "ENC" }], total: 1 });
@@ -239,6 +244,7 @@ test("Switching Package retains the map and bindings until the next Package is r
 test("Failed Package selection keeps the previous bindings and offers selection Retry", async () => {
   const dom = fakeDom();
   const mapSelections = [];
+  const firstFailure = deferred();
   let attempts = 0;
   const services = {
     source: "live",
@@ -246,7 +252,7 @@ test("Failed Package selection keeps the previous bindings and offers selection 
     features: {
       search: async () => ({ items: [], page: 0, pageSize: 25, total: 0 }),
       get: async (id) => {
-        if (id === "B" && ++attempts === 1) throw new Error("Package unavailable");
+        if (id === "B" && ++attempts === 1) return firstFailure.promise;
         return packageData(id);
       },
     },
@@ -272,9 +278,18 @@ test("Failed Package selection keeps the previous bindings and offers selection 
     const previousRows = [...dom.get("work-streams").children];
     const previousMap = [...mapSelections];
 
-    assert.equal(await page.selectPackage("B"), false);
+    const pending = page.selectPackage("B");
+    await flush();
+    assert.equal(dom.get("package-name").textContent, "");
+    assert.deepEqual(dom.get("saved-bindings").children, []);
+    assert.deepEqual(dom.get("work-streams").children, []);
+    assert.equal(dom.get("work-streams").inert, true);
+
+    firstFailure.reject(new Error("Package unavailable"));
+    assert.equal(await pending, false);
     await flush();
     assert.match(dom.get("selection-status").textContent, /Package unavailable/);
+    assert.equal(dom.get("package-name").textContent, "A");
     assert.equal(dom.get("selection-retry").hidden, false);
     assert.equal(dom.get("map-empty").hidden, true);
     assert.deepEqual(dom.get("work-streams").children, previousRows);
@@ -959,6 +974,53 @@ test("assignment map Retry uses the same MapView top-right stack as basemap and 
     retry.click();
     assert.deepEqual(calls[1], ["remove", 1, retry]);
     assert.deepEqual(calls[2], ["add", 2, retry, { position: "top-right", index: 2 }]);
+  } finally {
+    page?.destroy();
+    dom.restore();
+  }
+});
+
+test("Last refreshed timestamp reports only successful live Package list reads", async () => {
+  const dom = fakeDom();
+  let failNext = false;
+  let searchCalls = 0;
+  const services = {
+    source: "live",
+    categories: async () => [],
+    features: {
+      async search() {
+        searchCalls++;
+        if (failNext) {
+          failNext = false;
+          throw new Error("Package list unavailable");
+        }
+        return { items: [], page: 0, pageSize: 25, total: 0 };
+      },
+    },
+    assignments: {},
+    workStreams: {},
+  };
+  let page;
+  try {
+    page = createAssignmentPage({
+      services,
+      createMap: () => ({ view: null, destroy() {} }),
+      runtimeConfig: { sourceMode: "live" },
+    });
+    const refreshed = dom.get("feature-last-refreshed");
+    assert.equal(refreshed.hidden, false);
+    assert.equal(refreshed.textContent, "Last refreshed: —");
+    await flush();
+    assert.match(refreshed.textContent, /^Last refreshed: /);
+    assert.ok(Number.isFinite(Date.parse(refreshed.dateTime)));
+    const firstTime = refreshed.dateTime;
+
+    failNext = true;
+    dom.get("feature-retry").click();
+    await flush();
+    assert.equal(searchCalls, 2);
+    assert.match(dom.get("list-status").textContent, /Package list unavailable/);
+    assert.equal(refreshed.dateTime, firstTime);
   } finally {
     page?.destroy();
     dom.restore();

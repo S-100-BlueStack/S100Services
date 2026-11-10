@@ -19,6 +19,9 @@ class Element extends EventTarget {
   append(...children) {
     this.children.push(...children);
   }
+  contains(node) {
+    return this === node || this.children.some((child) => child.contains?.(node));
+  }
 }
 
 function deferred() {
@@ -43,6 +46,7 @@ function fixture({ initialPath = "/" } = {}) {
     },
   };
   const windowRef = new EventTarget();
+  const documentRef = { title: "", activeElement: null };
   const button = new Element();
   const home = new Element();
   const lastUpdated = new Element();
@@ -75,6 +79,7 @@ function fixture({ initialPath = "/" } = {}) {
     locationRef,
     historyRef,
     windowRef,
+    documentRef,
     navbar,
     shellElement,
     jobsWorkflowHost,
@@ -93,6 +98,7 @@ function fixture({ initialPath = "/" } = {}) {
     button,
     home,
     jobsWorkflowHost,
+    documentRef,
     locationRef,
     historyChanges,
     getJobsOpens: () => jobsOpens,
@@ -266,4 +272,39 @@ test("A superseded deep-link selection cannot accept an older URL", async () => 
   assert.equal(f.jobsWorkflowHost.hidden, true);
   assert.equal(f.page.element.hidden, false);
   f.navigation.destroy();
+});
+
+test("Direct assignment URLs do not focus their navbar link on initialization", async () => {
+  const f = fixture({ initialPath: "/assignments" });
+  try {
+    await flush();
+    assert.equal(f.button.attributes.get("aria-current"), "page");
+    assert.equal(f.button.focusCount, 0);
+    assert.equal(f.home.focusCount, 0);
+  } finally {
+    f.navigation.destroy();
+  }
+});
+
+test("Navigation moves focus only when the active element is inside the hidden workflow", async () => {
+  const f = fixture();
+  try {
+    const oldJobsControl = new Element();
+    f.jobsWorkflowHost.append(oldJobsControl);
+    f.documentRef.activeElement = oldJobsControl;
+    assert.equal(await f.navigation.openAssignment(), true);
+    assert.equal(f.button.focusCount, 1);
+
+    f.documentRef.activeElement = f.button;
+    assert.equal(await f.navigation.openJobs(), true);
+    assert.equal(f.home.focusCount, 0);
+
+    f.documentRef.activeElement = f.jobsWorkflowHost;
+    assert.equal(await f.navigation.openAssignment(), true);
+    f.documentRef.activeElement = f.page.element;
+    assert.equal(await f.navigation.openJobs(), true);
+    assert.equal(f.home.focusCount, 1);
+  } finally {
+    f.navigation.destroy();
+  }
 });

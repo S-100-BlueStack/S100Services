@@ -39,7 +39,7 @@ export function createPipelineRow(pipeline, session, { listWorkspaces } = {}) {
   commentInput.setAttribute("aria-label", `Binding comment for ${pipeline.name}`);
   const closeComment = document.createElement("button");
   closeComment.type = "button";
-  closeComment.textContent = "Close";
+  closeComment.textContent = "OK";
   commentEditor.append(commentInput, closeComment);
 
   const derived = document.createElement("p");

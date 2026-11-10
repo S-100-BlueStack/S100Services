@@ -45,6 +45,17 @@ test("navbar Jobs control and overlay retain matching accessible identifiers", (
   assert.match(read("src/app/ui/createMapWorkspace.js"), /calcite-action-bar/);
 });
 
+test("Notifications precedes Preferences in the shared navbar for both workflows", () => {
+  const navbar = read("public/components/navbar.html");
+  const notificationsPosition = navbar.indexOf('id="test-notice-button"');
+  const preferencesPosition = navbar.indexOf('id="preferences-button"');
+
+  assert.ok(notificationsPosition > 0);
+  assert.ok(preferencesPosition > notificationsPosition);
+  assert.equal(navbar.match(/id="test-notice-button"/g)?.length, 1);
+  assert.equal(navbar.match(/id="preferences-button"/g)?.length, 1);
+});
+
 test("Jobs events keep matching producers and consumers after namespacing", () => {
   const eventNames = (source) => [...new Set(source.match(/data-catalogue:[a-z-]+/g))].sort();
   const produced = eventNames(read("src/features/jobs/ui/jobList.js"));

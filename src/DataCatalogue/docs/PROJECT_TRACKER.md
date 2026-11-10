@@ -1,3 +1,37 @@
+## DC-UX-03A — Navbar, assignment loading and refresh feedback (candidate, 2026-11-10)
+
+Authoritative commit-pinned baseline: `fc75611c06b0d9e531dc5a68c136bb90fce3450a`.
+The exported handoff contained 273 source files with verified SHA-256 values.
+Status: **frontend candidate; local `npm run check` and browser acceptance pending**.
+
+- The shared navbar places Notifications before Preferences in the main-map and
+  Package assignment workflows. No separate navbar, panel instance, or state is introduced.
+- Direct `/assignments` and Package deep links no longer programmatically focus the
+  route link during initial navigation. When hiding a workflow that currently owns
+  keyboard focus, navigation still moves focus to the visible route control.
+  The native `:focus-visible` affordance is preserved.
+- The unsaved-draft dialog body aligns with its title; Save, Discard and Cancel
+  semantics are unchanged. The informational Pipeline comment dismissal uses `OK`.
+- While a new Package and its bindings are loading, Package details, saved-binding
+  summaries and Pipeline controls from the previous selection are not displayed.
+  The committed session and map context remain retained internally for the
+  existing stale-response, failure recovery and draft guards. A failed selection
+  may restore the prior committed content and offer Retry; no extra network
+  requests or fake persistence are introduced.
+- The **Package assignment Packages list** displays `Last refreshed` directly
+  beside its existing Refresh action. This is the browser's time of the last
+  _successful, current_ Package list read, not a backend modification timestamp.
+  A failed or superseded read does not advance the time. The mock prototype hides
+  this indicator. Jobs/main-map refresh behavior is unchanged.
+- No backend contracts, authentication, packages, ArcGIS layers, preferences
+  persistence, dependencies, SDK versions, routing or unrelated panel designs change.
+
+See [DC_UX_03A_VALIDATION.md](DC_UX_03A_VALIDATION.md) for focused tests and manual
+browser acceptance. The remaining design, map preview and performance feedback
+from the 2026-11-10 walkthrough belongs to later tasks, not this candidate.
+
+---
+
 ## DC-CANCEL-01 — Expected HTTP client cancellation handling (candidate, 2026-11-10)
 
 Authoritative commit-pinned baseline: `f10d9fca276aab93fff645cf0d181efac3a5ef72`

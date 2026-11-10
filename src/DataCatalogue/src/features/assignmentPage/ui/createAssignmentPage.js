@@ -46,7 +46,7 @@ export function createAssignmentPage({
         <p data-category-status role="status"></p>
         <p data-list-status role="status"></p>
         <div class="dc-assignment-scroll" data-features></div>
-        <footer class="dc-assignment-toolbar"><button type="button" data-feature-prev>Previous</button><span data-feature-page></span><button type="button" data-feature-next>Next</button><button class="dc-assignment-icon-action dc-feature-list-refresh" type="button" data-feature-retry aria-label="Refresh Packages" title="Refresh Packages"><calcite-icon icon="refresh" scale="s" aria-hidden="true"></calcite-icon></button></footer>
+        <footer class="dc-assignment-toolbar"><button type="button" data-feature-prev>Previous</button><span data-feature-page></span><button type="button" data-feature-next>Next</button><span class="dc-feature-list-refresh-group"><button class="dc-assignment-icon-action dc-feature-list-refresh" type="button" data-feature-retry aria-label="Refresh Packages" title="Refresh Packages"><calcite-icon icon="refresh" scale="s" aria-hidden="true"></calcite-icon></button><time class="dc-feature-list-last-refreshed" data-feature-last-refreshed></time></span></footer>
       </section>
       <section class="dc-assignment-panel dc-work-stream-panel" data-work-stream-panel aria-label="Work stream assignments">
         <div class="dc-assignment-toolbar dc-assignment-panel-toolbar">
@@ -99,6 +99,8 @@ export function createAssignmentPage({
   if (live) element.className += " dc-assignment-page--live";
 
   const get = createRequiredTargetGetter((name) => element.querySelector(`[data-${name}]`));
+  get("feature-last-refreshed").textContent = "Last refreshed: —";
+  get("feature-last-refreshed").hidden = !live;
   if (live) {
     get("search").placeholder = "Search this page";
     get("search").setAttribute("aria-label", "Search Packages on this page");
@@ -237,6 +239,19 @@ export function createAssignmentPage({
       // List pagination must never fan out into one bindings request per Package.
       // Previously inspected Package summaries remain available across pages.
       renderFeatureRows(result);
+      if (live) {
+        // A response is only considered refreshed after its accepted page renders.
+        const refreshed = new Date();
+        const display = get("feature-last-refreshed");
+        display.dateTime = refreshed.toISOString();
+        display.textContent = `Last refreshed: ${refreshed.toLocaleString(undefined, {
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+        display.title = `Package list fetched at ${refreshed.toLocaleString()}. This is not the server's modification time.`;
+      }
     } catch (error) {
       if (isCurrent()) {
         loadedPage = null;
@@ -572,7 +587,7 @@ export function createAssignmentPage({
     get("selection-retry").hidden = !state.selectionError || !requestedId;
     get("work-stream-panel").setAttribute(
       "aria-label",
-      state.feature
+      state.feature && !state.loading
         ? `${assignmentName} assignments for ${state.feature.name}`
         : `${assignmentName} assignments`
     );
@@ -602,10 +617,34 @@ export function createAssignmentPage({
 
     const id = state.feature?.id ?? null;
     if (state.loading) {
+      // The session retains the previous committed Package during a selection request,
+      // but its details and bindings must not look like the pending Package's data.
+      const focused = document.activeElement;
+      if (get("information").contains(focused) || get("work-streams").contains(focused)) {
+        get("search").focus({ preventScroll: true });
+      }
+      get("package-name").textContent = "";
+      get("saved-bindings").replaceChildren();
+      get("information").replaceChildren();
+      get("work-streams").replaceChildren();
+      get("work-stream-status").textContent = `Loading ${assignmentName}s…`;
+      get("work-stream-retry").hidden = true;
       if (workStreamsRequestPending) lastScopeKey = "";
       workStreamRequests.invalidate();
       workStreamsRequestPending = false;
       setWorkStreamsBusy(true);
+    } else if (state.selectionError && state.feature) {
+      // A failed selection leaves the previous committed context intact and retryable.
+      renderInformation(state.feature);
+      if (rowsFeatureId === state.feature.id) {
+        reconcileRows(
+          get("work-streams"),
+          rows.map((row) => row.element),
+          get("work-stream-mode")
+        );
+        get("work-stream-status").textContent = "";
+      }
+      setWorkStreamsBusy(false);
     }
     const selectionChanged = displayedId !== id;
     if (selectionChanged) {

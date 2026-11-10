@@ -83,8 +83,12 @@ export function createWorkflowNavigation({
   function commitVisibility(show, openJobs) {
     if (show === active) return;
 
-    // Move keyboard focus before hiding the currently active workflow.
-    (show ? button : home).focus({ preventScroll: true });
+    // Only relocate focus when its current host is about to become hidden.
+    // Programmatic focus on a direct URL load creates an unwanted visible outline.
+    const hiddenHost = show ? jobsWorkflowHost : page?.element;
+    if (hiddenHost?.contains?.(documentRef?.activeElement)) {
+      (show ? button : home).focus({ preventScroll: true });
+    }
     active = show;
     jobsWorkflowHost.hidden = show;
     syncJobsButtonState();

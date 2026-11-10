@@ -10,6 +10,7 @@ export const REQUIRED_ASSIGNMENT_PAGE_TARGETS = Object.freeze([
   "feature-page",
   "feature-next",
   "feature-retry",
+  "feature-last-refreshed",
   "package-name",
   "saved-bindings",
   "selection-status",

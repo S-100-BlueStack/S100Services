@@ -334,6 +334,10 @@
   margin: 0;
   font-weight: 650;
 }
+.dc-assignment-page .dc-assignment-dialog > p {
+  /* The assignment page's panel paragraph inset must not apply to a modal. */
+  margin: 8px 0 14px;
+}
 .dc-assignment-dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
@@ -561,8 +565,24 @@
   background: transparent;
   color: var(--calcite-color-brand, #007ac2);
 }
+.dc-feature-list-refresh-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+}
 .dc-feature-list-refresh {
   margin-left: 0;
+}
+.dc-feature-list-last-refreshed {
+  margin-left: 2px;
+  color: var(--dc-text-muted);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dc-feature-list-last-refreshed[hidden] {
+  display: none;
 }
 .dc-assignment-page button.dc-binding-save {
   width: 34px;
