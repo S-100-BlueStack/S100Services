@@ -61,7 +61,8 @@
 .confirm-popover__divider {
   height: 3px;
   margin: 8px 0;
-  background: #bbb;
+  border: 0;
+  background: var(--pc-border);
 }
 
 .confirm-popover__message {

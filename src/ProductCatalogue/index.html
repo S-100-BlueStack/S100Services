@@ -37,6 +37,7 @@
           <calcite-action
             slot="header-actions-end"
             icon="x"
+            text="Close notifications"
             id="close-notice-panel"
           ></calcite-action>
 
@@ -46,9 +47,14 @@
     </calcite-shell>
 
     <div id="confirm-popover" class="confirm-popover" hidden>
-      <div class="confirm-popover__card">
+      <div
+        class="confirm-popover__card"
+        role="dialog"
+        aria-labelledby="confirm-popover-title"
+        aria-describedby="confirm-popover-message"
+      >
         <div class="confirm-popover__title" id="confirm-popover-title">Confirm action</div>
-        <hr class="solid" style="border-top: 3px solid #bbb; margin: 8px !important" />
+        <hr class="confirm-popover__divider" />
         <div class="confirm-popover__message" id="confirm-popover-message">Are you sure?</div>
 
         <div class="confirm-popover__actions">
