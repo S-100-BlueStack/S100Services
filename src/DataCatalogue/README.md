@@ -56,6 +56,30 @@ needed after extraction, review `npm run format` output before rerunning `npm ru
 This environment had no project dependencies; see the exact executed checks in the delivery
 report and [local verification instructions](docs/DC_API_LOCAL_VERIFICATION.md).
 
+## Branding and IIS virtual directories
+
+DataCatalogue supports the same browser-visible branding environment variables as
+ProductCatalogue. For an IIS `/branding` virtual directory, set these in the
+DataCatalogue `.env.local` (or approved build environment):
+
+```dotenv
+VITE_APP_LOGO_URL=/branding/Logo.png
+VITE_APP_LOGO_ALT=Geodatastyrelsen
+VITE_APP_FAVICON_URL=/branding/Favicon.png
+```
+
+The shared navbar applies the logo and alt text to both the main map and Package
+assignment. The page icon is set in `index.html` and updated by application startup.
+With no overrides, both use the existing `/images/logo96.png` asset and the navbar
+keeps its existing `GST` alternative text. A failed custom navbar logo falls back
+to the bundled asset; verify that the favicon URL actually resolves in IIS.
+
+`VITE_*` values are included in the Vite build, not fetched dynamically from IIS.
+Restart the local dev server or rebuild and redeploy the frontend when changing
+these values. IIS must serve the virtual directory at the configured root path;
+the Vite development server does not provide the IIS virtual directory. These
+paths must not contain secrets or authentication tokens.
+
 ## Documentation
 
 - [Project tracker](docs/PROJECT_TRACKER.md): current candidate status and historical work.

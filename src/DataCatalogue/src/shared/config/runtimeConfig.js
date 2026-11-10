@@ -9,6 +9,9 @@ export function getRuntimeConfig() {
     arcgisPortalUrl: readStringEnv("VITE_ARCGIS_PORTAL_URL"),
     arcgisBasemapApiKey: readStringEnv("VITE_ARCGIS_BASEMAP_API_KEY"),
     aoiFeatureServiceUrl: readStringEnv("VITE_AOI_FEATURE_SERVICE_URL"),
+    appLogoUrl: readStringEnv("VITE_APP_LOGO_URL"),
+    appLogoAlt: readStringEnv("VITE_APP_LOGO_ALT"),
+    appFaviconUrl: readStringEnv("VITE_APP_FAVICON_URL"),
   };
 }
 

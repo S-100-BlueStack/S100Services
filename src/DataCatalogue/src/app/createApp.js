@@ -28,6 +28,7 @@ import { createJobsOverlay } from "./ui/createJobsOverlay.js";
 import { createJobsPanelActions } from "./ui/createJobsPanelActions.js";
 import { createMapWorkspace } from "./ui/createMapWorkspace.js";
 import { createNavbarController } from "./ui/createNavbarController.js";
+import { applyAppBranding } from "./ui/appBranding.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
@@ -85,6 +86,8 @@ export async function createApp(rootElement) {
       });
     },
   });
+
+  applyAppBranding({ navbarElement: navbar.element, config: runtimeConfig });
 
   const preferencesPanel = createPreferencesPanel({
     navbarElement: navbar.element,

@@ -1,3 +1,24 @@
+## DC-BRAND-01 — Configurable DataCatalogue branding (candidate, 2026-11-10)
+
+Authoritative source: commit-pinned `2de4635d23b26e112d998919ede71a5e7812e119`.
+The export includes committed DataCatalogue files only; unrelated dirty ProductCatalogue
+working-tree changes were excluded. Local validation and acceptance are pending.
+
+- `VITE_APP_LOGO_URL`, `VITE_APP_LOGO_ALT` and `VITE_APP_FAVICON_URL` configure
+  shared main-map/assignment navbar branding and the browser icon through existing
+  Vite environment variables. Root-relative `/branding/...` paths support IIS
+  virtual-directory hosting without changes to API contracts or IIS configuration.
+- Missing or invalid overrides use the bundled `/images/logo96.png` logo/icon;
+  a failed custom navbar logo falls back to this asset after its load error.
+- Branding is applied once during app composition; it does not cause API requests,
+  alter workflow navigation, ArcGIS map lifecycle, preferences, or Package state.
+- No SDK/dependency upgrade is part of this focused branding delivery. Compatibility
+  migration is separately scoped as DC-SDK-01.
+
+See [README.md](../README.md) for setup and verification requirements.
+
+---
+
 ## DC-UX-03A — Navbar, assignment loading and refresh feedback (candidate, 2026-11-10)
 
 Authoritative commit-pinned baseline: `fc75611c06b0d9e531dc5a68c136bb90fce3450a`.
