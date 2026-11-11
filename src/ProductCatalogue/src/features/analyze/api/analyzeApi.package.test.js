@@ -31,6 +31,9 @@ function harness({
   missingGeometry = false,
   contradictory = false,
   packageStatus = 99,
+  aoiVersions = false,
+  omitDetailVersions = false,
+  memberDetailVersions = false,
 } = {}) {
   const registry = createDataSourceRegistry();
   const exactCalls = [];
@@ -47,7 +50,30 @@ function harness({
         data: {
           Data: {
             Geometry: missingGeometry ? null : geometry,
-            Attributes: { DatasetName: name, ProductSpecification: index ? "S57" : "S101" },
+            Attributes: {
+              DatasetName: name,
+              ProductSpecification: index ? "S57" : "S101",
+              ...(aoiVersions
+                ? {
+                    Package: {
+                      Status: packageStatus,
+                      HasActivePackage: true,
+                      S101: {
+                        DatasetName: names[0],
+                        CurrentEdition: 11,
+                        CurrentUpdate: 12,
+                        Status: 8,
+                      },
+                      S57: {
+                        DatasetName: names[1],
+                        CurrentEdition: 21,
+                        CurrentUpdate: 22,
+                        Status: 11,
+                      },
+                    },
+                  }
+                : {}),
+            },
           },
         },
       };
@@ -56,13 +82,23 @@ function harness({
   const payload = (name) => ({
     Name: name,
     Status: name === names[0] ? 8 : 11,
-    Edition: name === names[0] ? 3 : 7,
-    Update: name === names[0] ? 2 : 4,
-    S101: missing === "s101" ? null : { Name: names[0] },
+    ...(omitDetailVersions === true || (omitDetailVersions === "secondary" && name === names[1])
+      ? {}
+      : { Edition: name === names[0] ? 3 : 7, Update: name === names[0] ? 2 : 4 }),
+    S101:
+      missing === "s101"
+        ? null
+        : {
+            Name: names[0],
+            ...(memberDetailVersions ? { Edition: 31, Update: 0 } : {}),
+          },
     S57:
       missing === "s57"
         ? null
-        : { Name: contradictory && name === names[1] ? "Different legacy" : names[1] },
+        : {
+            Name: contradictory && name === names[1] ? "Different legacy" : names[1],
+            ...(memberDetailVersions ? { Edition: 41, Update: 5 } : {}),
+          },
     Package: { Status: packageStatus },
   });
   const fetchProduct = async (name) => {
@@ -270,4 +306,63 @@ test("Analyze retains backend Package.Status from the existing detail read", asy
   assert.equal(h.getCalls.filter((path) => path.includes("/artifacts/history")).length, 2);
   const [unknown] = await fetchAnalyzeProducts([names[0]], harness({ packageStatus: 999 }));
   assert.equal(unknown.packageStatus, undefined);
+});
+
+test("Analyze reads exact AOI member versions only when Product detail versions are absent", async () => {
+  const missing = harness({ aoiVersions: true, omitDetailVersions: true });
+  const [result] = await fetchAnalyzeProducts([names[1]], missing);
+  assert.equal(result.workspaceLoadState, "loaded", result.loadError);
+  assert.deepEqual(
+    result.members.map((member) => member.edition),
+    [11, 21]
+  );
+  assert.deepEqual(
+    result.members.map((member) => member.update),
+    [12, 22]
+  );
+
+  const partial = harness({ aoiVersions: true, omitDetailVersions: "secondary" });
+  const [mixed] = await fetchAnalyzeProducts([names[0]], partial);
+  assert.equal(mixed.workspaceLoadState, "loaded", mixed.loadError);
+  assert.deepEqual(
+    mixed.members.map((member) => member.edition),
+    [3, 21]
+  );
+  assert.deepEqual(
+    mixed.members.map((member) => member.update),
+    [2, 22]
+  );
+});
+
+test("Analyze retains member-specific Product-detail versions when top-level versions are absent", async () => {
+  const h = harness({ memberDetailVersions: true, omitDetailVersions: true });
+  const [product] = await fetchAnalyzeProducts([names[1]], h);
+  assert.equal(product.workspaceLoadState, "loaded", product.loadError);
+  assert.deepEqual(
+    product.members.map((member) => member.edition),
+    [31, 41]
+  );
+  assert.deepEqual(
+    product.members.map((member) => member.update),
+    [0, 5]
+  );
+  assert.equal(h.getCalls.filter((path) => path.includes("/artifacts/history")).length, 2);
+});
+
+test("Analyze prefers own top-level version, then own nested detail, then own AOI version", async () => {
+  const h = harness({
+    memberDetailVersions: true,
+    omitDetailVersions: "secondary",
+    aoiVersions: true,
+  });
+  const [product] = await fetchAnalyzeProducts([names[0]], h);
+  assert.equal(product.workspaceLoadState, "loaded", product.loadError);
+  assert.deepEqual(
+    product.members.map((member) => member.edition),
+    [3, 41]
+  );
+  assert.deepEqual(
+    product.members.map((member) => member.update),
+    [2, 5]
+  );
 });

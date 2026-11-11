@@ -347,7 +347,7 @@ test("startup and mapped-member add own one canonical item, one graphic, and one
   assert.equal(h.page.products.length, 1);
   assert.deepEqual(h.state.route, [names[0]]);
   assert.equal(h.state.monitors, 1);
-  assert.equal(h.state.loads, 2);
+  assert.equal(h.state.loads, 1, "Adding an alias must reuse its selected package");
   await h.event("pc-analyze-dataset-toggle", { id: names[0].toLowerCase(), enabled: false });
   assert.equal(h.map.layers.length, 0);
   await h.event("pc-analyze-dataset-toggle", { id: names[0].toLowerCase(), enabled: true });
@@ -854,4 +854,78 @@ test("direct Analyze navigation waits for all initial package and ordinary layer
   assert.equal(h.state.readinessCalls.length, 1);
   assert.equal(h.state.readinessCalls[0].length, 2);
   assert.equal(h.state.loaderSessions.length, 1);
+});
+
+test("adding an ordinary Product retains package metadata, History and map layers", async (t) => {
+  const h = await harness(t, [names[0]]);
+  const oldPackage = h.page.products[0];
+  const oldPackageLayer = h.map.layers[0];
+  const oldLoads = h.state.loads;
+  const oldHistory = oldPackage.members.map((member) => member.history);
+  await h.event("pc-analyze-dataset-add", { datasetName: ordinaryName });
+  assert.equal(h.state.loads, oldLoads + 1, "Only the newly selected work unit is fetched");
+  assert.equal(h.page.products[0], oldPackage);
+  assert.deepEqual(
+    h.page.products[0].members.map((member) => member.history),
+    oldHistory
+  );
+  assert.ok(h.page.layers.includes(oldPackageLayer));
+  assert.equal(h.state.removed.includes(oldPackageLayer), false);
+  assert.deepEqual(
+    h.page.products.map((product) => product.datasetName),
+    [names[0], ordinaryName]
+  );
+});
+
+test("disabling and removing one Product do not reload surviving work units", async (t) => {
+  const h = await harness(t, [names[0], ordinaryName]);
+  const packageLayer = h.map.layers.find((layer) => layer.appAnalyzeWorkUnitKey);
+  const oldLoads = h.state.loads;
+  await h.event("pc-analyze-dataset-toggle", { id: ordinaryName.toLowerCase(), enabled: false });
+  assert.equal(h.state.loads, oldLoads);
+  assert.ok(h.page.layers.includes(packageLayer));
+  assert.deepEqual(
+    h.page.products.map((product) => product.datasetName),
+    [names[0]]
+  );
+  await h.event("pc-analyze-dataset-toggle", { id: ordinaryName.toLowerCase(), enabled: true });
+  assert.equal(h.state.loads, oldLoads + 1, "Re-enabled Product alone is fetched");
+  assert.ok(h.page.layers.includes(packageLayer));
+  await h.event("pc-analyze-dataset-remove", { id: names[0].toLowerCase() });
+  assert.equal(h.state.loads, oldLoads + 1);
+  assert.deepEqual(
+    h.page.products.map((product) => product.datasetName),
+    [ordinaryName]
+  );
+  assert.equal(h.page.layers.includes(packageLayer), false);
+});
+
+test("manual Analyze refresh still reloads all enabled Products", async (t) => {
+  const h = await harness(t, [names[0], ordinaryName]);
+  const initialLoads = h.state.loads;
+  await h.event("pc-analyze-refresh", {});
+  assert.equal(h.state.loads, initialLoads + 1);
+  assert.equal(h.page.products.length, 2);
+});
+
+test("superseded selection cannot publish an older Product or orphan a layer", async (t) => {
+  const h = await harness(t, [names[0]]);
+  const original = h.map.layers[0];
+  const gate = { started: deferred(), done: deferred() };
+  h.state.layerGate = gate;
+  const earlier = h.event("pc-analyze-dataset-add", { datasetName: ordinaryName });
+  await gate.started.promise;
+  try {
+    await h.event("pc-analyze-dataset-remove", { id: ordinaryName.toLowerCase() });
+  } finally {
+    gate.done.resolve();
+  }
+  await earlier;
+  assert.deepEqual(
+    h.page.products.map((product) => product.datasetName),
+    [names[0]]
+  );
+  assert.deepEqual(h.page.layers, [original]);
+  assert.deepEqual(h.map.layers, [original]);
+  assert.equal(h.state.removed.includes(original), false);
 });

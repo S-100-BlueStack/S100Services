@@ -1,4 +1,5 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
+import { fetchDashboardValidationReports } from "../services/dashboardValidationReports.js";
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
@@ -1430,10 +1431,12 @@ function createActivityLinks(activity) {
     createReportLinkGroup({
       label: "IC-ENC",
       reports: activity.links.icEncReports,
+      datasetName: activity.datasetName,
     }),
     createReportLinkGroup({
       label: "Validation",
       reports: activity.links.internalValidationReports,
+      datasetName: activity.datasetName,
     })
   );
 
@@ -1841,32 +1844,95 @@ function createPlaceholderLink({ label, enabled, title }) {
   return button;
 }
 
-function createReportLinkGroup({ label, reports }) {
+function createReportLinkGroup({ label, reports, datasetName }) {
   const normalizedReports = Array.isArray(reports) ? reports : [];
+  if (normalizedReports.length === 0) return createDisabledLink(label);
 
-  if (normalizedReports.length === 0) {
-    return createDisabledLink(label);
-  }
-
-  const firstReportWithUrl = normalizedReports.find((report) => report.url);
+  const linkedReports = normalizedReports.filter((report) => report.url);
   const linkLabel = normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
-
-  if (firstReportWithUrl?.url) {
-    const link = document.createElement("a");
-    link.className = "pc-dashboard-link-button";
-    link.href = firstReportWithUrl.url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = linkLabel;
-    link.title = firstReportWithUrl.title || label;
-    return link;
+  if (linkedReports.length === 1 && normalizedReports.length === 1) {
+    return createDashboardReportLink(linkedReports[0], label);
   }
 
-  return createPlaceholderLink({
-    label: linkLabel,
-    enabled: true,
-    title: `${label} report metadata is available, but no report URL endpoint exists yet.`,
+  if (linkedReports.length > 0) {
+    return createDashboardReportDisclosure(linkLabel, (content) => {
+      content.replaceChildren(
+        ...linkedReports.map((report) => createDashboardReportLink(report, report.title || label))
+      );
+      if (linkedReports.length !== normalizedReports.length) {
+        const note = document.createElement("span");
+        note.textContent = "Some report links are unavailable.";
+        content.appendChild(note);
+      }
+    });
+  }
+
+  if (label !== "Validation" || !datasetName) {
+    return createPlaceholderLink({
+      label: linkLabel,
+      enabled: true,
+      title: `${label} report metadata is available, but no report download URL was supplied.`,
+    });
+  }
+
+  return createDashboardReportDisclosure(linkLabel, async (content, isCurrent) => {
+    const { reports, hasUnattributedArtifacts } =
+      await fetchDashboardValidationReports(datasetName);
+    if (!isCurrent()) return;
+    content.replaceChildren();
+    if (reports.length === 0) {
+      content.textContent = "No downloadable validation files were found for this Product.";
+    } else {
+      content.append(...reports.map((report) => createDashboardReportLink(report, report.title)));
+    }
+    if (hasUnattributedArtifacts) {
+      const note = document.createElement("span");
+      note.textContent = "Files without verified Product ownership were excluded.";
+      content.appendChild(note);
+    }
   });
+}
+
+function createDashboardReportLink(report, label) {
+  const link = document.createElement("a");
+  link.className = "pc-dashboard-link-button";
+  link.href = report.url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = label;
+  link.title = report.title || label;
+  return link;
+}
+
+function createDashboardReportDisclosure(label, loadContent) {
+  const details = document.createElement("details");
+  details.className = "pc-dashboard-report-disclosure";
+  const summary = document.createElement("summary");
+  summary.className = "pc-dashboard-link-button";
+  summary.textContent = label;
+  const content = document.createElement("div");
+  content.className = "pc-dashboard-report-disclosure__content";
+  details.append(summary, content);
+
+  let requested = false;
+  details.addEventListener("toggle", () => {
+    if (!details.open || requested) return;
+    requested = true;
+    content.textContent = "Loading available reports...";
+    const isCurrent = () => details.isConnected && details.open;
+    void Promise.resolve()
+      .then(() => loadContent(content, isCurrent))
+      .then(() => {
+        if (!isCurrent()) requested = false;
+      })
+      .catch((error) => {
+        requested = false;
+        if (!isCurrent()) return;
+        content.textContent =
+          error instanceof Error ? error.message : "Validation reports could not be loaded.";
+      });
+  });
+  return details;
 }
 
 function createDisabledLink(label) {

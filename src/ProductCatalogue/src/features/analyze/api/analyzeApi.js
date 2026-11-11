@@ -88,7 +88,26 @@ async function fetchResolvedAnalyzeProduct(datasetName, resolution, get, reuseDe
             resolution.workUnit
           );
           if (product.workspaceLoadState !== "loaded") throw new Error(product.loadError);
-          return { ...product, memberKey: member.key, memberLabel: member.label };
+          const aoIMember =
+            representative.data?.attributes?.workUnitMetadata?.members?.[member.key];
+          // The targeted AOI contains backend-owned CurrentEdition/CurrentUpdate for
+          // each declared member. Use them only when that exact member's detail
+          // does not expose a value; never borrow another member's version.
+          const matchingAoIMember =
+            aoIMember?.datasetName?.trim().toUpperCase() === member.datasetName.toUpperCase()
+              ? aoIMember
+              : null;
+          return {
+            ...product,
+            edition: hasVersionValue(product.edition)
+              ? product.edition
+              : (matchingAoIMember?.edition ?? product.edition),
+            update: hasVersionValue(product.update)
+              ? product.update
+              : (matchingAoIMember?.update ?? product.update),
+            memberKey: member.key,
+            memberLabel: member.label,
+          };
         })
       );
       const primary = members.find(
@@ -353,6 +372,15 @@ function readFirstDefined(source, keys) {
   return undefined;
 }
 
+function hasVersionValue(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    String(value).trim() !== "" &&
+    String(value).trim() !== "-"
+  );
+}
+
 function normalizeStatus(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : value;
@@ -380,6 +408,7 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
     if (metadata.value?.Success === false || metadata.value?.success === false) {
       throw new Error("Product metadata is unavailable.");
     }
+    let matchingDetailMember = null;
     if (workUnit) {
       const current = metadata.value?.workUnitMetadata
         ? metadata.value
@@ -395,8 +424,23 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
           throw new Error("Package member metadata contradicts the resolved work unit.");
         }
       }
+      const matchingMember = workUnit.members.find(
+        (member) => member.datasetName.toUpperCase() === datasetName.toUpperCase()
+      );
+      if (!matchingMember) throw new Error("Package member identity is missing.");
+      matchingDetailMember = current.workUnitMetadata.members[matchingMember.key];
     }
     const product = normalizeAnalyzeProduct(metadata.value, datasetName, { productContext });
+    // Backend Product-detail may carry version numbers on S101/S57 members instead
+    // of the top-level Product. Reuse only this member's verified normalized values.
+    if (matchingDetailMember) {
+      if (!hasVersionValue(product.edition) && hasVersionValue(matchingDetailMember.edition)) {
+        product.edition = matchingDetailMember.edition;
+      }
+      if (!hasVersionValue(product.update) && hasVersionValue(matchingDetailMember.update)) {
+        product.update = matchingDetailMember.update;
+      }
+    }
     if (product.datasetName.toLowerCase() !== datasetName.toLowerCase()) {
       throw new Error("Product identity mismatch.");
     }

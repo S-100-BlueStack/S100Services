@@ -719,6 +719,41 @@ body.pc-dashboard-route #last-updated {
   background: transparent;
 }
 
+.pc-dashboard-report-disclosure {
+  position: relative;
+  min-width: 0;
+}
+
+.pc-dashboard-report-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.pc-dashboard-report-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pc-dashboard-report-disclosure > summary:focus-visible {
+  outline: 2px solid var(--pc-focus-ring, var(--calcite-color-brand));
+  outline-offset: 2px;
+}
+
+.pc-dashboard-report-disclosure__content {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 6px;
+  color: var(--pc-text-muted);
+  background: var(--pc-surface, var(--calcite-color-foreground-1));
+  border: 1px solid var(--pc-border, var(--calcite-color-border-3));
+  font-size: 11px;
+}
+
+.pc-dashboard-report-disclosure__content .pc-dashboard-link-button {
+  overflow-wrap: anywhere;
+}
+
 .pc-dashboard-link-button.is-active {
   color: var(--pc-text);
   background: color-mix(in srgb, var(--pc-button-secondary-bg-hover) 78%, transparent);
