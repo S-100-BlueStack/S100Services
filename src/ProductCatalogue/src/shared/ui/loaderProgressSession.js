@@ -19,13 +19,9 @@ import {
 let latestLoaderSessionRevision = 0;
 
 export function createLoaderProgressSession({
-  loadStartProgress = 0.03,
-  loadEndProgress = 0.16,
   dataReceivedProgress = 0.18,
   renderStartProgress = 0.2,
   renderEndProgress = 0.96,
-  simulatedProgressIntervalMs = 350,
-  simulatedProgressStep = 0.012,
   loadingMessagesStage = "loadingData",
   renderingMessagesStage = "renderingMap",
   showLoaderOnStart = false,
@@ -33,13 +29,13 @@ export function createLoaderProgressSession({
   completionHoldMs = 0,
 } = {}) {
   let retryCountdownIntervalId = null;
-  let simulatedProgressIntervalId = null;
   let delayedShowTimeoutId = null;
 
   let loaderWasShownBySession = false;
   let currentText = null;
   let currentProgress = null;
   let currentProgressLabel = null;
+  let currentWaiting = false;
   let pendingTextRotation = null;
   let failHideTimeoutId = null;
   let completionHideTimeoutId = null;
@@ -68,7 +64,8 @@ export function createLoaderProgressSession({
     sessionRevision = ++latestLoaderSessionRevision;
 
     currentText = text;
-    setSessionProgress(loadStartProgress);
+    currentWaiting = true;
+    setSessionProgress(null, { label: "Working..." });
 
     if (showLoaderOnStart) {
       scheduleLoaderShow();
@@ -77,14 +74,13 @@ export function createLoaderProgressSession({
     }
 
     startSessionTextRotation(loadingMessagesStage, rotateImmediately);
-    startSimulatedProgress();
   }
 
   function startRetryCountdown({ attempt, totalAttempts, delayMs }) {
     if (!isCurrentSession()) return;
     stopRetryCountdown();
-    stopSimulatedProgress();
     stopSessionTextRotation();
+    currentWaiting = false;
 
     // Retry waits are long enough that hiding the loader would make the app
     // look idle, so show the delayed loader immediately when retrying.
@@ -130,20 +126,20 @@ export function createLoaderProgressSession({
   function markDataReceived() {
     if (!isCurrentSession()) return;
     stopRetryCountdown();
-    stopSimulatedProgress();
+    currentWaiting = false;
     setSessionProgress(dataReceivedProgress);
   }
 
   function startRendering({ text } = {}) {
     if (!isCurrentSession()) return;
-    stopSimulatedProgress();
 
     if (shouldShowTechnicalLoadingStages() && text) {
       setSessionText(text);
     }
 
     startSessionTextRotation(renderingMessagesStage, true);
-    setSessionProgress(renderStartProgress);
+    currentWaiting = true;
+    setSessionProgress(renderStartProgress, { label: "Rendering..." });
   }
 
   function handleRenderProgress({ progress, stage, layerTitle } = {}) {
@@ -152,6 +148,7 @@ export function createLoaderProgressSession({
     const loaderProgress =
       renderStartProgress + normalizedProgress * (renderEndProgress - renderStartProgress);
 
+    currentWaiting = false;
     setSessionProgress(loaderProgress);
 
     if (shouldShowTechnicalLoadingStages() && stage && layerTitle) {
@@ -159,19 +156,28 @@ export function createLoaderProgressSession({
     }
   }
 
-  function updateProgressStage({ progress, text, label = null, preserveProgress = false } = {}) {
+  function updateProgressStage({
+    progress,
+    text,
+    label = null,
+    preserveProgress = false,
+    waiting = true,
+  } = {}) {
     if (!isCurrentSession()) return;
     stopRetryCountdown();
-    stopSimulatedProgress();
     stopSessionTextRotation();
 
     if (text) {
       setSessionText(text);
     }
-    // Map rendering has no measured percentage. Keep the existing bar at its
-    // source-owned value instead of making it appear to restart.
-    if (!preserveProgress) {
-      setSessionProgress(progress, { label });
+    // Keep measured stage progress, but animate activity while backend/map work
+    // has no meaningful percentage. Never advance the value based on elapsed time.
+    currentWaiting = Boolean(waiting);
+    if (preserveProgress) {
+      currentProgressLabel = label ?? "Working...";
+      applyCurrentLoaderState();
+    } else {
+      setSessionProgress(progress, { label: label ?? (currentWaiting ? "Working..." : null) });
     }
   }
 
@@ -181,6 +187,7 @@ export function createLoaderProgressSession({
       return;
     }
     cleanup();
+    currentWaiting = false;
 
     setSessionText(text);
     setSessionProgress(1);
@@ -222,6 +229,7 @@ export function createLoaderProgressSession({
       return;
     }
     cleanup();
+    currentWaiting = false;
 
     setSessionText(text);
     setSessionProgress(1, { label });
@@ -247,7 +255,6 @@ export function createLoaderProgressSession({
 
   function cleanup() {
     stopRetryCountdown();
-    stopSimulatedProgress();
     if (sessionRevision === 0 || isCurrentSession()) {
       stopSessionTextRotation();
     } else {
@@ -354,31 +361,6 @@ export function createLoaderProgressSession({
     stopLoaderTextRotation();
   }
 
-  function startSimulatedProgress() {
-    stopSimulatedProgress();
-
-    simulatedProgressIntervalId = window.setInterval(() => {
-      if (!isCurrentSession()) {
-        stopSimulatedProgress();
-        return;
-      }
-      setSessionProgress(Math.min(loadEndProgress, currentProgress + simulatedProgressStep));
-
-      if (currentProgress >= loadEndProgress) {
-        stopSimulatedProgress();
-      }
-    }, simulatedProgressIntervalMs);
-  }
-
-  function stopSimulatedProgress() {
-    if (simulatedProgressIntervalId === null) {
-      return;
-    }
-
-    window.clearInterval(simulatedProgressIntervalId);
-    simulatedProgressIntervalId = null;
-  }
-
   function setSessionText(text) {
     currentText = text;
 
@@ -396,6 +378,7 @@ export function createLoaderProgressSession({
     if (!showLoaderOnStart || loaderWasShownBySession) {
       setLoaderProgress(progress, {
         label: currentProgressLabel,
+        waiting: currentWaiting,
       });
     }
   }
@@ -407,6 +390,7 @@ export function createLoaderProgressSession({
 
     setLoaderProgress(currentProgress, {
       label: currentProgressLabel,
+      waiting: currentWaiting,
     });
   }
 }

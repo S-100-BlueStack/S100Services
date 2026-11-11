@@ -153,3 +153,12 @@ metadata alias. Cancel Export keeps its presentation while using public CancelEx
 History and validation use separate `visible`/`implemented` content permissions. Electronic History
 preserves BE-108A IDs/Events; diagnostics use public artifact history/download routes. Unsupported
 sources return unavailable content without electronic API requests. No Batch 2 producers are added.
+
+## PC-UX-R02 automatic refresh cadence (2026-11-11)
+
+Main Map coordinates the compatibility AOI and enabled source refresh pipelines
+with one 2-minute timer. Concurrent manual, package-action and automatic full
+refreshes remain coalesced; an automatic tick in a hidden tab is deferred,
+then retried once when the tab is visible again. Turning off Auto Refresh
+cancels its timer and any deferred attempt. These rules do not add full
+workspace refreshes to Analyze or Review; they use incremental freshness.

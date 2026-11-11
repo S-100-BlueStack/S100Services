@@ -121,8 +121,10 @@ test("initial map readiness keeps one determinate progress bar until completion"
   assert.equal(loaderText.textContent, "Finishing initial map display...");
   assert.equal(progress.attributes.get("aria-valuenow"), "96");
   assert.equal(progressFill.style.width, "96%");
-  assert.equal(progressLabel.textContent, "96%");
+  assert.equal(progressLabel.textContent, "Working...");
   assert.equal(progress.classList.contains("is-indeterminate"), false);
+  assert.equal(progress.classList.contains("is-waiting"), true);
+  assert.equal(progress.attributes.get("aria-busy"), "true");
 
   session.complete({ text: "Map ready" });
   assert.equal(progress.attributes.get("aria-valuenow"), "100");
@@ -130,6 +132,25 @@ test("initial map readiness keeps one determinate progress bar until completion"
   assert.equal(loader.classList.contains("hidden"), false);
   fireTimeout(300);
   assert.equal(loader.classList.contains("hidden"), true);
+});
+
+test("pending backend work stays indeterminate until measured stage progress is available", () => {
+  const session = createVisibleSession();
+  session.startLoading("Loading data...");
+  assert.equal(progress.attributes.has("aria-valuenow"), false);
+  assert.equal(progress.classList.contains("is-indeterminate"), true);
+  assert.equal(progressLabel.textContent, "Working...");
+  assert.equal(progress.attributes.get("aria-busy"), "true");
+  assert.equal(
+    [...intervals.values()].some(({ delay }) => delay === 350),
+    false
+  );
+
+  session.markDataReceived();
+  assert.equal(progress.classList.contains("is-indeterminate"), false);
+  assert.equal(progress.classList.contains("is-waiting"), false);
+  assert.equal(progress.attributes.get("aria-valuenow"), "18");
+  session.cleanup();
 });
 
 test("map readiness does not advance unresolved source progress or restart the bar", () => {
@@ -140,6 +161,8 @@ test("map readiness does not advance unresolved source progress or restart the b
 
   assert.equal(progress.attributes.get("aria-valuenow"), "74");
   assert.equal(progressFill.style.width, "74%");
+  assert.equal(progressLabel.textContent, "Working...");
+  assert.equal(progress.classList.contains("is-waiting"), true);
   assert.equal(progress.classList.contains("is-indeterminate"), false);
   session.cleanup();
 });
@@ -153,6 +176,8 @@ test("completion exposes the actual 100% state before a short dismissal", () => 
   assert.equal(loaderText.textContent, "Analyze ready");
   assert.equal(progress.attributes.get("aria-valuenow"), "100");
   assert.equal(progressLabel.textContent, "100%");
+  assert.equal(progress.classList.contains("is-waiting"), false);
+  assert.equal(progress.attributes.get("aria-busy"), "false");
   assert.equal(loader.classList.contains("hidden"), false);
 
   fireTimeout(300);
@@ -246,7 +271,7 @@ test("stale progress and completion do not overwrite the active session", () => 
   older.complete({ text: "Stale completion" });
   assert.equal(progress.attributes.get("aria-valuenow"), currentProgress);
   assert.equal(loaderText.textContent, "New request");
-  assert.equal(intervals.size, activeIntervals - 1);
+  assert.equal(intervals.size, activeIntervals);
   assert.equal(loader.classList.contains("hidden"), false);
 
   newer.cleanup();

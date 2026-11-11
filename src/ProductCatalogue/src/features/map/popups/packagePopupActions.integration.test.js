@@ -473,7 +473,7 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
     const popup = h.open();
     await h.settle();
     assert.equal(h.intervals.size, 1);
-    assert.equal([...h.intervals.values()][0].ms, 30_000);
+    assert.equal([...h.intervals.values()][0].ms, 10_000);
     const tableSection = popup.querySelector(".popup-section");
     const table = tableSection.children[0];
     const summary = popup.querySelector(".popup-package-workflow");

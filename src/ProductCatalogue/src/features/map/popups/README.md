@@ -533,7 +533,7 @@ Only the session's last accepted `exportMetadata` is preserved if the refreshed
 Graphic omits that field. An explicit replacement (including undefined/null)
 replaces it. The retained overlay is local to popup presentation and is not copied
 back into map/filter state. The existing revision monitor alone revalidates Product
-detail at its bounded 30-second cadence. A local source refresh supersedes publication of an older in-flight detail result
+detail at its bounded 10-second cadence. A local source refresh supersedes publication of an older in-flight detail result
 without duplicating simultaneous detail reads. Metadata-signature rendering still preserves
 focus and error controls on semantic no-ops.
 

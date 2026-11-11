@@ -1,15 +1,17 @@
-const DEFAULT_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+export const DEFAULT_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
 export function createDataSourceRefreshCoordinator({
   compatibilityRefreshService,
   dataSourceController,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
   timer = globalThis.window,
+  documentRef = globalThis.document,
   onRefreshComplete,
 } = {}) {
   let isRefreshing = false;
   let autoRefreshEnabled = true;
   let intervalId = null;
+  let refreshDeferredWhileHidden = false;
 
   compatibilityRefreshService?.stopAuto?.();
 
@@ -58,22 +60,33 @@ export function createDataSourceRefreshCoordinator({
     }
   }
 
+  function runAutoRefresh() {
+    if (!autoRefreshEnabled) return;
+    if (documentRef?.hidden === true || documentRef?.visibilityState === "hidden") {
+      refreshDeferredWhileHidden = true;
+      return;
+    }
+    refreshDeferredWhileHidden = false;
+    // refresh() already rejects concurrent manual, package-action and timer requests.
+    void refresh({ source: "auto" });
+  }
+
+  function handleVisibilityChange() {
+    if (refreshDeferredWhileHidden && autoRefreshEnabled) runAutoRefresh();
+  }
+
   function startAuto() {
     stopAuto();
-    intervalId = timer?.setInterval?.(() => {
-      if (autoRefreshEnabled) {
-        void refresh({ source: "auto" });
-      }
-    }, refreshIntervalMs);
+    if (!autoRefreshEnabled) return;
+    intervalId = timer?.setInterval?.(runAutoRefresh, refreshIntervalMs) ?? null;
+    documentRef?.addEventListener?.("visibilitychange", handleVisibilityChange);
   }
 
   function stopAuto() {
-    if (intervalId === null) {
-      return;
-    }
-
-    timer?.clearInterval?.(intervalId);
+    if (intervalId !== null) timer?.clearInterval?.(intervalId);
     intervalId = null;
+    refreshDeferredWhileHidden = false;
+    documentRef?.removeEventListener?.("visibilitychange", handleVisibilityChange);
   }
 
   function setAuto(enabled) {

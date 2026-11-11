@@ -63,3 +63,14 @@ rules remain authoritative. Analyze's read-only popup correction is documented i
 This committed follow-up still needs a fresh-cache browser check on the accepted frontend,
 including cold navigation with two Products, LayerView readiness, a later Product
 change, popup metadata, focus/Escape, and no regression of Main-map popup actions.
+
+## PC-UX-R02 loading presentation (2026-11-11)
+
+The Main Map and Analyze startup loaders now use indeterminate activity while
+awaiting unmeasured backend work, rather than incrementing a simulated
+percentage. Measured rendering and source-stage progress is eased visually,
+and a subtle highlight shows activity during subsequent backend/map waits. During source waits and initial MapView readiness, they retain the
+last verified stage instead of inventing progress. The visible label reads
+`Working...` for these unmeasured phases; accessibility exposes the waiting
+state through `aria-busy`. Reduced-motion mode suppresses the animation.
+The readiness gate, warning states, retry behavior and completion hold are unchanged.

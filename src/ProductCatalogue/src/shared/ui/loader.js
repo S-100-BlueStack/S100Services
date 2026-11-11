@@ -21,7 +21,7 @@ function initLoader() {
   isInitialized = true;
 }
 
-export function showLoader(text = "Loading...", { progress = null } = {}) {
+export function showLoader(text = "Loading...", { progress = null, waiting = false } = {}) {
   initLoader();
 
   if (!loaderElement) return;
@@ -29,7 +29,7 @@ export function showLoader(text = "Loading...", { progress = null } = {}) {
   const visibilityRevision = ++loaderVisibilityRevision;
 
   setLoaderText(text);
-  setLoaderProgress(progress);
+  setLoaderProgress(progress, { waiting });
 
   requestAnimationFrame(() => {
     if (visibilityRevision !== loaderVisibilityRevision) {
@@ -58,12 +58,20 @@ export function setLoaderText(text) {
   loaderTextElement.style.visibility = "visible";
 }
 
-export function setLoaderProgress(progress, { label = null } = {}) {
+export function setLoaderProgress(progress, { label = null, waiting = false } = {}) {
   initLoader();
 
   if (!progressElement || !progressFillElement) {
     return;
   }
+
+  // Indicate activity during requests without advancing an unmeasured percentage.
+  if (waiting) {
+    progressElement.classList.add("is-waiting");
+  } else {
+    progressElement.classList.remove("is-waiting");
+  }
+  progressElement.setAttribute("aria-busy", waiting ? "true" : "false");
 
   if (progress === null || progress === undefined) {
     progressElement.classList.add("is-indeterminate");

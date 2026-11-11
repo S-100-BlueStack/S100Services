@@ -916,13 +916,9 @@ export async function initAnalyzePage({ datasetNames }) {
 
 function createAnalyzeLoaderProgress({ initialLoad = false } = {}) {
   return createLoaderProgressSession({
-    loadStartProgress: 0.04,
-    loadEndProgress: 0.2,
     dataReceivedProgress: 0.22,
     renderStartProgress: 0.24,
     renderEndProgress: 0.96,
-    simulatedProgressIntervalMs: 350,
-    simulatedProgressStep: 0.014,
     showLoaderOnStart: !initialLoad,
     showLoaderDelayMs: initialLoad ? 0 : 350,
     completionHoldMs: 300,

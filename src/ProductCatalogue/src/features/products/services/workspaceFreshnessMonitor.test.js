@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWorkspaceFreshnessMonitor } from "./workspaceFreshnessMonitor.js";
+import {
+  createWorkspaceFreshnessMonitor,
+  DEFAULT_WORKSPACE_FRESHNESS_INTERVAL_MS,
+} from "./workspaceFreshnessMonitor.js";
 
 function createDocumentStub() {
   const listeners = new Map();
@@ -214,4 +217,29 @@ test("consumer detail failure requests recovery even with unchanged revision", a
   assert.equal(await monitor.check(), true);
   assert.equal(refreshes, 2);
   monitor.destroy();
+});
+
+test("workspace revisions use a 10-second default interval without starting extra timers", () => {
+  const intervals = new Map();
+  let nextId = 0;
+  const documentRef = createDocumentStub();
+  const monitor = createWorkspaceFreshnessMonitor({
+    getDatasetNames: () => ["101DK001"],
+    onChanged: async () => true,
+    documentRef,
+    setIntervalFn(callback, ms) {
+      intervals.set(++nextId, { callback, ms });
+      return nextId;
+    },
+    clearIntervalFn(id) {
+      intervals.delete(id);
+    },
+  });
+  monitor.start();
+  monitor.start();
+  assert.equal(intervals.size, 1);
+  assert.equal([...intervals.values()][0].ms, DEFAULT_WORKSPACE_FRESHNESS_INTERVAL_MS);
+  assert.equal(DEFAULT_WORKSPACE_FRESHNESS_INTERVAL_MS, 10_000);
+  monitor.destroy();
+  assert.equal(intervals.size, 0);
 });

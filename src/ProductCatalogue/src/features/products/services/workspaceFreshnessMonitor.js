@@ -1,6 +1,7 @@
 import { fetchWorkspaceFreshness } from "../api/workspaceFreshnessApi.js";
 
-export const DEFAULT_WORKSPACE_FRESHNESS_INTERVAL_MS = 30_000;
+// Only compact revisions are polled; unchanged Products never trigger a content reload.
+export const DEFAULT_WORKSPACE_FRESHNESS_INTERVAL_MS = 10_000;
 
 const UNAVAILABLE_REVISION = "__workspace_unavailable__";
 

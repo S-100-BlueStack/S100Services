@@ -40,7 +40,7 @@ Direct external edits to S-128 that bypass the running ProductManager cache are 
 Analyze and Review create a route-local freshness monitor with these rules:
 
 - the initial revision snapshot is captured before workspace content is loaded;
-- while the document is visible, the lightweight freshness endpoint is checked every 30 seconds;
+- while the document is visible, the lightweight freshness endpoint is checked every 10 seconds;
 - hidden tabs do not perform interval checks;
 - returning to a visible tab performs an immediate check;
 - when a known Product operation stops running, the workspace performs an immediate check;
@@ -104,3 +104,10 @@ FI-039 was manually accepted on 2026-09-18 at `1a77af904ec1a41726bcec357b72610c7
 
 See [FI-039 implementation and verification](fi-039-incremental-review.md) for generation boundaries,
 source-aware identity, independent failure behavior, regression counts and the manual checklist.
+
+## PC-UX-R02 cadence update (2026-11-11)
+
+The Analyze and Review freshness monitor now polls lightweight revision signals at a
+10-second interval while the document is visible. Only changed Products are
+refreshed; no full workspace reload is scheduled. Existing in-flight coalescing,
+failed-refresh retry, visibility checks and generation ownership are unchanged.

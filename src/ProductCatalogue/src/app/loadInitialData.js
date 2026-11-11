@@ -17,13 +17,9 @@ const abortController = new AbortController();
 
 export async function loadInitialData(app) {
   const loaderProgress = createLoaderProgressSession({
-    loadStartProgress: 0.03,
-    loadEndProgress: 0.2,
     dataReceivedProgress: 0.22,
     renderStartProgress: 0.24,
     renderEndProgress: 0.52,
-    simulatedProgressIntervalMs: 350,
-    simulatedProgressStep: 0.012,
     completionHoldMs: 300,
   });
 

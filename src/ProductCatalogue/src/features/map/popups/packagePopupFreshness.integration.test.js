@@ -60,14 +60,14 @@ function harness() {
     snapshot: () => ({ reads, pings, cleared, cadence, listening: Boolean(listener) }),
   };
 }
-test("real monitor uses 30 seconds and unchanged revision avoids detail", async () => {
+test("real monitor uses 10 seconds and unchanged revision avoids detail", async () => {
   const h = harness();
   await h.session.start();
   assert.deepEqual(h.snapshot(), {
     reads: 1,
     pings: 2,
     cleared: false,
-    cadence: 30_000,
+    cadence: 10_000,
     listening: true,
   });
   h.tick();

@@ -62,9 +62,7 @@ async function bootstrapMainRoute() {
     initRefreshControls(app);
     initializeTheme(app.view);
 
-    showLoader("Preparing UI components...", {
-      progress: 0.01,
-    });
+    showLoader("Preparing UI components...", { waiting: true });
     await waitForNextPaint();
     await waitForCalcite();
 
@@ -124,9 +122,7 @@ async function bootstrapAnalyzeRoute(route) {
   try {
     const ui = await initUI();
 
-    showLoader("Preparing UI components...", {
-      progress: 0.01,
-    });
+    showLoader("Preparing UI components...", { waiting: true });
     await waitForNextPaint();
     await waitForCalcite();
 
