@@ -38,7 +38,7 @@ namespace DataCatalague.Api.Controllers
     [Authorize(Policy = "datacatalogue:access")]
     [ApiController]
     [ApiVersion(ApiVersions.V1Text)]
-    [Route("api/v{version:apiVersion}/dispatcher")]
+    [Route("v{version:apiVersion}/dispatcher")]
     [Produces("application/json")]
     public sealed class DispatcherController(IEventStore eventstore, ICommandService<CategoryState> categoryService, DispatchRepository dispatchRepository, WorkspaceService workspaceService, PipelineAssignmentService assignments, DispatcherResourceService resources, IOptions<DispatcherOptions> options, ILogger<DispatcherController> logger) : ControllerBase
     {
@@ -111,7 +111,7 @@ namespace DataCatalague.Api.Controllers
 
             return this.CreatedAtRoute(
                 "GetCategory.V1",
-                new { id = result.State.Id!.Value, version = ApiVersions.V1Text },
+                new { id = result.State.Id!.Value, version = ApiVersions.V1RouteValue },
                 Map(result.State));
         }
 
@@ -173,7 +173,7 @@ namespace DataCatalague.Api.Controllers
             this._logger.LogInformation("UpdateCategorySpecification {version}.", result.State.Version);
 
             if (current.Markdown is null) {
-                return this.CreatedAtAction(nameof(UpdateCategorySpecification), new { id, version = ApiVersions.V1Text }, Map(result.State));
+                return this.CreatedAtAction(nameof(UpdateCategorySpecification), new { id, version = ApiVersions.V1RouteValue }, Map(result.State));
             }
             return this.Ok(Map(result.State));
         }
@@ -215,7 +215,7 @@ namespace DataCatalague.Api.Controllers
                 var intersections = await workspaceService.GetIntersectionsAsync(request.PackageId, request.PipelineId, cancellationToken);
                 var state = await assignments.AssignAsync(request.PackageId, request.PipelineId, cancellationToken);
                 this._logger.LogInformation("Assigned package {PackageId} to pipeline {PipelineId}. User: {User}.", request.PackageId, request.PipelineId, this.User?.Identity?.Name);
-                return this.CreatedAtRoute("GetBinding.V1", new { id = state.Id!.Value, version = ApiVersions.V1Text }, Map(state, intersections));
+                return this.CreatedAtRoute("GetBinding.V1", new { id = state.Id!.Value, version = ApiVersions.V1RouteValue }, Map(state, intersections));
             }
             catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
             catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }

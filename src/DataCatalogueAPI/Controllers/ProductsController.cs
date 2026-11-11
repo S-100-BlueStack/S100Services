@@ -14,7 +14,7 @@ namespace DataCatalague.Api.Controllers.V2;
 /// <param name="logger">The logger for this controller.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V2Text)]
-[Route("api/v{version:apiVersion}/products")]
+[Route("v{version:apiVersion}/products")]
 [Produces("application/json")]
 public sealed class ProductsController(
     IProductRepository repository,
@@ -124,7 +124,7 @@ public sealed class ProductsController(
 
         return this.CreatedAtRoute(
             "GetProductV2",
-            new { id = created.Id, version = ApiVersions.V2Text },
+            new { id = created.Id, version = ApiVersions.V2RouteValue },
             Map(created));
     }
 

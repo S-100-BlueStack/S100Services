@@ -20,7 +20,7 @@ namespace DataCatalague.Api.Controllers.V1
         [Authorize(Policy = "datacatalogue:access")]
         [ApiController]
         [ApiVersion(ApiVersions.V1Text)]
-        [Route("api/v{version:apiVersion}/pipelines")]
+        [Route("v{version:apiVersion}/pipelines")]
         [Produces("application/json")]
         public sealed class PipelineController(IEventStore eventstore, ICommandService<PipelineState> servicePipeline, DispatchRepository dispatchRepository, IPipelineRepository pipelineRepository, WorkspaceService workspaceService, IOptions<DispatcherOptions> options, ArcGisDispatcher dispatcher, ILogger<PipelineController> logger) : ControllerBase
         {
@@ -82,7 +82,7 @@ namespace DataCatalague.Api.Controllers.V1
 
                 var route = this.CreatedAtRoute(
                     "GetPipeline.V1",
-                    new { id = result.State.Id!.Value, version = ApiVersions.V1Text },
+                    new { id = result.State.Id!.Value, version = ApiVersions.V1RouteValue },
                     Map(result.State));
 
                 return route;
@@ -115,7 +115,7 @@ namespace DataCatalague.Api.Controllers.V1
                     this._logger.LogInformation("Creating workspace. PipelineId: {PipelineId}, Name: {DisplayName}, User: {User}.", id, request?.DisplayName, this.User?.Identity?.Name);
                     var state = await workspaceService.CreateAsync(id, request!, cancellationToken);
                     var created = state.Workspaces.Single(w => string.Equals(w.DisplayName, request!.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase));
-                    return this.CreatedAtRoute("GetWorkspace.V1", new { id, workspace = created.Id, version = ApiVersions.V1Text }, Map(state));
+                    return this.CreatedAtRoute("GetWorkspace.V1", new { id, workspace = created.Id, version = ApiVersions.V1RouteValue }, Map(state));
                 }
                 catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
                 catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }

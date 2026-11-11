@@ -12,12 +12,29 @@ Serilog logging, HTTPS, and two browsable documentation UIs (Swagger UI and Scal
 | OpenAPI v2 document| <https://localhost:51849/openapi/v2.json>       |
 | Health check       | <https://localhost:51849/health>                |
 
-Sample endpoints:
+## API route base and IIS hosting
 
-```
-GET    /api/v1/dispatcher
-GET    /api/v2/dispatcher?page=1&pageSize=20
-```
+Controller route templates are relative to the ASP.NET Core application root.
+Direct Kestrel hosting exposes `/v1/...` and `/v2/...`. With an IIS Application
+mounted at `/api`, IIS supplies the `PathBase` and the **public** URLs are
+`/api/v1/...` and `/api/v2/...`. Do not add `/api` to controller attributes or
+configure an extra `/api` with `UsePathBase` in the hosted API.
+
+| Resource | Direct Kestrel | IIS Application `/api` |
+| --- | --- | --- |
+| Pipelines | `/v1/pipelines` | `/api/v1/pipelines` |
+| Products v2 | `/v2/products` | `/api/v2/products` |
+| OpenAPI v1 | `/openapi/v1.json` | `/api/openapi/v1.json` |
+| Swagger UI | `/swagger` | `/api/swagger` |
+| Scalar UI | `/scalar` | `/api/scalar` |
+| Health | `/health` | `/api/health` |
+
+The request examples later in this document use public IIS paths. For direct
+Kestrel calls, remove the leading `/api` prefix. Route alignment changes only
+URL composition; controller behavior, Windows Negotiate and access policies stay
+unchanged. To verify the IIS deployment and local configuration, see
+`src/DataCatalogue/docs/DC_DEPLOY_01_VALIDATION.md`.
+
 
 
 ## Geometry JSON format

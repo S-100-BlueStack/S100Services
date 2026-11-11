@@ -13,7 +13,7 @@ namespace DataCatalague.Api.Controllers;
 [Authorize(Policy = "datacatalogue:access")]
 [ApiController]
 [ApiVersion(ApiVersions.V1Text)]
-[Route("api/v{version:apiVersion}/workspaces")]
+[Route("v{version:apiVersion}/workspaces")]
 [Produces("application/json")]
 public sealed class WorkspaceController(WorkspaceQueryService queries) : ControllerBase
 {

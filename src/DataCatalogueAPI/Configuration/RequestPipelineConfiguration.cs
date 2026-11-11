@@ -97,14 +97,17 @@ public static class RequestPipelineConfiguration
             options.DisplayRequestDuration();
 
             foreach (var description in descriptions) {
+                // Resolve from /swagger/index.html so the IIS application PathBase is retained.
                 options.SwaggerEndpoint(
-                    $"/openapi/{description.GroupName}.json",
+                    $"../openapi/{description.GroupName}.json",
                     BuildDisplayName(description));
             }
         });
 
         // Scalar at /scalar, with a per-version document picker.
         app.MapScalarApiReference(options => {
+            // A relative document URL preserves the IIS application PathBase.
+            options.WithOpenApiRoutePattern("openapi/{documentName}.json");
             options.WithTitle("OpenApiDataCatalogue API");
             options.WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
 

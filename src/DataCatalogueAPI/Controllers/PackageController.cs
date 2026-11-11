@@ -18,7 +18,7 @@ namespace DataCatalague.Api.Controllers
     [Authorize(Policy = "datacatalogue:access")]
     [ApiController]
     [ApiVersion(ApiVersions.V1Text)]
-    [Route("api/v{version:apiVersion}/packages")]
+    [Route("v{version:apiVersion}/packages")]
     [Produces("application/json")]
     public sealed class PackageController(IEventStore eventstore, PackageRepository packageRepository, PackageGeometryService geometryService, PackageCreationService creationService, DispatcherResourceService resources, IOptions<PackagesOptions> options, ILogger<PackageController> logger) : ControllerBase
     {
@@ -64,7 +64,7 @@ namespace DataCatalague.Api.Controllers
             try {
                 var state = await creationService.CreateAsync(request, cancellationToken);
                 this._logger.LogInformation("Created package {PackageId}. ShortId: {ShortId}, Category: {Category}, User: {User}.", state.Id, state.MetaData?.ShortId, request.Category, this.User?.Identity?.Name);
-                return this.CreatedAtRoute("GetPackage.V1", new { id = state.Id!.Value, version = ApiVersions.V1Text }, Map(state));
+                return this.CreatedAtRoute("GetPackage.V1", new { id = state.Id!.Value, version = ApiVersions.V1RouteValue }, Map(state));
             }
             catch (PackageCreationException exception) {
                 var status = exception.Error switch {
