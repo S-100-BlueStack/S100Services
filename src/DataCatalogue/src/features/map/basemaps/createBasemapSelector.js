@@ -38,8 +38,7 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
     ui.basemapsById.clear();
     for (const option of options) {
       const basemap =
-        ui.Basemap.fromId(option.id) ??
-        new ui.Basemap({ id: option.id, style: { id: option.id } });
+        ui.Basemap.fromId(option.id) ?? new ui.Basemap({ id: option.id, style: { id: option.id } });
       basemap.title = option.label;
       ui.basemapsById.set(option.id, basemap);
     }
@@ -151,13 +150,12 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
     expand.view = view;
     expand.append(gallery);
     container.replaceChildren(expand);
-    Promise.resolve(gallery.componentOnReady?.())
-      .catch(() => {
-        if (alive && token === generation && ui === mounted) {
-          container.textContent = "Basemap gallery is unavailable.";
-          disposeUi();
-        }
-      });
+    Promise.resolve(gallery.componentOnReady?.()).catch(() => {
+      if (alive && token === generation && ui === mounted) {
+        container.textContent = "Basemap gallery is unavailable.";
+        disposeUi();
+      }
+    });
   }
 
   return {

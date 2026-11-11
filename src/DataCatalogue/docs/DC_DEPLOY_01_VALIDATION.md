@@ -1,5 +1,28 @@
 # DC-DEPLOY-01 — API route base alignment validation
 
+## Post-commit deployment verification (2026-11-11)
+
+The route changes from DC-DEPLOY-01 v1-v3 are present in committed baseline
+`a986e7f20f96aa3e4a6d5acbaeebe836b5cb91d0`. The user reports that the
+DataCatalogue test deployment started working after removing
+`VITE_CATALOGUE_API_BASE_URL=/api` from `.env`. That is a real-world observation,
+not proof that the deployed API is mounted at the website root: the observed
+browser Request URL, IIS application structure, effective Vite build variables,
+reverse-proxy rules and deployed assets were not included in the source export.
+
+Source inspection confirms `catalogueService.js` passes `/v1/...` paths and
+`catalogueClient.js` prepends only the configured base. Unset means the browser
+requests `/v1/...`; `/api` means `/api/v1/...`. The backend controller templates
+are application-relative `v{version:apiVersion}/...`. Existing frontend tests
+cover both URL shapes and reject resource paths containing `/api/v1/...`.
+There is no source-supported reason to change production routes or introduce
+automatic base-path guessing. The remaining acceptance task is to match the
+_deployed_ public API prefix and frontend build inputs to observed HTTP traffic.
+
+The original 2026-11-11 v1-v3 instructions below describe the intended IIS
+`/api`-subapplication layout. They must not be treated as proof that every test
+or production environment uses that hosting topology.
+
 ## Authority and scope
 
 - Repository: `S-100-BlueStack/S100Services`
@@ -11,19 +34,21 @@
 
 ## Routing contract
 
-| Context | API base URL | Resource path | Final request path |
-| --- | --- | --- | --- |
-| IIS public frontend | `/api` | `/v1/pipelines` | `/api/v1/pipelines` |
-| IIS public frontend | `/api` | `/v1/dispatcher/bindings` | `/api/v1/dispatcher/bindings` |
-| Direct Kestrel | `https://localhost:51849` | `/v1/pipelines` | `https://localhost:51849/v1/pipelines` |
-| Same-origin standalone | empty | `/v1/pipelines` | `/v1/pipelines` |
+| Context                           | API base URL              | Resource path             | Final request path                     |
+| --------------------------------- | ------------------------- | ------------------------- | -------------------------------------- |
+| IIS Application mounted at `/api` | `/api`                    | `/v1/pipelines`           | `/api/v1/pipelines`                    |
+| IIS Application mounted at `/api` | `/api`                    | `/v1/dispatcher/bindings` | `/api/v1/dispatcher/bindings`          |
+| Direct Kestrel on another origin  | `https://localhost:51849` | `/v1/pipelines`           | `https://localhost:51849/v1/pipelines` |
+| Same-origin API at site root      | unset / empty             | `/v1/pipelines`           | `/v1/pipelines`                        |
 
-IIS must host DataCatalogueAPI as an **Application** mounted at `/api`, not as a
-plain virtual directory. The app must receive the expected `PathBase=/api` from
-IIS/ASP.NET Core Module. Do not configure a duplicate prefix in backend routes,
+For the **IIS `/api` Application** scenario, IIS/ASP.NET Core Module supplies
+`PathBase=/api`. A plain IIS virtual directory is not a substitute for a hosted
+ASP.NET Core Application. Hosting the API at the same-origin site root, where
+`/v1/...` is publicly reachable, is a different valid topology and uses an
+empty frontend base. Do not configure a duplicate prefix in backend routes,
 frontend resource paths, a rewrite rule, or `UsePathBase` in production code.
-The public `/api/v1/...` paths remain familiar, but raw Kestrel clients must
-switch from `/api/v1/...` to `/v1/...` when adopting this release.
+The standalone Kestrel routes are `/v1/...`, even when IIS exposes `/api/v1/...`.
+Existing external clients must use the actual public path for their environment.
 
 The frontend has no development proxy. For local cross-origin testing, supply the
 standalone Kestrel **origin** through `VITE_CATALOGUE_API_BASE_URL` without `/api`.
@@ -63,7 +88,35 @@ excludes `Controllers/ProductsController.cs` from compilation, so the sample
 product API is not active. Do not enable it merely to satisfy a routing test.
 The full .NET integration suite and IIS hosting were not run by the candidate author.
 
-## Manual IIS acceptance
+## Test-server verification after removing the base setting
+
+1. In browser Developer Tools, enable Network, reload the deployed frontend with
+   a fresh asset load and inspect the successful `pipelines` and `packages`
+   requests. Record each **Request URL**, HTTP status and `content-type` (do
+   not capture credentials or response payloads containing private data).
+2. If the URLs are same-origin `/v1/...`, keep `VITE_CATALOGUE_API_BASE_URL`
+   unset for **that build/deployment**. Confirm the API really serves those URLs
+   with authenticated JSON responses; do not restore `/api` just to match an IIS
+   application name or a previous candidate's example.
+3. If the URLs are `/api/v1/...`, verify which build-time input supplies `/api`
+   despite removing the `.env` value. Check `.env.local`, `.env.production`,
+   `.env.production.local` and the build process environment **by presence only**;
+   do not share or commit secrets. Also inspect rewrites and stale bundled assets
+   if the browser URL does not match the configured source.
+4. If the intended API URL is `/api/v1/...` but the current bundle requests
+   `/v1/...`, set the build-time base to `/api` and **rebuild/redeploy** the
+   frontend after verifying the backend's public path. If the current `/v1/...`
+   route succeeds, changing to `/api` would be a regression without a matching
+   host route. There is no Vite development proxy in this project.
+5. Verify both main-map Jobs and Package assignment read paths, a selected
+   Package's bindings/geometry and the existing mutation/error handling. Confirm
+   no unexpected `/api/api/`, `404`, HTML-as-JSON, CORS or auth failures.
+
+The source archive excludes `.env*`, `package-lock.json`, deployed assets and IIS
+configuration. These tests cannot be completed from the archive alone. Do not
+claim a verified server mount path merely because either configuration worked.
+
+## Manual IIS acceptance (only for an intentional `/api` subapplication)
 
 1. Confirm the frontend serves `/` and the API has a distinct IIS Application
    `/api` with its existing app pool and Negotiate/authorization settings.

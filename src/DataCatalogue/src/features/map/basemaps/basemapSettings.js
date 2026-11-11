@@ -76,7 +76,6 @@ export function createBasemapSettings({
   let manuallySelected = supportedBasemap(saved?.manualId, hasApiKey);
   let keyStatus = hasApiKey ? "unchecked" : "absent";
 
-
   // The v4 format did not distinguish an automatic default from a selection.
   // Preserve only a non-default legacy choice as explicit user intent.
   if (!manuallySelected && !saved) {
@@ -161,7 +160,8 @@ export function createBasemapSettings({
     hasApiKey,
     getValue: currentBasemap,
     getThemeMode: () => mode,
-    getOptions: () => BASEMAP_OPTIONS.filter((entry) => !entry.requiresKey || keyStatus === "verified"),
+    getOptions: () =>
+      BASEMAP_OPTIONS.filter((entry) => !entry.requiresKey || keyStatus === "verified"),
     isCustom: () => Boolean(manuallySelected),
     setThemeMode(nextMode) {
       if (!alive) return;

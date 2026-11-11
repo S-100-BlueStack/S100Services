@@ -55,15 +55,28 @@ npm run dev
 ```
 
 Edit `.env.local` before starting Vite. To test the live API, set `VITE_CATALOGUE_SOURCE=live`.
-Set `VITE_CATALOGUE_API_BASE_URL=/api` when hosting the API as an IIS Application at `/api`.
-The API client appends application-relative `/v1/...` paths exactly once, producing public
-`/api/v1/...` URLs. For standalone local Kestrel, use its origin (for example,
-`https://localhost:51849`) with no `/api` suffix; the resulting path is `/v1/...`.
+`VITE_CATALOGUE_API_BASE_URL` specifies the **public API URL prefix**, not the controller
+route or an API on/off switch. The frontend resource paths always start at `/v1/...`:
+
+| Public API topology                                               | `VITE_CATALOGUE_API_BASE_URL`       | Example browser request                |
+| ----------------------------------------------------------------- | ----------------------------------- | -------------------------------------- |
+| Same origin exposes `/v1/...` at the website root                 | Unset (default empty)               | `/v1/pipelines`                        |
+| Same origin exposes `/api/v1/...` via an IIS Application or proxy | `/api`                              | `/api/v1/pipelines`                    |
+| Separate standalone Kestrel origin                                | `https://localhost:51849` (example) | `https://localhost:51849/v1/pipelines` |
+
+Determine the correct prefix from the **actual public Request URL** in the browser's
+Network panel, not merely the IIS application name. Never add `/api` to resource paths
+or the ASP.NET Core controller templates. The 2026-11-11 test-server report says the
+site worked after removing `/api` from `.env`; this does not independently establish
+whether the deployed assets use an empty base, another build-time override, or a
+server-side rewrite. Check the live request before changing the setting again.
+
 Credentials default to `same-origin`; use `include` only for approved credentialed
 cross-origin development with matching CORS. The existing Vite configuration does not
-add an API proxy. An empty base URL only works when the frontend origin also routes `/v1`
-to the API. Changing `VITE_*` values requires a frontend rebuild for IIS deployment.
-See [DC-DEPLOY-01 validation](docs/DC_DEPLOY_01_VALIDATION.md) for release and rollback checks.
+add an API proxy. A missing base produces `/v1/...` directly. `VITE_*` values come
+from the build environment (`.env`, mode-specific files or process variables), and
+changing them requires a rebuild and redeployment of the frontend static assets.
+See [DC-DEPLOY-01 validation](docs/DC_DEPLOY_01_VALIDATION.md) for concrete checks.
 
 `VITE_*` configuration is public in the browser and read at build/start time. Never store
 passwords, tokens or service credentials there. Restart Vite after changing source mode.
