@@ -448,3 +448,43 @@ test("a paused server snapshot cannot send even when it reports CanSend", async 
   assert.equal(h.requests.length, 1);
   h.session.destroy();
 });
+
+test("Resume reloads server CanSend before publishing send availability", async () => {
+  const state = {
+    packageId: PACKAGE_ID,
+    sourceDatasetName: "PRIMARY",
+    paused: true,
+    canPause: false,
+    canResume: true,
+    canDiscard: true,
+    canSend: false,
+    eligibleMembers: [{ key: "s101", datasetName: "PRIMARY" }],
+  };
+  const requests = [];
+  const session = createPackageActionSession({
+    sourceName: "PRIMARY",
+    identityKey: "identity",
+    memberNames: { s101: "PRIMARY" },
+    demoEnabled: false,
+    isCurrent: () => true,
+    notify: {},
+    request: async (url) => {
+      requests.push(url);
+      if (url.endsWith("/actions")) return { success: true, data: { ...state } };
+      if (url.endsWith("/resume")) {
+        Object.assign(state, { paused: false, canPause: true, canResume: false, canSend: true });
+        return { success: true, data: { packageId: PACKAGE_ID, paused: false } };
+      }
+      throw new Error(`Unexpected ${url}`);
+    },
+  });
+  try {
+    await session.start();
+    assert.equal(session.projection().actionEligibility.send, false);
+    assert.equal(await session.invoke("resume"), true);
+    assert.equal(session.projection().actionEligibility.send, true);
+    assert.equal(requests.filter((url) => url.endsWith("/actions")).length, 2);
+  } finally {
+    session.destroy();
+  }
+});

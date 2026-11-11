@@ -274,7 +274,8 @@ export function createPackageActionSession({
       return false;
     } finally {
       busy = false;
-      if (operation === "send" && current()) await refresh();
+      // Resume changes delivery eligibility even when product metadata and versions are unchanged.
+      if (["send", "resume"].includes(operation) && current()) await refresh();
       publish();
     }
   }

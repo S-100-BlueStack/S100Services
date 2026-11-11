@@ -720,3 +720,15 @@ All resolved Product contexts use the same four-slot F7A-style action bar and st
 ### FI-029 UI acceptance record (2026-10-26)
 
 The shared four-slot action presentation was committed at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`. The owner manually reviewed the existing ENC-package UI and reported no apparent popup regression. This is presentation/regression acceptance only: there were no standalone/non-package Products available for an end-to-end mutation test. Keep non-package Pause/Resume, Discard and Send/Accept disabled until the actual source-owned backend eligibility and dispatch contract is verified. Do not route the Product through a different source's package session or the previous Freeze/Export/Cancel Export workflow. See `../../../../docs/demo-readiness-plan.md` for current regression scope.
+
+## November 2026 generated-response package Send
+
+The server action snapshot now exposes optional `CanSend`. When true, the existing Send control posts the exact active package ID to `electronicproducts/packages/{source}/send` and polls `electronicproducts/packages/send-jobs/{jobId}`. Both server modes must be Simulation; no development build flag is required. The distribute policy applies server-side. Current package/revision, Pause and candidate guards are repeated by the Worker and SQL reservation.
+
+The session blocks duplicate actions while polling, aborts on teardown, invalidates the old snapshot after enqueueing and requests the normal source refresh on completion or uncertainty. It does not synthesize accepted state or enable manual Accept. Generated responses update the normal backend workflow; provisional outcomes stay pending. The old explicitly opted-in development toast demo remains a fallback only when the server has not authorized a real simulation send.
+
+### Delivery permission after Resume
+
+Resume reloads the authoritative action snapshot after the mutation completes. The Resume response contains only Pause state/control version, so the previous snapshot's `CanSend` cannot be retained: it was read while delivery was paused. Failed permission refreshes disable actions until a subsequent successful snapshot. Send continues to require explicit backend authorization and remains blocked during requests and after popup teardown.
+
+The GUI integration test covers a PascalCase `GetActions` response with `CanSend: true`, both eligible members, the real Send click, exact package ID dispatch, job status polling and duplicate-click suppression. A newly opened popup must enable Send for this response. If deployed behavior differs, rebuild/redeploy the separate Vite frontend or restart its development server, then reload the browser; publishing the API does not build the frontend assets.
