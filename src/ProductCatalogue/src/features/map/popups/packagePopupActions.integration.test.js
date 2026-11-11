@@ -190,6 +190,7 @@ function createHarness() {
   let revision = "a";
   let actionsSnapshot = null;
   let discardHandler = () => {};
+  let sendHandler = () => {};
   let detail = async () => ({
     name: "PRIMARY",
     s101: { name: "PRIMARY", edition: 1, update: 0 },
@@ -235,6 +236,13 @@ function createHarness() {
       }
       if (url === "/electronicproducts/packages/PRIMARY/actions" && actionsSnapshot) {
         return json(actionsSnapshot);
+      }
+      if (url === "/electronicproducts/packages/PRIMARY/send" && options.method === "POST") {
+        sendHandler(options);
+        return json({ jobId: "send-test" });
+      }
+      if (url === "/electronicproducts/packages/send-jobs/send-test") {
+        return json({ status: "Succeeded" });
       }
       if (url === "/electronicproducts/packages/PRIMARY/discard" && options.method === "POST") {
         discardHandler();
@@ -330,6 +338,9 @@ function createHarness() {
     },
     onDiscard(callback) {
       discardHandler = callback;
+    },
+    onSend(callback) {
+      sendHandler = callback;
     },
     destroy() {
       popup?.remove();
@@ -1006,6 +1017,100 @@ test("standalone Product with no active package does not probe package actions",
     assert.equal(
       h.requests.some(({ url }) => url.endsWith("/actions")),
       false
+    );
+  } finally {
+    h.destroy();
+  }
+});
+
+test("PascalCase CanSend from GetActions enables the actual popup Send button", async () => {
+  const h = createHarness();
+  h.actions({
+    PackageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+    SourceDatasetName: "PRIMARY",
+    Paused: false,
+    ControlVersion: null,
+    CanPause: true,
+    CanResume: false,
+    CanDiscard: true,
+    EligibleMembers: [
+      { Key: "s101", DatasetName: "PRIMARY" },
+      { Key: "s57", DatasetName: "SECONDARY" },
+    ],
+    RestrictionCode: null,
+    CanSend: true,
+    Status: 2,
+    BuiltAtUtc: "2026-11-11T13:22:30.53Z",
+    ErrorMessage: null,
+  });
+  try {
+    const popup = h.open();
+    await h.settle();
+    const button = popup
+      .querySelectorAll(".popup-action-bar__action")
+      .find((item) => item.dataset.popupActionId === "package-send-accept");
+    assert.equal(button.getAttribute("aria-disabled"), "false");
+    assert.equal(button.getAttribute("aria-label"), "Send (2)");
+    let sent = 0;
+    h.onSend((options) => {
+      sent++;
+      assert.deepEqual(JSON.parse(options.body), {
+        packageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+      });
+      h.actions({
+        PackageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+        SourceDatasetName: "PRIMARY",
+        Paused: false,
+        EligibleMembers: [],
+        CanSend: false,
+      });
+    });
+    button.click();
+    button.click();
+    await h.settle();
+    assert.equal(sent, 1);
+    assert.equal(button.getAttribute("aria-disabled"), "true");
+    assert.ok(
+      h.requests.some(({ url }) => url === "/electronicproducts/packages/send-jobs/send-test")
+    );
+  } finally {
+    h.destroy();
+  }
+});
+
+test("refreshing an open popup reloads CanSend even when member metadata is unchanged", async () => {
+  const h = createHarness();
+  const state = {
+    PackageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+    SourceDatasetName: "PRIMARY",
+    Paused: false,
+    CanPause: true,
+    CanResume: false,
+    CanDiscard: true,
+    EligibleMembers: [
+      { Key: "s101", DatasetName: "PRIMARY" },
+      { Key: "s57", DatasetName: "SECONDARY" },
+    ],
+    CanSend: false,
+  };
+  h.actions(state);
+  try {
+    const popup = h.open();
+    await h.settle();
+    const button = popup
+      .querySelectorAll(".popup-action-bar__action")
+      .find((item) => item.dataset.popupActionId === "package-send-accept");
+    assert.equal(button.getAttribute("aria-disabled"), "true");
+    button.focus();
+    h.actions({ ...state, CanSend: true });
+    await refreshOpenProductPopup("PRIMARY");
+    await h.settle();
+    assert.equal(button.getAttribute("aria-disabled"), "false");
+    assert.equal(h.doc.activeElement, button);
+    assert.equal(
+      popup.querySelectorAll(".popup-action-bar__action")[2],
+      button,
+      "permission refresh retains the existing focused control"
     );
   } finally {
     h.destroy();
