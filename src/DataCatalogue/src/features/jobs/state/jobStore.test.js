@@ -139,3 +139,63 @@ function createErrorResult(message) {
     meta: {},
   };
 }
+
+test("last successful Packages read is retained for a failed refresh but reset for a new Workspace scope", async () => {
+  let calls = 0;
+  let finishScopedRead;
+  const store = createJobStore({
+    service: {
+      loadJobs() {
+        calls++;
+        if (calls === 1) return Promise.resolve(createSuccessResult({ jobs: [BASE_JOB] }));
+        if (calls === 2) return Promise.resolve(createErrorResult("Offline"));
+        return new Promise((resolve) => {
+          finishScopedRead = resolve;
+        });
+      },
+    },
+  });
+
+  assert.equal(store.getSnapshot().lastSuccessfulLoadAt, null);
+  const before = Date.now();
+  await store.loadJobs();
+  const initialTime = store.getSnapshot().lastSuccessfulLoadAt;
+  assert.ok(initialTime >= before && initialTime <= Date.now());
+
+  await store.loadJobs();
+  assert.equal(store.getSnapshot().lastSuccessfulLoadAt, initialTime);
+  assert.match(store.getSnapshot().error.message, /Offline/);
+
+  const scopedRead = store.loadJobs({ clear: true });
+  assert.equal(store.getSnapshot().lastSuccessfulLoadAt, null);
+  assert.deepEqual(store.getSnapshot().jobs, []);
+  finishScopedRead(createSuccessResult({ jobs: [BASE_JOB] }));
+  await scopedRead;
+  assert.ok(Number.isFinite(store.getSnapshot().lastSuccessfulLoadAt));
+});
+
+test("superseded Packages read never updates the successful read timestamp", async () => {
+  let finishOld;
+  let calls = 0;
+  const store = createJobStore({
+    service: {
+      loadJobs() {
+        calls++;
+        if (calls === 1) {
+          return new Promise((resolve) => {
+            finishOld = resolve;
+          });
+        }
+        return Promise.resolve(createSuccessResult({ jobs: [BASE_JOB] }));
+      },
+    },
+  });
+
+  const old = store.loadJobs();
+  await store.loadJobs();
+  const latest = store.getSnapshot().lastSuccessfulLoadAt;
+  finishOld(createSuccessResult({ jobs: [] }));
+  assert.equal((await old).stale, true);
+  assert.equal(store.getSnapshot().lastSuccessfulLoadAt, latest);
+  assert.equal(store.getSnapshot().jobs.length, 1);
+});

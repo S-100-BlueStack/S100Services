@@ -1,3 +1,35 @@
+## DC-UX-03B — Avoid redundant live Packages reads on panel reopen (candidate, 2026-11-11)
+
+Authoritative user-reported commit: `f0f139451c0cb73965a0498aad0a12290d0541cf`.
+The candidate was prepared from the verified `a986e7f` routing context, with the four
+DC-DEPLOY-01 documentation replacements that the user subsequently committed.
+An exact `f0f1394` source export has not yet been inspected; match preimage hashes
+before applying the candidate to newer local sources.
+
+- The main-map Packages panel no longer starts a second live catalogue read while an
+  earlier read is in flight. Reopening the panel within 60 seconds of an accepted
+  successful load reuses the current `jobStore` data without a new request or
+  synthetic refresh event. The store records the actual completion time of the
+  latest successful, current-generation load, including a verified empty result.
+- Manual Refresh, error recovery, a new Workspace scope (`clear: true`) and an
+  expired reuse window continue to fetch authoritative data. Stale/superseded
+  requests cannot advance the timestamp. Demo/mock Packages still refresh every
+  time their panel opens, preserving mock-created Job behavior.
+- No new backend endpoint, HTTP response cache, hidden network call, credentials,
+  API URL change, route, map layer, UI component or dependency is introduced.
+  The user confirmed the test-server configuration works with an empty
+  `api_target` value; that setting is outside this change.
+- This addresses redundant reads on reopening the panel, **not** the underlying
+  N Workspace-membership reads plus N unique Package-detail reads on a truly
+  fresh load. The observed 26 calls have not been independently reproduced in
+  a browser. A separately scoped backend batch/read contract or trace analysis
+  may be needed to reduce first-load request count; do not invent it here.
+
+See [DC_UX_03B_VALIDATION.md](DC_UX_03B_VALIDATION.md) for automated/manual
+checks, cache semantics and the remaining backend/API performance gap.
+
+---
+
 ## DC-DEPLOY-01 — Test-server API base-path follow-up (2026-11-11)
 
 Source baseline: committed `a986e7f20f96aa3e4a6d5acbaeebe836b5cb91d0`.
