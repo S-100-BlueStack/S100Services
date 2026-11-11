@@ -181,6 +181,13 @@ async function createHarness(
       createAnalyzeDocumentTitle: (names) => names.join(","),
       setAnalyzeRouteUrl: (names) => state.routes.push([...names]),
       renderAnalyzeSidebar: (snapshot) => state.renders.push(snapshot),
+      updateAnalyzeActionControls() {},
+      createAnalyzePackageActions: () => ({
+        reconcile() {},
+        actionsFor: () => [],
+        actionsForKey: () => [],
+        destroy() {},
+      }),
     });
   } else {
     init = runInNewContext(`${source}\ninitReviewPage;`, {

@@ -199,3 +199,20 @@ test("progress stays monotonic when Analyze creates multiple Product layers", as
   assert.deepEqual(updates, [0, 0.25, 0.5, 0.5, 0.75, 1]);
   assert.ok(updates.every((progress, i) => i === 0 || progress >= updates[i - 1]));
 });
+
+test("all Analyze layers receive the page-owned popup actions only when explicitly provided", async () => {
+  const createLayers = await layerFactory();
+  const map = mapHarness();
+  const provider = { actionsForGraphic: () => [], subscribe: () => () => {} };
+  const product = {
+    datasetName: "Ordinary",
+    productContext: context("Ordinary"),
+    aoiGeometry: { x: 11, y: 57 },
+  };
+  await createLayers(map, [product], { popupActions: provider });
+  assert.equal(map.definitions[0].popupReadOnly, true);
+  assert.equal(map.definitions[0].popupReadOnlyActions, provider);
+  const anotherMap = mapHarness();
+  await createLayers(anotherMap, [product]);
+  assert.equal(Object.hasOwn(anotherMap.definitions[0], "popupReadOnlyActions"), false);
+});

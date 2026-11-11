@@ -11,6 +11,7 @@ export function createPopupActionBar({
   productContext,
   refreshAndRender,
   packageActions,
+  providedActions,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
   const actionGroups = getActionGroups({
@@ -19,6 +20,7 @@ export function createPopupActionBar({
     attributes,
     refreshAndRender,
     packageActions,
+    providedActions,
   });
 
   if (actionGroups.length === 0) {
@@ -36,7 +38,15 @@ export function createPopupActionBar({
 
 export function updatePopupActionBar(
   container,
-  { attributes, graphic, productContext, refreshAndRender, packageActions, force = false } = {}
+  {
+    attributes,
+    graphic,
+    productContext,
+    refreshAndRender,
+    packageActions,
+    providedActions,
+    force = false,
+  } = {}
 ) {
   if (!container) {
     return {
@@ -52,6 +62,7 @@ export function updatePopupActionBar(
     attributes,
     refreshAndRender,
     packageActions,
+    providedActions,
   });
 
   if (actionGroups.length === 0) {
@@ -75,7 +86,16 @@ export function updatePopupActionBar(
   };
 }
 
-function getActionGroups({ context, graphic, attributes, refreshAndRender, packageActions }) {
+function getActionGroups({
+  context,
+  graphic,
+  attributes,
+  refreshAndRender,
+  packageActions,
+  providedActions,
+}) {
+  // Analyze supplies verified workflow descriptors; the standard popup builds its own.
+  if (Array.isArray(providedActions)) return providedActions.length ? [providedActions] : [];
   if (!context) {
     return [];
   }

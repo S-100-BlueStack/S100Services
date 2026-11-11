@@ -38,6 +38,7 @@ import {
 } from "../routing/analyzeRoute.js";
 import { loadAnalyzeProductHistories } from "../services/analyzeHistoryLoader.js";
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
+import { createAnalyzePackageActions } from "../services/analyzePackageActions.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -56,6 +57,7 @@ export async function initAnalyzePage({ datasetNames }) {
   let activeWorkspaceLoadRequestId = null;
   let activeWorkspaceLoadType = null;
   let targetedRefreshRequestId = 0;
+  let packageActions = null;
 
   const enabledDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
   document.body.classList.add("pc-analyze-route");
@@ -119,6 +121,7 @@ export async function initAnalyzePage({ datasetNames }) {
   };
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
   const renderSidebar = ({ loading = false, preserveProductFocus = false } = {}) => {
+    packageActions?.reconcile(currentProducts, getEnabledAnalyzeDatasetNames(datasetItems));
     const panel = preserveProductFocus ? document.getElementById("analyze-sidebar-panel") : null;
     const activeElement = document.activeElement;
     const focusedDatasetControl = panel
@@ -220,16 +223,12 @@ export async function initAnalyzePage({ datasetNames }) {
     activeLoaderProgress?.cleanup();
     activeLoaderProgress = null;
 
-    renderAnalyzeSidebar({
-      datasetItems,
-      datasetNames: enabledNextDatasetNames,
-      products: currentProducts,
-      loading: enabledNextDatasetNames.length > 0,
-      productCatalog,
-    });
+    renderSidebar({ loading: enabledNextDatasetNames.length > 0 });
     removeLayers(map, currentLayers);
     currentLayers = [];
     currentProducts = [];
+    // A full reload revokes actions from the previous Product snapshot immediately.
+    packageActions?.reconcile([], []);
 
     if (enabledNextDatasetNames.length === 0) {
       await freshnessMonitor?.prime([]);
@@ -238,13 +237,7 @@ export async function initAnalyzePage({ datasetNames }) {
         activeWorkspaceLoadType = null;
       }
       if (!updateUrl) setAnalyzeRouteUrl([], { replace: true });
-      renderAnalyzeSidebar({
-        datasetItems,
-        datasetNames: [],
-        products: [],
-        loading: false,
-        productCatalog,
-      });
+      renderSidebar({ loading: false });
       return;
     }
 
@@ -295,6 +288,7 @@ export async function initAnalyzePage({ datasetNames }) {
       );
       const layers = await createAnalyzeLayers(map, productsWithHistory, {
         onProgress: loaderProgress.handleRenderProgress,
+        popupActions: packageActions,
       });
 
       if (requestId !== loadRequestId) {
@@ -315,13 +309,7 @@ export async function initAnalyzePage({ datasetNames }) {
       currentProducts = productsWithHistory;
       currentLayers = layers;
 
-      renderAnalyzeSidebar({
-        datasetItems,
-        datasetNames: enabledNextDatasetNames,
-        products: productsWithHistory,
-        loading: false,
-        productCatalog,
-      });
+      renderSidebar({ loading: false });
       if (layers.length > 0) {
         await waitForLayerViews(view, layers);
 
@@ -519,7 +507,9 @@ export async function initAnalyzePage({ datasetNames }) {
       let newLayers = [];
       if (productsToRender.length) {
         pendingReplacement = createPackageReplacement();
-        newLayers = await createAnalyzeLayers(pendingReplacement.map, productsToRender);
+        newLayers = await createAnalyzeLayers(pendingReplacement.map, productsToRender, {
+          popupActions: packageActions,
+        });
         if (!isCurrent()) {
           pendingReplacement.cancel();
           return;
@@ -627,7 +617,9 @@ export async function initAnalyzePage({ datasetNames }) {
         refreshedPackageKeys.has(layer.appAnalyzeWorkUnitKey)
       );
       pendingReplacement = createPackageReplacement();
-      const layers = await createAnalyzeLayers(pendingReplacement.map, refreshedPackages);
+      const layers = await createAnalyzeLayers(pendingReplacement.map, refreshedPackages, {
+        popupActions: packageActions,
+      });
       if (
         refreshRequestId !== targetedRefreshRequestId ||
         workspaceLoadRequestId !== loadRequestId ||
@@ -744,6 +736,17 @@ export async function initAnalyzePage({ datasetNames }) {
     });
   };
 
+  packageActions = createAnalyzePackageActions({
+    getProduct: (key) => currentProducts.find((product) => product.workUnit?.identityKey === key),
+    getProducts: () => currentProducts,
+    isCurrentGraphicLayer: (layer) => currentLayers.includes(layer),
+    isEnabled: (product) =>
+      getEnabledAnalyzeDatasetNames(datasetItems).some(
+        (name) => normalizeDatasetKey(name) === normalizeDatasetKey(product.datasetName)
+      ),
+    refreshProduct: (datasetName) => refreshAnalyzeProducts([datasetName]),
+  });
+
   freshnessMonitor = createWorkspaceFreshnessMonitor({
     getDatasetNames: () => getEnabledAnalyzeDatasetNames(datasetItems),
     onChanged: (changedDatasetNames) => refreshAnalyzeProducts(changedDatasetNames),
@@ -773,13 +776,7 @@ export async function initAnalyzePage({ datasetNames }) {
   // Bootstrap owns the visible loader for direct navigation. Its Product-load
   // session continues that same progress bar until the first map display is ready.
 
-  renderAnalyzeSidebar({
-    datasetItems,
-    datasetNames: enabledDatasetNames,
-    products: [],
-    loading: false,
-    productCatalog,
-  });
+  renderSidebar({ loading: false });
   // Picker and route data have independent owners; a pending catalogue cannot block the route.
   void loadProductCatalogForPicker();
   await loadAnalyzeDatasetItems(datasetItems, {
@@ -825,6 +822,8 @@ export async function initAnalyzePage({ datasetNames }) {
       unsubscribeFromProductOperationState = null;
       freshnessMonitor?.destroy();
       freshnessMonitor = null;
+      packageActions?.destroy();
+      packageActions = null;
       cleanupKeyboardClose?.();
       cleanupKeyboardClose = null;
       closePopup(view);

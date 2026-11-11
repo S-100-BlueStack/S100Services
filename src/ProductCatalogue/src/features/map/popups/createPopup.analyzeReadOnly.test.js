@@ -25,6 +25,16 @@ class TestNode {
     children.forEach((child) => this.appendChild(child));
   }
 
+  insertBefore(child, sibling) {
+    const index = this.children.indexOf(sibling);
+    this.children.splice(index < 0 ? this.children.length : index, 0, child);
+    return child;
+  }
+
+  remove() {
+    this.removed = true;
+  }
+
   replaceChildren(...children) {
     this.children = children;
   }
@@ -38,7 +48,7 @@ function nodeText(node) {
   return [node.textContent ?? "", ...node.children.map(nodeText)].join(" ");
 }
 
-async function loadPopupWithReadOnlyDependencies(graphicContext) {
+async function loadPopupWithReadOnlyDependencies(graphicContext, actionCapture = null) {
   const url = new URL("./createPopup.js", import.meta.url);
   const source = await readFile(url, "utf8");
   const namespace = `__analyzeReadOnlyPopupTest${Math.random().toString(36).slice(2)}`;
@@ -61,8 +71,17 @@ async function loadPopupWithReadOnlyDependencies(graphicContext) {
     createPackageActionSession: () => {
       throw new Error("Package actions must not be used in Analyze");
     },
-    createPopupActionBar: () => {
-      throw new Error("Popup actions must not be used in Analyze");
+    createPopupActionBar: ({ providedActions } = {}) => {
+      if (!actionCapture) throw new Error("Read-only popup actions require an Analyze provider");
+      actionCapture.created.push(providedActions);
+      const bar = new TestNode("div");
+      bar.className = "popup-action-bar";
+      return bar;
+    },
+    updatePopupActionBar: (_bar, { providedActions } = {}) => {
+      if (!actionCapture) throw new Error("Read-only popup actions require an Analyze provider");
+      actionCapture.updated.push(providedActions);
+      return { supported: providedActions.length > 0 };
     },
   };
 
@@ -166,4 +185,59 @@ test("Analyze ordinary popup renders product details without package source cont
     popup.children.some((node) => node.className === "popup-action-bar"),
     false
   );
+});
+
+test("Analyze popup uses only page-owned workflow actions and updates without a second mutation session", async (t) => {
+  setupDocument(t);
+  const capture = { created: [], updated: [] };
+  const createPopup = await loadPopupWithReadOnlyDependencies(null, capture);
+  const graphic = { attributes: { datasetName: "101DK001A", edition: 3 } };
+  const listeners = new Set();
+  const actions = [
+    { id: "package-pause-resume", operation: "pause", isCurrent: () => true, onClick: () => true },
+    {
+      id: "package-discard-export",
+      operation: "discard",
+      isCurrent: () => true,
+      onClick: () => true,
+    },
+    { id: "package-send-accept", operation: "send", isCurrent: () => true, onClick: () => true },
+  ];
+  const template = createPopup({
+    readOnly: true,
+    readOnlyActions: {
+      actionsForGraphic: (selected) => {
+        assert.equal(selected, graphic);
+        return actions;
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  });
+  const popup = template.content({ graphic });
+  assert.equal(popup.children[0].className, "popup-action-bar");
+  assert.deepEqual(
+    capture.created[0].map((item) => item.operation),
+    ["pause", "discard", "send"]
+  );
+  assert.equal(
+    capture.created[0].some((item) => item.id === "tools"),
+    false
+  );
+  // An ArcGIS popup can be prepared off DOM. Actions may activate only once attached.
+  assert.equal(capture.created[0][0].isCurrent(), false);
+  popup.isConnected = true;
+  assert.equal(capture.created[0][0].isCurrent(), true);
+  assert.equal(listeners.size, 1);
+  listeners.forEach((listener) => listener());
+  assert.equal(capture.updated.length, 1);
+  assert.deepEqual(
+    capture.updated[0].map((item) => item.operation),
+    ["pause", "discard", "send"]
+  );
+  popup.isConnected = false;
+  assert.equal(capture.updated[0][0].isCurrent(), false);
+  assert.equal(await capture.updated[0][0].onClick(), false);
 });

@@ -314,6 +314,13 @@ async function harness(
       state.route = values;
     },
     renderAnalyzeSidebar: (snapshot) => state.snapshots.push(snapshot),
+    updateAnalyzeActionControls: noop,
+    createAnalyzePackageActions: () => ({
+      reconcile: noop,
+      actionsFor: () => [],
+      actionsForKey: () => [],
+      destroy: noop,
+    }),
   };
   // Replace imports only, retaining the production initializer and generation logic.
   // The public factory uses production attribute transformation and F2 symbol selection.

@@ -408,18 +408,22 @@ function createXmlBlock(xml, availability = null) {
   details.open = hasXml;
 
   const summary = document.createElement("summary");
-  summary.textContent = hasXml ? "IC-ENC report XML" : "IC-ENC report XML unavailable";
-
+  summary.textContent = "IC-ENC";
+  details.appendChild(summary);
+  if (!hasXml) {
+    details.appendChild(
+      createInternalValidationStateMessage({
+        asValidation: false,
+        title: "No IC-ENC reports found",
+        message: "No IC-ENC reports were returned for this product.",
+      })
+    );
+    return details;
+  }
   const pre = document.createElement("pre");
   const code = document.createElement("code");
-  code.textContent = hasXml
-    ? formatXml(xml)
-    : availability?.implemented === false
-      ? (availability.availabilityReason ??
-        "IC-ENC reports are not available for this Product source yet.")
-      : "No XML report was returned for this product.";
+  code.textContent = formatXml(xml);
   pre.appendChild(code);
-  details.appendChild(summary);
   details.appendChild(pre);
 
   return details;
@@ -436,8 +440,8 @@ function createInternalValidationReportsBlock(reports = [], availability = null)
   details.open = hasReports;
   const summary = document.createElement("summary");
   summary.textContent = hasReports
-    ? `Internal validation reports (${validReports.length})`
-    : "Internal validation reports unavailable";
+    ? `Internal validation (${validReports.length})`
+    : "Internal validation";
 
   const content = document.createElement("div");
   content.className = "analyze-internal-validation__content";
@@ -451,12 +455,15 @@ function createInternalValidationReportsBlock(reports = [], availability = null)
   if (!hasReports) {
     content.appendChild(
       createInternalValidationStateMessage({
-        title: "Internal validation not available",
+        title:
+          availability?.implemented === false
+            ? "Internal validation not available"
+            : "No validation reports found",
         message:
           availability?.implemented === false
             ? (availability.availabilityReason ??
-              "Internal validation is not available for this Product source yet.")
-            : "The Analyze UI is ready for internal validation reports, but no report payload was returned for this product.",
+              "Internal validation is not supported for this source.")
+            : "No validation reports were returned for this product.",
       })
     );
     details.append(summary, content);
@@ -561,15 +568,21 @@ function createInternalValidationMetadataItem(label, value) {
   return item;
 }
 
-function createInternalValidationStateMessage({ title, message }) {
+function createInternalValidationStateMessage({ title, message, asValidation = true }) {
   const container = document.createElement("div");
-  container.className = "analyze-internal-validation__state";
-  const titleElement = document.createElement("p");
-  titleElement.className = "analyze-internal-validation__state-title";
+  container.className = asValidation
+    ? "analyze-report-state analyze-internal-validation__state"
+    : "analyze-report-state";
+  const titleElement = document.createElement("h3");
+  titleElement.className = asValidation
+    ? "analyze-report-state__title analyze-internal-validation__state-title"
+    : "analyze-report-state__title";
   titleElement.textContent = title;
 
   const messageElement = document.createElement("p");
-  messageElement.className = "analyze-internal-validation__state-message";
+  messageElement.className = asValidation
+    ? "analyze-report-state__message analyze-internal-validation__state-message"
+    : "analyze-report-state__message";
   messageElement.textContent = message;
 
   container.append(titleElement, messageElement);
@@ -587,7 +600,7 @@ function createHistoryBlock(product) {
   content.className = "analyze-history__content";
   if (product.historyError) {
     content.append(
-      createProductHistoryStateMessage({
+      createHistoryState({
         title: "History could not be loaded",
         message: product.historyError,
       })
@@ -597,7 +610,7 @@ function createHistoryBlock(product) {
   }
   if (!product.history) {
     content.append(
-      createProductHistoryStateMessage({
+      createHistoryState({
         title: "History unavailable",
         message: `History for ${product.datasetName} was not loaded.`,
       })
@@ -607,7 +620,7 @@ function createHistoryBlock(product) {
   }
   if (!product.history.endpointAvailable) {
     content.append(
-      createProductHistoryStateMessage({
+      createHistoryState({
         title: "History unavailable",
         message:
           product.history.availabilityReason ??
@@ -619,7 +632,7 @@ function createHistoryBlock(product) {
   }
   if (product.history.events.length === 0) {
     content.append(
-      createProductHistoryStateMessage({
+      createHistoryState({
         title: "No historical changes found",
         message: "No history events were returned for this product.",
       })
@@ -634,6 +647,12 @@ function createHistoryBlock(product) {
 
   return details;
 }
+function createHistoryState(options) {
+  const state = createProductHistoryStateMessage(options);
+  state.classList.add("analyze-report-state");
+  return state;
+}
+
 function normalizeDatasetNames(datasetNames) {
   return normalizeAnalyzeDatasetItems(datasetNames).map((item) => item.name);
 }

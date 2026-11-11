@@ -1,8 +1,6 @@
 # Analyze
 
-The Analyze feature shows product analysis content for one or more selected products. It is separate from the main map popup action flow.
-
-Product mutation actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Cancel Export should stay in the product popup.
+The Analyze feature shows Product analysis content for one or more selected Products. It has its own lifecycle, independent of the Main Map popup. The R01C workflow controls appear in the Analyze map Product popup and reuse the existing backend-authorized Package action session without borrowing the Main Map popup session.
 
 ## Responsibilities
 
@@ -16,10 +14,11 @@ Analyze owns:
 - Internal validation report display
 - Analyze-specific loading progress
 - Analyze history content
+- Analyze-scoped Product popup workflow controls and action-session lifetime
 
 Analyze does not own:
 
-- Product mutation actions
+- Backend mutation permission or the Package action API contract
 - Popup action availability
 - Export state
 - Product operation state
@@ -76,9 +75,7 @@ The Analyze sidebar is for analysis/report content. It can show:
 - load warnings
 - history content
 
-It should not show product mutation actions.
-
-Product actions belong in the popup action bar so the action model stays consistent across the app.
+The sidebar remains dedicated to Product metadata, History, IC-ENC and Internal validation. Pause/Resume, Discard and Send/Accept belong exclusively to the Analyze **map popup**, not to Product cards in this sidebar. The popup reuses the shared action bar without Tools. Unsupported Products show the same controls disabled; no display state grants mutation permission.
 
 ### FI-035 compact presentation
 
@@ -159,9 +156,8 @@ Electronic Analyze metadata and diagnostics are loaded from current public endpo
 mock payload substitution.
 
 Keep the UI-facing Analyze product shape stable, map backend-specific report fields into the existing
-normalizers, keep map graphics minimal, and keep Product mutation actions out of the Analyze sidebar.
-Do not make Analyze depend directly on popup operation state unless there is a specific Product action UX
-requirement.
+normalizers and keep map graphics minimal. The page owns its own verified Package action
+session; it never depends on popup state or bypasses source-specific mutation gating.
 
 ## FI-011D source-aware workspace loading
 
@@ -197,6 +193,33 @@ If its top-level values are absent, Analyze first uses the same member's verifie
 use the backend-provided `CurrentEdition` or `CurrentUpdate` from the same member's verified,
 source-owned targeted AOI snapshot. An absent or mismatched member identity cannot supply a fallback;
 Update `0` remains a valid value. This does not guess or synthesize version numbers.
+
+## R01C Analyze Package actions and report states (candidate; browser acceptance pending)
+
+The Analyze map Product popup has Pause/Resume, Discard and Send/Accept controls driven by
+`createPopupWorkflowActions()` and the same `createPackageActionSession()` used on Main Map.
+Analyze owns the session per current, enabled work-unit identity; it does not reuse popup state.
+Only a resolved Package with matching member identities and backend-owned
+`hasActivePackage === true` may read `electronicproducts/packages/{name}/actions`. Each operation
+requires the latest server-projected eligibility, including after the Discard confirmation.
+Send/Accept remains limited to the existing opt-in development demo mode and never simulates
+production authorization. An unknown, inactive or non-Package Product cannot dispatch.
+
+The controller destroys sessions when Products are removed, disabled, replaced or the page
+is destroyed. Successful Pause/Resume/Discard requests trigger targeted Analyze refresh;
+accepted R01B incremental caching, off-map layer replacement and full manual Refresh remain
+unchanged. Action projection changes update existing popup buttons in place, preserving focus and
+open report sections. The sidebar does not render workflow buttons; Tools is not included in the
+Analyze popup. An inactive, unregistered or replaced map Graphic cannot dispatch. Discard uses the shared confirmation dialog; Cancel and superseded
+selection or eligibility never dispatch to the backend.
+
+History, IC-ENC and Internal validation keep distinct content and failure contracts but now
+share a compact empty-state presentation. Their collapsed headings do not say
+"unavailable" when no payload is returned. For IC-ENC, an empty or unimplemented source
+renders `No IC-ENC reports found` rather than a technical backend-support message;
+no report content or download URL is fabricated. Internal validation and History retain
+their source-specific unavailable states and genuine request errors remain visible.
+This UI change does not create an IC-ENC download endpoint.
 
 ## Public route
 

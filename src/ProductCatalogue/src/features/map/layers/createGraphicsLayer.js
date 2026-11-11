@@ -26,7 +26,12 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
     capabilities,
   });
 
-  const popupTemplate = createPopup({ readOnly: layerConfig.popupReadOnly === true });
+  const popupTemplate = createPopup({
+    readOnly: layerConfig.popupReadOnly === true,
+    ...(layerConfig.popupReadOnlyActions
+      ? { readOnlyActions: layerConfig.popupReadOnlyActions }
+      : {}),
+  });
 
   reportProgress(onProgress, 0, "Preparing layer", title);
 

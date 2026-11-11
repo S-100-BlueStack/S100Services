@@ -79,6 +79,10 @@ for (const emptyLegacy of [false, true]) {
       node.className.split(" ").includes("analyze-package-member")
     );
     assert.equal(sections.length, 2);
+    assert.equal(
+      card.collect((node) => node.className.includes("analyze-product-card__actions")).length,
+      0
+    );
     for (const [index, section] of sections.entries()) {
       const links = section.collect((node) => node.tagName === "calcite-link");
       assert.deepEqual(
@@ -93,7 +97,7 @@ for (const emptyLegacy of [false, true]) {
       if (emptyLegacy && index === 1) {
         assert.equal(
           section.querySelector(".analyze-internal-validation__state-title").textContent,
-          "Internal validation not available"
+          "No validation reports found"
         );
       }
     }

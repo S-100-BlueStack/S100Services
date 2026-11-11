@@ -60,6 +60,19 @@ Cancel-first focus, Escape/return focus, and light/dark presentation.
 No full Product Catalogue application or screen-reader verification is implied
 by this commit. Future corrections should be specific, reproduced real-usage findings.
 
+## PC-UX-R01C - Analyze actions and report-state consistency (candidate)
+
+Proposed on merge baseline `1bfcd2c134b4f8d81e444db4072b985175d00840`.
+The Analyze **map Product popup** gains Package-scoped Pause/Resume, Discard and Send/Accept
+controls, reusing the shared popup action presentation and an Analyze-owned verified
+session without inheriting Main Map popup lifetime. The sidebar stays read-only;
+no Tools button is added to Analyze. Non-Package/unsupported mutations fail closed.
+The History, IC-ENC and Internal validation empty states share a neutral presentation.
+IC-ENC reports with no payload display `No IC-ENC reports found`, not technical
+backend-unavailability copy; this does not invent report data or a download endpoint. See
+[Analyze](../src/features/analyze/README.md). Browser validation and developer
+acceptance remain pending; this note does not mark R01C complete.
+
 ## PC-UX-R01A - real-usage stability corrections (candidate, local acceptance pending)
 
 The November 10 real-usage walkthrough identified accidental Discard, concurrent Main-map

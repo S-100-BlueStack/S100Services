@@ -68,3 +68,16 @@ test("Analyze gets a read-only popup without changing the default Main Map popup
   assert.equal(analyze.popupTemplate.readOnly, true);
   assert.deepEqual(map.layers, [regular, analyze]);
 });
+
+test("Analyze passes a page-owned popup provider without affecting Main Map layers", async () => {
+  const { createGraphicsLayer, captured } = await loadFactory();
+  const actions = { actionsForGraphic: () => [], subscribe: () => () => {} };
+  const map = { add() {} };
+  await createGraphicsLayer(map, {
+    id: "analyze-actions",
+    popupReadOnly: true,
+    popupReadOnlyActions: actions,
+    data: { type: "FeatureCollection", features: [] },
+  });
+  assert.deepEqual(captured, [{ readOnly: true, readOnlyActions: actions }]);
+});

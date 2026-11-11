@@ -7,7 +7,7 @@ import {
   registerAnalyzeGraphicProductContexts,
 } from "./analyzeGraphicProductContext.js";
 
-export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
+export async function createAnalyzeLayers(map, products, { onProgress, popupActions } = {}) {
   const ordinaryProducts = products.filter((product) => product.workUnit?.kind !== "package");
   const packageProducts = products.filter((product) => product.workUnit?.kind === "package");
   const compatibilityEntries = ordinaryProducts
@@ -104,7 +104,11 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
         : undefined;
       const layer = await createLayer(
         map,
-        { ...definition, popupReadOnly: true },
+        {
+          ...definition,
+          popupReadOnly: true,
+          ...(popupActions ? { popupReadOnlyActions: popupActions } : {}),
+        },
         { onProgress: reportLayerProgress }
       );
       if (layer) {

@@ -53,7 +53,7 @@ const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "exportMetadata",
 ]);
 
-export function createPopup({ readOnly = false } = {}) {
+export function createPopup({ readOnly = false, readOnlyActions = null } = {}) {
   return {
     title: (event) => {
       return getPopupTitle(event.graphic?.attributes);
@@ -75,16 +75,54 @@ export function createPopup({ readOnly = false } = {}) {
         attributes: currentAttributes,
       });
       if (readOnly) {
-        // Analyze owns read-only metadata, not the source-authorized action session.
-        // The package action snapshot requires a live AOI source and would clear
-        // valid Analyze popup content when that source is intentionally absent.
+        // Analyze graphics have no live AOI source snapshot. Keep the metadata
+        // renderer read-only and delegate optional actions to the page owner.
         renderPopupContent(container, currentAttributes, {
           graphic,
           productContext,
           errorDetails,
           readOnly: true,
         });
-        cleanupWhenDisconnected(container, () => errorDetails.destroy());
+        let disposeActionSubscription = null;
+        function updateReadOnlyActions() {
+          if (disposed || !readOnlyActions) return;
+          const descriptors = readOnlyActions.actionsForGraphic?.(graphic) ?? [];
+          // Never grant popup lifetime to an action that survived selection change.
+          const providedActions = descriptors.map((descriptor) => ({
+            ...descriptor,
+            isCurrent: () =>
+              !disposed && container.isConnected && descriptor.isCurrent?.() !== false,
+            onClick: (options) =>
+              !disposed && container.isConnected && descriptor.isCurrent?.() !== false
+                ? descriptor.onClick?.(options)
+                : false,
+          }));
+          const existing = getDirectChildByClass(container, "popup-action-bar");
+          if (existing) {
+            if (
+              !updatePopupActionBar(existing, { graphic, productContext, providedActions })
+                .supported
+            )
+              existing.remove();
+          } else if (providedActions.length) {
+            const bar = createPopupActionBar({ graphic, productContext, providedActions });
+            if (bar) container.insertBefore(bar, getOrCreatePopupSection(container));
+          }
+          container.className = getDirectChildByClass(container, "popup-action-bar")
+            ? "popup-container popup-container--with-action-bar"
+            : "popup-container";
+        }
+        updateReadOnlyActions();
+        if (readOnlyActions?.subscribe) {
+          disposeActionSubscription = readOnlyActions.subscribe(updateReadOnlyActions);
+        }
+        cleanupWhenDisconnected(container, () => {
+          disposed = true;
+          disposeActionSubscription?.();
+          const bar = getDirectChildByClass(container, "popup-action-bar");
+          if (bar) updatePopupActionBar(bar, { graphic, productContext, providedActions: [] });
+          errorDetails.destroy();
+        });
         return container;
       }
       const popupDatasetName =
