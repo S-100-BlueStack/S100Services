@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailModels.cs" Link="Production/ValidationEmailModels.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/Providers/IcEnc/IcEncReportParser.cs" Link="Production/IcEncReportParser.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailMatcher.cs" Link="Production/ValidationEmailMatcher.cs" />
+  <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/IValidationEmailParser.cs" Link="Production/IValidationEmailParser.cs" />
+</ItemGroup>
+</Project>

@@ -27,7 +27,10 @@ INSERT @ApplicationTables VALUES
     (N'EncPackageReplay'),
     (N'ProductIcEncDelivery'),
     (N'EncPackageControl'),
-    (N'ProductHistoryEvent');
+    (N'ProductHistoryEvent'),
+    (N'ProductIcEncDeliveryFile'),
+    (N'IcEncMailboxSync'),
+    (N'IcEncInboundEmail');
 
 DECLARE @Targets TABLE (
     ObjectId int PRIMARY KEY,

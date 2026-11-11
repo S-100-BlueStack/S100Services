@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Log GeneratedAt="2026-03-05T0811" Toolname="DmdLoadLog">
+  <Cell Name="DK30549D_000" ProductType="S57" CRC="9268B827">
+    <Message Category="Comment">Starting processing of: DK30549D_000
+Time : Thursday, March 5, 2026, 8:11:08 AM
+Type : FTP from Path denmark
+</Message>
+    <Message Category="Error">Error, 2019, The ancillary file DKSOUND2.TIF is referenced by the CATALOG CATALOG.031 and could not be found in the data file</Message>
+    <Message Category="Comment">Processing Edition 9, Update 0</Message>
+  </Cell>
+</Log>

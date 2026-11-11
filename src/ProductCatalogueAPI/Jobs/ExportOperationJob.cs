@@ -9,13 +9,6 @@ using S100FC.ProductCatalogue;
 
 namespace ProductCatalogueAPI.Jobs
 {
-    public interface IExportJobExecutionContext
-    {
-        string JobId { get; }
-        T? GetJobParameter<T>(string name);
-        void SetJobParameter(string name, object? value);
-    }
-
     public sealed class ExportOperationJob(
         IProductManager productManager,
         IDatasetLockService datasetLockService,

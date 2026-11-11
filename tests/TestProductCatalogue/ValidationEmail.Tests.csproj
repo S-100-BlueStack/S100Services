@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <PackageReference Include="Hangfire.Core" Version="1.8.25" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <Compile Include="ValidationEmailTests.cs" />
+    <Compile Include="ValidationEmailProviderBoundaryTests.cs" />
+    <Compile Include="ValidationEmailSyncTests.cs" />
+    <Compile Include="ValidationEmailAuditTests.cs" />
+    <Compile Include="ValidationEmailSimulationTests.cs" />
+    <Compile Include="ValidationEmailSendSimulationTests.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Jobs/UploadSingularProductJob.cs" Link="Production/UploadSingularProductJob.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Jobs/SendToIcEncJobRequest.cs" Link="Production/SendToIcEncJobRequest.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Jobs/IExportJobExecutionContext.cs" Link="Production/IExportJobExecutionContext.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Jobs/ExportJobParameterNames.cs" Link="Production/ExportJobParameterNames.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Jobs/IcEncDeliveryContracts.cs" Link="Production/IcEncDeliveryContracts.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Export/S100CompilerConfiguration.cs" Link="Production/S100CompilerConfiguration.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Configuration/SendToIcEncOptions.cs" Link="Production/SendToIcEncOptions.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Data/Repositories/IProductRepository.cs" Link="Production/IProductRepository.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Data/Models/ProductRecord.cs" Link="Production/ProductRecord.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Data/Models/WorkflowModels.cs" Link="Production/WorkflowModels.cs" />
+    <Compile Include="../TestProductManager/MutationAuditLogFilterTests.cs" Link="Existing/MutationAuditLogFilterTests.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Filters/MutationAuditLogFilter.cs" Link="Production/MutationAuditLogFilter.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationMailboxSynchronizer.cs" Link="Production/ValidationMailboxSynchronizer.cs" />
+    <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Xunit" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailModels.cs" Link="Production/ValidationEmailModels.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/Providers/IcEnc/IcEncReportParser.cs" Link="Production/IcEncReportParser.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailMatcher.cs" Link="Production/ValidationEmailMatcher.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailProcessor.cs" Link="Production/ValidationEmailProcessor.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationOutgoingManifest.cs" Link="Production/ValidationOutgoingManifest.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailOptions.cs" Link="Production/ValidationEmailOptions.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailSimulation.cs" Link="Production/ValidationEmailSimulation.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailSenderTrust.cs" Link="Production/ValidationEmailSenderTrust.cs" />
+    <None Include="IcEncEmailFixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/IValidationEmailParser.cs" Link="Production/IValidationEmailParser.cs" />
+<Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/Providers/IcEnc/IcEncResponseGenerator.cs" Link="Production/IcEncResponseGenerator.cs" />
+</ItemGroup>
+</Project>

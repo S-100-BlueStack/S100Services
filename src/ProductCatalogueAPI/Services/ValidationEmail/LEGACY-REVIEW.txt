@@ -1,0 +1,78 @@
+IC-ENC LEGACY IMPLEMENTATION REVIEW - 10 NOVEMBER 2026
+
+Scope: the original attached facc5c2da596af64fcd900eea68a2b71d06f7f1d
+snapshot and the complete IC-ENC mail package delivered on 9 November. No claim
+is made about unprovided changes in another checkout or branch.
+
+The old ProductStatusEmailParser, Mails models, MailImport/EWS options and Graph
+authentication options were compiled source. However, the complete Graph client,
+Graph reader, local MSG processing job and both startup registration/execution
+blocks were commented out. The supplied snapshot therefore did not register or
+run that workflow. It was incomplete scaffolding, rather than a second active
+implementation that could safely be switched on.
+
+Findings in the commented job if it were reactivated:
+- Product selection used substring Contains against a snapshot of current
+  products, then a guessed S-57-to-S-101 name conversion. Neither identifies an
+  immutable candidate or outgoing send attempt.
+- The switch omitted NotAcceptedForDistribution, despite the parser returning
+  that value. Its default Frozen state would misrepresent an ordinary rejection.
+- Successful registration mapped to Exported. A receipt did not prove validation
+  acceptance. Holding mapped to Frozen, confusing conditional validation with
+  the independent package/workflow Hold semantics.
+- AppendAsync forced S-101 and reused the current product version, risking
+  updates to the wrong format or a newer candidate. A missing product could be
+  dereferenced while reading its edition/update.
+- The frozen-state branch occurred after branches that already handled changed
+  and unchanged state, so it did not provide the intended protection.
+- Subject/CRC parsing did not inspect P007 conclusions, edition metadata or
+  cross-source disagreements. Attachments were selected by extension only.
+- There was no durable inbox, immutable-message deduplication, synchronization
+  checkpoint, sender-authentication gate, safe retry/outbox handling, or exact
+  transmission correlation. Repeated directory scans could revisit every MSG.
+- The Graph sketch traversed all folders, including hidden ones, and accumulated
+  results without the new size limits or durable per-page capture.
+- The Task<Task> method and TODO state mappings were additional evidence that
+  this was unfinished work. Simply uncommenting it would not implement the
+  current paired-candidate acceptance/publication contract.
+
+Useful ideas retained in the replacement:
+- Transport-independent parsing and normalized data models.
+- Negative-outcome precedence and explicit distinction between registration,
+  final acceptance/rejection and holding.
+- Unicode punctuation/whitespace normalization, including historical exported
+  subject variants using NAME_001 and CRC_XXXXXXXX. These tolerances are retained
+  behind exact identity/report cross-checks, without guessed format conversion.
+- Local MSG replay without a production Outlook/MSG reader dependency.
+- Paged mailbox reads, cancellation propagation and original attachment bytes.
+
+All-folder/hidden-folder traversal is intentionally not enabled by default. The
+new adapter targets an explicitly configured folder with a durable delta cursor;
+the operator can select the IC-ENC intake folder without scanning unrelated mail.
+The old device-code/client-secret/EWS settings are replaced by the existing new
+certificate-based adapter, or the read-only mailbox abstraction for another host.
+
+Removed files:
+src/ProductCatalogueAPI/Services/MailImport/MailImportOptions.cs
+src/ProductCatalogueAPI/Services/MailImport/ProductStatusEmailParser.cs
+src/ProductCatalogueAPI/Services/Graph/GraphAuthOptions.cs
+src/ProductCatalogueAPI/Services/Graph/GraphClientFactory.cs
+src/ProductCatalogueAPI/Services/Graph/GraphMailReaderService.cs
+src/ProductCatalogueAPI/Jobs/ProcessProductStatusEmailsJob.cs
+src/ProductCatalogueAPI/Models/Mails.cs
+
+Program.cs's two dead mail blocks are removed. No obsolete mail-import type or
+startup reference remains in ProductCatalogue API source or tests. Historical
+frontend readiness-audit prose is left as historical evidence, not executable
+configuration. Controllers, repositories, jobs and services use only ValidationEmail.
+
+The send job still uses its original public contracts. Small transport/delivery
+and job-context interfaces were moved unchanged into independent source files
+so the real send job can be tested without ArcGIS or SQL. This does not change
+their namespaces, assembly identities, signatures or runtime behavior.
+
+Simulation is an additional adapter: it derives actual candidate identity from
+the stored exchange set, chooses one of four response classes (eight sample
+variants), persists the random result once, and passes it through the normal
+parser/matcher as a permanently synthetic preview. It does not reproduce any of
+the unsafe legacy AppendAsync state mappings or create a second acceptance path.

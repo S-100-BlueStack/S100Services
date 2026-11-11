@@ -2,21 +2,9 @@ using Dapper;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
 using System.Data;
+using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI.Services.Jobs;
-
-/// <summary>Reserves one immutable candidate for delivery and records the outcome in SQL.</summary>
-public interface IIcEncDeliveryRepository
-{
-    Task<IcEncDelivery?> ReserveAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken cancellationToken);
-    Task MarkDeliveredAsync(Guid deliveryId, DateTime nowUtc, CancellationToken cancellationToken);
-    Task MarkUncertainAsync(Guid deliveryId, DateTime nowUtc, string reason, CancellationToken cancellationToken);
-    /// <summary>Resolves an uncertain transfer after an operator verifies IC-ENC's intake.</summary>
-    Task<bool> ReconcileAsync(Guid deliveryId, bool receivedByIcEnc, string? owner, DateTime nowUtc, CancellationToken cancellationToken);
-}
-
-/// <summary>The ZIP belongs to the exact revision and version reserved by the send job.</summary>
-public sealed record IcEncDelivery(Guid Id, string DatasetName, ProductSpecification Specification, int Edition, int Update, byte[] ExchangeSet);
 
 public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactory) : IIcEncDeliveryRepository
 {
@@ -65,6 +53,8 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
             throw new InvalidOperationException("The candidate has no stored exchange set.");
 
         var deliveryId = Guid.NewGuid();
+        // Capture the exact transmitted file and checksum in the same transaction as the immutable revision reservation.
+        var manifest = ValidationOutgoingManifest.Read(artifact.Content, specification.ToString(), datasetName, update);
         await connection.ExecuteAsync(new CommandDefinition("""
             INSERT INTO dbo.ProductIcEncDelivery
                 (delivery_id, product_export_track_id, product_revision_id, job_id, status, reserved_at_utc)
@@ -78,6 +68,11 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
             """, new { DeliveryId = deliveryId, TrackId = track.Id, artifact.RevisionId, JobId = jobId,
                        NowUtc = nowUtc, State = ProductState.InTransit, Edition = edition, Update = update,
                        HistoryId = Guid.NewGuid() }, transaction, cancellationToken: cancellationToken));
+        foreach (var file in manifest)
+            await connection.ExecuteAsync(new CommandDefinition("""
+                INSERT dbo.ProductIcEncDeliveryFile (delivery_id, file_name, sha256, crc)
+                VALUES (@DeliveryId, @FileName, @Sha256, @Crc);
+                """, new { DeliveryId = deliveryId, file.FileName, file.Sha256, file.Crc }, transaction, cancellationToken: cancellationToken));
         transaction.Commit();
         return new IcEncDelivery(deliveryId, datasetName, specification, edition, update, artifact.Content);
     }

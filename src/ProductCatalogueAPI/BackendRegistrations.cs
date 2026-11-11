@@ -11,6 +11,7 @@ using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using ProductCatalogueAPI.Services.SevenCs;
 using Serilog;
+using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI;
 
@@ -38,6 +39,7 @@ public static class BackendRegistrations
         services.AddScoped<IEncPackageActionService, EncPackageActionService>();
         services.AddScoped<IEncPackageAcknowledgementRepository, EncPackageAcknowledgementRepository>();
         services.AddScoped<IIcEncAcknowledgementService, IcEncAcknowledgementService>();
+        services.AddValidationEmailProcessing(configuration, processProfile.RunsHangfireServer);
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
         services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
         services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();

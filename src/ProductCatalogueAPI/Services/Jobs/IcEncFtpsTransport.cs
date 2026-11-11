@@ -7,12 +7,6 @@ using System.Security.Authentication;
 
 namespace ProductCatalogueAPI.Services.Jobs;
 
-/// <summary>Uploads the immutable exchange set to a product-specific IC-ENC FTPS intake directory.</summary>
-public interface IIcEncTransport
-{
-    Task<string> UploadAsync(IcEncDelivery delivery, CancellationToken cancellationToken);
-}
-
 public sealed class IcEncFtpsTransport(IOptionsMonitor<SendToIcEncOptions> options, ILogger<IcEncFtpsTransport> logger) : IIcEncTransport
 {
     public Task<string> UploadAsync(IcEncDelivery delivery, CancellationToken cancellationToken) {

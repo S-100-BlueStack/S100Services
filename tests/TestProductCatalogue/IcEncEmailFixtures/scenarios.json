@@ -1,0 +1,50 @@
+[
+  {
+    "Subject": "CELL REGISTRATION \u2013 SUCCESSFUL \u2013 DK30549D.000 - CRC: 9268B827",
+    "FileName": "DK30549D.000",
+    "Outcome": "Registered",
+    "Attachment": "DMDLOAD_DK30549D_000.XML"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK30557D.001 - NOT ACCEPTED FOR DISTRIBUTION - CRC: 40DB80AE",
+    "FileName": "DK30557D.001",
+    "Outcome": "Rejected",
+    "Attachment": "P007_DK30557D_001.DOC"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK40343E.000 - NOT ACCEPTED FOR DISTRIBUTION - CRC: 20D454EC",
+    "FileName": "DK40343E.000",
+    "Outcome": "Rejected",
+    "Attachment": "P007_DK40343E_000.DOC"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK40349E.000 - NOT ACCEPTED FOR DISTRIBUTION",
+    "FileName": "DK40349E.000",
+    "Outcome": "Rejected",
+    "Attachment": "P007_DK40349E_000.DOC"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK4BQDME.001 - NOT ACCEPTED FOR DISTRIBUTION - CRC: 7ED6CCD6",
+    "FileName": "DK4BQDME.001",
+    "Outcome": "Rejected",
+    "Attachment": "P007_DK4BQDME_001.DOC"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK4CADKE.003 - PASSED IN HOLDING",
+    "FileName": "DK4CADKE.003",
+    "Outcome": "PendingConditions",
+    "Attachment": "P007_DK4CADKE_003.DOC"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK5OTERP.000 - ACCEPTED FOR DISTRIBUTION - CRC: C0571EC1",
+    "FileName": "DK5OTERP.000",
+    "Outcome": "Accepted",
+    "Attachment": "P007_DK5OTERP_000.DOC"
+  },
+  {
+    "Subject": "VALIDATION OF CELL - DK5QEQKN.001 - PASSED IN HOLDING",
+    "FileName": "DK5QEQKN.001",
+    "Outcome": "PendingConditions",
+    "Attachment": "P007_DK5QEQKN_001.DOC"
+  }
+]

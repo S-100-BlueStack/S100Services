@@ -1,19 +1,19 @@
 /*
 Product Catalogue - fresh System schema for an existing SQL Server database.
-Generated 2026-10-29 from the latest supplied S100Services snapshot:
-  68d57f39a4670bd376d083add74eee360e4d812d (clean main), with migration 009.
+Updated 2026-11-09 from the supplied S100Services snapshot:
+  facc5c2da596af64fcd900eea68a2b71d06f7f1d (clean main), with migration 011.
 
 In SSMS, select the existing database that will be used by SystemConnection
 (the S-128 database if co-locating application tables with the geodatabase),
 then execute this entire file as the database owner. No database name is assumed.
 The API and Worker must point SystemConnection at this same database.
 
-Includes the final schema from migrations 001, 002, 003, 004, 006, 007, 008, 009
-and BE108A_001, with their keys, constraints, defaults and indexes.
+Includes the final schema from migrations 001, 002, 003, 004, 006, 007, 008, 009,
+010, 011 and BE108A_001, with their keys, constraints, defaults and indexes.
 This replaces those migrations for a FRESH application schema only.
 No legacy JobTable conversion, seed products or checkpoint rows are needed.
 
-Creates 14 dbo application tables in one transaction. Stops if any expected
+Creates 17 dbo application tables in one transaction. Stops if any expected
 application object already exists; use incremental migrations for upgrades.
 Unrelated existing dbo/S100/S128/sde geodatabase objects are left untouched.
 Does not create a database, Hangfire objects, spatial tables, users or grants.
@@ -52,7 +52,10 @@ INSERT @ApplicationTables (TableName) VALUES
     (N'EncPackageReplay'),
     (N'ProductIcEncDelivery'),
     (N'EncPackageControl'),
-    (N'ProductHistoryEvent');
+    (N'ProductHistoryEvent'),
+    (N'ProductIcEncDeliveryFile'),
+    (N'IcEncMailboxSync'),
+    (N'IcEncInboundEmail');
 
 BEGIN TRY
     BEGIN TRANSACTION;
@@ -405,6 +408,56 @@ IF EXISTS (
 )
     THROW 51092, 'BE108A: incompatible audit index columns, order or includes.', 1;
 
+IF OBJECT_ID(N'dbo.ProductIcEncDeliveryFile', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ProductIcEncDeliveryFile (
+        delivery_id uniqueidentifier NOT NULL,
+        file_name varchar(128) COLLATE Latin1_General_100_BIN2 NOT NULL,
+        sha256 binary(32) NOT NULL,
+        crc varchar(8) COLLATE Latin1_General_100_BIN2 NULL,
+        CONSTRAINT PK_ProductIcEncDeliveryFile PRIMARY KEY (delivery_id, file_name),
+        CONSTRAINT FK_ProductIcEncDeliveryFile_Delivery FOREIGN KEY (delivery_id) REFERENCES dbo.ProductIcEncDelivery(delivery_id)
+    );
+    CREATE INDEX IX_ProductIcEncDeliveryFile_Name ON dbo.ProductIcEncDeliveryFile(file_name);
+END;
+
+IF OBJECT_ID(N'dbo.IcEncMailboxSync', N'U') IS NULL
+    CREATE TABLE dbo.IcEncMailboxSync (
+        mailbox_key char(64) NOT NULL CONSTRAINT PK_IcEncMailboxSync PRIMARY KEY,
+        initial_from_utc datetimeoffset(7) NOT NULL,
+        cursor_url nvarchar(max) NULL,
+        next_poll_at_utc datetime2(7) NOT NULL,
+        updated_at_utc datetime2(7) NOT NULL
+    );
+
+IF OBJECT_ID(N'dbo.IcEncInboundEmail', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.IcEncInboundEmail (
+        inbound_id uniqueidentifier NOT NULL CONSTRAINT PK_IcEncInboundEmail PRIMARY KEY,
+        mailbox_key char(64) NOT NULL,
+        transport_id_hash binary(32) NOT NULL,
+        received_at_utc datetimeoffset(7) NOT NULL,
+        message_json nvarchar(max) NOT NULL,
+        result_json nvarchar(max) NULL,
+        review_json nvarchar(max) NULL,
+        status varchar(16) NOT NULL CONSTRAINT DF_IcEncInboundEmail_Status DEFAULT 'Pending',
+        delivery_id uniqueidentifier NULL,
+        revision_id uniqueidentifier NULL,
+        attempts int NOT NULL CONSTRAINT DF_IcEncInboundEmail_Attempts DEFAULT 0,
+        next_attempt_at_utc datetime2(7) NOT NULL,
+        last_error_code varchar(64) NULL,
+        created_at_utc datetime2(7) NOT NULL,
+        updated_at_utc datetime2(7) NOT NULL,
+        CONSTRAINT UX_IcEncInboundEmail_Message UNIQUE (mailbox_key, transport_id_hash),
+        CONSTRAINT CK_IcEncInboundEmail_MessageJson CHECK (ISJSON(message_json) = 1),
+        CONSTRAINT CK_IcEncInboundEmail_ResultJson CHECK (result_json IS NULL OR ISJSON(result_json) = 1),
+        CONSTRAINT CK_IcEncInboundEmail_ReviewJson CHECK (review_json IS NULL OR ISJSON(review_json) = 1),
+        CONSTRAINT CK_IcEncInboundEmail_Status CHECK (status IN ('Pending', 'Review', 'Applied', 'Recorded', 'DryRun', 'Dismissed'))
+    );
+    CREATE INDEX IX_IcEncInboundEmail_Pending ON dbo.IcEncInboundEmail(status, next_attempt_at_utc);
+    CREATE INDEX IX_IcEncInboundEmail_Delivery ON dbo.IcEncInboundEmail(delivery_id, received_at_utc);
+END;
+
     IF EXISTS (
         SELECT 1 FROM @ApplicationTables expected
         WHERE OBJECT_ID(N'dbo.' + QUOTENAME(expected.TableName), N'U') IS NULL
@@ -418,7 +471,7 @@ BEGIN CATCH
     THROW;
 END CATCH;
 
-PRINT N'Created all 14 Product Catalogue application tables in ' + QUOTENAME(DB_NAME()) + N'.';
+PRINT N'Created all 17 Product Catalogue application tables in ' + QUOTENAME(DB_NAME()) + N'.';
 SELECT N'dbo.' + expected.TableName AS created_table,
        (SELECT COUNT(*) FROM sys.columns c WHERE c.object_id = t.object_id) AS column_count,
        (SELECT COUNT(*) FROM sys.indexes i WHERE i.object_id = t.object_id AND i.index_id > 0) AS index_count

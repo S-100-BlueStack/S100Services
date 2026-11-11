@@ -156,26 +156,6 @@ namespace ProductCatalogueAPI
                 processProfile.ArcGisExecutionLane
             );
             builder.Services.AddProductCatalogueBackend(builder.Configuration, processProfile);
-            // Mail-Handling
-            //try {
-            //    builder.Services
-            //        .AddOptions<MailImportOptions>()
-            //        .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
-            //        .ValidateOnStart();
-            //    builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
-            //    builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
-            //    // Graph
-            //    builder.Services
-            //        .AddOptions<GraphAuthOptions>()
-            //        .Bind(builder.Configuration.GetSection(GraphAuthOptions.SectionName))
-            //        .ValidateOnStart();
-            //    builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
-            //    builder.Services.AddScoped<IGraphMailReaderService, GraphMailReaderService>();
-            //}
-            //catch (Exception ex) {
-            //    Log.Error(ex, "Failed to configure mail import services. Mail import functionality will be unavailable.");
-            //}
-
             var app = builder.Build();
             CheckJavaToolOptions();
             DetectProductChangesRecurringJob.Reconcile(
@@ -229,18 +209,6 @@ namespace ProductCatalogueAPI
                 .Produces(StatusCodes.Status404NotFound)
                 .RequireAuthorization("productmanager:access");
             }
-            //if (app.Environment.IsDevelopment() && 1 == 2) {
-            //    using var scope = app.Services.CreateScope();
-            //    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            //    try {
-            //        var job = scope.ServiceProvider.GetRequiredService<ProcessProductStatusEmailsJob>();
-            //        await job.RunAsync(CancellationToken.None);
-            //    }
-            //    catch (Exception ex) {
-            //        logger.LogError(ex, "Failed to run {JobName} during startup.", nameof(ProcessProductStatusEmailsJob));
-            //    }
-            //}
-
             app.Run();
         }
 
