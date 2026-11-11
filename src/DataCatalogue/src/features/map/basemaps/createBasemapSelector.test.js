@@ -141,11 +141,10 @@ test("the chooser uses the actual Esri Basemap Gallery and Expand components", a
     assert.equal(f.gallery.autoDestroyDisabled, true);
     assert.equal(f.expand.view, view);
     assert.equal(f.gallery.view, view);
-    assert.deepEqual(f.gallery.source.basemaps.map((basemap) => basemap.title), [
-      "Topographic",
-      "Oceans",
-      "Dark Gray",
-    ]);
+    assert.deepEqual(
+      f.gallery.source.basemaps.map((basemap) => basemap.title),
+      ["Topographic", "Oceans", "Dark Gray"]
+    );
     assert.equal(f.gallery.activeBasemap.id, "topo-vector");
     assert.equal(f.uiCalls[0][3].position, "top-right");
   } finally {
@@ -183,7 +182,10 @@ test("a verified key adds the fourth Esri basemap without changing the MapView",
   let resolveValidation;
   const f = createFixture({
     apiKey: "browser-key",
-    validateProtectedBasemap: () => new Promise((resolve) => { resolveValidation = resolve; }),
+    validateProtectedBasemap: () =>
+      new Promise((resolve) => {
+        resolveValidation = resolve;
+      }),
   });
   try {
     const view = f.view("main");
@@ -206,7 +208,9 @@ test("a verified key adds the fourth Esri basemap without changing the MapView",
 test("failed credential validation never exposes a restricted gallery choice", async () => {
   const f = createFixture({
     apiKey: "expired-key",
-    validateProtectedBasemap: async () => { throw new Error("Invalid token"); },
+    validateProtectedBasemap: async () => {
+      throw new Error("Invalid token");
+    },
   });
   try {
     const map = {};
@@ -247,7 +251,10 @@ test("view replacement removes and destroys the old component instances", async 
 test("superseded module initialization cannot publish an older gallery", async () => {
   let finish;
   const f = createFixture({
-    loadModules: () => new Promise((resolve) => { finish = resolve; }),
+    loadModules: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
   });
   try {
     f.selector.setView(f.view("main"));
@@ -263,7 +270,11 @@ test("superseded module initialization cannot publish an older gallery", async (
 });
 
 test("module import errors are isolated from map initialization", async () => {
-  const f = createFixture({ loadModules: async () => { throw new Error("Unavailable"); } });
+  const f = createFixture({
+    loadModules: async () => {
+      throw new Error("Unavailable");
+    },
+  });
   try {
     f.selector.setView(f.view("main"));
     await f.ready();

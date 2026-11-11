@@ -359,13 +359,28 @@ History panel guidance:
 - Prefer compact context and timeline content over additional action bars.
 - Keep the panel aligned with the activity table and right summary column rather than using a floating overlay.
 
+## R01B validation artifact links
+
+If Dashboard activities supply direct report URLs, those URLs remain the only direct download
+links. Multiple URLs are shown individually in a compact disclosure rather than silently choosing
+one. When Validation metadata is present without a URL, expanding the Validation action now loads
+artifacts on demand through the existing source-aware Product resolution and electronic artifact
+history endpoint. Results must match the resolved Product's exact dataset identity and specification;
+ambiguous or unattributed artifacts are excluded. The report list may contain more files than the
+specific activity because it represents the current Product's available validation artifacts.
+No validation reports are loaded as part of the Dashboard activity query.
+
+IC-ENC metadata without URLs continues to show a truthful unavailable action. The frontend does
+not invent an IC-ENC report endpoint, convert IDs into URLs, or treat validation artifacts as IC-ENC
+reports. A backend-owned IC-ENC report reference/URL contract is still required.
+
 ## Dashboard request lifecycle
 
 Search changes normally use a 300 ms debounce. An immediate Refresh (toolbar or controller API) and browser Back/Forward navigation cancel any pending search timer before starting their own request. The currently applied search/filter state is retained; history navigation still applies the route range and resets paging. Range auto-apply, sorting, page-size changes, and teardown retain their existing timer cleanup and request-generation guards. A cancelled timer must not schedule a second load or update the last-successful-load timestamp.
 
 ## Report links
 
-Report links support multiple IC-ENC and internal validation report metadata entries. Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend.
+Report links support multiple IC-ENC and internal validation report metadata entries. Direct URLs remain usable; validation metadata without URLs can open the current Product's verified artifact downloads on demand. IC-ENC metadata without URLs remains an unavailable placeholder until the backend publishes an IC-ENC report contract.
 
 Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
 
@@ -374,6 +389,6 @@ Dashboard should not fetch full report content as part of the activity payload. 
 The following work remains intentionally outside phase 1:
 
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
-- Add real internal validation report links when backend report IDs/storage contract exists.
+- Verify whether Dashboard activity report IDs should map to a specific validation artifact rather than the Product's available artifact history.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
 - Consider richer dashboard charts only if they remain compact and data-oriented.

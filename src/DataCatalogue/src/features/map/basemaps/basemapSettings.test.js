@@ -31,7 +31,11 @@ test("All supported light and dark basemaps are available in either theme", () =
   );
   assert.equal(validBasemapId("javascript:alert(1)"), DEFAULT_BASEMAP);
   const settings = createBasemapSettings({ apiKey: "browser-key" });
-  assert.equal(settings.getOptions().length, 3, "Keyed styles remain hidden before access verification");
+  assert.equal(
+    settings.getOptions().length,
+    3,
+    "Keyed styles remain hidden before access verification"
+  );
   settings.destroy();
 });
 
@@ -145,7 +149,9 @@ test("an expired API key cannot block map startup through a persisted protected 
     themeMode: "dark",
     validateProtectedBasemap: () => {
       validations++;
-      return new Promise((resolve, reject) => { rejectValidation = reject; });
+      return new Promise((resolve, reject) => {
+        rejectValidation = reject;
+      });
     },
     onUnavailable: (notice) => notices.push(notice),
   });
@@ -180,7 +186,10 @@ test("a verified API key activates the saved protected basemap only after valida
   const settings = createBasemapSettings({
     apiKey: "browser-key",
     storage,
-    validateProtectedBasemap: () => new Promise((resolve) => { resolveValidation = resolve; }),
+    validateProtectedBasemap: () =>
+      new Promise((resolve) => {
+        resolveValidation = resolve;
+      }),
   });
   const map = {};
   try {
@@ -203,7 +212,10 @@ test("late credential validation after destroy cannot write map state or notices
   const notices = [];
   const settings = createBasemapSettings({
     apiKey: "browser-key",
-    validateProtectedBasemap: () => new Promise((resolve, reject) => { rejectValidation = reject; }),
+    validateProtectedBasemap: () =>
+      new Promise((resolve, reject) => {
+        rejectValidation = reject;
+      }),
     onUnavailable: (notice) => notices.push(notice),
     storage: null,
   });

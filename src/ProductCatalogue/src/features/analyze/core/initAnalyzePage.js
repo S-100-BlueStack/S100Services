@@ -54,6 +54,7 @@ export async function initAnalyzePage({ datasetNames }) {
   let freshnessMonitor = null;
   let unsubscribeFromProductOperationState = null;
   let activeWorkspaceLoadRequestId = null;
+  let activeWorkspaceLoadType = null;
   let targetedRefreshRequestId = 0;
 
   const enabledDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
@@ -185,6 +186,7 @@ export async function initAnalyzePage({ datasetNames }) {
     const requestId = ++loadRequestId;
     cancelPendingPackageReplacements();
     activeWorkspaceLoadRequestId = requestId;
+    activeWorkspaceLoadType = "full";
     const validatedDatasetItems = skipCatalogValidation
       ? { items: normalizeAnalyzeDatasetItems(nextDatasetItems), unknown: [], alreadySelected: [] }
       : validateAnalyzeDatasetItems(nextDatasetItems);
@@ -233,6 +235,7 @@ export async function initAnalyzePage({ datasetNames }) {
       await freshnessMonitor?.prime([]);
       if (activeWorkspaceLoadRequestId === requestId) {
         activeWorkspaceLoadRequestId = null;
+        activeWorkspaceLoadType = null;
       }
       if (!updateUrl) setAnalyzeRouteUrl([], { replace: true });
       renderAnalyzeSidebar({
@@ -393,6 +396,7 @@ export async function initAnalyzePage({ datasetNames }) {
       }
       if (activeWorkspaceLoadRequestId === requestId) {
         activeWorkspaceLoadRequestId = null;
+        activeWorkspaceLoadType = null;
       }
     }
   };
@@ -402,6 +406,172 @@ export async function initAnalyzePage({ datasetNames }) {
       // URL composition is resolved against authoritative source identity, not a picker list.
       skipCatalogValidation: true,
     });
+  };
+
+  // Selection edits retain accepted Product snapshots. Full reloads remain owned by
+  // loadAnalyzeDatasetItems for initial navigation, route replacement and manual Refresh.
+  const editAnalyzeDatasetItems = async (nextDatasetItems, { updateUrl = true } = {}) => {
+    if (activeWorkspaceLoadType === "full") {
+      // A pending initial/full load has no stable composition to reconcile yet.
+      return loadAnalyzeDatasetItems(nextDatasetItems, { updateUrl });
+    }
+
+    const requestId = ++loadRequestId;
+    targetedRefreshRequestId += 1;
+    cancelPendingPackageReplacements();
+    activeWorkspaceLoadRequestId = requestId;
+    activeWorkspaceLoadType = "incremental";
+    const previousItems = datasetItems;
+    let pendingReplacement = null;
+    let committed = false;
+    const isCurrent = () => requestId === loadRequestId;
+
+    const validated = validateAnalyzeDatasetItems(nextDatasetItems);
+    datasetItems = canonicalizeAnalyzeItems(validated.items, currentProducts);
+    freshnessMonitor?.retain?.();
+    renderSidebar({
+      loading:
+        currentProducts.length === 0 && getEnabledAnalyzeDatasetNames(datasetItems).length > 0,
+      preserveProductFocus: true,
+    });
+
+    try {
+      const acceptedByName = new Map(
+        currentProducts.map((product) => [normalizeDatasetKey(product.datasetName), product])
+      );
+      const newNames = getEnabledAnalyzeDatasetNames(datasetItems).filter(
+        (name) => !acceptedByName.has(normalizeDatasetKey(name))
+      );
+      const resolutions = newNames.length ? await resolveAnalyzeWorkUnits(newNames) : [];
+      if (!isCurrent()) return;
+
+      datasetItems = canonicalizeAnalyzeItems(datasetItems, [
+        ...currentProducts,
+        ...resolutions.map((resolution) => ({
+          datasetName: resolution.product?.datasetName ?? resolution.requestedDatasetName,
+          workUnit: resolution.workUnit,
+        })),
+      ]);
+      notifyRejectedCatalogProducts(validated);
+      const enabledNames = getEnabledAnalyzeDatasetNames(datasetItems);
+      const missingNames = enabledNames.filter(
+        (name) => !acceptedByName.has(normalizeDatasetKey(name))
+      );
+      // A known package alias may have canonicalized to an already loaded work unit.
+      const missingKeys = new Set(missingNames.map(normalizeDatasetKey));
+      const neededResolutions = resolutions.filter((resolution) =>
+        missingKeys.has(
+          normalizeDatasetKey(
+            resolution.workUnit?.kind === "package"
+              ? resolution.product?.datasetName
+              : (resolution.product?.datasetName ?? resolution.requestedDatasetName)
+          )
+        )
+      );
+
+      if (missingNames.length) {
+        await freshnessMonitor?.primeAdditional?.(missingNames);
+        if (!isCurrent()) return;
+        await ensureLookupsLoaded();
+        if (!isCurrent()) return;
+      }
+      const fetched = neededResolutions.length
+        ? await fetchAnalyzeProducts(missingNames, {
+            resolutions: neededResolutions,
+            reuseDetails: false,
+          })
+        : [];
+      if (!isCurrent()) return;
+      const newlyLoaded = fetched.length ? await loadAnalyzeProductHistories(fetched) : [];
+      if (!isCurrent()) return;
+      const nextProducts = mergeAnalyzeRefresh(currentProducts, newlyLoaded, enabledNames);
+
+      // Ordinary Products share source-specific aggregate layers; changing their
+      // composition rebuilds those layers from cached snapshots, never new reads.
+      const previousOrdinary = currentProducts.filter(
+        (product) => product.workUnit?.kind !== "package"
+      );
+      const nextOrdinary = nextProducts.filter((product) => product.workUnit?.kind !== "package");
+      const ordinaryChanged =
+        previousOrdinary.length !== nextOrdinary.length ||
+        previousOrdinary.some((product, index) => product !== nextOrdinary[index]);
+      const nextPackageKeys = new Set(
+        nextProducts
+          .filter((product) => product.workUnit?.kind === "package")
+          .map((product) => product.workUnit.identityKey)
+      );
+      const previouslyLoadedPackageKeys = new Set(
+        currentProducts
+          .filter((product) => product.workUnit?.kind === "package")
+          .map((product) => product.workUnit.identityKey)
+      );
+      const newPackages = nextProducts.filter(
+        (product) =>
+          product.workUnit?.kind === "package" &&
+          !previouslyLoadedPackageKeys.has(product.workUnit.identityKey)
+      );
+      const layersToReplace = currentLayers.filter((layer) =>
+        layer.appAnalyzeWorkUnitKey
+          ? !nextPackageKeys.has(layer.appAnalyzeWorkUnitKey)
+          : ordinaryChanged
+      );
+      const productsToRender = [...(ordinaryChanged ? nextOrdinary : []), ...newPackages];
+      let newLayers = [];
+      if (productsToRender.length) {
+        pendingReplacement = createPackageReplacement();
+        newLayers = await createAnalyzeLayers(pendingReplacement.map, productsToRender);
+        if (!isCurrent()) {
+          pendingReplacement.cancel();
+          return;
+        }
+        if (!pendingReplacement.publish()) return;
+        await registerHoverLayers(hoverManager, newLayers);
+        if (!isCurrent()) {
+          pendingReplacement.cancel();
+          return;
+        }
+      }
+
+      // Commit only after the replacement is fully registered. Unchanged Package
+      // layers and their popups keep the exact same Graphic and identity.
+      if (layersToReplace.includes(view.popup?.selectedFeature?.layer)) closePopup(view);
+      layersToReplace.forEach((layer) => hoverManager.unregisterLayer(layer));
+      removeLayers(map, layersToReplace);
+      currentLayers = currentLayers.filter((layer) => !layersToReplace.includes(layer));
+      currentLayers.push(...newLayers);
+      pendingReplacement?.commit();
+      pendingReplacement = null;
+      currentProducts = nextProducts;
+      committed = true;
+      setAnalyzeRouteUrl(enabledNames, { replace: !updateUrl });
+      document.title = createAnalyzeDocumentTitle(enabledNames);
+      renderSidebar({ loading: false, preserveProductFocus: true });
+      if (newLayers.length) {
+        // A failed zoom cannot roll back an otherwise accepted composition.
+        try {
+          await zoomToGraphicsExtent(view, currentLayers);
+        } catch (error) {
+          if (isCurrent()) console.warn("[Analyze] Could not zoom to selected Products", error);
+        }
+      }
+    } catch (error) {
+      pendingReplacement?.cancel();
+      if (!isCurrent()) return;
+      if (!committed) {
+        datasetItems = previousItems;
+        freshnessMonitor?.retain?.();
+        renderSidebar({ loading: false, preserveProductFocus: true });
+      }
+      noticeError(
+        "Analyze data failed",
+        error instanceof Error ? error.message : "Unknown analyze error"
+      );
+    } finally {
+      if (activeWorkspaceLoadRequestId === requestId) {
+        activeWorkspaceLoadRequestId = null;
+        activeWorkspaceLoadType = null;
+      }
+    }
   };
 
   const refreshAnalyzeProducts = async (datasetNamesToRefresh) => {
@@ -530,10 +700,7 @@ export async function initAnalyzePage({ datasetNames }) {
     for (const datasetName of validation.valid) {
       nextDatasetItems = addAnalyzeDatasetItem(nextDatasetItems, datasetName);
     }
-    await loadAnalyzeDatasetItems(nextDatasetItems, {
-      updateUrl: true,
-      showLoader: false,
-    });
+    await editAnalyzeDatasetItems(nextDatasetItems, { updateUrl: true });
   };
 
   const handleAnalyzeDatasetToggle = async (event) => {
@@ -543,12 +710,9 @@ export async function initAnalyzePage({ datasetNames }) {
       return;
     }
 
-    await loadAnalyzeDatasetItems(
+    await editAnalyzeDatasetItems(
       toggleAnalyzeDatasetItem(datasetItems, itemId, event.detail?.enabled),
-      {
-        updateUrl: true,
-        showLoader: false,
-      }
+      { updateUrl: true }
     );
   };
   const handleAnalyzeDatasetRemove = async (event) => {
@@ -558,9 +722,8 @@ export async function initAnalyzePage({ datasetNames }) {
       return;
     }
 
-    await loadAnalyzeDatasetItems(removeAnalyzeDatasetItem(datasetItems, itemId), {
+    await editAnalyzeDatasetItems(removeAnalyzeDatasetItem(datasetItems, itemId), {
       updateUrl: true,
-      showLoader: false,
     });
   };
 
@@ -650,6 +813,7 @@ export async function initAnalyzePage({ datasetNames }) {
       targetedRefreshRequestId += 1;
       cancelPendingPackageReplacements();
       activeWorkspaceLoadRequestId = null;
+      activeWorkspaceLoadType = null;
       productCatalogRequestId += 1;
       document.removeEventListener("pc-analyze-dataset-add", handleAnalyzeDatasetAdd);
       document.removeEventListener("pc-analyze-dataset-toggle", handleAnalyzeDatasetToggle);

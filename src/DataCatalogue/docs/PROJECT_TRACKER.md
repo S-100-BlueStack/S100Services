@@ -1,3 +1,25 @@
+## DC-DEPLOY-01 — Test-server API base-path follow-up (2026-11-11)
+
+Source baseline: committed `a986e7f20f96aa3e4a6d5acbaeebe836b5cb91d0`.
+The user reports the test server worked after removing
+`VITE_CATALOGUE_API_BASE_URL=/api` from `.env`. In the committed source,
+`catalogueService.js` uses only `/v1/...` resource paths and `catalogueClient.js`
+adds only the configured prefix. Thus an absent base emits same-origin `/v1/...`,
+whereas `/api` emits `/api/v1/...`. There is no verified need for another
+frontend/backend routing change or an automatic rewrite.
+
+The earlier DC-DEPLOY-01 `/api` deployment instructions below describe the
+**specific IIS-subapplication topology** tested in code, not a universal
+production setting. The actual deployed Request URL, build-time environment
+sources and IIS/rewrite configuration were not included in the context export.
+Keep the functioning test-server configuration unless browser Network evidence
+shows a mismatch; use the hosting matrix and acceptance steps in
+[DC_DEPLOY_01_VALIDATION.md](DC_DEPLOY_01_VALIDATION.md). This follow-up changes
+only current frontend documentation, not frontend JavaScript, API contracts,
+Windows authentication, backend configuration or dependencies.
+
+---
+
 ## DC-SDK-01 v6 — Restore Esri gallery; key validation fail-safe (candidate, 2026-11-11)
 
 Browser feedback after v5: the replacement thumbnail layouts did not match the

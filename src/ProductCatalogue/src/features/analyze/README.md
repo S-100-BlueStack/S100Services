@@ -175,6 +175,29 @@ reports, and Internal validation distinguish `unavailable` from request `failed`
 request-generation guards remain the publication boundary. Routing remains datasetName-based; source
 identity stays internal to the workspace runtime.
 
+## R01B incremental Product composition
+
+Interactive Add, enable/disable and Remove now reconcile against the currently accepted Analyze
+composition. Previously loaded work units retain their Product metadata, History and report snapshots;
+only newly enabled work units are resolved and fetched. Package layers are keyed by their verified
+work-unit identity. Ordinary Products continue sharing their source/compatibility layers; when their
+selection changes, those grouped layers are rebuilt from already loaded snapshots without repeating
+backend reads for surviving Products. Unchanged package layers retain their Graphics and popup state.
+
+Selection changes use a request generation and off-map staging so superseded loads cannot publish
+orphan layers. The workspace freshness monitor retains surviving revision baselines and primes only
+new names, avoiding a full revision reset on every selection edit. Disabled Products remain in the
+local list, but are no longer part of the active Product snapshot; enabling one again reloads that
+Product. Manual Refresh, initial navigation and explicit route composition still perform the existing
+full reload. A failed Product remains an explicit failed entry rather than fake successful data.
+
+For package member Edition and Update, the Product-detail response remains the primary source.
+If its top-level values are absent, Analyze first uses the same member's verified, normalized
+`workUnitMetadata` (`S101`/`S57` Edition/Update). If that member also lacks a value, Analyze may
+use the backend-provided `CurrentEdition` or `CurrentUpdate` from the same member's verified,
+source-owned targeted AOI snapshot. An absent or mismatched member identity cannot supply a fallback;
+Update `0` remains a valid value. This does not guess or synthesize version numbers.
+
 ## Public route
 
 The canonical route is `/Analyze?Datasets=ProductA,ProductB`. See
