@@ -553,3 +553,102 @@ test("Done and No update can each be set and toggled off without hiding the curr
     }
   });
 });
+
+test("live Packages panel reuses a recent list but Refresh and expiry fetch fresh data", async () => {
+  await withAsyncDocument(async () => {
+    let reads = 0;
+    const store = createJobStore({
+      service: {
+        async loadJobs() {
+          reads++;
+          return { ok: true, data: { jobs: [] } };
+        },
+      },
+    });
+    await store.loadJobs();
+    let now = store.getSnapshot().lastSuccessfulLoadAt;
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live", now: () => now });
+    try {
+      assert.equal((await overlay.refreshJobs({ onPanelOpen: true })).reused, true);
+      assert.equal(reads, 1);
+      now += 59_999;
+      assert.equal((await overlay.refreshJobs({ onPanelOpen: true })).reused, true);
+      assert.equal(reads, 1);
+      now += 1;
+      assert.equal((await overlay.refreshJobs({ onPanelOpen: true })).ok, true);
+      assert.equal(reads, 2);
+
+      const refresh = assertRefreshIconButton(overlay.element);
+      refresh.dispatchEvent({ type: "click" });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(reads, 3, "Manual Refresh must bypass panel reuse");
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});
+
+test("live Packages panel does not restart an in-flight read, but retries after failure", async () => {
+  await withAsyncDocument(async () => {
+    let calls = 0;
+    let finishInitial;
+    const store = createJobStore({
+      service: {
+        loadJobs() {
+          calls++;
+          if (calls === 1) {
+            return new Promise((resolve) => {
+              finishInitial = resolve;
+            });
+          }
+          if (calls === 2) return Promise.resolve({ ok: false, error: new Error("Offline") });
+          return Promise.resolve({ ok: true, data: { jobs: [] } });
+        },
+      },
+    });
+    const pending = store.loadJobs();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    try {
+      assert.deepEqual(await overlay.refreshJobs({ onPanelOpen: true }), {
+        ok: false,
+        pending: true,
+      });
+      assert.equal(calls, 1);
+      finishInitial({ ok: true, data: { jobs: [] } });
+      await pending;
+      assert.equal((await overlay.refreshJobs({ onPanelOpen: true })).reused, true);
+
+      await store.loadJobs();
+      assert.equal((await overlay.refreshJobs({ onPanelOpen: true })).ok, true);
+      assert.equal(calls, 3, "A failed read must never be reused as successful data");
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});
+
+test("mock Packages panel still reloads on every open", async () => {
+  await withAsyncDocument(async () => {
+    let calls = 0;
+    const store = createJobStore({
+      service: {
+        async loadJobs() {
+          calls++;
+          return { ok: true, data: { jobs: [] } };
+        },
+      },
+    });
+    await store.loadJobs();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "mock" });
+    try {
+      await overlay.refreshJobs({ onPanelOpen: true });
+      await overlay.refreshJobs({ onPanelOpen: true });
+      assert.equal(calls, 3);
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});

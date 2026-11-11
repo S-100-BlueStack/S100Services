@@ -1,6 +1,13 @@
 import { createJobList } from "../../features/jobs/ui/jobList.js";
 
-export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock" } = {}) {
+const LIVE_PACKAGE_PANEL_REUSE_MS = 60_000;
+
+export function createJobsOverlay({
+  jobFilterStore,
+  jobStore,
+  sourceMode = "mock",
+  now = () => Date.now(),
+} = {}) {
   const jobList = createJobList({
     jobFilterStore,
     store: jobStore,
@@ -91,7 +98,23 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
     element: panelElement,
     closeButton,
     refreshButton,
-    refreshJobs() {
+    refreshJobs({ onPanelOpen = false } = {}) {
+      if (onPanelOpen && sourceMode === "live") {
+        const snapshot = jobStore.getSnapshot();
+        const loadedAt = snapshot.lastSuccessfulLoadAt;
+        const age = now() - loadedAt;
+        // Joining the current read avoids replacing a request that already owns this load.
+        if (snapshot.isLoading) return Promise.resolve({ ok: false, pending: true });
+        // Only a recent successful read can be reused; manual Refresh bypasses this policy.
+        if (
+          !snapshot.error &&
+          Number.isFinite(loadedAt) &&
+          age >= 0 &&
+          age < LIVE_PACKAGE_PANEL_REUSE_MS
+        ) {
+          return Promise.resolve({ ok: true, reused: true });
+        }
+      }
       return jobList.refreshJobs();
     },
     showJobsForAoi(selectedAoi) {

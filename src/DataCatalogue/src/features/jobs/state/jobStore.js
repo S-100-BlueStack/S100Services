@@ -17,6 +17,7 @@ export function createJobStore({ service = jobService } = {}) {
     jobs: [],
     isLoading: false,
     error: null,
+    lastSuccessfulLoadAt: null,
     lastChange: createInitialJobStoreChange(),
   };
 
@@ -36,6 +37,7 @@ export function createJobStore({ service = jobService } = {}) {
       jobs: state.jobs.map(cloneJob),
       isLoading: state.isLoading,
       error: state.error,
+      lastSuccessfulLoadAt: state.lastSuccessfulLoadAt,
       lastChange: {
         ...state.lastChange,
       },
@@ -48,7 +50,7 @@ export function createJobStore({ service = jobService } = {}) {
     const request = new AbortController();
     loadAbort = request;
     setState({
-      ...(clear ? { jobs: [] } : {}),
+      ...(clear ? { jobs: [], lastSuccessfulLoadAt: null } : {}),
       isLoading: true,
       error: null,
     });
@@ -60,6 +62,7 @@ export function createJobStore({ service = jobService } = {}) {
     if (result.ok) {
       setState({
         jobs: result.data.jobs,
+        lastSuccessfulLoadAt: Date.now(),
         isLoading: false,
         error: null,
         lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOBS_LOADED, {

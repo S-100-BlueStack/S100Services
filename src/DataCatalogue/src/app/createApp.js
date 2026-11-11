@@ -240,7 +240,7 @@ export async function createApp(rootElement) {
     resetContext: resetJobsPanelContext,
     prepareOpen() {
       jobsPanel.clearAoiFilter();
-      jobsPanel.refreshJobs();
+      void jobsPanel.refreshJobs({ onPanelOpen: true });
     },
     prepareClose: () => jobsPanel.hideCompletedJobs(),
     setOpen: (isOpen) => setJobsPanelOpen(isOpen),
