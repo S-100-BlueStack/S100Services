@@ -3,12 +3,13 @@ using System.Globalization;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI.Filters;
 
 public sealed class MutationAuditLogFilter(ILogger<MutationAuditLogFilter> logger) : IAsyncActionFilter
 {
-    private static readonly string[] SensitiveTerms = ["password", "secret", "token", "authorization", "credential"];
+    private static readonly string[] SensitiveTerms = ["password", "secret", "token", "authorization", "credential", "operatorKey"];
     private readonly ILogger<MutationAuditLogFilter> _logger = logger;
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next) {
@@ -31,6 +32,9 @@ public sealed class MutationAuditLogFilter(ILogger<MutationAuditLogFilter> logge
     private static string FormatValue(string name, object? value, int depth = 0) {
         if (IsSensitive(name)) return "[REDACTED]";
         if (value is null) return "null";
+        // Replay evidence and review explanations can contain confidential correspondence. Keep the audit envelope only.
+        if (value is ValidationEmailMessage mail) return $"<IC-ENC replay id={Quote(Truncate(mail.Id))}, attachments={mail.Attachments?.Count ?? 0}>";
+        if (value is ValidationEmailReview review) return $"<IC-ENC review delivery={review.DeliveryId:D}>";
         if (value is string text) return Quote(Truncate(text));
         if (value is byte[] bytes) return $"<{bytes.Length} bytes>";
         if (value is Stream) return $"<{value.GetType().Name}>";

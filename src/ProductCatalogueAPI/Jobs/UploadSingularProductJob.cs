@@ -5,6 +5,7 @@ using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI.Jobs
 {
@@ -13,7 +14,8 @@ namespace ProductCatalogueAPI.Jobs
         IOptionsMonitor<SendToIcEncOptions> options,
         ILogger<UploadSingularProductJob> logger,
         IIcEncDeliveryRepository? deliveryRepository = null,
-        IIcEncTransport? transport = null
+        IIcEncTransport? transport = null,
+        IValidationEmailSimulationService? simulationEmails = null
     )
     {
         private readonly IProductRepository _productRepository = productRepository;
@@ -119,7 +121,13 @@ namespace ProductCatalogueAPI.Jobs
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Simulation intentionally performs no transport, acknowledgement,
-                // Product-state mutation, history write or delivery-record write.
+                // Product-state mutation, product history write or delivery-record write.
+                // The optional email adapter writes only a permanently synthetic inbound audit record.
+                if (simulationEmails is not null) {
+                    var simulated = await simulationEmails.GenerateAsync(request.DatasetName, request.ProductSpecification, request.ExpectedEdition, request.ExpectedUpdate, "send:" + context.JobId, cancellationToken);
+                    if (simulated is not null)
+                        _logger.LogInformation("Simulated IC-ENC email captured. JobId: {JobId}. MessageId: {MessageId}. CandidateId: {CandidateId}", context.JobId, simulated.Id, simulated.Message.SimulatedOutgoingFile?.RevisionId);
+                }
                 context.SetJobParameter(
                     ExportJobParameterNames.Mode,
                     SendToIcEncContract.SimulationMode

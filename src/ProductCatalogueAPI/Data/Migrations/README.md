@@ -48,3 +48,7 @@ API package projections and action snapshots expose `builtAtUtc`. Published
 `issueDate` remains separate: the existing finalization path writes it to S-128
 only after both IC-ENC acceptances, using the accepted snapshot's issue date.
 Creating or rebuilding candidates does not publish that date to S-128.
+
+## IC-ENC mailbox ingestion (011)
+
+Apply `011_AddIcEncEmailProcessing.sql` to the System database after 010 before deploying either process. It adds the outgoing dataset manifest, immutable inbound evidence and mailbox cursor tables. No mail is backfilled into delivery manifests, and no geodatabase schema changes are made. The fresh-schema script includes these tables. Follow `Services/ValidationEmail/DEPLOYMENT.txt` for permissions, dry-run rollout, review, recovery and independent tests. The existing clear script includes only these three additional named application tables in its target inventory; its geodatabase and foreign-key boundary checks remain in force.

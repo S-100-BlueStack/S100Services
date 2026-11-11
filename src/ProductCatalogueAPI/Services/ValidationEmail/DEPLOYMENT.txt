@@ -1,0 +1,372 @@
+COMPANY-NEUTRAL NAMING UPDATE - 11 NOVEMBER 2026
+Baseline: attached a986e7f20f96aa3e4a6d5acbaeebe836b5cb91d0 working-tree snapshot,
+including the uncommitted changes in that ZIP. Apply only this matching BAT/ZIP
+to that working tree. Do not reapply earlier full feature ZIPs over newer work.
+
+The email subsystem is now Services/ValidationEmail. Core models, mailbox access,
+processor, matcher, repository, simulation coordination and controller use
+ValidationEmail/ValidationMailbox names. Provider-specific code is in
+Services/ValidationEmail/Providers/IcEnc:
+  IcEncReportParser implements IValidationEmailParser.
+  IcEncResponseGenerator implements IValidationResponseGenerator.
+  IcEncAcknowledgementAdapter implements IValidationEmailDecisionSink and calls
+  the existing IC-ENC delivery acknowledgement service.
+
+A different partner can supply those three adapters and change their DI bindings
+in ValidationEmailRegistrations.AddValidationEmailProcessing. Its authentication,
+protocol, transfer, metadata and publication requirements still need implementing
+and verification; a name change alone does not make another provider compatible.
+The mailbox/synchronization/audit/matching/simulation orchestration stays shared.
+
+Preferred settings section: ValidationEmail. Legacy IcEncEmail settings are bound
+first; explicitly supplied ValidationEmail properties override them. Existing
+SendToIcEnc delivery settings remain unchanged. Both example settings files now
+use ValidationEmail. No credential changes are required by this refactor.
+Preferred route: /upload/validation-emails. /upload/icenc-emails remains an alias
+for every existing email action, including replay, simulation, list and review.
+
+Existing SQL names, migration 011, notice/error codes, protected-header default,
+checkpoint keys, synthetic message identities and distributed lock identities
+are preserved. No new SQL migration, backfill, data clearing or mailbox re-read
+is required. The old recurring-job ID is retained to update the existing schedule;
+a tiny compatibility job at the original CLR name forwards already queued jobs
+to the same neutral service. It is not a second processing workflow.
+
+The BAT installs complete replacement/new files and removes only the explicitly
+listed renamed paths. It stages those exact changes on the current branch,
+without a commit or branch switch. No database/deployment command is executed.
+The supplied baseline explicitly includes uncommitted work. The BAT removes the
+listed old paths whether tracked, staged or untracked; no commit is required.
+Save edits made AFTER creating the supplied context before applying this delta.
+The package is a delta against the newly supplied snapshot, not yesterday's ZIP.
+
+Verification: 93 isolated tests pass, including a provider-independent processor
+test with a second fake partner and configuration fallback/precedence tests.
+All eight original samples still classify correctly. The adapter sources compile
+in an isolated harness; the full Windows/ArcGIS build, real SQL/Graph integration
+and Windows BAT execution remain unverified. The archive/add/removal inventories
+are checked through a disposable checkout outside the source tree.
+
+Updated commands:
+  dotnet test tests/TestProductCatalogue/ValidationEmail.Tests.csproj -c Debug
+  dotnet run --project tools/ValidationEmailReplay -- <normalized-json-directory>
+
+The following operational guide is retained from the prior implementation. New
+names/paths apply; its older implementation-baseline notes are historical.
+
+IC-ENC EMAIL PROCESSING - REPLACEMENT AND SIMULATION (10 NOVEMBER 2026)
+Source baseline: attached clean main snapshot facc5c2da596af64fcd900eea68a2b71d06f7f1d.
+
+EXISTING FLOW AND INTEGRATION
+UploadController/UploadSingularProductJob reserve an immutable ProductRevision in
+ProductIcEncDelivery, then send its stored ExchangeSet through FTPS. Sending is
+not validation. Simulation does not send, reserve deliveries or mutate candidates.
+
+The new adapter records actual outgoing dataset members, SHA-256 and S-57 CRC-32
+in the reservation transaction before transfer. It does not guess checksums for
+historical deliveries. SHA-256 covers each member's exact bytes. The original
+ExchangeSet artifact retains auxiliary files and the complete transmission.
+
+The worker's new Hangfire job captures Graph delta pages in IcEncInboundEmail.
+Only after every relevant message on a page is durable does ValidationMailboxSync
+advance. Pending messages are parsed/matched on the next tick. Repeated immutable
+IDs cannot replace original evidence; read/unread flags are never consulted.
+The same Hangfire distributed lock excludes polling, replay and operator review
+across machines. The configured API and worker must share their Hangfire store.
+
+Accepted/Rejected calls IIcEncAcknowledgementService, exactly as the existing
+manual endpoint does. That repository rechecks the current immutable revision,
+version, delivery and candidate state inside its transaction. RejectedByIC-ENC is
+recorded with the existing IC_ENC_REJECTED error category. Both current deliveries
+must be accepted before FinalizeEncPackageJob publishes the pair in S-128.
+
+The existing finalizer writes S-128 first, then completes SQL. Failed enqueueing
+and failed SQL completion are recovered by the existing DPC finalization scan;
+S-128's package-ID/hash marker avoids duplicate attachments. Keep DPC recovery
+enabled, or explicitly requeue FinalizeEncPackageJob after a failed finalization.
+No SQL transaction is claimed to cover S-128. No new publication path is added.
+
+Registered is receipt evidence only. Registration XML errors are visible as a
+review warning and are not final rejection. PendingConditions remains InTransit
+at candidate level and is visible in inbound review, never package Hold. This
+preserves the five package statuses and independent S-57/S-101 outcomes.
+The existing package IssueDate publication behavior is retained. DateValidated
+and ExpectedReleaseDate are stored separately as calendar dates, without an
+invented UTC time. No state action is derived from corrective-action prose.
+
+FILES AND INSTALLATION
+Place the matching BAT and ZIP together anywhere, including outside the repository.
+Double-click the BAT. It verifies C:\source\S-100-BlueStack\S100Services as the Git
+root, verifies the origin and project files, extracts only the changed files,
+removes/stages the seven explicitly named obsolete implementation files, stages
+exactly the replacement ZIP file inventory and prints git status --short. It never creates
+or switches branches, commits, runs SQL, deploys binaries or contacts IC-ENC.
+The files in the ZIP are complete replacement/new files at repository paths.
+This package supersedes the 9 November delivery and works with either that
+package applied or the original attached snapshot. No earlier ZIP is required.
+The exact renamed paths are removed even if they are staged or untracked in
+this supplied uncommitted snapshot. Save edits made after exporting the context
+before applying this delta. No commit is required.
+
+For an existing database apply, in SSMS against the confirmed System database:
+  src/ProductCatalogueAPI/Data/Migrations/011_AddIcEncEmailProcessing.sql
+Apply it after migration 010, before starting either updated process. Fresh
+installations use the updated Create-All-Tables.sql instead. Clear-All-Tables.sql
+includes exactly the three added application tables in its existing allowlist.
+No migration or clear script has been executed against any shared system here.
+
+The updated BackendRegistrations installs the adapter in API and Worker roles;
+only Worker registers process-icenc-mailbox. Restart the Worker after configuration
+changes. It polls on minute ticks with the configured minimum interval. Program.cs no longer contains the obsolete mail-startup blocks. Old
+MailImport/Graph options, models, parser, Graph stubs and job are removed. The
+review is recorded in LEGACY-REVIEW.txt. Do not re-enable their old settings.
+
+No new production NuGet packages are needed. Certificate assertions use .NET
+cryptography and the documented Entra protocol. The isolated xUnit project has
+its own test-only packages. The optional Python converter needs extract-msg only
+on the developer machine, never the deployed worker.
+
+MICROSOFT 365 PREREQUISITES
+This implementation targets global-cloud Exchange Online/Microsoft Graph v1.0.
+For on-premises Exchange or another host, implement IValidationMailbox with the same
+bounded pagination and durable checkpoint contract; do not enable this Graph
+adapter against an unsupported mailbox or fall back to username/password auth.
+Managed identity is not implemented; the shipped unattended mechanism is a
+certificate in Windows LocalMachine/My. Use a suitable managed-identity adapter
+if hosting later moves to an environment where that identity is available.
+
+Create a dedicated Entra application. Upload the public RSA certificate under
+App registrations > Certificates & secrets > Certificates. Install its private
+key into LocalMachine/My on the worker host and grant only the actual Windows
+Service identity read access to that key. Configure rotation/expiry monitoring.
+No private certificate, password, client secret or token belongs in appsettings.
+
+Use Exchange Online RBAC for Applications with Application Mail.Read scoped to
+this shared mailbox. Mail.ReadBasic cannot read the report bodies/attachments.
+Do not grant Mail.ReadWrite or Mail.Send. Entra application grants and Exchange
+RBAC permissions are additive: a tenant-wide Entra Mail.Read grant would bypass
+the intended mailbox-only scope unless independently restricted. Use a dedicated
+application and remove broad grants. Check the enterprise SERVICE PRINCIPAL
+object ID, which differs from the app registration object ID.
+
+Administrator example (placeholders; review and run only in the intended tenant):
+  Connect-ExchangeOnline
+  New-ServicePrincipal -AppId '<application-guid>' -ObjectId '<enterprise-service-principal-object-guid>' -DisplayName 'ProductCatalogue IC-ENC reader'
+  New-ManagementScope -Name 'ProductCatalogue IC-ENC mailbox' -RecipientRestrictionFilter "PrimarySmtpAddress -eq '<shared-mailbox-address>'"
+  New-ManagementRoleAssignment -Name 'ProductCatalogue IC-ENC read' -App '<enterprise-service-principal-object-guid>' -Role 'Application Mail.Read' -CustomResourceScope 'ProductCatalogue IC-ENC mailbox'
+  Test-ServicePrincipalAuthorization -Identity '<enterprise-service-principal-object-guid>' -Resource '<shared-mailbox-address>'
+  Test-ServicePrincipalAuthorization -Identity '<enterprise-service-principal-object-guid>' -Resource '<out-of-scope-test-mailbox>'
+
+Confirm actual app-only Graph reads succeed for the shared mailbox and are denied
+for an out-of-scope mailbox; the RBAC test cmdlet alone excludes separate Entra
+grants. Allow for Exchange permission-cache propagation. No directory-wide user
+read permission is required by this adapter; it uses the configured mailbox path.
+
+SENDER AUTHENTICATION IS A REQUIRED ADMINISTRATIVE CONTROL
+An allowlisted From address is insufficient. Configure Exchange/EOP so external
+messages cannot retain or inject the chosen X-ProductCatalogue-ICENC-Verified
+header. Strip all external copies at the protected ingress boundary. Only a
+subsequent protected rule/connector may stamp the configured marker for genuinely
+authenticated IC-ENC traffic delivered to this mailbox. Validate the actual
+IC-ENC sender and the tenant's anti-spoof/DMARC or authenticated connector results
+at that trusted boundary. Never stamp solely because a user-controlled From or
+Authentication-Results string claims success. Your Exchange administrator must
+implement and verify this tenant-specific trust policy; the application cannot
+establish its authenticity from arbitrary internet headers itself.
+
+Test a forged sender and a forged marker: neither may reach the mailbox with a
+valid protected marker. The application also requires equal From/Sender SMTP
+addresses, an exact allowlist entry and exactly one marker. Forwarded messages,
+missing markers and display-name spoofing go to review. Keep DryRun=true until
+these tests pass. No tenant changes have been attempted by this delivery.
+
+CONFIGURATION AND ROLLOUT
+Merge Services/ValidationEmail/appsettings.ValidationEmail.example.json into the external
+settings used by BOTH API and Worker. That example is not loaded automatically.
+All values are placeholders. Environment overrides use IcEncEmail__PropertyName.
+Mode=Disabled and DryRun=true are the shipped defaults. Explicit Mode overrides
+the first package's Enabled compatibility alias. If Mode is absent, Enabled=true
+continues to mean Live; remove that alias when switching to the new examples. CertificateThumbprint is
+the store lookup thumbprint; the OAuth assertion independently uses SHA-256.
+
+1. Apply migration 011, deploy binaries, configure mailbox/certificate/sender
+   allowlist, and set Mode=Live, DryRun=true. Start Worker. Inspect Hangfire's
+   process-icenc-mailbox and GET /upload/icenc-emails?status=DryRun or status=Review.
+2. Send a controlled candidate through the EXISTING live FTPS send flow. Inspect
+   its recorded ProductIcEncDeliveryFile. Compare the S-57 CRC against the next
+   real IC-ENC response before enabling state changes. IHO S-57 Appendix B.1 Annex
+   B defines the implemented reflected CRC-32; the known-answer vector is tested.
+3. Review unmatched/ambiguous results, original attachments, dataset identities,
+   timestamps, From/Sender protection and exact revision/delivery matches.
+4. To activate future automatic decisions set DryRun=false and explicitly set
+   ApplyReceivedAfterUtc to the approved UTC rollout instant, with existing
+   SendToIcEnc:Mode=Live. Restart both processes. Previously captured DryRun rows
+   remain terminal previews; changing the setting does not backfill their states.
+   Messages received before the rollout instant require explicit operator review.
+5. Verify one-candidate acceptance leaves the pair pending; only two accepted
+   current candidates publish. Verify one rejection leaves the package in Error,
+   and holding results leave their candidate waiting without publication.
+
+SIMULATION MODE
+Merge appsettings.ValidationEmail.simulation.example.json into the settings of BOTH API
+and Worker and restart them:
+  "SendToIcEnc": { "Mode": "Simulation" }
+  "ValidationEmail": { "Mode": "Simulation", "DryRun": true }
+
+Mode meanings:
+  Disabled   No scheduled polling or simulation processing.
+  Simulation Generate synthetic responses after simulated sends or explicit API
+             requests; process only synthetic queued messages. Never read Graph,
+             reserve a live delivery, acknowledge a candidate, write candidate
+             artifacts/history, or write S-128. No Graph credentials are needed.
+  Live       Read the configured shared mailbox. DryRun=true previews decisions;
+             DryRun=false additionally requires the live rollout/auth controls.
+
+The existing Send-To-IC-ENC Simulation job automatically captures one random
+synthetic response after validating the current candidate/version. Its stable
+Hangfire job ID deduplicates generation. A retry reuses the same response even
+if the current candidate has subsequently changed. Existing send status/message
+contracts still say NotDelivered and SimulationCompleted. Synthetic responses
+are additional inbound audit evidence, never actual receipt or delivery records.
+
+Four outcomes are equally likely: Registered, Rejected, Accepted and
+PendingConditions. Within Rejected one of four supplied report scenarios is
+selected, and within PendingConditions one of two holding scenarios is selected.
+This covers all eight original sample variants. Dataset name, edition/update and
+CRC come from the actual immutable candidate and stored exchange set; response
+metadata is not copied from unrelated sample products. S-101 synthetic reports
+omit an unverified CRC rather than applying S-57 checksum semantics.
+
+To generate another response explicitly, use Swagger:
+POST /upload/icenc-emails/simulate
+  {"RequestId":"<new-guid>","DatasetName":"<actual-candidate-name>","ProductSpecification":"S57"}
+ProductSpecification can be S57, S101 or omitted when unambiguous. The caller must
+have the existing distribute policy. No operator key is needed for this preview
+operation. A current candidate and its stored exchange set are required. Reuse
+the same RequestId for an idempotent replay; use a NEW RequestId to roll another
+random response. Reusing it for a different product/version is rejected.
+
+Inspect the returned original synthetic message and then:
+GET /upload/icenc-emails?isSimulation=true
+GET /upload/icenc-emails?isSimulation=true&status=DryRun
+The Worker parses/matches pending generated messages on its next minute tick.
+The mode does not create unsolicited responses for every ready product.
+
+A permanent IsSimulation flag and synthetic outgoing metadata survive SQL
+storage and restart. Even after switching to Live, setting DryRun=false or
+submitting a manual association, synthetic evidence remains preview-only. Fake
+delivery IDs exist only inside synthetic JSON and are never inserted in
+ProductIcEncDelivery. No new SQL migration is needed beyond 011. Real pending
+mail is left alone while Simulation is selected; simulated pending mail is left
+alone while Live is selected. Original reports and bodies are explicitly marked
+SIMULATION for inspection.
+
+OPERATOR API (existing distribute policy applies)
+GET /upload/icenc-emails?status=Review[&deliveryId=<guid>]
+  Latest 100 audit summaries; raw ResultJson contains extracted evidence/reasons.
+GET /upload/icenc-emails/<inbound-guid>
+  Original normalized metadata/body and original report bytes as base64.
+POST /upload/icenc-emails/<inbound-guid>/review
+  Header X-ICENC-Operator-Key uses the existing live operator key.
+  Body: {"DeliveryId":"<verified-exact-transmission-guid>","Reason":"<verification explanation>"}
+  Records the operator/association before retrying; still obeys DryRun. It cannot
+  override contradictory parsing or a filename/CRC mismatch. Interrupted reviewed
+  applications retain their verified association for the durable retry queue.
+POST /upload/icenc-emails/replay
+  Body is a normalized message JSON from the offline converter. Always previews,
+  never puts synthetic messages on the live queue and ignores supplied trust.
+
+Existing /Upload/acknowledgements remains the fallback for genuinely ambiguous
+or unsupported report evidence. Pass the exact DeliveryId and independently
+verified product/version/decision/reference. A holding decision needs subsequent
+authoritative confirmation or explicit manual resolution through that existing
+endpoint; the review action itself does not turn PendingConditions into Accepted.
+Do not silently change an already-final decision; conflicting results need review.
+Legacy sends without manifests cannot be auto-applied; do not populate guessed
+historical manifests. Use the existing manual acknowledgement endpoint instead.
+
+Original matched reports use ProductArtifact ValidationReport and appear in the
+existing electronicproducts/{name}/artifacts/history and artifact download routes.
+Unmatched report bytes remain inspectable in the inbound detail response. Dry-run
+never writes candidate artifacts or states, and never enqueues publication.
+Keep audit data in the System database with appropriate access, backup, retention
+and volume monitoring. SQL Express capacity must include retained attachments.
+This change does not add a frontend screen or a mailbox retention/deletion policy.
+The listing is capped at 100 newest rows; filter by status/delivery to narrow it.
+
+RETRY AND MONITORING
+Pending rows survive restart. A transient decision/storage failure delays retry
+five minutes; review rows never auto-retry or auto-rebuild. A successful decision
+followed by a failed audit completion reuses the same inbound event ID on retry.
+Graph 429/5xx responses retry up to three times with Retry-After. Long retry waits
+are deferred to the next minute tick. Failed message retrieval leaves its page
+cursor unchanged. A message deleted between enumeration and retrieval becomes a
+durable MESSAGE_UNAVAILABLE review record. Expired delta tokens replay from the
+original saved initial boundary. The mailbox folder must retain/make messages
+available until ingestion; a mail rule moving/removing them before retrieval can
+only produce review evidence, not recover content that is no longer accessible.
+
+Logs contain inbound ID, dataset filename, revision ID, delivery ID, outcome and
+reason codes. HTTP-client automatic logging is disabled for delta/token URLs;
+audit logging redacts replay bodies, review explanations and operator keys.
+Monitor Pending/INFRASTRUCTURE_FAILURE rows, Review rows, stopped/failed Hangfire
+polls, certificate expiry, delta resets and the existing finalization job/DPC.
+
+OFFLINE AND UNIT VERIFICATION
+No production mailbox, SQL Server or ArcGIS is used by these commands:
+  python -m pip install extract-msg==0.55.0
+  python tools/ValidationEmailReplay/Normalize-MsgSamples.py <sample-msg-folder> <private-output-folder>
+  dotnet run --project tools/ValidationEmailReplay -- <private-output-folder>
+  dotnet test tests/TestProductCatalogue/ValidationEmail.Tests.csproj -c Debug
+
+The replay executable optionally accepts an outgoing manifest JSON array as its
+second argument (ValidationOutgoingFile shape). It prints classification/matching
+metadata only; it has no acknowledgement/database/network dependencies. Local
+MSG replay uses the message's date for ReceivedAt because it is offline evidence,
+not an authenticated Graph mailbox receipt timestamp. Do not commit normalized
+private mail. The checked-in fixtures retain observed metadata/conclusions in
+minimal synthetic OOXML, avoiding private bodies, signatures and screenshots.
+The original eight attachments were also exercised directly during delivery QA.
+
+Prior delivery verification: 89 isolated xUnit tests passed, and all eight original
+MSG samples produced the expected classifications, CRCs and report metadata.
+The adapter source compiled in an isolated harness with zero warnings/errors.
+The ZIP inventory matched the BAT add list, and the seven deleted paths matched
+the explicit removal list; extraction/removal/staging was
+checked from outside a disposable Linux checkout. The Windows BAT was not run.
+
+Full target verification still requires the actual Windows .NET 10/ArcGIS host:
+  dotnet restore Nexus.slnx
+  dotnet build Nexus.slnx -c Debug -p:Platform=x64
+  dotnet test tests/TestProductManager/TestProductManager.csproj -c Debug -p:Platform=x64 --no-build
+The supplied snapshot has no TestProductCatalogue.csproj; its existing DPC tests
+are linked by TestProductManager. The new isolated project is explicitly runnable.
+
+LIMITATIONS AND ROLLBACK
+No SQL Server migration execution, real Graph/certificate/EOP configuration, live
+FTPS/ArcGIS/S-128 integration, full Windows solution build, or Windows BAT execution
+was performed here. Run those deployment checks on the intended non-production
+target before live use. API source syntax was compiled in an isolated harness;
+that is not a full production solution build.
+
+The parser supports current S-57 and S-101 dataset names and observed OOXML P007
+and DMDLOAD templates. Binary Word, PDF, encrypted or new templates require review.
+S-101 checksum-bearing responses require a verified S-101 checksum adapter; no
+S-57 checksum semantics are silently reused for S-101. Missing CRC can match only
+when filename/edition/update identifies one historical manifest-backed attempt.
+Future unsupported templates fail closed. A material new IC-ENC template requires
+new fixture evidence and review before changing the parser.
+
+Rollback by stopping Worker, setting Mode=Disabled/DryRun=true and restarting it
+(to remove the recurring schedule). Keep the additive tables and captured audit
+history; older binaries ignore them. Accepted candidate/publication changes are
+not undone by disabling email ingestion. Retain the existing recovery workflow.
+
+AUTHORITATIVE REFERENCES (verified 9 November 2026)
+https://learn.microsoft.com/en-us/exchange/permissions-exo/application-rbac
+https://learn.microsoft.com/en-us/entra/identity-platform/certificate-credentials
+https://learn.microsoft.com/en-us/graph/api/message-delta
+https://learn.microsoft.com/en-us/graph/outlook-immutable-id
+https://iho.int/uploads/user/pubs/standards/s-57/10CRC.pdf
+
+Suggested commit: Replace legacy IC-ENC email import and add isolated response simulation
