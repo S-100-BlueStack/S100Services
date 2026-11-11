@@ -60,7 +60,7 @@ Source baseline: attached clean main snapshot facc5c2da596af64fcd900eea68a2b71d0
 EXISTING FLOW AND INTEGRATION
 UploadController/UploadSingularProductJob reserve an immutable ProductRevision in
 ProductIcEncDelivery, then send its stored ExchangeSet through FTPS. Sending is
-not validation. Simulation does not send, reserve deliveries or mutate candidates.
+not validation. Simulation with both modes selected now reserves marked synthetic deliveries and processes candidate decisions without external transport.
 
 The new adapter records actual outgoing dataset members, SHA-256 and S-57 CRC-32
 in the reservation transaction before transfer. It does not guess checksums for
@@ -217,17 +217,41 @@ Mode meanings:
   Disabled   No scheduled polling or simulation processing.
   Simulation Generate synthetic responses after simulated sends or explicit API
              requests; process only synthetic queued messages. Never read Graph,
-             reserve a live delivery, acknowledge a candidate, write candidate
-             artifacts/history, or write S-128. No Graph credentials are needed.
+             or contact the transport. Package Send reserves a permanently marked
+             simulated delivery, moves the member InTransit, stores its generated
+             response/report and applies matched final decisions to SQL state.
+             Both accepted members use normal S-128 finalization and return Idle.
+             No Graph credentials are needed. Use the intended test databases.
   Live       Read the configured shared mailbox. DryRun=true previews decisions;
              DryRun=false additionally requires the live rollout/auth controls.
 
-The existing Send-To-IC-ENC Simulation job automatically captures one random
-synthetic response after validating the current candidate/version. Its stable
-Hangfire job ID deduplicates generation. A retry reuses the same response even
-if the current candidate has subsequently changed. Existing send status/message
-contracts still say NotDelivered and SimulationCompleted. Synthetic responses
-are additional inbound audit evidence, never actual receipt or delivery records.
+Apply Data/Migrations/012_AddSimulationDelivery.sql to the System database
+before deploying this version. Existing sends are marked live by default.
+The creation script includes this column for new databases.
+
+The package popup reads CanSend from GET /electronicproducts/packages/{source}/actions.
+POST /electronicproducts/packages/{source}/send with {"packageId":"<active-guid>"}
+requires the distribute policy and queues the ready members with their exact
+immutable revision IDs. GET /electronicproducts/packages/send-jobs/{jobId}
+reports completion. The production frontend no longer needs a Vite demo flag.
+Pause, discarded packages, manual holds and stale snapshots still block sends.
+Members are attempted independently, including when the first member fails.
+
+The Worker records a simulated send, generates one random reply per member and
+immediately runs the normal parser/matcher/acknowledgement pipeline. Its minute
+poll recovers pending captured responses. The same job ID reuses its reservation
+and captured outcome on retry, including after a connection loss during capture.
+The single-product /Upload/{datasetName} route also reads the current export track
+and uses this workflow when both modes are Simulation. Its existing job metadata
+continues to say NotDelivered: no network transfer was made.
+
+ValidationEmail:DryRun applies to live mailbox decisions and standalone previews.
+It does not suppress state changes for explicitly reserved workflow simulations.
+A registration or pending-conditions reply is recorded/reviewed and leaves its
+member InTransit; it is never treated as unconditional acceptance. A rejected
+reply puts its member/package into Error. Two accepted replies trigger existing
+idempotent S-128 publication. That publication and SQL finalization remain separate
+recoverable operations, not one cross-store transaction.
 
 Four outcomes are equally likely: Registered, Rejected, Accepted and
 PendingConditions. Within Rejected one of four supplied report scenarios is
@@ -252,14 +276,16 @@ GET /upload/icenc-emails?isSimulation=true&status=DryRun
 The Worker parses/matches pending generated messages on its next minute tick.
 The mode does not create unsolicited responses for every ready product.
 
-A permanent IsSimulation flag and synthetic outgoing metadata survive SQL
-storage and restart. Even after switching to Live, setting DryRun=false or
-submitting a manual association, synthetic evidence remains preview-only. Fake
-delivery IDs exist only inside synthetic JSON and are never inserted in
-ProductIcEncDelivery. No new SQL migration is needed beyond 011. Real pending
-mail is left alone while Simulation is selected; simulated pending mail is left
-alone while Live is selected. Original reports and bodies are explicitly marked
-SIMULATION for inspection.
+Permanent IsSimulation and SimulationWorkflow evidence survives restart. Workflow
+responses match only ProductIcEncDelivery rows with is_simulation=1, the exact
+recorded delivery ID, current candidate revision, filename/version and checksum.
+The acknowledgement service requires both modes to remain Simulation and records
+Source=Simulation. Generated mail can never acknowledge a live delivery, and real
+mail cannot acknowledge a simulated delivery. Mixed live/simulated acceptances
+cannot publish as a pair. Changing to Live leaves simulated pending mail alone.
+The explicit /simulate preview API remains read-only; it cannot authorize a
+workflow send or promote its generated result into a real notice.
+Original reports and bodies remain explicitly marked SIMULATION.
 
 OPERATOR API (existing distribute policy applies)
 GET /upload/icenc-emails?status=Review[&deliveryId=<guid>]

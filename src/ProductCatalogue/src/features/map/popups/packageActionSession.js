@@ -93,6 +93,7 @@ export function createPackageActionSession({
       canPause: get("canPause") === true,
       canResume: get("canResume") === true,
       canDiscard: get("canDiscard") === true,
+      canSend: get("canSend") === true,
       eligibleMembers,
       restrictionCode: ["MEMBER_TRACK_MISSING", "MEMBERS_NOT_READY"].includes(
         get("restrictionCode")
@@ -163,7 +164,12 @@ export function createPackageActionSession({
         pause: !busy && !simulatedAccept && snapshot?.canPause === true,
         resume: !busy && !simulatedAccept && snapshot?.canResume === true,
         discard: !busy && !simulatedAccept && snapshot?.canDiscard === true,
-        send: !busy && demoEnabled && !simulatedAccept && !snapshot?.paused && !hasDiscarded,
+        send:
+          !busy &&
+          (snapshot?.canSend === true || demoEnabled) &&
+          !simulatedAccept &&
+          !snapshot?.paused &&
+          !hasDiscarded,
         accept: !busy && demoEnabled && simulatedAccept && !hasDiscarded,
       },
     };
@@ -172,7 +178,7 @@ export function createPackageActionSession({
   async function invoke(operation) {
     const state = projection();
     if (!state?.actionEligibility?.[operation] || !current()) return false;
-    if (operation === "send" || operation === "accept") {
+    if ((operation === "send" && snapshot?.canSend !== true) || operation === "accept") {
       simulatedAccept = operation === "send";
       notify.info?.(
         operation === "send" ? "Demo: Send" : "Demo: Accept",
@@ -191,7 +197,7 @@ export function createPackageActionSession({
     const currentPackageId = snapshot.packageId;
     try {
       const body =
-        operation === "discard"
+        operation === "discard" || operation === "send"
           ? { packageId: currentPackageId }
           : { packageId: currentPackageId, expectedControlVersion: snapshot.controlVersion };
       const result = await request(`${path}/${operation === "discard" ? "discard" : operation}`, {
@@ -208,6 +214,20 @@ export function createPackageActionSession({
           getApiResultErrorMessage(result, "The package action was rejected.")
         );
         return false;
+      }
+      if (operation === "send") {
+        const jobId = result.data?.jobId ?? result.data?.JobId;
+        // A lost completion response must not leave another send enabled from the old snapshot.
+        snapshot = null;
+        const completed = Boolean(jobId) && (await waitForSend(jobId));
+        if (!current()) return completed;
+        globalThis.window?.dispatchEvent?.(new CustomEvent("pc-package-action-refresh"));
+        if (completed)
+          notify.success?.(
+            "Simulation completed",
+            "The simulated send completed. Refresh the package to see validation results."
+          );
+        return completed;
       }
       if (operation === "discard") {
         const jobId = result.data?.jobId ?? result.data?.JobId;
@@ -254,8 +274,41 @@ export function createPackageActionSession({
       return false;
     } finally {
       busy = false;
+      if (operation === "send" && current()) await refresh();
       publish();
     }
+  }
+
+  /** Polls only this package session's send job and stops publishing after teardown. */
+  async function waitForSend(jobId) {
+    for (let elapsed = 0; elapsed <= JOB_WAIT_MS; elapsed += JOB_POLL_MS) {
+      if (!current()) return false;
+      const response = await request(
+        `electronicproducts/packages/send-jobs/${encodeURIComponent(jobId)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          signal: abort.signal,
+          timeoutMs: REQUEST_TIMEOUT,
+        }
+      );
+      if (!current()) return false;
+      const status = response.data?.status ?? response.data?.Status;
+      if (!response.success || status === "Failed" || status === "Cancelled") {
+        notify.warning?.(
+          "Send requires attention",
+          "Refresh the package and check the Worker before retrying."
+        );
+        return false;
+      }
+      if (status === "Succeeded") return true;
+      if (elapsed < JOB_WAIT_MS) await wait(JOB_POLL_MS, abort.signal);
+    }
+    notify.info?.(
+      "Simulation queued",
+      "The Worker is still processing the package. Refresh to see its result."
+    );
+    return false;
   }
 
   async function waitForDiscard(jobId) {

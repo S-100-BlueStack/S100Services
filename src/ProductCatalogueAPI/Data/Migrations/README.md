@@ -52,3 +52,9 @@ Creating or rebuilding candidates does not publish that date to S-128.
 ## IC-ENC mailbox ingestion (011)
 
 Apply `011_AddIcEncEmailProcessing.sql` to the System database after 010 before deploying either process. It adds the outgoing dataset manifest, immutable inbound evidence and mailbox cursor tables. No mail is backfilled into delivery manifests, and no geodatabase schema changes are made. The fresh-schema script includes these tables. Follow `Services/ValidationEmail/DEPLOYMENT.txt` for permissions, dry-run rollout, review, recovery and independent tests. The existing clear script includes only these three additional named application tables in its target inventory; its geodatabase and foreign-key boundary checks remain in force.
+
+## Generated-response workflow simulation
+
+Apply `012_AddSimulationDelivery.sql` to the ProductCatalogue **System** database after `011_AddIcEncEmailProcessing.sql`, before deploying the updated API and Worker. It adds permanent delivery provenance and the Simulation acknowledgement source without changing existing live deliveries. `Create-All-Tables.sql` includes these fields for fresh databases. No script should be run against the S-101 source geodatabase or Hangfire store.
+
+Configure both `SendToIcEnc:Mode` and `ValidationEmail:Mode` to `Simulation` in API and Worker. Package Send now exercises candidate state/history and existing S-128 publication when both replies accept, while external transport and Graph polling remain unused. The standalone email simulation endpoint remains a read-only preview.

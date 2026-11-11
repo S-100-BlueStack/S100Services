@@ -8,8 +8,9 @@ using ProductCatalogueAPI.Options;
 namespace ProductCatalogueAPI.Services.ValidationEmail;
 
 /// <summary>Runs polling and authenticated reviews under the same distributed lock across API and Worker hosts.</summary>
-public sealed class ValidationEmailService(ValidationEmailRepository repository, ValidationEmailProcessor processor, ValidationMailboxSynchronizer synchronizer, JobStorage storage, IOptions<ValidationEmailOptions> options, ILogger<ValidationEmailService> logger, IValidationEmailParser parser)
+public sealed class ValidationEmailService(ValidationEmailRepository repository, ValidationEmailProcessor processor, ValidationMailboxSynchronizer synchronizer, JobStorage storage, IOptions<ValidationEmailOptions> options, ILogger<ValidationEmailService> logger, IValidationEmailParser parser, IOptionsMonitor<SendToIcEncOptions>? sendOptions = null) : IValidationEmailInboxProcessor
 {
+    private bool ApplySimulation => options.Value.Mode == ValidationEmailMode.Simulation && sendOptions?.CurrentValue.Mode == SendToIcEncMode.Simulation;
     private const string LockName = "ProductCatalogue:ICENC-Email";
 
     /// <summary>Processes durable retries first, then captures at most twenty Graph pages per invocation.</summary>
@@ -22,7 +23,7 @@ public sealed class ValidationEmailService(ValidationEmailRepository repository,
             try {
                 var message = await repository.GetMessageAsync(id, cancellationToken);
                 var review = await repository.GetPendingReviewAsync(id, cancellationToken);
-                if (message is not null) LogResult(id, await processor.ProcessAsync(id, message, settings.DryRun, settings.ApplyReceivedAfterUtc, review, cancellationToken));
+                if (message is not null) LogResult(id, await processor.ProcessAsync(id, message, settings.DryRun, settings.ApplyReceivedAfterUtc, review, cancellationToken, ApplySimulation));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception exception) {
@@ -41,7 +42,7 @@ public sealed class ValidationEmailService(ValidationEmailRepository repository,
         var message = await repository.GetMessageAsync(id, cancellationToken);
         if (message is null) return null;
         await repository.ReviewAsync(id, review, owner, cancellationToken);
-        var result = await processor.ProcessAsync(id, message, options.Value.Mode != ValidationEmailMode.Live || options.Value.DryRun, options.Value.ApplyReceivedAfterUtc, review, cancellationToken);
+        var result = await processor.ProcessAsync(id, message, options.Value.Mode != ValidationEmailMode.Live || options.Value.DryRun, options.Value.ApplyReceivedAfterUtc, review, cancellationToken, ApplySimulation);
         LogResult(id, result);
         return result;
     }
@@ -102,6 +103,8 @@ public static class ValidationEmailRegistrations
         services.AddScoped<ValidationMailboxSynchronizer>();
         services.AddScoped<ValidationEmailProcessor>();
         services.AddScoped<ValidationEmailService>();
+        services.AddScoped<IValidationEmailInboxProcessor>(provider => provider.GetRequiredService<ValidationEmailService>());
+        services.AddScoped<IValidationEmailSimulatedSend, ValidationEmailSimulatedSend>();
         services.AddScoped<IValidationEmailSimulationStore>(provider => provider.GetRequiredService<ValidationEmailRepository>());
         services.AddSingleton<IValidationEmailSimulationRandom, ValidationEmailSimulationRandom>();
         services.AddScoped<IValidationResponseGenerator, IcEncResponseGenerator>();

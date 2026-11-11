@@ -21,9 +21,12 @@ public sealed record ValidationEmailAttachment(string Name, byte[] Content);
 /// <param name="Attachments">Bounded relevant attachments.</param>
 /// <param name="TrustedSender">True only after allowlist and the administrator's protected mail-flow marker checks.</param>
 /// <param name="RetrievalProblem">A non-null value prevents automatic decisions on incomplete downloads.</param>
-/// <param name="IsSimulation">Permanent provenance flag; simulated messages can never apply a live decision, including after mode changes.</param>
-/// <param name="SimulatedOutgoingFile">Synthetic send metadata bound to an actual immutable candidate; never a real delivery row.</param>
-public sealed record ValidationEmailMessage(string Id, string? InternetMessageId, string Sender, DateTimeOffset ReceivedAt, string Subject, string Body, IReadOnlyList<ValidationEmailAttachment> Attachments, bool TrustedSender = false, string? RetrievalProblem = null, bool IsSimulation = false, ValidationOutgoingFile? SimulatedOutgoingFile = null);
+/// <param name="IsSimulation">Permanent provenance flag; generated replies may affect only marked simulation reservations while both modes are Simulation.</param>
+/// <param name="SimulatedOutgoingFile">Synthetic send metadata bound to an actual immutable candidate; preview metadata or an exact permanently marked simulation reservation.</param>
+public sealed record ValidationEmailMessage(string Id, string? InternetMessageId, string Sender, DateTimeOffset ReceivedAt, string Subject, string Body, IReadOnlyList<ValidationEmailAttachment> Attachments, bool TrustedSender = false, string? RetrievalProblem = null, bool IsSimulation = false, ValidationOutgoingFile? SimulatedOutgoingFile = null) {
+    /// <summary>True only for generated notices belonging to a durably reserved simulated send; standalone previews remain read-only.</summary>
+    public bool SimulationWorkflow { get; init; }
+}
 
 /// <summary>Extracted evidence. Calendar dates remain dates because reports provide no time zone.</summary>
 public sealed record ValidationEmailParseResult
@@ -68,8 +71,9 @@ public sealed record ValidationEmailParseResult
 /// <param name="Crc">Verified S-57 CRC-32; absent for unsupported checksum schemes.</param>
 /// <param name="SentAtUtc">UTC reservation time, before network transmission.</param>
 /// <param name="Status">Persisted delivery status; uncertain sends require reconciliation.</param>
+/// <param name="IsSimulation">Permanent send provenance used to isolate live and generated decisions.</param>
 /// <param name="HasManifest">False for historical sends whose exact filename/checksum evidence was never captured; blocks automatic guesses.</param>
-public sealed record ValidationOutgoingFile(Guid DeliveryId, Guid RevisionId, Guid TrackId, string DatasetName, string Specification, int Edition, int Update, string FileName, string? Crc, DateTime SentAtUtc, string Status, bool HasManifest = true);
+public sealed record ValidationOutgoingFile(Guid DeliveryId, Guid RevisionId, Guid TrackId, string DatasetName, string Specification, int Edition, int Update, string FileName, string? Crc, DateTime SentAtUtc, string Status, bool HasManifest = true, bool IsSimulation = false);
 
 /// <summary>A deterministic match or a reason to request operator review.</summary>
 /// <param name="File">Unique outgoing attempt, or null.</param>
@@ -81,5 +85,5 @@ public sealed record ValidationEmailMatch(ValidationOutgoingFile? File, string R
 /// <param name="Reason">Stable diagnostic reason.</param>
 /// <param name="Parsed">Extracted evidence.</param>
 /// <param name="Match">Exact outgoing attempt when unique.</param>
-/// <param name="IsSimulation">True for synthetic evidence that cannot mutate candidates or publish.</param>
+/// <param name="IsSimulation">True for permanently synthetic evidence; workflow application requires Simulation mode and a simulated reservation.</param>
 public sealed record ValidationEmailProcessingResult(string Status, string Reason, ValidationEmailParseResult Parsed, ValidationOutgoingFile? Match, bool IsSimulation = false);

@@ -93,7 +93,7 @@ public sealed class ValidationEmailRepository(DbConnectionFactory connections, T
             SELECT d.delivery_id AS DeliveryId, d.product_revision_id AS RevisionId, d.product_export_track_id AS TrackId,
                 p.dataset_name AS DatasetName, t.product_specification AS Specification, r.edition_number AS Edition,
                 r.update_number AS [Update], COALESCE(f.file_name, @FileName) AS FileName, f.crc AS Crc, d.reserved_at_utc AS SentAtUtc, d.status AS Status,
-                CONVERT(bit, CASE WHEN f.delivery_id IS NULL THEN 0 ELSE 1 END) AS HasManifest
+                CONVERT(bit, CASE WHEN f.delivery_id IS NULL THEN 0 ELSE 1 END) AS HasManifest, d.is_simulation AS IsSimulation
             FROM dbo.ProductIcEncDelivery d
             JOIN dbo.ProductExportTrack t ON t.product_export_track_id = d.product_export_track_id
             JOIN dbo.Product p ON p.product_id = t.product_id
@@ -113,8 +113,8 @@ public sealed class ValidationEmailRepository(DbConnectionFactory connections, T
             UPDATE dbo.IcEncInboundEmail SET result_json = @Json, status = @Status, delivery_id = @DeliveryId,
                 revision_id = @RevisionId, updated_at_utc = @Now, last_error_code = NULL
             WHERE inbound_id = @Id;
-            """, new { Id = id, Json = JsonSerializer.Serialize(result), result.Status, DeliveryId = result.IsSimulation ? null : result.Match?.DeliveryId, RevisionId = result.Match?.RevisionId, Now = clock.GetUtcNow().UtcDateTime }, transaction, cancellationToken: cancellationToken));
-        if (!result.IsSimulation && result.Match is not null && result.Parsed.CanMatch && result.Status != "DryRun") {
+            """, new { Id = id, Json = JsonSerializer.Serialize(result), result.Status, DeliveryId = result.IsSimulation && result.Match?.IsSimulation != true ? null : result.Match?.DeliveryId, RevisionId = result.Match?.RevisionId, Now = clock.GetUtcNow().UtcDateTime }, transaction, cancellationToken: cancellationToken));
+        if (result.Match is not null && (!result.IsSimulation || result.Match.IsSimulation) && result.Parsed.CanMatch && result.Status != "DryRun") {
             foreach (var attachment in attachments.Where(a => parser.IsRelevantAttachment(a.Name))) {
                 var hash = SHA256.HashData(attachment.Content);
                 var artifactId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"{id:D}:{attachment.Name}:{Convert.ToHexString(hash)}"))[..16]);
