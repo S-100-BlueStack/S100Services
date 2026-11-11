@@ -3,6 +3,7 @@ import lightArcgisThemeUrl from "@arcgis/core/assets/esri/themes/light/main.css?
 
 import { THEME_MODE, getNextThemeMode, normalizeThemeMode } from "../domain/themeMode.js";
 
+import { applyDocumentTheme } from "./applyDocumentTheme.js";
 import { readStoredThemeMode, resolveThemeStorage, writeStoredThemeMode } from "./themeStorage.js";
 const ARCGIS_THEME_LINK_ID = "arcgis-theme-css";
 
@@ -111,12 +112,7 @@ function resolveSystemThemeMode(mediaQueryList) {
 
 function applyThemeMode({ documentElement, documentHead, themeMode }) {
   const normalizedThemeMode = normalizeThemeMode(themeMode);
-  const isDark = normalizedThemeMode === THEME_MODE.DARK;
-
-  documentElement.classList.toggle("calcite-mode-dark", isDark);
-  documentElement.classList.toggle("calcite-mode-light", !isDark);
-  documentElement.dataset.theme = normalizedThemeMode;
-  documentElement.style.colorScheme = normalizedThemeMode;
+  applyDocumentTheme({ documentElement, themeMode: normalizedThemeMode });
 
   applyArcgisTheme({
     documentHead,

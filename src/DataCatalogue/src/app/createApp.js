@@ -39,6 +39,9 @@ export async function createApp(rootElement) {
     apiKey: runtimeConfig.arcgisBasemapApiKey,
     preferences,
     themeMode: themeStore.getSnapshot().themeMode,
+    onUnavailable({ message }) {
+      showErrorNotice({ title: "Basemap unavailable", message });
+    },
   });
   const unsubscribeThemeBasemap = themeStore.subscribe(({ themeMode }) => {
     basemapSettings.setThemeMode(themeMode);

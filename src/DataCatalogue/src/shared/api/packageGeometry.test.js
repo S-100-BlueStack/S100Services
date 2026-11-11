@@ -30,7 +30,7 @@ test("Package geometry read calls the verified v1 route with canonical identity 
   });
   assert.deepEqual(await service.packageGeometry("ID / A", { signal: abort.signal }), envelope());
   assert.equal(captured.length, 1);
-  assert.equal(captured[0][0], "/api/v1/packages/ID%20%2F%20A/geometry");
+  assert.equal(captured[0][0], "/v1/packages/ID%20%2F%20A/geometry");
   assert.equal(captured[0][1].signal, abort.signal);
 });
 

@@ -1,3 +1,17 @@
+## DC-DEPLOY-01 — Public vs application-relative API paths (2026-11-11)
+
+The endpoint URLs in this document use **public IIS paths**. The IIS Application is
+mounted at `/api`, while controller routes are relative to its root (`/v1/...`,
+`/v2/...`). Consequently a public `GET /api/v1/packages` is served by an internal
+`GET /v1/packages`. The frontend adds `VITE_CATALOGUE_API_BASE_URL=/api` to
+resource paths such as `/v1/packages`, rather than embedding `/api` twice.
+Standalone Kestrel development uses `/v1/...` on the Kestrel origin; OpenAPI is
+available under `/openapi/` locally and `/api/openapi/` in IIS.
+No request/response shape, API version, permission or persistence contract changes.
+See [DC_DEPLOY_01_VALIDATION.md](DC_DEPLOY_01_VALIDATION.md).
+
+---
+
 ## DC-UX-01 v5 — Package summaries use existing selected reads (2026-11-06)
 
 V4 per-page `GET /api/v1/dispatcher/bindings?packageId=...` fan-out was removed

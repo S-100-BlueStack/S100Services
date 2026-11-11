@@ -28,7 +28,23 @@ Demo geometry URLs must not be treated as live catalogue joins.
 
 ## Local development
 
-Use the versions in `package.json` and `package-lock.json`. From the repository root:
+DC-SDK-01 declares matching exact 5.2.1 versions of ArcGIS Core, Map Components,
+and Calcite. The committed lockfile must be regenerated with npm **before** running
+`npm ci`, `npm run check`, or building the upgrade candidate. From
+`src/DataCatalogue`, run:
+
+```powershell
+npm install --save-exact @arcgis/core@5.2.1 @arcgis/map-components@5.2.1 @esri/calcite-components@5.2.1
+npm run format
+npm run check
+```
+
+Review and commit both `package.json` and the npm-generated `package-lock.json`
+only after the local check and browser tests pass. Do not hand-edit the lockfile.
+For the full verification matrix and 6.0 compatibility follow-ups, see
+[DC-SDK-01 validation](docs/DC_SDK_01_VALIDATION.md).
+
+For a fresh checkout _after_ the lockfile has been committed, from the repository root:
 
 ```powershell
 Set-Location src/DataCatalogue
@@ -39,11 +55,15 @@ npm run dev
 ```
 
 Edit `.env.local` before starting Vite. To test the live API, set `VITE_CATALOGUE_SOURCE=live`.
-Set `VITE_CATALOGUE_API_BASE_URL` to the approved origin/hosting prefix, or leave it empty for
-same-origin routing. The client appends `/api/v1/...`. Credentials default to `same-origin`;
-use `include` only for an approved credentialed cross-origin deployment with matching CORS.
-The existing Vite configuration does not add an API proxy. An empty base URL therefore requires
-hosting/proxy routing to the API; the Vite server alone does not serve these endpoints.
+Set `VITE_CATALOGUE_API_BASE_URL=/api` when hosting the API as an IIS Application at `/api`.
+The API client appends application-relative `/v1/...` paths exactly once, producing public
+`/api/v1/...` URLs. For standalone local Kestrel, use its origin (for example,
+`https://localhost:51849`) with no `/api` suffix; the resulting path is `/v1/...`.
+Credentials default to `same-origin`; use `include` only for approved credentialed
+cross-origin development with matching CORS. The existing Vite configuration does not
+add an API proxy. An empty base URL only works when the frontend origin also routes `/v1`
+to the API. Changing `VITE_*` values requires a frontend rebuild for IIS deployment.
+See [DC-DEPLOY-01 validation](docs/DC_DEPLOY_01_VALIDATION.md) for release and rollback checks.
 
 `VITE_*` configuration is public in the browser and read at build/start time. Never store
 passwords, tokens or service credentials there. Restart Vite after changing source mode.
@@ -89,4 +109,5 @@ paths must not contain secrets or authentication tokens.
 - [Backend contracts](docs/BACKEND_CONTRACTS.md).
 - [Backend gap register](docs/DC_API_BACKEND_GAPS.md).
 - [Local verification](docs/DC_API_LOCAL_VERIFICATION.md).
+- [IIS route alignment](docs/DC_DEPLOY_01_VALIDATION.md).
 - [Calcite usage decisions](docs/CALCITE_USAGE_LOG.md).

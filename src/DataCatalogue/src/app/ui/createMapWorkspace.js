@@ -10,8 +10,8 @@ export function createMapWorkspace({ live = false } = {}) {
   const actionBar = document.createElement("calcite-action-bar");
   actionBar.className = "dc-map-action-bar";
   actionBar.layout = "vertical";
-  actionBar.expandDisabled = true;
-  actionBar.overflowActionsDisabled = true;
+  actionBar.expandToggleDisabled = true;
+  actionBar.overflowMode = "none";
   actionBar.scale = "s";
   actionBar.setAttribute("aria-label", "Map actions");
 

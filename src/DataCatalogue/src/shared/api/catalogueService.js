@@ -123,11 +123,11 @@ export async function collectPages(read, { signal } = {}) {
 export function createCatalogueService(client) {
   const segment = (id) => encodeURIComponent(requiredId(id));
   const workspacePath = (pipelineId, workspaceId) =>
-    `/api/v1/pipelines/${segment(pipelineId)}/workspaces/${segment(workspaceId)}`;
+    `/v1/pipelines/${segment(pipelineId)}/workspaces/${segment(workspaceId)}`;
   return {
     async packages({ page, pageSize, category, hasPipeline, pipelineId, signal } = {}) {
       return normalizePage(
-        await client.request("/api/v1/packages", {
+        await client.request("/v1/packages", {
           query: { ...paging({ page, pageSize }), category, hasPipeline, pipelineId },
           signal,
         }),
@@ -136,18 +136,18 @@ export function createCatalogueService(client) {
     },
     async package(id, { signal } = {}) {
       const item = normalizePackage(
-        await client.request(`/api/v1/packages/${segment(id)}`, { signal })
+        await client.request(`/v1/packages/${segment(id)}`, { signal })
       );
       if (item.id !== id) throw new Error("API returned a different Package identity.");
       return item;
     },
     async packageGeometry(id, { signal } = {}) {
       return normalizePackageGeometry(
-        await client.request(`/api/v1/packages/${segment(id)}/geometry`, { signal })
+        await client.request(`/v1/packages/${segment(id)}/geometry`, { signal })
       );
     },
     async pipelines({ signal } = {}) {
-      const page = normalizePage(await client.request("/api/v1/pipelines", { signal }), (item) => ({
+      const page = normalizePage(await client.request("/v1/pipelines", { signal }), (item) => ({
         id: requiredId(item.id),
         name: item.displayName || item.id,
         description: item.description ?? null,
@@ -158,7 +158,7 @@ export function createCatalogueService(client) {
       return page.items;
     },
     async categories({ signal } = {}) {
-      const page = normalizePage(await client.request("/api/v1/dispatcher/categories", { signal }));
+      const page = normalizePage(await client.request("/v1/dispatcher/categories", { signal }));
       if (page.items.length !== page.total) throw new Error("Category catalogue is incomplete.");
       return page.items.map((item) => ({
         id: requiredId(item.id),
@@ -167,7 +167,7 @@ export function createCatalogueService(client) {
     },
     async workspaces({ page, pageSize, pipelineId, owner, unassigned, signal } = {}) {
       return normalizePage(
-        await client.request("/api/v1/workspaces", {
+        await client.request("/v1/workspaces", {
           query: { ...paging({ page, pageSize }), pipelineId, owner, unassigned },
           signal,
         }),
@@ -191,7 +191,7 @@ export function createCatalogueService(client) {
       );
     },
     async bindings(packageId, { signal } = {}) {
-      const values = await client.request("/api/v1/dispatcher/bindings", {
+      const values = await client.request("/v1/dispatcher/bindings", {
         query: { packageId: requiredId(packageId) },
         signal,
       });
@@ -211,14 +211,14 @@ export function createCatalogueService(client) {
       });
     },
     bind(packageId, pipelineId, { signal } = {}) {
-      return client.request("/api/v1/dispatcher/bindings", {
+      return client.request("/v1/dispatcher/bindings", {
         method: "POST",
         signal,
         body: { packageId: requiredId(packageId), pipelineId: requiredId(pipelineId) },
       });
     },
     unbind(bindingId, { signal } = {}) {
-      return client.request(`/api/v1/dispatcher/bindings/${segment(bindingId)}`, {
+      return client.request(`/v1/dispatcher/bindings/${segment(bindingId)}`, {
         method: "DELETE",
         signal,
       });

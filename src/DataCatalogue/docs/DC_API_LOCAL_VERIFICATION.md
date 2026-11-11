@@ -31,15 +31,18 @@ node --test src/shared/api/catalogueClient.test.js src/shared/api/catalogueServi
 
 1. Copy `.env.example` to `.env.local` if a local environment file does not already exist.
    Preserve existing approved demo settings. Set `VITE_CATALOGUE_SOURCE=live`.
-2. Set `VITE_CATALOGUE_API_BASE_URL` to the approved API origin/hosting prefix, without
-   `/api/v1`, query, fragment or credentials. Empty means same origin and requires working
-   reverse-proxy/hosting routing. The bundled Vite configuration has no API proxy.
+2. For standalone Kestrel development, set `VITE_CATALOGUE_API_BASE_URL` to the backend
+   origin (for example `https://localhost:51849`), with no `/api` suffix. The client
+   appends `/v1/...`. In IIS, set `VITE_CATALOGUE_API_BASE_URL=/api`, producing public
+   `/api/v1/...`. The bundled Vite configuration has no API proxy. An empty base URL
+   requires same-origin routing of `/v1/...` to the API.
 3. Default credentials are `same-origin`. Set `VITE_CATALOGUE_API_CREDENTIALS=include` only
    with approved cross-origin Windows authentication and credentialed CORS. No browser
    password, token, API key or service account belongs in environment variables.
 4. Run `npm run dev` and use the HTTPS URL printed by Vite. The existing mkcert setup must
    work on the local machine. Restart Vite after changing environment values.
-5. In the Network panel, verify requests use the intended origin and `/api/v1` once.
+5. In the Network panel, verify requests use `/v1/...` with direct Kestrel or
+   `/api/v1/...` under the IIS sub-application, never `/api/api/v1/...`.
    Confirm real 200 JSON responses rather than an HTML login/proxy page. Verify 401/403
    display failures and do not populate demo data. Do not export credentials in diagnostics.
 

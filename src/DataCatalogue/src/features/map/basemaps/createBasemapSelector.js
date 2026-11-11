@@ -1,12 +1,16 @@
-// Keep the existing MapView architecture. ArcGIS Expand and Basemap Gallery
-// connect through their public `view` properties, without an arcgis-map migration.
+// Use Esri's gallery directly. Its public `view` property supports the existing
+// MapView architecture without introducing an arcgis-map component.
 async function loadBasemapModules() {
   return Promise.all([
     import("@arcgis/map-components/components/arcgis-basemap-gallery"),
     import("@arcgis/map-components/components/arcgis-expand"),
     import("@arcgis/core/Basemap.js"),
-    import("@arcgis/core/widgets/BasemapGallery/support/LocalBasemapsSource.js"),
+    import("@arcgis/core/basemapGallery/LocalBasemapsSource.js"),
   ]);
+}
+
+function basemapId(basemap) {
+  return typeof basemap === "string" ? basemap : (basemap?.id ?? basemap?.style?.id);
 }
 
 export function createBasemapSelector({ container, settings, loadModules = loadBasemapModules }) {
@@ -14,33 +18,86 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
   let generation = 0;
   let currentView = null;
   let ui = null;
-  let imports = null;
+  let modulesPromise = null;
   let currentSelection = settings.getValue();
 
-  function renderSelection(value) {
-    currentSelection = value;
-    const basemap = ui?.basemapsById.get(value);
-    if (basemap && ui.gallery.activeBasemap !== basemap) {
-      ui.gallery.activeBasemap = basemap;
+  function syncSelection() {
+    if (!ui?.ready) return;
+    const candidate = ui.basemapsById.get(currentSelection);
+    if (candidate && basemapId(ui.gallery.activeBasemap) !== currentSelection) {
+      ui.gallery.activeBasemap = candidate;
     }
   }
 
-  const unsubscribe = settings.subscribe(renderSelection);
+  function refreshOptions() {
+    if (!ui) return;
+    const options = settings.getOptions();
+    const nextIds = options.map((option) => option.id).join("|");
+    if (nextIds === ui.optionIds) return;
+    ui.optionIds = nextIds;
+    ui.basemapsById.clear();
+    for (const option of options) {
+      const basemap =
+        ui.Basemap.fromId(option.id) ??
+        new ui.Basemap({ id: option.id, style: { id: option.id } });
+      basemap.title = option.label;
+      ui.basemapsById.set(option.id, basemap);
+    }
+    const source = new ui.LocalBasemapsSource({ basemaps: [...ui.basemapsById.values()] });
+    ui.sources.push(source);
+    ui.gallery.source = source;
+    syncSelection();
+  }
+
+  const unsubscribe = settings.subscribe((value) => {
+    currentSelection = value;
+    refreshOptions();
+    syncSelection();
+  });
+
+  function disposeUi() {
+    const previous = ui;
+    ui = null;
+    if (!previous) return;
+    previous.gallery.removeEventListener("arcgisPropertyChange", previous.onSelection);
+    previous.gallery.removeEventListener("arcgisReady", previous.onReady);
+    previous.expand.remove();
+    // Both components opted out of auto-destroy because MapView.ui reparents
+    // their host. Explicit teardown owns their lifetime.
+    void Promise.resolve()
+      .then(() => previous.gallery.destroy?.())
+      .catch(() => {})
+      .finally(() => {
+        for (const source of previous.sources) source.destroy?.();
+      });
+    void Promise.resolve()
+      .then(() => previous.expand.destroy?.())
+      .catch(() => {});
+  }
 
   async function mount(view, token) {
-    imports ??= loadModules();
+    modulesPromise ??= loadModules();
     let modules;
     try {
-      modules = await imports;
-    } catch {
-      if (alive && token === generation) {
-        container.textContent =
-          "Basemap gallery unavailable. Verify @arcgis/map-components installation.";
+      modules = await modulesPromise;
+      // A defined custom element receives property values through its actual
+      // setters. Assigning them to an unupgraded element loses the connection
+      // when its component class is subsequently initialized.
+      if (globalThis.customElements?.whenDefined) {
+        await Promise.all([
+          globalThis.customElements.whenDefined("arcgis-basemap-gallery"),
+          globalThis.customElements.whenDefined("arcgis-expand"),
+        ]);
       }
-      imports = null;
+    } catch {
+      modulesPromise = null;
+      if (alive && token === generation) {
+        container.textContent = "Basemap gallery is unavailable.";
+      }
       return;
     }
-    if (!alive || token !== generation || !view) return;
+    if (!alive || token !== generation || currentView !== view) return;
+
     const Basemap = modules[2].default;
     const LocalBasemapsSource = modules[3].default;
     const expand = document.createElement("arcgis-expand");
@@ -51,73 +108,80 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
     expand.label = "Basemaps";
     expand.mode = "floating";
     expand.visualScale = "m";
+    expand.autoDestroyDisabled = true;
 
     const gallery = document.createElement("arcgis-basemap-gallery");
     gallery.className = "dc-basemap-gallery";
     gallery.label = "Basemaps";
     gallery.headingLevel = 3;
-    expand.append(gallery);
+    gallery.autoDestroyDisabled = true;
 
-    // Offer all available light/dark choices, independent of the UI theme.
-    const basemapsById = new Map(
-      settings
-        .getOptions()
-        .map((entry) => [
-          entry.id,
-          Basemap.fromId(entry.id) ?? new Basemap({ id: entry.id, style: { id: entry.id } }),
-        ])
-    );
-    gallery.source = new LocalBasemapsSource({ basemaps: [...basemapsById.values()] });
-
-    const onGalleryChanged = (event) => {
-      if (!alive || event.detail?.name !== "activeBasemap") return;
-      const selected = gallery.activeBasemap;
-      const id = typeof selected === "string" ? selected : (selected?.id ?? selected?.style?.id);
-      if (!basemapsById.has(id)) return;
-      // Programmatic changes (theme changes and shared-map sync) are not manual overrides.
-      if (id === settings.getValue()) return;
+    const mounted = {
+      expand,
+      gallery,
+      Basemap,
+      LocalBasemapsSource,
+      basemapsById: new Map(),
+      sources: [],
+      optionIds: "",
+      ready: false,
+      onReady: null,
+      onSelection: null,
+    };
+    mounted.onReady = () => {
+      if (!alive || token !== generation || ui !== mounted) return;
+      mounted.ready = true;
+      syncSelection();
+    };
+    mounted.onSelection = (event) => {
+      if (!alive || token !== generation || ui !== mounted) return;
+      if (event.detail?.name !== "activeBasemap") return;
+      const id = basemapId(gallery.activeBasemap);
+      if (!mounted.basemapsById.has(id) || id === settings.getValue()) return;
       if (settings.setValue(id)) expand.expanded = false;
     };
-    gallery.addEventListener("arcgisPropertyChange", onGalleryChanged);
+    gallery.addEventListener("arcgisReady", mounted.onReady);
+    gallery.addEventListener("arcgisPropertyChange", mounted.onSelection);
+    ui = mounted;
+    refreshOptions();
+
+    // Set a fully upgraded component's source and view before connecting it.
+    // This avoids a first render with an uninitialized gallery model.
     gallery.view = view;
     expand.view = view;
+    expand.append(gallery);
     container.replaceChildren(expand);
-    ui = { expand, gallery, basemapsById, onGalleryChanged };
-    renderSelection(currentSelection);
+    Promise.resolve(gallery.componentOnReady?.())
+      .catch(() => {
+        if (alive && token === generation && ui === mounted) {
+          container.textContent = "Basemap gallery is unavailable.";
+          disposeUi();
+        }
+      });
   }
 
   return {
     setView(view) {
       if (!alive || currentView === view) return;
-      currentView?.ui?.remove?.(container);
-      currentView = view ?? null;
-      if (currentView?.ui?.add) {
-        // ArcGIS owns the zoom/basemap alignment. Do not position this host by pixels.
-        currentView.ui.add(container, { position: "top-right", index: 1 });
-      }
+      const oldView = currentView;
       const token = ++generation;
-      if (ui) {
-        ui.gallery.view = currentView;
-        ui.expand.view = currentView;
-        return;
+      oldView?.ui?.remove?.(container);
+      disposeUi();
+      currentView = view ?? null;
+      container.replaceChildren();
+      if (currentView?.ui?.add) {
+        currentView.ui.add(container, { position: "top-right", index: 1 });
+        void mount(currentView, token);
       }
-      if (currentView) void mount(currentView, token);
     },
     destroy() {
       if (!alive) return;
       alive = false;
       generation++;
       currentView?.ui?.remove?.(container);
+      currentView = null;
       unsubscribe();
-      if (ui) {
-        ui.gallery.removeEventListener("arcgisPropertyChange", ui.onGalleryChanged);
-        ui.gallery.view = null;
-        ui.expand.view = null;
-        const expand = ui.expand;
-        expand.remove();
-        void expand.destroy?.();
-      }
-      ui = null;
+      disposeUi();
       container.replaceChildren();
     },
   };

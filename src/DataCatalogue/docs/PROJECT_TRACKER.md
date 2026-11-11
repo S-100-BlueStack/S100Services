@@ -1,3 +1,121 @@
+## DC-SDK-01 v6 — Restore Esri gallery; key validation fail-safe (candidate, 2026-11-11)
+
+Browser feedback after v5: the replacement thumbnail layouts did not match the
+original Esri Basemap Gallery, and a saved Human Geography Dark choice with an
+expired API key caused a Basemap Styles 401 and could block MapView startup.
+The v3-v5 custom-selector choices are superseded. Use the official public
+`arcgis-expand` + `arcgis-basemap-gallery` with the existing `MapView`, the
+5.2 `LocalBasemapsSource` path and upgrade-before-connect guards. Defer a
+broader map-component migration. Basemap settings now validate protected style
+access asynchronously before applying it, preserving usable default basemaps
+if authorization fails. Changes are limited to the basemap feature and its
+app notice wiring; no backend, API or dependency changes.
+
+The v6 implementation remains a candidate pending a real ArcGIS 5.2.1 browser
+check, including standard gallery visuals, no `null.state` error, key-expiry
+fallback, two-map synchronization, and local `npm run check`. See
+[DC_SDK_01_BASEMAP_FOLLOWUP.md](DC_SDK_01_BASEMAP_FOLLOWUP.md).
+
+---
+
+## DC-SDK-01 v5 — Thumbnail list layout correction (candidate, 2026-11-11)
+
+Browser feedback on v4 shows the two-column Calcite Card layout differs
+from the previous ArcGIS Basemap Gallery: images are visibly cropped into
+strips, and basemap labels appear beneath cards. The desired layout is one
+vertical, scrollable list with full 112 x 64 px thumbnails to the left of
+labels. v5 switches only the selector presentation to documented Calcite
+List/List Item APIs and keeps the v3/v4 basemap-settings ownership,
+selection, MapView lifecycle, themes, persistence and v4 geometry API migration.
+No backend, dependencies or unrelated frontend controls change. Browser
+acceptance remains pending after `npm run check`.
+
+See [DC_SDK_01_BASEMAP_FOLLOWUP.md](DC_SDK_01_BASEMAP_FOLLOWUP.md).
+
+---
+
+## DC-SDK-01 — Basemap selector runtime follow-up (candidate, 2026-11-11)
+
+Source baseline: `22e2ff7da5578f26559189eca06c9118e8227bfe` with a
+separately verified, dirty DataCatalogue working-tree snapshot. User browser
+evidence on ArcGIS/Calcite 5.2.1 shows an empty Basemap Gallery and an
+`arcgis-basemap-gallery` rendering error reading `state` from `null`.
+The precise root cause inside the SDK/component has not been established.
+
+- Supersede the earlier `arcgis-expand` + `arcgis-basemap-gallery` choice **only**
+  for DataCatalogue's basemap selector. Use a native icon button and radio group
+  instead, with a public `calcite-icon` and public `MapView.ui.add` placement.
+- Keep the existing `Map`/`MapView` architecture, basemap option set, API-key
+  gating, shared settings, map sync, manual/theme defaults and Preferences
+  persistence. Keep keyboard Escape/focus/outside-click/view teardown behavior.
+- Load feature-owned CSS from `src/main.js`; do not replace uncommitted
+  `src/styles/map.css`, update package versions, or edit backend routing.
+- This is a focused candidate, not a verified SDK/browser fix. Require
+  local `npm run check` and real browser checks on both maps before acceptance.
+
+See [DC_SDK_01_BASEMAP_FOLLOWUP.md](DC_SDK_01_BASEMAP_FOLLOWUP.md) for the
+source evidence, verification boundary and local acceptance checklist.
+
+---
+
+## DC-DEPLOY-01 — IIS API route base alignment (candidate, 2026-11-11)
+
+Authoritative committed baseline: `22e2ff7da5578f26559189eca06c9118e8227bfe`.
+The separate working-tree overlay from the 2026-11-11 export preserves uncommitted
+DC-SDK-01/theme changes; this task does not approve or commit them.
+
+- DataCatalogueAPI controllers expose application-relative `/v1/...` and `/v2/...`
+  routes; IIS hosts the API under `/api`, giving public `/api/v1/...` and `/api/v2/...`.
+- The browser API client composes base URL and `/v1/...` resource paths in one
+  place. Production uses `VITE_CATALOGUE_API_BASE_URL=/api`; standalone Kestrel
+  uses the Kestrel origin (or an empty base only with an appropriate same-origin host).
+- TestServer integration covers direct routes, an `/api` PathBase, URL generation,
+  and OpenAPI routes. Swagger and Scalar resolve their documents relative to the app.
+- No changes to authentication, authorization policies, database contracts, Job
+  semantics, ArcGIS/Calcite dependencies, or other frontend behavior.
+- Routing integration tests: user-reported 100/100 passed after DC-DEPLOY-01
+  v3 test correction on 2026-11-11 (four compiler warnings remain).
+  Frontend `npm run check`, browser SSO, OpenAPI UI and IIS acceptance remain
+  separate verification gates.
+
+See [DC_DEPLOY_01_VALIDATION.md](DC_DEPLOY_01_VALIDATION.md) for checks,
+release sequencing, rollback and the documentation scope.
+
+---
+
+## DC-SDK-01 — ArcGIS and Calcite 5.2 alignment (candidate, 2026-11-10)
+
+Authoritative input: `22e2ff7da5578f26559189eca06c9118e8227bfe`, exported using
+`git archive`, with all 276 source-file SHA-256 checks verified. This is a
+frontend-only candidate; local dependency installation and browser acceptance
+remain pending.
+
+- Align `@arcgis/core`, `@arcgis/map-components` and `@esri/calcite-components`
+  at the exact stable `5.2.1` release. Generate `package-lock.json` with npm
+  locally; do not copy or hand-edit lockfile dependency records.
+- Keep the existing `Map`/`MapView` architecture. `arcgis-expand` and
+  `arcgis-basemap-gallery` remain public components. Esri's Basemap Gallery
+  component still documents `LocalBasemapsSource` from the `widgets/.../support`
+  path; it is a source helper, not an instantiated legacy UI widget.
+- Replace Calcite's deprecated Action Bar `expandDisabled` and
+  `overflowActionsDisabled` with public `expandToggleDisabled` and
+  `overflowMode = "none"` to retain the existing fixed-width map controls.
+- Move theme selection from deprecated `calcite-mode-*` classes to CSS
+  `color-scheme`; use the existing application-owned `data-theme` attribute
+  for local CSS overrides. No Preferences storage or ArcGIS theme-link changes.
+- Legacy Calcite `--calcite-color-background` and `--calcite-color-foreground-*`
+  tokens remain in older app styles. Their visual replacements require separate
+  theme-parity browser acceptance before a 6.0 migration; they are documented
+  rather than silently altered in this dependency-focused candidate.
+- Backend APIs, auth, assignment/Jobs semantics, packages and ProductCatalogue
+  remain unchanged. No major-version/6.0 migration or new app dependency is
+  included. All unverified browser/SDK-dependent behavior is a release gate.
+
+See [DC_SDK_01_VALIDATION.md](DC_SDK_01_VALIDATION.md) for the exact local npm
+command, verification and remaining 6.0 work.
+
+---
+
 ## DC-BRAND-01 — Configurable DataCatalogue branding (candidate, 2026-11-10)
 
 Authoritative source: commit-pinned `2de4635d23b26e112d998919ede71a5e7812e119`.

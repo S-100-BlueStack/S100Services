@@ -19,7 +19,7 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
     public async Task AOI_only_package_returns_an_Esri_object_and_no_details() {
         await this.CategoryAsync();
         var package = await this.PackageAsync();
-        using var response = await this.Client.GetAsync($"/api/v1/packages/{package.Id}/geometry");
+        using var response = await this.Client.GetAsync($"/v1/packages/{package.Id}/geometry");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var aoi = json.RootElement.GetProperty("aoi");
@@ -39,8 +39,8 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         const string curves = "{\"paths\":[[[12.1,55.1],[12.3,55.3]],[[12.6,55.6],[12.9,55.9]]],\"spatialReference\":{\"wkid\":4326}}";
         // Clockwise shell and counterclockwise hole must both survive retrieval.
         const string surfaces = "{\"rings\":[[[12,55],[12,56],[13,56],[13,55],[12,55]],[[12.2,55.2],[12.8,55.2],[12.8,55.8],[12.2,55.8],[12.2,55.2]]],\"spatialReference\":{\"wkid\":4326}}";
-        var package = await this.App.CreateAsync<PackageResponse>("/api/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry, detailedGeometry = new { aoi = Geometry, points, curves, surfaces } });
-        var result = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{package.Id}/geometry"))!;
+        var package = await this.App.CreateAsync<PackageResponse>("/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry, detailedGeometry = new { aoi = Geometry, points, curves, surfaces } });
+        var result = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/v1/packages/{package.Id}/geometry"))!;
         Assert.True(result.Aoi.HasValue);
         var details = Assert.IsType<PackageDetailedGeometryResponse>(result.DetailedGeometry);
         Assert.Equal(pointCount, details.Points.Sum(point => point.TryGetProperty("points", out var members) ? members.GetArrayLength() : point.TryGetProperty("x", out _) && point.TryGetProperty("y", out _) ? 1 : 0));
@@ -55,7 +55,7 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
     public async Task Read_after_replacement_uses_current_AOI_and_removes_old_groups() {
         await this.CategoryAsync();
         var package = await this.PackageAsync();
-        var path = $"/api/v1/packages/{package.Id}/geometry";
+        var path = $"/v1/packages/{package.Id}/geometry";
         using var first = await this.Client.PutAsJsonAsync(path, new { aoi = Geometry, points = "{\"points\":[[7.2,55.2],[7.8,55.8]],\"spatialReference\":{\"wkid\":4326}}" });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var before = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>(path))!;
@@ -76,7 +76,7 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         using var scope = this.App.Services.CreateScope();
         var commands = scope.ServiceProvider.GetRequiredService<ICommandService<PackageState>>();
         (await commands.Handle(new PackagesCommands.AddDetailedGeometry(package.Id, null, null, null), default)).ThrowIfError();
-        using var response = await this.Client.GetAsync($"/api/v1/packages/{package.Id}/geometry");
+        using var response = await this.Client.GetAsync($"/v1/packages/{package.Id}/geometry");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(JsonValueKind.Object, json.RootElement.GetProperty("aoi").ValueKind);
@@ -85,7 +85,7 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
 
     [Fact]
     public async Task Missing_package_returns_404_and_missing_referenced_geometry_returns_generic_500() {
-        using var missing = await this.Client.GetAsync("/api/v1/packages/missing/geometry");
+        using var missing = await this.Client.GetAsync("/v1/packages/missing/geometry");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         await this.CategoryAsync();
         var package = await this.PackageAsync();
@@ -93,7 +93,7 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         var commands = scope.ServiceProvider.GetRequiredService<ICommandService<PackageState>>();
         var absentReference = $"surface::{Guid.NewGuid():B}";
         (await commands.Handle(new PackagesCommands.ReplaceGeometry(package.Id!, absentReference, new(null, null, null)), default)).ThrowIfError();
-        using var broken = await this.Client.GetAsync($"/api/v1/packages/{package.Id}/geometry");
+        using var broken = await this.Client.GetAsync($"/v1/packages/{package.Id}/geometry");
         Assert.Equal(HttpStatusCode.InternalServerError, broken.StatusCode);
         var problem = (await broken.Content.ReadFromJsonAsync<ProblemDetails>())!;
         Assert.Equal("Could not retrieve package geometry.", problem.Title);
@@ -103,16 +103,16 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
     [Fact]
     public async Task Geometry_read_requires_access_and_is_documented_in_OpenAPI() {
         using var document = JsonDocument.Parse(await this.Client.GetStringAsync("/openapi/v1.json"));
-        var responses = document.RootElement.GetProperty("paths").GetProperty("/api/v1/packages/{id}/geometry").GetProperty("get").GetProperty("responses");
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/v1/packages/{id}/geometry").GetProperty("get").GetProperty("responses");
         Assert.True(responses.TryGetProperty("200", out _));
         Assert.True(responses.TryGetProperty("404", out _));
         Assert.True(responses.TryGetProperty("500", out _));
         this.Client.DefaultRequestHeaders.Remove(TestAuthentication.UserHeader);
-        using var anonymous = await this.Client.GetAsync("/api/v1/packages/missing/geometry");
+        using var anonymous = await this.Client.GetAsync("/v1/packages/missing/geometry");
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
         this.User("PROD\\outsider");
         this.Client.DefaultRequestHeaders.Add("X-Test-DenyAccess", "true");
-        using var forbidden = await this.Client.GetAsync("/api/v1/packages/missing/geometry");
+        using var forbidden = await this.Client.GetAsync("/v1/packages/missing/geometry");
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
     }
 
@@ -122,17 +122,17 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         var package = await this.PackageAsync();
         var pipeline = await this.PipelineAsync();
         var workspace = await this.WorkspaceAsync(pipeline.Id);
-        var binding = await this.App.CreateAsync<BindingResponse>("/api/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        var binding = await this.App.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == 1);
         foreach (var path in new[] {
-            $"/api/v1/packages/{package.Id}", "/api/v1/packages", $"/api/v1/pipelines/{pipeline.Id}",
-            $"/api/v1/pipelines/{pipeline.Id}/workspaces", $"/api/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}",
-            $"/api/v1/dispatcher/bindings/{Uri.EscapeDataString(binding.Id)}",
-            $"/api/v1/dispatcher/bindings?packageId={package.Id}",
+            $"/v1/packages/{package.Id}", "/v1/packages", $"/v1/pipelines/{pipeline.Id}",
+            $"/v1/pipelines/{pipeline.Id}/workspaces", $"/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}",
+            $"/v1/dispatcher/bindings/{Uri.EscapeDataString(binding.Id)}",
+            $"/v1/dispatcher/bindings?packageId={package.Id}",
         }) {
             using var json = JsonDocument.Parse(await this.Client.GetStringAsync(path));
             AssertNoStorageReference(json.RootElement);
-            if (path.StartsWith("/api/v1/packages", StringComparison.Ordinal)) {
+            if (path.StartsWith("/v1/packages", StringComparison.Ordinal)) {
                 var metadata = path.EndsWith(package.Id, StringComparison.Ordinal) ? json.RootElement : Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
                 Assert.False(metadata.TryGetProperty("detailedGeometry", out _));
             }
@@ -161,7 +161,7 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         using var scope = this.App.Services.CreateScope();
         var commands = scope.ServiceProvider.GetRequiredService<ICommandService<PackageState>>();
         (await commands.Handle(new PackagesCommands.ReplaceGeometry(package.Id, aoi!, new(null, null, null)), default)).ThrowIfError();
-        using var response = await this.Client.GetAsync($"/api/v1/packages/{package.Id}/geometry");
+        using var response = await this.Client.GetAsync($"/v1/packages/{package.Id}/geometry");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("Could not retrieve package geometry.", (await response.Content.ReadFromJsonAsync<ProblemDetails>())!.Title);
     }

@@ -1,3 +1,74 @@
+## DC-SDK-01 v6 — Restore Esri Basemap Gallery (candidate, 2026-11-11)
+
+The screenshot review of v5 confirmed that imitating the original Esri Basemap
+Gallery with native Calcite List/Card controls does not preserve the expected
+standard design. The v3-v5 selector replacements are superseded by the actual
+public `arcgis-expand` and `arcgis-basemap-gallery` components attached to the
+existing `MapView` via their documented `view` properties. `LocalBasemapsSource`
+now comes from `@arcgis/core/basemapGallery/LocalBasemapsSource.js`, the supported
+5.2 path. The components must be defined before their `source` and `view`
+properties are assigned, and are explicitly destroyed when detached.
+
+No Calcite shadow-DOM styling or hand-authored replacement gallery is used.
+The gallery's internal layout, thumbnails, selection presentation and keyboard
+handling remain owned by Esri. The validation of an optional protected basemap
+runs outside MapView startup so an invalid API key cannot block the map.
+Real 5.2.1 component rendering is pending browser acceptance; the original
+`null.state` error was not reproducible in the SDK-independent test runtime.
+
+---
+
+## DC-SDK-01 v5 — Basemap thumbnail rows (2026-11-11)
+
+User browser feedback on v4 confirmed that `calcite-card` laid out thumbnails
+as narrow strips and used a two-column grid unlike the former ArcGIS gallery.
+The current selector uses the public `calcite-list` and `calcite-list-item`
+(`selectionMode="single-persist"`, `selectionAppearance="highlight"`,
+`calciteListChange`, and the `content-start` slot). Each row has a fixed-size
+112 x 64 px preview to the left of its label. The panel scrolls vertically.
+The colors use documented `--calcite-list-*` variables and existing `--dc-*`
+tokens, without shadow-root styling. This supersedes the v4 Card visual
+implementation, not the shared basemap-settings service or the operator
+migration. Browser verification on Calcite 5.2.1 is still required.
+
+---
+
+## DC-SDK-01 — Basemap selector native control (2026-11-11)
+
+The earlier decision to use public `arcgis-expand` and `arcgis-basemap-gallery`
+for DataCatalogue's basemap selector is superseded after browser testing on
+ArcGIS 5.2.1 showed a Gallery rendering exception (`null.state`) and an empty
+panel. The precise SDK/component root cause has not been independently proven.
+
+The replacement uses an application-owned native button and radio group with
+the public `calcite-icon` (`basemap`). Its state is owned by the existing
+`basemapSettings` service, and its host stays in public `MapView.ui`. This
+avoids both the crashing Gallery lifecycle and private Calcite/ArcGIS DOM
+access while preserving light/dark tokens, Escape, focus, and map synchronization.
+No new dependency or migration to `arcgis-map` is required.
+
+See [DC_SDK_01_BASEMAP_FOLLOWUP.md](DC_SDK_01_BASEMAP_FOLLOWUP.md).
+
+---
+
+## DC-SDK-01 — Calcite 5.2 public component migration (2026-11-10)
+
+- Keep `calcite-action-bar` with public `expandToggleDisabled = true` and
+  `overflowMode = "none"`. They replace the 5.2-deprecated `expandDisabled`
+  and `overflowActionsDisabled` properties without changing the docked layout.
+- Rely on the browser's `color-scheme` property for Calcite light/dark styling.
+  Application CSS continues to use its own `data-theme` selector for targeted
+  light/dark variations. No private Calcite internals are touched.
+- Continue using `arcgis-expand` and `arcgis-basemap-gallery` with public
+  `view`/`source` APIs and Esri's documented `LocalBasemapsSource`. There is no
+  legacy BasemapGallery widget instantiated in DataCatalogue.
+- Existing application-owned native controls remain intentional opt-outs, as
+  documented in the earlier entries. The old Calcite foreground/background
+  tokens require a separate visual review before removing their compatibility
+  aliases for 6.0.
+
+---
+
 ## DC-UX-02 — Preferences controls and navbar parity (2026-11-09)
 
 The application-owned Preferences panel now uses the public `calcite-switch`

@@ -18,7 +18,7 @@ test("transport keeps raw numeric uint64 precision and quoted content", async ()
         '{"severity":18446744073709551615,"text":"\\"severity\\":18446744073709551615","small":0}'
       ),
   });
-  const value = await client.request("/api/v1/packages");
+  const value = await client.request("/v1/packages");
   assert.equal(value.severity, UNPRIORITIZED_SEVERITY);
   assert.equal(value.text, '"severity":18446744073709551615');
   assert.equal(value.small, 0);
@@ -64,7 +64,7 @@ test("transport forwards credentials, body, encoded query and AbortSignal", asyn
   const abort = new AbortController();
   let request;
   const client = createCatalogueClient({
-    baseUrl: "/catalogue/",
+    baseUrl: "/catalogue/api/",
     credentials: "include",
     fetchImpl: async (...args) => {
       request = args;
@@ -72,7 +72,7 @@ test("transport forwards credentials, body, encoded query and AbortSignal", asyn
     },
   });
   assert.equal(
-    await client.request("/api/v1/dispatcher/bindings", {
+    await client.request("/v1/dispatcher/bindings", {
       query: { packageId: "a/b &", hasPipeline: false },
       method: "POST",
       body: { packageId: "p", pipelineId: "q" },
@@ -90,6 +90,38 @@ test("transport forwards credentials, body, encoded query and AbortSignal", asyn
   assert.deepEqual(JSON.parse(request[1].body), { packageId: "p", pipelineId: "q" });
 });
 
+test("API base path is composed exactly once for standalone and IIS hosting", async () => {
+  for (const [baseUrl, expected] of [
+    ["", "/v1/packages"],
+    ["/api", "/api/v1/packages"],
+    ["/api/", "/api/v1/packages"],
+    ["https://localhost:51849", "https://localhost:51849/v1/packages"],
+    ["https://example.test/api/", "https://example.test/api/v1/packages"],
+  ]) {
+    let actual;
+    const client = createCatalogueClient({
+      baseUrl,
+      fetchImpl: async (url) => {
+        actual = url;
+        return new Response(null, { status: 204 });
+      },
+    });
+    await client.request("/v1/packages");
+    assert.equal(actual, expected);
+  }
+});
+
+test("resource paths cannot smuggle an API hosting prefix or other version", async () => {
+  const client = createCatalogueClient({
+    baseUrl: "/api",
+    fetchImpl: async () => {
+      throw new Error("Invalid resource path should not reach fetch.");
+    },
+  });
+  for (const path of ["/api/v1/packages", "/v2/products", "//v1/packages"])
+    await assert.rejects(client.request(path), /v1 routes/);
+});
+
 test("ProblemDetails exposes validation messages and HTTP status", async () => {
   const client = createCatalogueClient({
     fetchImpl: async () =>
@@ -99,7 +131,7 @@ test("ProblemDetails exposes validation messages and HTTP status", async () => {
       ),
   });
   await assert.rejects(
-    client.request("/api/v1/packages"),
+    client.request("/v1/packages"),
     (error) =>
       error.status === 400 &&
       error.message.includes("Must be positive") &&
@@ -117,7 +149,7 @@ for (const [status, message] of [
       fetchImpl: async () => new Response("<html>private proxy content</html>", { status }),
     });
     await assert.rejects(
-      client.request("/api/v1/packages"),
+      client.request("/v1/packages"),
       (error) =>
         error.status === status &&
         error.message.includes(message) &&
@@ -129,9 +161,9 @@ for (const [status, message] of [
 test("non-JSON success, empty success and invalid JSON are distinguished", async () => {
   const responses = [new Response("plain text"), new Response(""), json("{")];
   const client = createCatalogueClient({ fetchImpl: async () => responses.shift() });
-  assert.equal(await client.request("/api/v1/packages"), "plain text");
-  assert.equal(await client.request("/api/v1/packages"), null);
-  await assert.rejects(client.request("/api/v1/packages"), /invalid JSON/);
+  assert.equal(await client.request("/v1/packages"), "plain text");
+  assert.equal(await client.request("/v1/packages"), null);
+  await assert.rejects(client.request("/v1/packages"), /invalid JSON/);
 });
 
 test("network and abort failures never return mock success", async () => {
@@ -140,14 +172,14 @@ test("network and abort failures never return mock success", async () => {
       throw new Error("offline");
     },
   });
-  await assert.rejects(client.request("/api/v1/packages"), (error) => error.kind === "network");
+  await assert.rejects(client.request("/v1/packages"), (error) => error.kind === "network");
   const abortError = new DOMException("Cancelled", "AbortError");
   const aborted = createCatalogueClient({
     fetchImpl: async () => {
       throw abortError;
     },
   });
-  await assert.rejects(aborted.request("/api/v1/packages"), (error) => error === abortError);
+  await assert.rejects(aborted.request("/v1/packages"), (error) => error === abortError);
 });
 
 test("configuration rejects credential-bearing and invalid API URLs", () => {

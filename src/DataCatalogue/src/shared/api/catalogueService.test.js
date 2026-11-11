@@ -139,12 +139,12 @@ test("routes encode opaque identifiers and bindings validate package and Pipelin
     },
   });
   await service.workspacePackages("pipe/a", "work space");
-  assert.equal(requests[0].path, "/api/v1/pipelines/pipe%2Fa/workspaces/work%20space/packages");
+  assert.equal(requests[0].path, "/v1/pipelines/pipe%2Fa/workspaces/work%20space/packages");
   const bindings = await service.bindings("p");
   assert.equal(bindings[0].workspaces[0].pipelineId, "q");
   await assert.rejects(service.bindings("other"), /inconsistent/);
   await service.unbind("p::q");
-  assert.equal(requests.at(-1).path, "/api/v1/dispatcher/bindings/p%3A%3Aq");
+  assert.equal(requests.at(-1).path, "/v1/dispatcher/bindings/p%3A%3Aq");
 });
 
 test("Workspace detail preserves Esri JSON, validates identity and forwards abort ownership", async () => {
@@ -158,7 +158,7 @@ test("Workspace detail preserves Esri JSON, validates identity and forwards abor
     },
   });
   const detail = await service.workspace("pipe/a", "work space", { signal: controller.signal });
-  assert.equal(captured.path, "/api/v1/pipelines/pipe%2Fa/workspaces/work%20space");
+  assert.equal(captured.path, "/v1/pipelines/pipe%2Fa/workspaces/work%20space");
   assert.equal(captured.options.signal, controller.signal);
   assert.equal(detail.workspace.pipelineId, "pipe/a");
   assert.equal(detail.esriJSON, esriJSON);

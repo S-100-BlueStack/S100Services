@@ -1,0 +1,20 @@
+/* Preserve the position and dimensions of the existing MapView zoom tools. */
+.dc-basemap-control {
+  width: 32px;
+  height: 32px;
+  pointer-events: auto;
+}
+
+.dc-basemap-expand {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+
+/* Esri owns the gallery rows, thumbnails, and selected appearance. */
+.dc-basemap-gallery {
+  display: block;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: min(24rem, calc(100vh - 7rem));
+  overflow-y: auto;
+}

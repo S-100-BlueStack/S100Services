@@ -15,8 +15,8 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
     public async Task Create_read_and_paginate_packages() {
         await this.CategoryAsync();
         var created = await this.PackageAsync();
-        var read = await this.Client.GetFromJsonAsync<PackageResponse>($"/api/v1/packages/{created.Id}");
-        Assert.True((await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{created.Id}/geometry"))!.Aoi.HasValue);
+        var read = await this.Client.GetFromJsonAsync<PackageResponse>($"/v1/packages/{created.Id}");
+        Assert.True((await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/v1/packages/{created.Id}/geometry"))!.Aoi.HasValue);
         Assert.Matches(@"^TT-[0-9]{3,}-[0-9]{2}$", read!.MetaData!.ShortId!);
         await this.PackageAsync(DistantGeometry);
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == 2);
@@ -24,8 +24,8 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
         Assert.Single(page.Items);
         Assert.Equal(2, page.TotalCount);
         Assert.Equal(2, page.TotalPages);
-        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync("/api/v1/packages?page=0")).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync("/api/v1/packages?pageSize=201")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync("/v1/packages?page=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync("/v1/packages?pageSize=201")).StatusCode);
     }
 
     // Create packages in different areas and categories, then combine both filters.
@@ -40,19 +40,19 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == 3);
         var page = await this.PackagesAsync("?category=test&geometry=" + Uri.EscapeDataString(Geometry));
         Assert.Equal(selected.Id, Assert.Single(page.Items).Id);
-        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync("/api/v1/packages?geometry=invalid-json")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync("/v1/packages?geometry=invalid-json")).StatusCode);
     }
 
     // Submit a package with an unknown category, reuse a reserved source ID and read a missing ID.
     // Expected: The API returns 400, 409 and 404 respectively.
     [Fact]
     public async Task Unknown_categories_and_duplicate_source_identifiers_are_rejected() {
-        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PostAsJsonAsync("/api/v1/packages", new { category = "missing", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PostAsJsonAsync("/v1/packages", new { category = "missing", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry })).StatusCode);
         await this.CategoryAsync();
         var metadata = new { shortId = "TT-123-26" };
         await this.PackageAsync(metadata: metadata);
-        Assert.Equal(HttpStatusCode.Conflict, (await this.Client.PostAsJsonAsync("/api/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry, metaData = metadata })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await this.Client.GetAsync("/api/v1/packages/missing")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await this.Client.PostAsJsonAsync("/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry, metaData = metadata })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await this.Client.GetAsync("/v1/packages/missing")).StatusCode);
     }
 
     // Fail package creation with incomplete detail geometry, then reuse the same source ID.
@@ -61,7 +61,7 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
     public async Task Failed_geometry_validation_releases_the_source_identifier() {
         await this.CategoryAsync();
         var metadata = new { shortId = "TT-333-26" };
-        using var failed = await this.Client.PostAsJsonAsync("/api/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry, metaData = metadata, detailedGeometry = new { aoi = Geometry } });
+        using var failed = await this.Client.PostAsJsonAsync("/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = Geometry, metaData = metadata, detailedGeometry = new { aoi = Geometry } });
         Assert.Equal(HttpStatusCode.BadRequest, failed.StatusCode);
         var retry = await this.PackageAsync(metadata: metadata);
         Assert.Equal("TT-333-26", retry.MetaData!.ShortId);
@@ -74,7 +74,7 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
         await this.CategoryAsync();
         var package = await this.PackageAsync();
         var original = await this.PackageStateAsync(package.Id);
-        var path = $"/api/v1/packages/{package.Id}/geometry";
+        var path = $"/v1/packages/{package.Id}/geometry";
         var request = new { aoi = Geometry, points = "{\"points\":[[7.2,55.2],[7.8,55.8]],\"spatialReference\":{\"wkid\":4326}}" };
         using var first = await this.Client.PutAsJsonAsync(path, request);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
@@ -109,7 +109,7 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
         Assert.NotEqual(full.GeometryRef, restored.GeometryRef);
         Assert.NotEmpty(restored.DetailedGeometry!.PointRefs);
         Assert.Null(restored.DetailedGeometry.SurfaceRef);
-        Assert.Equal(HttpStatusCode.NotFound, (await this.Client.PutAsJsonAsync("/api/v1/packages/missing/geometry", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await this.Client.PutAsJsonAsync("/v1/packages/missing/geometry", request)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PutAsJsonAsync(path, new { aoi = "invalid" })).StatusCode);
     }
 
@@ -125,11 +125,11 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
         }
         using var content = new MultipartFormDataContent();
         content.Add(new ByteArrayContent(bytes.ToArray()), "File", "input.zip");
-        using var uploaded = await this.Client.PostAsync("/api/v1/packages/repository", content);
+        using var uploaded = await this.Client.PostAsync("/v1/packages/repository", content);
         Assert.Equal(HttpStatusCode.Created, uploaded.StatusCode);
         var stored = await uploaded.Content.ReadFromJsonAsync<FileResponse>();
         Assert.StartsWith("database://", stored!.AbsoluteUri);
-        var created = await this.App.CreateAsync<PackageResponse>("/api/v1/packages", new { category = "test", absoluteUri = stored.AbsoluteUri, esriJSON = Geometry });
+        var created = await this.App.CreateAsync<PackageResponse>("/v1/packages", new { category = "test", absoluteUri = stored.AbsoluteUri, esriJSON = Geometry });
         Assert.NotNull(created.Id);
     }
 
@@ -141,6 +141,6 @@ public sealed class PackageTests(CatalogueFixture runtime) : CatalogueTest(runti
     public async Task Invalid_uploads_are_rejected(string filename, int length) {
         using var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(new byte[length]), "File", filename);
-        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PostAsync("/api/v1/packages/repository", form)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PostAsync("/v1/packages/repository", form)).StatusCode);
     }
 }

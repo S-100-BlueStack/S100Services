@@ -9,9 +9,9 @@ import { workspaceColorForOpenJobs } from "./workspaceJobColors.js";
 
 let projectionReady;
 function loadProjection() {
-  if (projectOperator.isLoaded()) return Promise.resolve();
+  if (projectOperator.projectIsLoaded()) return Promise.resolve();
   // The SDK operator is process-wide; share only initialization, never Workspace data.
-  projectionReady ??= projectOperator.load().catch((error) => {
+  projectionReady ??= projectOperator.projectLoad().catch((error) => {
     projectionReady = null;
     throw error;
   });
@@ -85,7 +85,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
         try {
           await loadProjection();
           if (!alive) throw new Error("Workspace map was closed.");
-          polygon = projectOperator.execute(polygon, view.spatialReference);
+          polygon = projectOperator.projectExecute(polygon, view.spatialReference);
         } catch {
           throw new Error("Workspace spatial reference could not be projected to this map.");
         }
@@ -101,7 +101,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       )
         throw new Error("Workspace polygon is empty or unsupported after projection.");
       normalizeWorkspacePolygon(JSON.stringify(polygon.toJSON()));
-      if (!simplifyOperator.isSimple(polygon))
+      if (!simplifyOperator.simplifyIsSimple(polygon))
         throw new Error("Workspace polygon is not topologically simple after projection.");
       return polygon;
     },

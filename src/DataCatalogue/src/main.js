@@ -12,6 +12,7 @@ import "@esri/calcite-components/components/calcite-switch";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles/main.css";
+import "./features/map/basemaps/basemapSelector.css";
 
 import { createApp } from "./app/createApp.js";
 

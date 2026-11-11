@@ -29,6 +29,8 @@ test("Action Bar reserves map width while Pipelines and Jobs overlay the same ma
     assert.equal(shell.children[1].children[1], ui.mapViewElement);
     assert.equal(ui.panelHost.hidden, false);
     assert.equal(ui.pipelineAction.active, true);
+    assert.equal(ui.actionBar.expandToggleDisabled, true);
+    assert.equal(ui.actionBar.overflowMode, "none");
 
     ui.setJobsVisible(true);
     assert.equal(ui.panelHost.hidden, false);

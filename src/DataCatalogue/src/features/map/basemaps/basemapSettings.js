@@ -19,6 +19,15 @@ export const BASEMAP_OPTIONS = Object.freeze([
 
 const DEFAULTS = Object.freeze({ light: DEFAULT_BASEMAP, dark: DEFAULT_DARK_BASEMAP });
 
+async function verifyProtectedBasemap() {
+  // A configured key is not proof of access. Basemap.load checks the actual
+  // ArcGIS Basemap Styles service before a protected basemap reaches a MapView.
+  const { default: Basemap } = await import("@arcgis/core/Basemap.js");
+  const id = "arcgis/human-geography-dark";
+  const basemap = Basemap.fromId(id) ?? new Basemap({ style: { id } });
+  await basemap.load();
+}
+
 function supportedBasemap(id, hasApiKey) {
   return (
     BASEMAP_OPTIONS.find((option) => option.id === id && (!option.requiresKey || hasApiKey))?.id ??
@@ -51,6 +60,8 @@ export function createBasemapSettings({
   storage,
   preferences,
   themeMode = "light",
+  validateProtectedBasemap = verifyProtectedBasemap,
+  onUnavailable,
 } = {}) {
   const hasApiKey = Boolean(apiKey?.trim());
   if (storage === undefined) {
@@ -63,6 +74,8 @@ export function createBasemapSettings({
   let mode = themeMode === "dark" ? "dark" : "light";
   const saved = readJSON(storage, BASEMAP_SELECTION_KEY);
   let manuallySelected = supportedBasemap(saved?.manualId, hasApiKey);
+  let keyStatus = hasApiKey ? "unchecked" : "absent";
+
 
   // The v4 format did not distinguish an automatic default from a selection.
   // Preserve only a non-default legacy choice as explicit user intent.
@@ -78,7 +91,13 @@ export function createBasemapSettings({
   const maps = new Set();
   let alive = true;
   const remember = () => preferences?.getSnapshot().rememberBasemap ?? true;
-  const currentBasemap = () => manuallySelected ?? DEFAULTS[mode];
+  const currentBasemap = () => {
+    // Never initialize a MapView with an unverified, potentially expired token.
+    if (manuallySelected === "arcgis/human-geography-dark" && keyStatus !== "verified") {
+      return DEFAULTS[mode];
+    }
+    return manuallySelected ?? DEFAULTS[mode];
+  };
 
   function persist() {
     if (!remember()) return;
@@ -101,6 +120,36 @@ export function createBasemapSettings({
     for (const listener of listeners) listener(value, mode, Boolean(manuallySelected));
   }
 
+  function checkProtectedBasemapAccess() {
+    if (!alive || keyStatus !== "unchecked") return;
+    keyStatus = "checking";
+    void Promise.resolve()
+      .then(() => validateProtectedBasemap())
+      .then((available) => {
+        if (available === false) throw new Error("Basemap access unavailable");
+        if (!alive) return;
+        keyStatus = "verified";
+        notify();
+      })
+      .catch(() => {
+        if (!alive) return;
+        keyStatus = "invalid";
+        if (manuallySelected === "arcgis/human-geography-dark") {
+          manuallySelected = null;
+          persist();
+        }
+        notify();
+        try {
+          onUnavailable?.({
+            id: "arcgis/human-geography-dark",
+            message: "Human Geography Dark is unavailable. Check the ArcGIS API key.",
+          });
+        } catch {
+          // Error reporting must not affect the MapView lifecycle.
+        }
+      });
+  }
+
   const unsubscribePreferences =
     preferences?.subscribe((snapshot) => {
       if (snapshot.rememberBasemap) persist();
@@ -112,7 +161,7 @@ export function createBasemapSettings({
     hasApiKey,
     getValue: currentBasemap,
     getThemeMode: () => mode,
-    getOptions: () => BASEMAP_OPTIONS.filter((entry) => !entry.requiresKey || hasApiKey),
+    getOptions: () => BASEMAP_OPTIONS.filter((entry) => !entry.requiresKey || keyStatus === "verified"),
     isCustom: () => Boolean(manuallySelected),
     setThemeMode(nextMode) {
       if (!alive) return;
@@ -123,7 +172,7 @@ export function createBasemapSettings({
     },
     setValue(id) {
       if (!alive) return false;
-      const next = supportedBasemap(id, hasApiKey);
+      const next = supportedBasemap(id, keyStatus === "verified");
       if (!next) return false;
       if (manuallySelected === next) return true;
       manuallySelected = next;
@@ -141,6 +190,7 @@ export function createBasemapSettings({
       if (!alive) return () => {};
       map.basemap = currentBasemap();
       maps.add(map);
+      checkProtectedBasemapAccess();
       return () => maps.delete(map);
     },
     subscribe(listener) {

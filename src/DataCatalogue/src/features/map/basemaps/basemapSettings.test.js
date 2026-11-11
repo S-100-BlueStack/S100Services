@@ -31,7 +31,7 @@ test("All supported light and dark basemaps are available in either theme", () =
   );
   assert.equal(validBasemapId("javascript:alert(1)"), DEFAULT_BASEMAP);
   const settings = createBasemapSettings({ apiKey: "browser-key" });
-  assert.equal(settings.getOptions().length, 4);
+  assert.equal(settings.getOptions().length, 3, "Keyed styles remain hidden before access verification");
   settings.destroy();
 });
 
@@ -130,4 +130,89 @@ test("Storage failures do not prevent basemap changes", () => {
   settings.setValue(DEFAULT_BASEMAP);
   assert.equal(settings.getValue(), DEFAULT_BASEMAP);
   settings.destroy();
+});
+
+test("an expired API key cannot block map startup through a persisted protected basemap", async () => {
+  const storage = memoryStorage({
+    [BASEMAP_SELECTION_KEY]: JSON.stringify({ manualId: "arcgis/human-geography-dark" }),
+  });
+  let rejectValidation;
+  let validations = 0;
+  const notices = [];
+  const settings = createBasemapSettings({
+    apiKey: "expired-key",
+    storage,
+    themeMode: "dark",
+    validateProtectedBasemap: () => {
+      validations++;
+      return new Promise((resolve, reject) => { rejectValidation = reject; });
+    },
+    onUnavailable: (notice) => notices.push(notice),
+  });
+  const first = {};
+  const second = {};
+  try {
+    assert.equal(settings.getValue(), DEFAULT_DARK_BASEMAP);
+    settings.registerMap(first);
+    settings.registerMap(second);
+    assert.equal(first.basemap, DEFAULT_DARK_BASEMAP);
+    assert.equal(second.basemap, DEFAULT_DARK_BASEMAP);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(validations, 1, "Two map views must share a single credential check");
+    rejectValidation(new Error("Token Invalid"));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(first.basemap, DEFAULT_DARK_BASEMAP);
+    assert.equal(settings.getOptions().length, 3);
+    assert.equal(storage.getItem(BASEMAP_SELECTION_KEY), null);
+    assert.equal(settings.isCustom(), false);
+    assert.equal(notices.length, 1);
+    assert.doesNotMatch(notices[0].message, /expired-key/);
+  } finally {
+    settings.destroy();
+  }
+});
+
+test("a verified API key activates the saved protected basemap only after validation", async () => {
+  const storage = memoryStorage({
+    [BASEMAP_SELECTION_KEY]: JSON.stringify({ manualId: "arcgis/human-geography-dark" }),
+  });
+  let resolveValidation;
+  const settings = createBasemapSettings({
+    apiKey: "browser-key",
+    storage,
+    validateProtectedBasemap: () => new Promise((resolve) => { resolveValidation = resolve; }),
+  });
+  const map = {};
+  try {
+    settings.registerMap(map);
+    assert.equal(map.basemap, DEFAULT_BASEMAP);
+    assert.equal(settings.getOptions().length, 3);
+    await new Promise((resolve) => setImmediate(resolve));
+    resolveValidation(true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(map.basemap, "arcgis/human-geography-dark");
+    assert.equal(settings.getOptions().length, 4);
+    assert.equal(settings.isCustom(), true);
+  } finally {
+    settings.destroy();
+  }
+});
+
+test("late credential validation after destroy cannot write map state or notices", async () => {
+  let rejectValidation;
+  const notices = [];
+  const settings = createBasemapSettings({
+    apiKey: "browser-key",
+    validateProtectedBasemap: () => new Promise((resolve, reject) => { rejectValidation = reject; }),
+    onUnavailable: (notice) => notices.push(notice),
+    storage: null,
+  });
+  const map = {};
+  settings.registerMap(map);
+  await new Promise((resolve) => setImmediate(resolve));
+  settings.destroy();
+  rejectValidation(new Error("Token Invalid"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(map.basemap, DEFAULT_BASEMAP);
+  assert.equal(notices.length, 0);
 });

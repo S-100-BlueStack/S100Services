@@ -52,8 +52,7 @@ export function createCatalogueClient({
 
   return {
     async request(path, { query = {}, method = "GET", body, signal } = {}) {
-      if (!path.startsWith("/api/v1/"))
-        throw new Error("Only DataCatalogue v1 routes are supported.");
+      if (!path.startsWith("/v1/")) throw new Error("Only DataCatalogue v1 routes are supported.");
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(query)) {
         if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
