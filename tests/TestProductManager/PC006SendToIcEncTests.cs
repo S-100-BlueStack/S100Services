@@ -12,6 +12,7 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Services.ValidationEmail;
 using ProductCatalogueAPI.Services.Locking;
 using System.Reflection;
 using System.Collections;
@@ -721,12 +722,28 @@ namespace TestProductCatalogueAPI
             );
         }
 
+        /// <summary>Configured workflow simulation uses candidate versions even when the legacy product projection is absent.</summary>
+        [Fact]
+        public async Task SimulationEmailEndpointUsesCurrentCandidateTrack() {
+            var tracks = new InMemoryProductRepository();
+            var track = await tracks.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 0);
+            await tracks.BeginExportAsync(track.Id, 5, 0, "test", DateTime.UtcNow);
+            await tracks.SetStateAsync(track.Id, ProductState.ReadyForDistribution, "test", DateTime.UtcNow);
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(new RecordingProductRepository(null), new ThrowingLockService(), jobs, SendToIcEncMode.Simulation, tracks, ValidationEmailMode.Simulation);
+            Assert.IsType<AcceptedResult>(await controller.UploadSingularProduct(DatasetName, CancellationToken.None));
+            Assert.Equal("S101", jobs.LastRequest!.ProductSpecification);
+            Assert.Equal(5, jobs.LastRequest.ExpectedEdition);
+            Assert.Equal(SendToIcEncMode.Simulation, jobs.LastRequest.Mode);
+        }
+
         private static UploadController Controller(
             RecordingProductRepository repository,
             IDatasetLockService locks,
             ISendToIcEncJobService jobs,
             SendToIcEncMode mode,
-            IProductWorkflowRepository? workflowRepository = null
+            IProductWorkflowRepository? workflowRepository = null,
+            ValidationEmailMode? emailMode = null
         ) {
             var controller = new UploadController(
                 NullLogger<UploadController>.Instance,
@@ -736,7 +753,8 @@ namespace TestProductCatalogueAPI
                 jobs,
                 new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode, OperatorKey = mode == SendToIcEncMode.Live ? "operator-secret" : null }),
                 TimeProvider.System,
-                new FreezeProductManager(new FreezeElectronicProductManager())
+                new FreezeProductManager(new FreezeElectronicProductManager()),
+                emailOptions: emailMode.HasValue ? Options.Create(new ValidationEmailOptions { Mode = emailMode.Value }) : null
             ) {
                 ControllerContext = new ControllerContext {
                     HttpContext = new DefaultHttpContext {

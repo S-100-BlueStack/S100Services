@@ -4,6 +4,7 @@ using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Options;
+using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI.Services.Jobs;
 
@@ -11,7 +12,14 @@ namespace ProductCatalogueAPI.Services.Jobs;
 public enum IcEncDecision { Accepted, Rejected }
 
 /// <summary>Records which adapter supplied a notice; email ingestion is the intended primary adapter.</summary>
-public enum IcEncAcknowledgementSource { Email, Manual }
+public enum IcEncAcknowledgementSource {
+    /// <summary>A verified provider mailbox notice.</summary>
+    Email,
+    /// <summary>An authenticated operator's verified external notice.</summary>
+    Manual,
+    /// <summary>A generated reply bound to a permanently marked simulated reservation.</summary>
+    Simulation
+}
 
 /// <summary>
 /// One normalized notice for an exact product/version. A future email job supplies Email and a stable
@@ -33,19 +41,20 @@ public interface IIcEncAcknowledgementService
 
 /// <summary>Schedules publication only when both delivered products are accepted; DPC recovers missed enqueueing.</summary>
 public sealed class IcEncAcknowledgementService(IEncPackageAcknowledgementRepository repository, IBackgroundJobClient jobs,
-    IOptionsMonitor<SendToIcEncOptions> options, TimeProvider clock, ILogger<IcEncAcknowledgementService> logger) : IIcEncAcknowledgementService
+    IOptionsMonitor<SendToIcEncOptions> options, TimeProvider clock, ILogger<IcEncAcknowledgementService> logger, IOptions<ValidationEmailOptions>? emailOptions = null) : IIcEncAcknowledgementService
 {
     public async Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(acknowledgement);
-        if (options.CurrentValue.Mode != SendToIcEncMode.Live)
-            throw new InvalidOperationException("IC-ENC notices can be applied only to live deliveries.");
+        var simulation = acknowledgement.Source == IcEncAcknowledgementSource.Simulation;
+        if (simulation ? options.CurrentValue.Mode != SendToIcEncMode.Simulation || emailOptions?.Value.Mode != ValidationEmailMode.Simulation : options.CurrentValue.Mode != SendToIcEncMode.Live)
+            throw new InvalidOperationException("The notice provenance does not match the configured delivery and email modes.");
         if (acknowledgement.Specification is not (ProductSpecification.S57 or ProductSpecification.S101) ||
             string.IsNullOrWhiteSpace(acknowledgement.DatasetName) || acknowledgement.DatasetName.Length > 64 ||
             acknowledgement.Edition < 0 || acknowledgement.Update < 0 ||
             !Enum.IsDefined(acknowledgement.Decision) || !Enum.IsDefined(acknowledgement.Source) ||
             string.IsNullOrWhiteSpace(acknowledgement.NoticeReference) || acknowledgement.NoticeReference.Length > 256 ||
             acknowledgement.Reason?.Length > 1000 ||
-            (acknowledgement.Source == IcEncAcknowledgementSource.Email &&
+            (acknowledgement.Source is (IcEncAcknowledgementSource.Email or IcEncAcknowledgementSource.Simulation) &&
                 (string.IsNullOrWhiteSpace(acknowledgement.SourceEventId) || acknowledgement.SourceEventId.Length > 256)) ||
             (acknowledgement.Source == IcEncAcknowledgementSource.Manual && acknowledgement.SourceEventId is not null) ||
             acknowledgement.DeliveryId == Guid.Empty)

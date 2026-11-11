@@ -241,6 +241,7 @@ CREATE TABLE dbo.ProductIcEncDelivery (
     product_export_track_id uniqueidentifier NOT NULL,
     product_revision_id uniqueidentifier NOT NULL,
     job_id nvarchar(100) NOT NULL,
+    is_simulation bit NOT NULL CONSTRAINT DF_ProductIcEncDelivery_IsSimulation DEFAULT (0),
     status varchar(16) NOT NULL,
     reserved_at_utc datetime2 NOT NULL,
     completed_at_utc datetime2 NULL,
@@ -253,7 +254,7 @@ CREATE TABLE dbo.ProductIcEncDelivery (
     CONSTRAINT FK_ProductIcEncDelivery_Track FOREIGN KEY (product_export_track_id) REFERENCES dbo.ProductExportTrack(product_export_track_id),
     CONSTRAINT FK_ProductIcEncDelivery_Revision FOREIGN KEY (product_revision_id) REFERENCES dbo.ProductRevision(product_revision_id),
     CONSTRAINT CK_ProductIcEncDelivery_Status CHECK (status IN ('Sending', 'Delivered', 'Uncertain', 'NotDelivered', 'Accepted', 'Rejected')),
-    CONSTRAINT CK_ProductIcEncDelivery_AcknowledgementSource CHECK (acknowledgement_source IS NULL OR acknowledgement_source IN ('Email', 'Manual'))
+    CONSTRAINT CK_ProductIcEncDelivery_AcknowledgementSource CHECK (acknowledgement_source IS NULL OR acknowledgement_source IN ('Email', 'Manual', 'Simulation'))
 );
 
 CREATE UNIQUE INDEX UX_ProductIcEncDelivery_ActiveRevision ON dbo.ProductIcEncDelivery(product_revision_id)

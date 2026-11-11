@@ -9,6 +9,7 @@ using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.ValidationEmail;
 using S100FC.ProductCatalogue;
 using System.Security.Cryptography;
 using System.Text;
@@ -33,7 +34,8 @@ namespace ProductCatalogueAPI.Controllers
         TimeProvider timeProvider,
         IProductManager productManager,
         IIcEncDeliveryRepository? deliveryRepository = null,
-        IIcEncAcknowledgementService? acknowledgementService = null
+        IIcEncAcknowledgementService? acknowledgementService = null,
+        IOptions<ValidationEmailOptions>? emailOptions = null
     ) : ControllerBase
     {
         private readonly ILogger<UploadController> _logger = logger;
@@ -88,7 +90,7 @@ namespace ProductCatalogueAPI.Controllers
             ProductRecord? product;
             ExportProductIdentity? identity = null;
             try {
-                if (mode == SendToIcEncMode.Live) {
+                if (mode == SendToIcEncMode.Live || mode == SendToIcEncMode.Simulation && emailOptions?.Value.Mode == ValidationEmailMode.Simulation) {
                     identity = ExportProductResolver.Resolve(_electronicProductManager, datasetName);
                     var track = identity is null ? null : await _workflowRepository.GetTrackAsync(identity.DatasetName, identity.ProductSpecification, cancellationToken);
                     product = track is null ? null : new ProductRecord {
@@ -154,7 +156,7 @@ namespace ProductCatalogueAPI.Controllers
             cancellationToken.ThrowIfCancellationRequested();
 
             var request = new SendToIcEncJobRequest(
-                datasetName,
+                identity?.DatasetName ?? datasetName,
                 mode,
                 product.EditionNo,
                 product.UpdateNo,

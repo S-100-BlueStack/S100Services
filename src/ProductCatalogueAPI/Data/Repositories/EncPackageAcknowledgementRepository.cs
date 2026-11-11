@@ -45,9 +45,9 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
             WHERE p.dataset_name = @DatasetName AND t.product_specification = @Specification
               AND r.edition_number = @Edition AND r.update_number = @Update
               AND (@DeliveryId IS NULL OR d.delivery_id = @DeliveryId)
-              AND d.status IN ('Delivered', 'Accepted', 'Rejected');
+              AND d.status IN ('Delivered', 'Accepted', 'Rejected') AND d.is_simulation = @Simulation;
             """, new { acknowledgement.DatasetName, Specification = acknowledgement.Specification.ToString(),
-                acknowledgement.Edition, acknowledgement.Update, acknowledgement.DeliveryId }, transaction, cancellationToken: cancellationToken))).ToArray();
+                acknowledgement.Edition, acknowledgement.Update, acknowledgement.DeliveryId, Simulation = acknowledgement.Source == IcEncAcknowledgementSource.Simulation }, transaction, cancellationToken: cancellationToken))).ToArray();
 
         // A later rebuild can use the same edition/update. A stable email event ID identifies a replay;
         // otherwise ambiguous versions require an exact delivery ID from an operator.
@@ -129,7 +129,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                     EXISTS (SELECT 1 FROM dbo.EncPackage ep
                             JOIN dbo.Product p ON p.dataset_name = ep.s57_dataset_name
                             JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id AND t.product_specification = 'S57'
-                            JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
+                            JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted' AND d.is_simulation = @Simulation
                             JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                             WHERE ep.package_id = @PackageId AND t.state = @Accepted AND ep.s57_discarded = 0
                               AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number
@@ -138,14 +138,14 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                     AND EXISTS (SELECT 1 FROM dbo.EncPackage ep
                             JOIN dbo.Product p ON p.dataset_name = ep.source_dataset_name
                             JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id AND t.product_specification = 'S101'
-                            JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
+                            JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted' AND d.is_simulation = @Simulation
                             JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                             WHERE ep.package_id = @PackageId AND t.state = @Accepted AND ep.s101_discarded = 0
                               AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number
                               AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WHERE newer.product_export_track_id = t.product_export_track_id
                                   AND (newer.created_at_utc > r.created_at_utc OR (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))))
                     THEN 1 ELSE 0 END);
-                """, new { delivery.PackageId, Accepted = ProductState.AcceptedForDistribution }, transaction, cancellationToken: cancellationToken));
+                """, new { delivery.PackageId, Simulation = acknowledgement.Source == IcEncAcknowledgementSource.Simulation, Accepted = ProductState.AcceptedForDistribution }, transaction, cancellationToken: cancellationToken));
         }
         transaction.Commit();
         return new IcEncAcknowledgementResult(delivery.DeliveryId, delivery.PackageId.Value, ready, alreadyRecorded);
@@ -188,7 +188,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
         var rows = (await connection.QueryAsync<PublicationRow>(new CommandDefinition("""
             SELECT p.dataset_name AS DatasetName, t.product_specification AS Specification,
                    t.candidate_edition AS Edition, t.candidate_update AS [Update],
-                   d.product_revision_id AS RevisionId
+                   d.product_revision_id AS RevisionId, d.is_simulation AS IsSimulation
             FROM dbo.ProductExportTrack t JOIN dbo.Product p ON p.product_id = t.product_id
             JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
             JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
@@ -200,7 +200,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                                    (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id)));
             """, new { S57 = package.S57DatasetName, S101 = package.SourceDatasetName,
                 Accepted = ProductState.AcceptedForDistribution }, cancellationToken: cancellationToken))).ToArray();
-        if (rows.Length != 2 || rows.Count(row => row.Specification == "S57") != 1 || rows.Count(row => row.Specification == "S101") != 1)
+        if (rows.Select(row => row.IsSimulation).Distinct().Count() != 1 || rows.Length != 2 || rows.Count(row => row.Specification == "S57") != 1 || rows.Count(row => row.Specification == "S101") != 1)
             return null;
         var s57 = rows.Single(row => row.Specification == "S57");
         var s101 = rows.Single(row => row.Specification == "S101");
@@ -295,6 +295,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
     }
     private sealed class PublicationRow
     {
+        public bool IsSimulation { get; set; }
         public string DatasetName { get; set; } = string.Empty;
         public string Specification { get; set; } = string.Empty;
         public int Edition { get; set; }

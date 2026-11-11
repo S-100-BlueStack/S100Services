@@ -2,11 +2,23 @@ using ProductCatalogueAPI.Data.Models;
 
 namespace ProductCatalogueAPI.Services.Jobs;
 
-/// <summary>Reserves immutable live candidates and records transfer outcomes in SQL; never used for synthetic sends.</summary>
+/// <summary>Reserves immutable live candidates and records transfer outcomes in SQL; simulation reservations retain permanent provenance.</summary>
 public interface IIcEncDeliveryRepository
 {
     /// <summary>Atomically reserves the exact current candidate and its outgoing file evidence.</summary>
     Task<IcEncDelivery?> ReserveAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken cancellationToken);
+    /// <summary>Reserves a synthetic send with durable provenance; retries reuse the same job reservation.</summary>
+    /// <param name="datasetName">Canonical ENC member dataset.</param>
+    /// <param name="specification">Exact S57 or S101 output.</param>
+    /// <param name="edition">Expected candidate edition.</param>
+    /// <param name="update">Expected candidate update.</param>
+    /// <param name="jobId">Stable idempotency identity retained across retries.</param>
+    /// <param name="nowUtc">UTC reservation time.</param>
+    /// <param name="cancellationToken">Cancels before committing the reservation.</param>
+    /// <param name="packageId">Expected shared snapshot, when invoked by package Send.</param>
+    /// <param name="revisionId">Expected immutable revision; guards rebuilds reusing version numbers.</param>
+    /// <returns>The existing or new simulated reservation, or null after a stale or ineligible request.</returns>
+    Task<IcEncDelivery?> ReserveSimulationAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken cancellationToken, Guid? packageId = null, Guid? revisionId = null) => throw new NotSupportedException("Simulation delivery reservations are not supported by this repository.");
     /// <summary>Records successful transport without implying IC-ENC validation acceptance.</summary>
     Task MarkDeliveredAsync(Guid deliveryId, DateTime nowUtc, CancellationToken cancellationToken);
     /// <summary>Locks an uncertain transfer against unsafe automatic resending.</summary>
@@ -29,4 +41,11 @@ public interface IIcEncTransport
 /// <param name="Edition">Reserved edition.</param>
 /// <param name="Update">Reserved update.</param>
 /// <param name="ExchangeSet">Immutable stored exchange-set bytes.</param>
-public sealed record IcEncDelivery(Guid Id, string DatasetName, ProductSpecification Specification, int Edition, int Update, byte[] ExchangeSet);
+public sealed record IcEncDelivery(Guid Id, string DatasetName, ProductSpecification Specification, int Edition, int Update, byte[] ExchangeSet) {
+    /// <summary>Immutable reserved revision, required for generated response matching.</summary>
+    public Guid RevisionId { get; init; }
+    /// <summary>Track owning the reserved candidate.</summary>
+    public Guid TrackId { get; init; }
+    /// <summary>Persisted UTC reservation time, preserved across retries.</summary>
+    public DateTime ReservedAtUtc { get; init; }
+}

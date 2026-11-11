@@ -399,3 +399,52 @@ test("an outstanding pre-action read cannot overwrite the authoritative Pause re
   assert.equal(session.projection().actionEligibility.resume, true);
   session.destroy();
 });
+
+test("server simulation send dispatches without a development flag and waits for its worker", async () => {
+  const h = createHarness({ initial: { canSend: true } });
+  const requests = [];
+  let release;
+  const session = createPackageActionSession({
+    sourceName: "PRIMARY",
+    identityKey: "identity",
+    memberNames: { s101: "PRIMARY" },
+    demoEnabled: false,
+    isCurrent: () => true,
+    onChange() {},
+    notify: {},
+    request: async (url, options) => {
+      requests.push({ url, options });
+      if (url.endsWith("/actions")) return { success: true, data: h.state };
+      if (url.endsWith("/send")) return { success: true, data: { jobId: "send-1" } };
+      if (url.endsWith("/send-jobs/send-1"))
+        return new Promise((done) => {
+          release = done;
+        });
+      throw new Error(`Unexpected ${url}`);
+    },
+  });
+  await session.start();
+  assert.equal(session.projection().actionEligibility.send, true);
+  const sent = session.invoke("send");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(await session.invoke("send"), false);
+  const sendRequest = requests.find((r) => r.url.endsWith("/send"));
+  assert.deepEqual(JSON.parse(sendRequest.options.body), {
+    packageId: PACKAGE_ID,
+  });
+  h.state.canSend = false;
+  release({ success: true, data: { status: "Succeeded" } });
+  assert.equal(await sent, true);
+  assert.equal(session.projection().actionEligibility.send, false);
+  assert.equal(session.projection().actionEligibility.accept, false);
+  session.destroy();
+});
+
+test("a paused server snapshot cannot send even when it reports CanSend", async () => {
+  const h = createHarness({ initial: { canSend: true, paused: true } });
+  await h.session.start();
+  assert.equal(h.session.projection().actionEligibility.send, false);
+  assert.equal(await h.session.invoke("send"), false);
+  assert.equal(h.requests.length, 1);
+  h.session.destroy();
+});

@@ -80,3 +80,23 @@ public sealed class ValidationEmailSimulationService(IValidationEmailSimulationS
         return await store.SaveSimulationAsync(sourceKey, generator.Generate(candidate, sourceKey, clock.GetUtcNow()), cancellationToken);
     }
 }
+
+/// <summary>Runs the send workflow with generated responses instead of external transport or mailbox access.</summary>
+public interface IValidationEmailSimulatedSend
+{
+    /// <summary>Requires both send and email modes to be Simulation.</summary>
+    bool Enabled { get; }
+    /// <summary>Reserves the exact candidate, durably generates one reply and processes pending simulated mail.</summary>
+    /// <param name="request">Validated output identity, candidate version and optional exact package/revision guards.</param>
+    /// <param name="jobId">Stable job identity used for durable reservation and response deduplication.</param>
+    /// <param name="cancellationToken">Cooperative cancellation; captured notices remain recoverable by polling.</param>
+    /// <returns>Completion after the immediate simulated inbox processing attempt.</returns>
+    Task SendAsync(ProductCatalogueAPI.Jobs.SendToIcEncJobRequest request, string jobId, CancellationToken cancellationToken);
+}
+
+/// <summary>Processes the durable inbound queue through the shared locking and parsing boundary.</summary>
+public interface IValidationEmailInboxProcessor
+{
+    /// <summary>Processes pending notices for the selected mode; simulation never polls Graph.</summary>
+    Task PollAsync(CancellationToken cancellationToken);
+}

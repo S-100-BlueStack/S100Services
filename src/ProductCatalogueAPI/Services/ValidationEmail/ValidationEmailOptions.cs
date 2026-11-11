@@ -16,11 +16,11 @@ public sealed class ValidationEmailOptions
         configuration.GetSection(SectionName).Bind(options);
     }
     private ValidationEmailMode? configuredMode;
-    /// <summary>Explicit Mode overrides Enabled. Simulation needs no Graph credentials and never applies live decisions.</summary>
+    /// <summary>Explicit Mode overrides Enabled. Simulation needs no Graph credentials and applies generated workflow decisions only to simulated deliveries.</summary>
     public ValidationEmailMode Mode { get => configuredMode ?? (Enabled ? ValidationEmailMode.Live : ValidationEmailMode.Disabled); set => configuredMode = value; }
     /// <summary>Compatibility for the first delivered package: Enabled=true means Live only when Mode is absent.</summary>
     public bool Enabled { get; set; }
-    /// <summary>Prevents acknowledgement and S-128 publication for every ingestion and review action.</summary>
+    /// <summary>Previews live mailbox decisions and standalone simulations. Reserved workflow simulations exercise state transitions independently.</summary>
     public bool DryRun { get; set; } = true;
     /// <summary>Minimum minutes between completed polls; Hangfire ticks every minute.</summary>
     public int PollIntervalMinutes { get; set; } = 1;

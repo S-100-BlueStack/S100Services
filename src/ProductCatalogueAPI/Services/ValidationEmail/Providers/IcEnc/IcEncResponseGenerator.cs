@@ -35,7 +35,7 @@ public sealed class IcEncResponseGenerator(IValidationEmailSimulationRandom rand
             _ => "SUCCESSFUL"
         };
         var subject = outcome == ValidationEmailOutcome.Registered ? $"CELL REGISTRATION - SUCCESSFUL - {file.FileName}{crc}" : $"VALIDATION OF CELL - {file.FileName} - {suffix}{crc}";
-        var body = "SIMULATION: generated IC-ENC response. No email was received and no dataset decision will be applied.";
+        var body = "SIMULATION: generated IC-ENC response. No email was received from the external validation provider.";
         ValidationEmailAttachment attachment;
         if (outcome == ValidationEmailOutcome.Registered) {
             var cell = new XElement("Cell", new XAttribute("Name", file.FileName.Replace('.', '_')), new XAttribute("ProductType", candidate.Specification),

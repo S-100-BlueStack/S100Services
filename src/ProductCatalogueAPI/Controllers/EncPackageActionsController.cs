@@ -8,7 +8,7 @@ using ProductCatalogueAPI.Services.Operations;
 
 namespace ProductCatalogueAPI.Controllers;
 
-/// <summary>Feature-flagged live package Pause/Resume/Discard. Never exposes Send/Accept.</summary>
+/// <summary>Feature-flagged package actions, including server-configured simulated delivery.</summary>
 [Authorize]
 [ApiController]
 [Route("electronicproducts/packages")]
@@ -49,6 +49,36 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
             EncPackagePauseWriteStatus.VersionConflict => Conflict(new { code = "PACKAGE_VERSION_CONFLICT", message = "The Pause state changed. Refresh before retrying." }),
             _ => Conflict(new { code = "PACKAGE_ACTION_UNAVAILABLE", message = "The package is not eligible for this action." })
         };
+    }
+
+    /// <summary>Queues current ready members for simulated delivery and generated response processing.</summary>
+    /// <param name="sourceName">S-101 package identity.</param>
+    /// <param name="request">Exact active package expected by the caller.</param>
+    /// <param name="cancellationToken">Cancels eligibility reads before enqueueing.</param>
+    /// <returns>A durable job identifier, or an eligibility conflict.</returns>
+    [Authorize("productmanager:distribute")]
+    [HttpPost("{sourceName}/send")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Send(string sourceName, [FromBody] EncPackageSendRequest request, CancellationToken cancellationToken) {
+        if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });
+        if (request is null || request.PackageId == Guid.Empty) return BadRequest(new { code = "PACKAGE_ACTION_INVALID", message = "A current package is required." });
+        var jobId = await actions.QueueSendAsync(sourceName, request.PackageId, cancellationToken);
+        return jobId is null ? Conflict(new { code = "PACKAGE_SEND_UNAVAILABLE", message = "Resume the package and configure both delivery and email Simulation modes before sending ready candidates." }) : Accepted(new { jobId, packageId = request.PackageId });
+    }
+
+    /// <summary>Reads only the aggregate simulated-send job type; no unrelated Hangfire job is exposed.</summary>
+    /// <param name="jobId">Durable aggregate send job identifier.</param>
+    /// <returns>The bounded send status or 404 for another job type.</returns>
+    [Authorize("productmanager:access")]
+    [HttpGet("send-jobs/{jobId}")]
+    public IActionResult GetSendJob(string jobId) {
+        if (string.IsNullOrWhiteSpace(jobId)) return NotFound();
+        using var connection = JobStorage.Current.GetConnection();
+        var job = connection.GetJobData(jobId);
+        if (job?.Job?.Type != typeof(SendEncPackageJob)) return NotFound();
+        var state = connection.GetStateData(jobId)?.Name;
+        return Ok(new { status = state switch { "Succeeded" => "Succeeded", "Failed" => "Failed", "Deleted" => "Cancelled", _ => "Running" } });
     }
 
     [Authorize("productmanager:manage")]
@@ -96,3 +126,7 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
 
 public sealed record EncPackagePauseRequest(Guid PackageId, string? ExpectedControlVersion);
 public sealed record EncPackageDiscardRequest(Guid PackageId);
+
+/// <summary>Targets the exact active shared snapshot for simulated delivery.</summary>
+/// <param name="PackageId">Package identity returned by the authoritative action snapshot.</param>
+public sealed record EncPackageSendRequest(Guid PackageId);

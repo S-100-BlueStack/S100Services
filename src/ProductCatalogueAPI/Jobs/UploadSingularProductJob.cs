@@ -15,7 +15,8 @@ namespace ProductCatalogueAPI.Jobs
         ILogger<UploadSingularProductJob> logger,
         IIcEncDeliveryRepository? deliveryRepository = null,
         IIcEncTransport? transport = null,
-        IValidationEmailSimulationService? simulationEmails = null
+        IValidationEmailSimulationService? simulationEmails = null,
+        IValidationEmailSimulatedSend? simulatedSend = null
     )
     {
         private readonly IProductRepository _productRepository = productRepository;
@@ -80,53 +81,57 @@ namespace ProductCatalogueAPI.Jobs
                     );
                 }
 
-                var product = await _productRepository.GetCurrentByNameAsync(request.DatasetName);
-                if (product == null) {
-                    throw CreateSafeFailure(
-                        context,
-                        ExportJobContract.ProductNotFoundCode,
-                        ExportJobContract.ProductNoLongerAvailableMessage
-                    );
+                if (simulatedSend?.Enabled == true) {
+                    await simulatedSend.SendAsync(request, context.JobId, cancellationToken);
                 }
+                else {
+                    var product = await _productRepository.GetCurrentByNameAsync(request.DatasetName);
+                    if (product == null) {
+                        throw CreateSafeFailure(
+                            context,
+                            ExportJobContract.ProductNotFoundCode,
+                            ExportJobContract.ProductNoLongerAvailableMessage
+                        );
+                    }
 
-                var allowsSevenCsValidationOverride = request.AllowSevenCsValidationFailure &&
-                    product.State == ProductState.Error &&
-                    string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
-                if (product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) && !allowsSevenCsValidationOverride) {
-                    throw CreateSafeFailure(
-                        context,
-                        SendToIcEncContract.InvalidStateCode,
-                        SendToIcEncContract.InvalidStateJobMessage
-                    );
-                }
+                    var allowsSevenCsValidationOverride = request.AllowSevenCsValidationFailure &&
+                        product.State == ProductState.Error &&
+                        string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
+                    if (product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) && !allowsSevenCsValidationOverride) {
+                        throw CreateSafeFailure(
+                            context,
+                            SendToIcEncContract.InvalidStateCode,
+                            SendToIcEncContract.InvalidStateJobMessage
+                        );
+                    }
 
-                if (allowsSevenCsValidationOverride) {
-                    _logger.LogWarning(
-                        "IC-ENC send simulation executing with manual SevenCs validation override. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
-                        context.JobId,
-                        request.DatasetName,
-                        request.CorrelationId
-                    );
-                }
+                    if (allowsSevenCsValidationOverride) {
+                        _logger.LogWarning(
+                            "IC-ENC send simulation executing with manual SevenCs validation override. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
+                            context.JobId,
+                            request.DatasetName,
+                            request.CorrelationId
+                        );
+                    }
 
-                if (product.EditionNo != request.ExpectedEdition ||
-                    product.UpdateNo != request.ExpectedUpdate) {
-                    throw CreateSafeFailure(
-                        context,
-                        ExportJobContract.ProductVersionChangedCode,
-                        ExportJobContract.ProductVersionChangedMessage
-                    );
-                }
+                    if (product.EditionNo != request.ExpectedEdition ||
+                        product.UpdateNo != request.ExpectedUpdate) {
+                        throw CreateSafeFailure(
+                            context,
+                            ExportJobContract.ProductVersionChangedCode,
+                            ExportJobContract.ProductVersionChangedMessage
+                        );
+                    }
 
-                cancellationToken.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                // Simulation intentionally performs no transport, acknowledgement,
-                // Product-state mutation, product history write or delivery-record write.
-                // The optional email adapter writes only a permanently synthetic inbound audit record.
-                if (simulationEmails is not null) {
-                    var simulated = await simulationEmails.GenerateAsync(request.DatasetName, request.ProductSpecification, request.ExpectedEdition, request.ExpectedUpdate, "send:" + context.JobId, cancellationToken);
-                    if (simulated is not null)
-                        _logger.LogInformation("Simulated IC-ENC email captured. JobId: {JobId}. MessageId: {MessageId}. CandidateId: {CandidateId}", context.JobId, simulated.Id, simulated.Message.SimulatedOutgoingFile?.RevisionId);
+                    // Preserve the original preview-only send when email workflow simulation is not configured.
+                    // The optional legacy hook writes synthetic audit evidence without reserving a candidate.
+                    if (simulationEmails is not null) {
+                        var simulated = await simulationEmails.GenerateAsync(request.DatasetName, request.ProductSpecification, request.ExpectedEdition, request.ExpectedUpdate, "send:" + context.JobId, cancellationToken);
+                        if (simulated is not null)
+                            _logger.LogInformation("Simulated IC-ENC email captured. JobId: {JobId}. MessageId: {MessageId}. CandidateId: {CandidateId}", context.JobId, simulated.Id, simulated.Message.SimulatedOutgoingFile?.RevisionId);
+                    }
                 }
                 context.SetJobParameter(
                     ExportJobParameterNames.Mode,

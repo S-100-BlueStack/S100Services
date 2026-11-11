@@ -51,6 +51,26 @@ public sealed class ValidationEmailSendSimulationTests
         Assert.Equal(3, delivery.Calls);
     }
 
+    /// <summary>Configured workflow simulation reaches the reserved-send coordinator and never the live transport.</summary>
+    [Fact]
+    public async Task ConfiguredWorkflowSimulationUsesCoordinator() {
+        var workflow = new Workflow();
+        var delivery = new Delivery();
+        var job = new UploadSingularProductJob(DispatchProxy.Create<IProductRepository, Products>(), new Settings(SendToIcEncMode.Simulation), NullLogger<UploadSingularProductJob>.Instance, delivery, delivery, simulatedSend: workflow);
+        await job.ExecuteAsync(new("DK5OTERP", SendToIcEncMode.Simulation, 3, 1, "trace", DateTimeOffset.UtcNow, ProductSpecification: "S57"), new Context(), default);
+        Assert.Equal("job-123", workflow.JobId);
+        Assert.Equal(1, workflow.Calls);
+        Assert.Equal(0, delivery.Calls);
+    }
+
+    private sealed class Workflow : IValidationEmailSimulatedSend
+    {
+        public bool Enabled => true;
+        public int Calls { get; private set; }
+        public string? JobId { get; private set; }
+        public Task SendAsync(SendToIcEncJobRequest request, string jobId, CancellationToken cancellationToken) { Calls++; JobId = jobId; return Task.CompletedTask; }
+    }
+
     // Any unexpected repository call, especially AppendAsync, fails the test instead of silently allowing a state mutation.
     public class Products : DispatchProxy
     {
