@@ -8,6 +8,9 @@ import {
   workspaceSelectionKey,
 } from "./pipelineVisibility.js";
 
+// A long group has its own scroll stop so the Pipeline toggle remains visible.
+const MAX_VISIBLE_WORKSPACE_ROWS = 6;
+
 export function createPipelineVisibility({ catalogue, container, onChange, onWorkspacesLoaded }) {
   const list = document.createElement("div");
   list.className = "dc-pipeline-list";
@@ -54,8 +57,10 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
     const nodes = groups.map((group) => {
       const region = document.createElement("div");
       region.className = "dc-pipeline-group";
+      region.setAttribute("role", "group");
+      region.setAttribute("aria-label", `${group.name} Pipeline`);
       const label = document.createElement("label");
-      label.className = "dc-pipeline-row";
+      label.className = "dc-pipeline-row dc-pipeline-row--pipeline";
       const input = document.createElement("input");
       input.type = "checkbox";
       input.checked = enabledPipelines.has(group.id);
@@ -67,7 +72,14 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
       count.textContent = String(group.workspaces.length);
       count.title = "Workspaces";
       label.append(input, name, count);
-      region.append(label);
+      const workspaceList = document.createElement("div");
+      workspaceList.className = "dc-pipeline-workspaces";
+      workspaceList.setAttribute("role", "group");
+      workspaceList.setAttribute("aria-label", `${group.name} Workspaces`);
+      if (group.workspaces.length > MAX_VISIBLE_WORKSPACE_ROWS) {
+        workspaceList.tabIndex = 0;
+      }
+      region.append(label, workspaceList);
       const childInputs = [];
       for (const workspace of group.workspaces) {
         const child = document.createElement("label");
@@ -81,7 +93,7 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
         const childName = document.createElement("span");
         childName.textContent = workspace.name;
         child.append(checkbox, childName);
-        region.append(child);
+        workspaceList.append(child);
         childInputs.push(checkbox);
         checkbox.addEventListener("change", () => {
           if (!alive) return;

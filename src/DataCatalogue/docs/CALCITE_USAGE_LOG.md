@@ -1,3 +1,17 @@
+## DC-UX-03C — Compact Pipeline / Workspace groups (2026-11-11)
+
+The main-map Pipelines panel keeps its existing application-owned native checkbox
+labels within the public Calcite Action Bar/panel-shell composition. Distinct
+Pipeline headers and bounded Workspace scroll regions are styled through
+`--dc-surface`, `--dc-surface-alt`, `--dc-border`, `--dc-focus-ring` and public
+`--calcite-color-brand` tokens. Nested native checkboxes preserve direct click,
+Space/Tab activation and the established visibility behavior. Large groups receive
+a keyboard-focusable, labeled scroll region; small groups do not gain an extra
+Tab stop. No Calcite widget migration, private shadow-root selector, dependency
+or map lifecycle change is needed for this structural UI refinement.
+
+---
+
 ## DC-SDK-01 v6 — Restore Esri Basemap Gallery (candidate, 2026-11-11)
 
 The screenshot review of v5 confirmed that imitating the original Esri Basemap

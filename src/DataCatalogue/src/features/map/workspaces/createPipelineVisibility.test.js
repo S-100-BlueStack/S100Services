@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createPipelineVisibility } from "./createPipelineVisibility.js";
 import { createLiveJobServiceAdapter } from "../../jobs/services/liveJobServiceAdapter.js";
@@ -24,7 +25,25 @@ class TestElement extends EventTarget {
   }
 }
 
-function fixture({ onWorkspacesLoaded = null } = {}) {
+const defaultWorkspaces = [
+  { pipelineId: "paper", workspaceId: "west", name: "Western Denmark", key: "paper/west" },
+  { pipelineId: "enc", workspaceId: "east", name: "Eastern Denmark", key: "enc/east" },
+];
+
+// The API normalizer supplies stable composite keys; collectPages rejects missing or duplicate keys.
+function createPaperWorkspaces(count, displayName = (number) => `Workspace ${number}`) {
+  return Array.from({ length: count }, (_, index) => {
+    const workspaceId = `workspace-${index + 1}`;
+    return {
+      pipelineId: "paper",
+      workspaceId,
+      key: JSON.stringify(["paper", workspaceId]),
+      name: displayName(index + 1),
+    };
+  });
+}
+
+function fixture({ onWorkspacesLoaded = null, workspaces = null } = {}) {
   const original = globalThis.document;
   globalThis.document = {
     createElement: (name) => new TestElement(name),
@@ -45,11 +64,8 @@ function fixture({ onWorkspacesLoaded = null } = {}) {
       return {
         page,
         pageSize: 200,
-        total: 2,
-        items: [
-          { pipelineId: "paper", workspaceId: "west", name: "Western Denmark", key: "paper/west" },
-          { pipelineId: "enc", workspaceId: "east", name: "Eastern Denmark", key: "enc/east" },
-        ],
+        total: (workspaces ?? defaultWorkspaces).length,
+        items: workspaces ?? defaultWorkspaces,
       };
     },
   };
@@ -138,7 +154,7 @@ test("Disabling one Workspace does not disable siblings or change Jobs membershi
   try {
     await new Promise((resolve) => setImmediate(resolve));
     const list = f.container.children[1];
-    const encWorkspaceCheckbox = list.children[0].children[1].children[0];
+    const encWorkspaceCheckbox = list.children[0].children[1].children[0].children[0];
     assert.equal(encWorkspaceCheckbox.checked, true);
     encWorkspaceCheckbox.checked = false;
     encWorkspaceCheckbox.dispatchEvent(new Event("change"));
@@ -149,8 +165,8 @@ test("Disabling one Workspace does not disable siblings or change Jobs membershi
     assert.equal(f.loaded.length, 1, "Visibility cannot change actual Workspace membership");
     await f.controller.reload();
     const newList = f.container.children[1];
-    assert.equal(newList.children[0].children[1].children[0].checked, false);
-    assert.equal(newList.children[1].children[1].children[0].checked, true);
+    assert.equal(newList.children[0].children[1].children[0].children[0].checked, false);
+    assert.equal(newList.children[1].children[1].children[0].children[0].checked, true);
   } finally {
     f.restore();
   }
@@ -162,7 +178,7 @@ test("Pipeline hide and restore retains individual Workspace choices", async () 
     await new Promise((resolve) => setImmediate(resolve));
     const group = f.container.children[1].children[0];
     const checkbox = group.children[0].children[0];
-    const child = group.children[1].children[0];
+    const child = group.children[1].children[0].children[0];
     checkbox.checked = false;
     checkbox.dispatchEvent(new Event("change"));
     assert.equal(child.disabled, true);
@@ -213,7 +229,7 @@ test("Pipeline and Workspace map toggles do not narrow the live Jobs catalogue",
       ["paper"]
     );
 
-    const paperWorkspaceCheckbox = list.children[1].children[1].children[0];
+    const paperWorkspaceCheckbox = list.children[1].children[1].children[0].children[0];
     paperWorkspaceCheckbox.checked = false;
     paperWorkspaceCheckbox.dispatchEvent(new Event("change"));
     assert.deepEqual(f.callbacks.at(-1).workspaces, []);
@@ -226,4 +242,98 @@ test("Pipeline and Workspace map toggles do not narrow the live Jobs catalogue",
   } finally {
     f.restore();
   }
+});
+
+test("Pipeline groups separate headers from Workspace rows without adding short-list tab stops", async () => {
+  const f = fixture();
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    const groups = f.container.children[1].children;
+    assert.equal(groups.length, 2);
+    for (const group of groups) {
+      assert.equal(group.attributes.get("role"), "group");
+      assert.match(group.attributes.get("aria-label"), / Pipeline$/);
+      assert.equal(group.children[0].className, "dc-pipeline-row dc-pipeline-row--pipeline");
+      const workspaceList = group.children[1];
+      assert.equal(workspaceList.className, "dc-pipeline-workspaces");
+      assert.equal(workspaceList.attributes.get("role"), "group");
+      assert.match(workspaceList.attributes.get("aria-label"), / Workspaces$/);
+      assert.equal(workspaceList.tabIndex, undefined);
+      assert.equal(workspaceList.children.length, 1);
+    }
+  } finally {
+    f.restore();
+  }
+});
+
+test("Workspace group focus is limited to lists longer than six entries", async () => {
+  for (const size of [0, 6, 7]) {
+    const workspaces = createPaperWorkspaces(size);
+    const f = fixture({ workspaces });
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(f.loaded.length, 1, f.container.children[0].textContent);
+      const region = f.container.children[1].children[1].children[1];
+      assert.equal(region.children.length, size);
+      assert.equal(region.tabIndex, size > 6 ? 0 : undefined);
+    } finally {
+      f.restore();
+    }
+  }
+});
+
+test("Long Pipeline groups remain fully selectable with one keyboard scroll region", async () => {
+  const workspaces = createPaperWorkspaces(
+    18,
+    (number) => `Paper Workspace ${String(number).padStart(2, "0")}`
+  );
+  const f = fixture({ workspaces });
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(f.loaded.length, 1, f.container.children[0].textContent);
+    const groups = f.container.children[1].children;
+    const paper = groups[1];
+    const workspacesRegion = paper.children[1];
+    assert.equal(paper.children[0].children[2].textContent, "18");
+    assert.equal(workspacesRegion.children.length, 18);
+    assert.equal(workspacesRegion.tabIndex, 0);
+    assert.equal(workspacesRegion.attributes.get("aria-label"), "Paper Charts Workspaces");
+    assert.equal(f.loaded.length, 1);
+
+    const last = workspacesRegion.children.at(-1).children[0];
+    assert.equal(last.checked, true);
+    last.checked = false;
+    last.dispatchEvent(new Event("change"));
+    assert.equal(f.callbacks.at(-1).workspaces.length, 17);
+    assert.equal(f.loaded.length, 1, "Visibility changes must not reload Package membership");
+    assert.equal(f.container.children[1].children[1].children[1], workspacesRegion);
+
+    const pipeline = paper.children[0].children[0];
+    pipeline.checked = false;
+    pipeline.dispatchEvent(new Event("change"));
+    assert.ok(workspacesRegion.children.every((row) => row.children[0].disabled));
+    pipeline.checked = true;
+    pipeline.dispatchEvent(new Event("change"));
+    assert.ok(workspacesRegion.children.every((row) => !row.children[0].disabled));
+    assert.equal(last.checked, false, "A Pipeline toggle must preserve Workspace choices");
+    await f.controller.reload();
+    const freshRegion = f.container.children[1].children[1].children[1];
+    assert.equal(freshRegion.children.at(-1).children[0].checked, false);
+    assert.equal(freshRegion.tabIndex, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+test("Pipeline Workspace scrolling and focus use theme-aware panel styles", () => {
+  const css = readFileSync(new URL("../../../styles/map.css", import.meta.url), "utf8");
+  const pipeline = css.match(/\.dc-pipeline-row--pipeline\s*\{([^}]*)\}/)?.[1];
+  const region = css.match(/\.dc-pipeline-workspaces\s*\{([^}]*)\}/)?.[1];
+  assert.ok(pipeline && region);
+  assert.match(pipeline, /background:\s*var\(--dc-surface-alt\)/);
+  assert.match(region, /max-height:\s*12\.25rem/);
+  assert.match(region, /overflow-y:\s*auto/);
+  assert.match(css, /\.dc-pipeline-workspaces:focus-visible/);
+  assert.match(css, /\.dc-pipeline-row:has\(input:focus-visible\)/);
+  assert.doesNotMatch(css, /\.dc-pipeline-row:focus-within/);
 });

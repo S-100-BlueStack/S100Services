@@ -1,10 +1,31 @@
-## DC-UX-03B — Avoid redundant live Packages reads on panel reopen (candidate, 2026-11-11)
+## DC-UX-03C — Pipelines panel hierarchy and bounded Workspace lists (candidate, 2026-11-11)
 
-Authoritative user-reported commit: `f0f139451c0cb73965a0498aad0a12290d0541cf`.
-The candidate was prepared from the verified `a986e7f` routing context, with the four
-DC-DEPLOY-01 documentation replacements that the user subsequently committed.
-An exact `f0f1394` source export has not yet been inspected; match preimage hashes
-before applying the candidate to newer local sources.
+Authoritative source baseline: `5e3350778e98eb7997a628ea9af00e7878a5cee7`
+(accepted `DC-UX-03B` merge). Limit this candidate to the live main-map Pipelines
+panel: draw each Pipeline as a distinct group header with a compact Workspace count,
+visually nest its Workspaces, and cap each child list at approximately six rows
+before independent scrolling. The Pipeline toggle stays outside that scrolling
+area; long lists have an accessible keyboard scroll stop, and short lists do not.
+All Workspaces remain rendered and selectable. Use existing light/dark theme
+tokens and keyboard focus-visible patterns, with no added decorative UI copy.
+
+Preserve Pipeline/Workspace selection, catalogue fetch and reload lifecycle,
+independent map visibility, complete Package membership, panel placement and
+MapView sizing. Do not introduce new API requests, backend changes, dependencies,
+filter semantics or a second UI component framework. Local browser acceptance
+is required for 18-Workspace groups, short/empty groups, keyboard navigation,
+light/dark and long Workspace names. See the map Workspace feature README and
+`DC_UX_03C_VALIDATION.md` for implementation details and verification gates.
+
+---
+
+## DC-UX-03B — Avoid redundant live Packages reads on panel reopen (accepted, 2026-11-11)
+
+User-reported implementation commit: `54353eebfe6921da61517edf13f75c4148574994`;
+user-reported merge: `5e3350778e98eb7997a628ea9af00e7878a5cee7`.
+The code is included in the verified DC-UX-03C baseline. Local browser testing and
+commit were reported by the user; the performance result was not independently
+replayed in this environment.
 
 - The main-map Packages panel no longer starts a second live catalogue read while an
   earlier read is in flight. Reopening the panel within 60 seconds of an accepted

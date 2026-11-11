@@ -77,3 +77,21 @@ Both maps share an ArcGIS Basemap Gallery with the same four available options i
 application theme. With no explicit choice, theme changes select Topographic (light) or
 Dark Gray (dark). An explicit selection overrides automatic switching until the user
 chooses "Use theme default" under Preferences; persistence is independently optional.
+
+## DC-UX-03C — Pipeline and Workspace panel hierarchy (2026-11-11)
+
+The main-map Pipelines panel presents each Pipeline as a compact, theme-aware group
+with its own header and count. Workspace rows are a visually subordinate child group;
+only its rows scroll after approximately six standard-height entries. The parent
+Pipeline checkbox stays visible while scrolling a large Workspace group. Groups
+retain every Workspace; the scroll limit is not paging or a data filter. Long
+Workspace lists are keyboard focusable and have a descriptive accessible group
+name, while short lists add no unnecessary Tab stop. Checkbox actions keep the
+existing per-Workspace and per-Pipeline map visibility state, and disabling a
+Pipeline retains individual Workspace choices for re-enabling or catalogue reload.
+
+The UI remains application-owned native labels/checkboxes inside the public
+Calcite Action Bar's floating panel host. Styling uses existing theme tokens,
+without a new widget, private shadow DOM or backend/API work. Verify light and
+dark appearances, mouse/keyboard scrolling and focus, long labels and disabled
+Pipeline children in a real desktop browser.
