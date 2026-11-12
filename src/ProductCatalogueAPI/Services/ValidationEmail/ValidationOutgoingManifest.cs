@@ -21,16 +21,26 @@ public static class ValidationOutgoingManifest
     /// <param name="update">Revision update, validated against the actual filename.</param>
     /// <returns>Actual dataset members, including the exact outgoing update; ambiguous archives are rejected before sending.</returns>
     public static Entry[] Read(byte[] exchangeSet, string specification, string datasetName, int update) {
+        if (update is < 0 or > 999 || string.IsNullOrWhiteSpace(datasetName) || !ValidationDatasetFile.IsDatasetFile(datasetName + ".000"))
+            throw new ArgumentException("A supported exact dataset name and three-digit update are required.");
         using var memory = new MemoryStream(exchangeSet, false);
         using var zip = new ZipArchive(memory, ZipArchiveMode.Read);
         var root = specification == "S57" ? "ENC_ROOT/" : specification == "S101" ? "S100_ROOT/" : throw new ArgumentException("Only S57 and S101 are supported.", nameof(specification));
-        var files = zip.Entries.Where(e => e.FullName.Replace('\\', '/').StartsWith(root, StringComparison.OrdinalIgnoreCase) && ValidationDatasetFile.IsDatasetFile(e.Name)).ToArray();
+        var files = zip.Entries.Where(e => e.FullName.Replace('\\', '/').StartsWith(root, StringComparison.OrdinalIgnoreCase) && ValidationDatasetFile.IsDatasetFile(GetFileName(e))).ToArray();
         var expected = datasetName + "." + update.ToString("000", CultureInfo.InvariantCulture);
-        var targets = files.Where(f => f.Name.Equals(expected, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (targets.Length != 1 || files.Any(f => f.Length > 256 * 1024 * 1024 || !f.Name.StartsWith(datasetName + ".", StringComparison.OrdinalIgnoreCase) || int.Parse(f.Name[^3..], CultureInfo.InvariantCulture) > update) ||
-            files.Select(f => f.Name.ToUpperInvariant()).Distinct().Count() != files.Length || files.Sum(f => f.Length) > 512 * 1024 * 1024)
-            throw new InvalidDataException("The exchange set must contain the exact outgoing dataset filename.");
+        var targets = files.Where(f => GetFileName(f).Equals(expected, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (targets.Length != 1 || files.Any(f => f.Length > 256 * 1024 * 1024 || !GetFileName(f).StartsWith(datasetName + ".", StringComparison.OrdinalIgnoreCase) || int.Parse(GetFileName(f)[^3..], CultureInfo.InvariantCulture) > update) ||
+            files.Select(f => GetFileName(f).ToUpperInvariant()).Distinct().Count() != files.Length || files.Sum(f => f.Length) > 512 * 1024 * 1024)
+            throw new InvalidDataException($"The exchange set must contain the exact outgoing dataset filename. Expected: {expected}. Root: {root}. DatasetFiles: {string.Join(", ", files.Take(10).Select(GetFileName))}.");
         return files.Select(file => ReadEntry(file, specification)).ToArray();
+    }
+
+    /// <summary>Legacy S-57 ZIPs contain Windows separators; ZipArchiveEntry.Name is not a portable normalization boundary.</summary>
+    private static string GetFileName(ZipArchiveEntry entry) {
+        var path = entry.FullName.Replace('\\', '/');
+        if (path.Split('/').Any(part => part is "." or ".." || part.Contains(':')) || path.StartsWith('/'))
+            throw new InvalidDataException("The exchange set contains an unsafe dataset path.");
+        return path[(path.LastIndexOf('/') + 1)..];
     }
 
     private static Entry ReadEntry(ZipArchiveEntry file, string specification) {
@@ -49,7 +59,7 @@ public static class ValidationOutgoingManifest
         crc ^= 0xffffffff;
         if (crc != file.Crc32) throw new InvalidDataException("Dataset ZIP checksum does not match the transmitted bytes.");
         // S-101 checksum semantics are not inferred from S-57. An S-101 CRC-bearing notice needs review until a verified adapter exists.
-        return new(file.Name.ToUpperInvariant(), sha.GetHashAndReset(), specification == "S57" ? crc.ToString("X8", CultureInfo.InvariantCulture) : null);
+        return new(GetFileName(file).ToUpperInvariant(), sha.GetHashAndReset(), specification == "S57" ? crc.ToString("X8", CultureInfo.InvariantCulture) : null);
     }
 
     private static uint[] BuildCrcTable() {

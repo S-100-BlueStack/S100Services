@@ -92,6 +92,13 @@ public interface IValidationEmailSimulatedSend
     /// <param name="cancellationToken">Cooperative cancellation; captured notices remain recoverable by polling.</param>
     /// <returns>Completion after the immediate simulated inbox processing attempt.</returns>
     Task SendAsync(ProductCatalogueAPI.Jobs.SendToIcEncJobRequest request, string jobId, CancellationToken cancellationToken);
+    /// <summary>Reserves both immutable members atomically, captures both replies, then processes the durable simulated inbox.</summary>
+    /// <param name="sourceName">S-101 package source.</param>
+    /// <param name="packageId">Expected active snapshot.</param>
+    /// <param name="members">Exactly one S-101 and one S-57 candidate.</param>
+    /// <param name="jobId">Stable aggregate job identity.</param>
+    /// <param name="cancellationToken">Cooperative cancellation; committed pairs remain recoverable under the same job ID.</param>
+    Task SendPackageAsync(string sourceName, Guid packageId, IReadOnlyList<ProductCatalogueAPI.Jobs.EncPackageSendMember> members, string jobId, CancellationToken cancellationToken) => throw new NotSupportedException("Paired simulation sending is unavailable.");
 }
 
 /// <summary>Processes the durable inbound queue through the shared locking and parsing boundary.</summary>

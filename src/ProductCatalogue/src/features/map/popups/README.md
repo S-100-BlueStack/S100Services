@@ -654,9 +654,8 @@ FI-029 does not grant this session authority over standalone Products.
 Pause/Resume and Discard require an authoritative backend package ID;
 Send/Accept, when explicitly opted in through `VITE_PACKAGE_DEMO_ENABLED=true`
 under `npm run dev`, only show a toast and toggle that same popup's primary
-action. The opt-in is independent of the URL and cannot enable simulation in
-production builds. No real Send/Accept endpoint is called. Normal frontend
-operation leaves Send/Accept disabled.
+action. This historical toast-demo behavior is superseded by paired Send rules;
+the development flag no longer authorizes Send or Accept.
 
 ### October 2026 follow-up: package action copy, incomplete tracks and Discard refresh
 
@@ -725,10 +724,18 @@ The shared four-slot action presentation was committed at `dbc1466400d18b92d5589
 
 The server action snapshot now exposes optional `CanSend`. When true, the existing Send control posts the exact active package ID to `electronicproducts/packages/{source}/send` and polls `electronicproducts/packages/send-jobs/{jobId}`. Both server modes must be Simulation; no development build flag is required. The distribute policy applies server-side. Current package/revision, Pause and candidate guards are repeated by the Worker and SQL reservation.
 
-The session blocks duplicate actions while polling, aborts on teardown, invalidates the old snapshot after enqueueing and requests the normal source refresh on completion or uncertainty. It does not synthesize accepted state or enable manual Accept. Generated responses update the normal backend workflow; provisional outcomes stay pending. The old explicitly opted-in development toast demo remains a fallback only when the server has not authorized a real simulation send.
+The session blocks duplicate actions while polling, aborts on teardown, invalidates the old snapshot after enqueueing and requests the normal source refresh on completion or uncertainty. It does not synthesize accepted state or enable manual Accept. Generated responses update the normal backend workflow; provisional outcomes stay pending. A development demo preference cannot override server send denial.
 
 ### Delivery permission after Resume
 
 Resume reloads the authoritative action snapshot after the mutation completes. The Resume response contains only Pause state/control version, so the previous snapshot's `CanSend` cannot be retained: it was read while delivery was paused. Failed permission refreshes disable actions until a subsequent successful snapshot. Send continues to require explicit backend authorization and remains blocked during requests and after popup teardown.
 
 The GUI integration test covers a PascalCase `GetActions` response with `CanSend: true`, both eligible members, the real Send click, exact package ID dispatch, job status polling and duplicate-click suppression. A newly opened popup must enable Send for this response. If deployed behavior differs, rebuild/redeploy the separate Vite frontend or restart its development server, then reload the browser; publishing the API does not build the frontend assets.
+
+### Paired package sending
+
+The shared action session used by Main Map and Analyze requires explicit server `CanSend`, Ready package status, no package error, and both matching eligible S-101/S-57 members. InTransit, Error, Hold, Idle, unknown status and a single eligible member cannot authorize Send. A development demo flag cannot override a denial. Resume continues to reload the authoritative action snapshot.
+
+The API repeats these guards before queueing. The Worker validates both immutable exchange sets before one System DB transaction commits both permanently marked simulated deliveries, manifests, InTransit states and history. A local preflight or write failure leaves neither newly sent. Retrying the same committed Hangfire job resumes that pair without creating another send or rerolling captured responses. Generated provisional/final responses remain independent after both sends are committed.
+
+Analyze retains its page-owned sessions, source/graphic identity checks, stale-request handling and mutation refresh lifecycle. Its successful Send refreshes the affected Product through the same owner as Pause/Resume/Discard, without publishing synthetic status to Main Map.

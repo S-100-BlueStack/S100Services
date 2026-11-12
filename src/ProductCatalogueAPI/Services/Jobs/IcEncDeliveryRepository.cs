@@ -1,4 +1,5 @@
 using Dapper;
+using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
 using System.Data;
@@ -17,6 +18,111 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
     public Task<IcEncDelivery?> ReserveSimulationAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken cancellationToken, Guid? packageId = null, Guid? revisionId = null) =>
         ReserveCoreAsync(datasetName, specification, edition, update, jobId, nowUtc, true, cancellationToken, packageId, revisionId);
 
+    /// <inheritdoc/>
+    public async Task<bool> IsPackageMemberAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken) {
+        using var connection = connectionFactory.Create();
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.EncPackage
+                WHERE (source_dataset_name = @DatasetName AND @Specification = 'S101') OR
+                      (s57_dataset_name = @DatasetName AND @Specification = 'S57')) THEN 1 ELSE 0 END);
+            """, new { DatasetName = datasetName, Specification = specification.ToString() }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<IcEncDelivery>?> ReserveSimulationPackageAsync(string sourceName, Guid packageId, IReadOnlyList<EncPackageSendMember> members, string jobId, DateTime nowUtc, CancellationToken cancellationToken) {
+        if (members.Count != 2 || members.Count(m => m.Specification == ProductSpecification.S101) != 1 || members.Count(m => m.Specification == ProductSpecification.S57) != 1 ||
+            members.Any(m => m.RevisionId == Guid.Empty || m.Edition < 0 || m.Update is < 0 or > 999) || string.IsNullOrWhiteSpace(jobId) || jobId.Length > 90)
+            throw new ArgumentException("A package send requires two exact immutable ENC candidates and a bounded job identity.");
+        using var connection = connectionFactory.Create();
+        if (connection is DbConnection db) await db.OpenAsync(cancellationToken);
+        else connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        // This is the same package/control -> tracks lock order used by Pause and paired discard.
+        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition("""
+            SELECT ep.package_id AS Id, ep.source_dataset_name AS SourceDatasetName, ep.s57_dataset_name AS S57DatasetName,
+                ep.s101_discarded AS S101Discarded, ep.s57_discarded AS S57Discarded, ep.error_message AS ErrorMessage,
+                COALESCE(control.is_paused, CONVERT(bit, 0)) AS IsPaused
+            FROM dbo.EncPackage ep WITH (UPDLOCK, HOLDLOCK)
+            LEFT JOIN dbo.EncPackageControl control WITH (UPDLOCK, HOLDLOCK) ON control.source_dataset_name = ep.source_dataset_name
+            WHERE ep.package_id = @PackageId AND ep.source_dataset_name = @SourceName;
+            """, new { PackageId = packageId, SourceName = sourceName }, transaction, cancellationToken: cancellationToken));
+        if (!members.Any(m => m.Specification == ProductSpecification.S101 && m.DatasetName == sourceName)) return null;
+        if (package is not null && members.Any(m => m.DatasetName != (m.Specification == ProductSpecification.S101 ? package.SourceDatasetName : package.S57DatasetName))) return null;
+        var ordered = members.OrderBy(m => m.Specification == ProductSpecification.S101 ? 0 : 1).ToArray();
+        var jobIds = ordered.Select(m => jobId + ":" + m.Specification).ToArray();
+        var prior = (await connection.QueryAsync<SimulationReservation>(new CommandDefinition("""
+            SELECT d.delivery_id AS Id, d.product_revision_id AS RevisionId, d.product_export_track_id AS TrackId,
+                d.reserved_at_utc AS ReservedAtUtc, d.status AS Status, t.product_specification AS Specification,
+                p.dataset_name AS DatasetName, r.edition_number AS Edition, r.update_number AS [Update], a.content AS ExchangeSet
+            FROM dbo.ProductIcEncDelivery d WITH (UPDLOCK, HOLDLOCK)
+            JOIN dbo.ProductExportTrack t ON t.product_export_track_id = d.product_export_track_id
+            JOIN dbo.Product p ON p.product_id = t.product_id
+            JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
+            CROSS APPLY (SELECT TOP (1) content FROM dbo.ProductArtifact WHERE product_revision_id = r.product_revision_id
+                AND artifact_kind = 'ExchangeSet' ORDER BY created_at_utc DESC, product_artifact_id DESC) a
+            WHERE d.job_id IN @JobIds AND d.is_simulation = 1;
+            """, new { JobIds = jobIds }, transaction, cancellationToken: cancellationToken))).ToArray();
+        if (prior.Length != 0) {
+            // Internal replay completes only this job's already committed pair; it never reserves another member.
+            if (prior.Length != 2 || ordered.Any(m => prior.Count(p => p.RevisionId == m.RevisionId && p.DatasetName == m.DatasetName && p.Specification == m.Specification.ToString() &&
+                p.Edition == m.Edition && p.Update == m.Update && p.Status is ("Delivered" or "Accepted" or "Rejected")) != 1)) return null;
+            transaction.Commit();
+            return prior.Select(p => new IcEncDelivery(p.Id, p.DatasetName, Enum.Parse<ProductSpecification>(p.Specification), p.Edition, p.Update, p.ExchangeSet) {
+                RevisionId = p.RevisionId, TrackId = p.TrackId, ReservedAtUtc = p.ReservedAtUtc
+            }).ToArray();
+        }
+        if (package is null || package.IsPaused || package.S101Discarded || package.S57Discarded || !string.IsNullOrWhiteSpace(package.ErrorMessage)) return null;
+        var prepared = new List<(IcEncDelivery Delivery, ValidationOutgoingManifest.Entry[] Manifest)>(2);
+        foreach (var member in ordered) {
+            var track = await connection.QuerySingleOrDefaultAsync<DeliveryTrack>(new CommandDefinition("""
+                SELECT t.product_export_track_id AS Id, t.state AS State, t.candidate_edition AS Edition, t.candidate_update AS [Update]
+                FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK) JOIN dbo.Product p ON p.product_id = t.product_id
+                OUTER APPLY (SELECT TOP (1) h.error_code, h.error_message FROM dbo.ProductStateHistory h
+                    WHERE h.product_export_track_id = t.product_export_track_id ORDER BY h.occurred_at_utc DESC, h.product_state_history_id DESC) history
+                WHERE p.dataset_name = @DatasetName AND t.product_specification = @Specification
+                    AND NOT EXISTS (SELECT 1 FROM dbo.ProductExportTrackFreezeHold WITH (UPDLOCK, HOLDLOCK) WHERE product_export_track_id = t.product_export_track_id)
+                    AND NULLIF(LTRIM(RTRIM(history.error_code)), '') IS NULL AND NULLIF(LTRIM(RTRIM(history.error_message)), '') IS NULL;
+                """, new { member.DatasetName, Specification = member.Specification.ToString() }, transaction, cancellationToken: cancellationToken));
+            if (track is null || track.State != ProductState.ReadyForDistribution || track.Edition != member.Edition || track.Update != member.Update) return null;
+            var artifact = await connection.QuerySingleOrDefaultAsync<DeliveryArtifact>(new CommandDefinition("""
+                SELECT TOP (1) r.product_revision_id AS RevisionId, a.content AS Content, r.edition_number AS Edition, r.update_number AS [Update]
+                FROM dbo.ProductRevision r WITH (UPDLOCK, HOLDLOCK)
+                OUTER APPLY (SELECT TOP (1) content FROM dbo.ProductArtifact WHERE product_revision_id = r.product_revision_id
+                    AND artifact_kind = 'ExchangeSet' ORDER BY created_at_utc DESC, product_artifact_id DESC) a
+                WHERE r.product_export_track_id = @TrackId ORDER BY r.created_at_utc DESC, r.product_revision_id DESC;
+                """, new { TrackId = track.Id }, transaction, cancellationToken: cancellationToken));
+            if (artifact is null || artifact.RevisionId != member.RevisionId || artifact.Edition != member.Edition || artifact.Update != member.Update || artifact.Content is not { Length: > 0 }) return null;
+            // Read both ZIPs before any delivery/history/state write. A malformed sibling rolls back the entire attempt.
+            var manifest = ValidationOutgoingManifest.Read(artifact.Content, member.Specification.ToString(), member.DatasetName, member.Update);
+            if (await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+                SELECT CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.ProductIcEncDelivery WITH (UPDLOCK, HOLDLOCK)
+                    WHERE product_revision_id = @RevisionId AND status <> 'NotDelivered') THEN 1 ELSE 0 END);
+                """, new { RevisionId = member.RevisionId }, transaction, cancellationToken: cancellationToken))) return null;
+            prepared.Add((new(Guid.NewGuid(), member.DatasetName, member.Specification, member.Edition, member.Update, artifact.Content) {
+                RevisionId = member.RevisionId, TrackId = track.Id, ReservedAtUtc = nowUtc
+            }, manifest));
+        }
+        foreach (var item in prepared) {
+            var delivery = item.Delivery;
+            // Simulation has no external transport. Both delivered records and both InTransit states become visible together.
+            await connection.ExecuteAsync(new CommandDefinition("""
+                INSERT dbo.ProductIcEncDelivery (delivery_id, product_export_track_id, product_revision_id, job_id, status, reserved_at_utc, completed_at_utc, is_simulation)
+                VALUES (@Id, @TrackId, @RevisionId, @JobId, 'Delivered', @NowUtc, @NowUtc, 1);
+                UPDATE dbo.ProductExportTrack SET state = @InTransit, updated_at_utc = @NowUtc WHERE product_export_track_id = @TrackId AND state = @Ready;
+                IF @@ROWCOUNT <> 1 THROW 51210, 'The package candidate changed before paired reservation.', 1;
+                INSERT dbo.ProductStateHistory (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+                VALUES (@HistoryId, @TrackId, @InTransit, @Edition, @Update, 'Simulated package delivery', @NowUtc);
+                """, new { delivery.Id, delivery.TrackId, delivery.RevisionId, JobId = jobId + ":" + delivery.Specification, NowUtc = nowUtc,
+                    InTransit = ProductState.InTransit, Ready = ProductState.ReadyForDistribution, delivery.Edition, delivery.Update, HistoryId = Guid.NewGuid() }, transaction, cancellationToken: cancellationToken));
+            foreach (var file in item.Manifest)
+                await connection.ExecuteAsync(new CommandDefinition("INSERT dbo.ProductIcEncDeliveryFile (delivery_id, file_name, sha256, crc) VALUES (@Id, @FileName, @Sha256, @Crc);",
+                    new { delivery.Id, file.FileName, file.Sha256, file.Crc }, transaction, cancellationToken: cancellationToken));
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        transaction.Commit();
+        return prepared.Select(p => p.Delivery).ToArray();
+    }
+
     /// <summary>Locks Pause before the track and records provenance with the immutable reservation.</summary>
     private async Task<IcEncDelivery?> ReserveCoreAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, bool simulation, CancellationToken cancellationToken, Guid? packageId = null, Guid? revisionId = null) {
         using var connection = connectionFactory.Create();
@@ -25,6 +131,12 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
         // Package Pause is an authoritative delivery gate. Lock it before the track row,
         // matching the package-action transaction order and closing the Send/Pause race.
+        // A singular endpoint must never reserve only one member of an active ENC package.
+        if (await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.EncPackage WITH (UPDLOCK, HOLDLOCK)
+                WHERE (source_dataset_name = @DatasetName AND @Specification = 'S101') OR
+                      (s57_dataset_name = @DatasetName AND @Specification = 'S57')) THEN 1 ELSE 0 END);
+            """, new { DatasetName = datasetName, Specification = specification.ToString() }, transaction, cancellationToken: cancellationToken))) return null;
         var isPackagePaused = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
             SELECT CONVERT(bit, CASE WHEN EXISTS (
                 SELECT 1 FROM dbo.EncPackage ep WITH (UPDLOCK, HOLDLOCK)
@@ -214,6 +326,8 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
 
     private sealed class SimulationReservation
     {
+        public string Specification { get; set; } = "";
+        public string Status { get; set; } = "";
         public Guid Id { get; set; }
         public Guid RevisionId { get; set; }
         public Guid TrackId { get; set; }
@@ -234,6 +348,8 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
 
     private sealed class DeliveryArtifact
     {
+        public int Edition { get; set; }
+        public int Update { get; set; }
         public Guid RevisionId { get; set; }
         public byte[] Content { get; set; } = [];
     }

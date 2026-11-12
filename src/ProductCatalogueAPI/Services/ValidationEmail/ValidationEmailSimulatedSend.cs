@@ -23,17 +23,36 @@ public sealed class ValidationEmailSimulatedSend(IIcEncDeliveryRepository delive
         // Complete the simulated send before exposing its notice to the durable mailbox queue.
         // Reservation and captured notice are replayable if the host stops between these operations.
         await deliveries.MarkDeliveredAsync(delivery.Id, clock.GetUtcNow().UtcDateTime, cancellationToken);
-        var key = "workflow-send:" + jobId;
+        await CaptureAsync(delivery, "workflow-send:" + jobId, cancellationToken);
+        // Uses the same distributed lock and processor as the minute-based recovery job.
+        await mailbox.PollAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task SendPackageAsync(string sourceName, Guid packageId, IReadOnlyList<EncPackageSendMember> members, string jobId, CancellationToken cancellationToken) {
+        if (!Enabled) throw new InvalidOperationException("Both delivery and email modes must remain Simulation.");
+        if (members.Count != 2 || members.Select(m => m.Specification).Distinct().Count() != 2 || members.Any(m => m.Specification is not (ProductSpecification.S101 or ProductSpecification.S57)))
+            throw new ArgumentException("Package Send requires both ENC candidates.", nameof(members));
+        var pair = await deliveries.ReserveSimulationPackageAsync(sourceName, packageId, members, jobId, clock.GetUtcNow().UtcDateTime, cancellationToken)
+            ?? throw new InvalidOperationException("The package is paused, changed, already sent, has errors or does not contain two Ready candidates.");
+        if (pair.Count != 2 || members.Any(m => pair.Count(d => d.DatasetName == m.DatasetName && d.Specification == m.Specification && d.RevisionId == m.RevisionId) != 1))
+            throw new InvalidOperationException("The paired delivery reservation does not match both queued immutable candidates.");
+        foreach (var delivery in pair)
+            await CaptureAsync(delivery, "workflow-send:" + jobId + ":" + delivery.Specification, cancellationToken);
+        // No acknowledgement can run through this path until both members are reserved and both replies are captured.
+        await mailbox.PollAsync(cancellationToken);
+    }
+
+    /// <summary>Reuses durable random evidence on retry; no transport or candidate state is changed here.</summary>
+    private async Task CaptureAsync(IcEncDelivery delivery, string key, CancellationToken cancellationToken) {
         var existing = await store.FindSimulationAsync(key, cancellationToken);
         if (existing is not null && (existing.Message.SimulatedOutgoingFile?.DeliveryId != delivery.Id || !existing.Message.SimulationWorkflow))
             throw new InvalidOperationException("The simulation job key belongs to another captured send.");
         if (existing is null) {
-            var candidate = new ValidationSimulationCandidate(delivery.RevisionId, delivery.TrackId, delivery.DatasetName, specification.ToString(), delivery.Edition, delivery.Update, delivery.ExchangeSet);
+            var candidate = new ValidationSimulationCandidate(delivery.RevisionId, delivery.TrackId, delivery.DatasetName, delivery.Specification.ToString(), delivery.Edition, delivery.Update, delivery.ExchangeSet);
             var generated = generator.Generate(candidate, key, clock.GetUtcNow());
             var file = generated.SimulatedOutgoingFile! with { DeliveryId = delivery.Id, SentAtUtc = delivery.ReservedAtUtc, IsSimulation = true };
             await store.SaveSimulationAsync(key, generated with { SimulatedOutgoingFile = file, SimulationWorkflow = true }, cancellationToken);
         }
-        // Uses the same distributed lock and processor as the minute-based recovery job.
-        await mailbox.PollAsync(cancellationToken);
     }
 }

@@ -89,6 +89,7 @@ namespace ProductCatalogueAPI.Controllers
 
             ProductRecord? product;
             ExportProductIdentity? identity = null;
+            var isPackageMember = false;
             try {
                 if (mode == SendToIcEncMode.Live || mode == SendToIcEncMode.Simulation && emailOptions?.Value.Mode == ValidationEmailMode.Simulation) {
                     identity = ExportProductResolver.Resolve(_electronicProductManager, datasetName);
@@ -101,6 +102,8 @@ namespace ProductCatalogueAPI.Controllers
                 }
                 else
                     product = await _productRepository.GetCurrentByNameAsync(datasetName);
+                if (product is not null && identity is not null && _deliveryRepository is not null)
+                    isPackageMember = await _deliveryRepository.IsPackageMemberAsync(identity.DatasetName, identity.ProductSpecification, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 throw;
@@ -126,6 +129,9 @@ namespace ProductCatalogueAPI.Controllers
                     ExportJobContract.ProductNotFoundStartMessage
                 );
             }
+
+            if (isPackageMember)
+                return JobProblem(StatusCodes.Status409Conflict, "PACKAGE_SEND_REQUIRED", "Use package Send to deliver both ready ENC members together.");
 
             var allowsSevenCsValidationOverride = product.State == ProductState.Error &&
                 string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);

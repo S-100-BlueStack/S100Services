@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createPackageActionSession } from "../../map/popups/packageActionSession.js";
 import { createAnalyzePackageActions, resolvePackageIdentity } from "./analyzePackageActions.js";
 import {
   createWorkspaceProductContext,
@@ -196,6 +197,7 @@ test("Send/Accept reflects backend and demo projection and never invents permiss
   h.projection.actionEligibility.send = true;
   assert.equal(await h.action("send").onClick({}), true);
   assert.deepEqual(h.sessions[0].invokes, ["send"]);
+  assert.deepEqual(h.refreshes, [memberNames[0]], "Send refreshes through the Analyze Product owner");
   h.projection.primaryAction = "accept";
   h.projection.actionEligibility.accept = true;
   const action = h.action("accept");
@@ -365,3 +367,44 @@ test("ordinary Analyze Product popup shows the same disabled workflows without a
   assert.equal(requests, 0);
   controller.destroy();
 });
+
+for (const status of [3, 4, 5]) {
+  test(`Analyze's real action session blocks Send for package status ${status}`, async () => {
+    const product = packageProduct();
+    const requests = [];
+    const manager = createAnalyzePackageActions({
+      getProduct: (key) => (key === product.workUnit.identityKey ? product : null),
+      isEnabled: () => true,
+      createSession: (config) => createPackageActionSession({
+        ...config,
+        demoEnabled: true,
+        notify: {},
+        request: async (url, options) => {
+          requests.push({ url, options });
+          return { success: true, data: {
+            PackageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+            SourceDatasetName: memberNames[0],
+            Paused: false,
+            CanSend: false,
+            Status: status,
+            EligibleMembers: [
+              { Key: "s101", DatasetName: memberNames[0] },
+              { Key: "s57", DatasetName: memberNames[1] },
+            ],
+          } };
+        },
+      }),
+    });
+    try {
+      manager.reconcile([product], [product.datasetName]);
+      await new Promise((resolve) => setImmediate(resolve));
+      const send = manager.actionsFor(product).find((action) => action.operation === "send");
+      assert.equal(send.disabled, true);
+      assert.equal(await send.onClick({}), false);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].options.method, "GET");
+    } finally {
+      manager.destroy();
+    }
+  });
+}

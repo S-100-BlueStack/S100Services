@@ -64,7 +64,7 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
         if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });
         if (request is null || request.PackageId == Guid.Empty) return BadRequest(new { code = "PACKAGE_ACTION_INVALID", message = "A current package is required." });
         var jobId = await actions.QueueSendAsync(sourceName, request.PackageId, cancellationToken);
-        return jobId is null ? Conflict(new { code = "PACKAGE_SEND_UNAVAILABLE", message = "Resume the package and configure both delivery and email Simulation modes before sending ready candidates." }) : Accepted(new { jobId, packageId = request.PackageId });
+        return jobId is null ? Conflict(new { code = "PACKAGE_SEND_UNAVAILABLE", message = "Both exports must be Ready without errors, the package must be resumed, and both simulation modes must be enabled." }) : Accepted(new { jobId, packageId = request.PackageId });
     }
 
     /// <summary>Reads only the aggregate simulated-send job type; no unrelated Hangfire job is exposed.</summary>

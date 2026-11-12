@@ -1,4 +1,5 @@
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Services.ValidationEmail;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
@@ -142,9 +143,45 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
         // The compiler takes the mapped S-57 YAML path and the output directory.
         await RunProcessAsync(_s57CompilerExecutablePath, $"\"{s57Yaml}\" \"{outputDirectory}\"", outputDirectory, request.DatasetName, cancellationToken);
-        // Use the same cell identity and layout check as SevenCs validation.
-        _ = ExportOutputPath.GetS57DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
-        var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
+        return await ReadS57ExportResultAsync(request, cancellationToken);
+    }
+
+    /// <summary>Archives flat or nested S-57 compiler output beneath one transport-compatible ENC_ROOT.</summary>
+    /// <param name="request">Exact candidate identity and compiler output location.</param>
+    /// <param name="cancellationToken">Stops archive creation before any artifact is returned.</param>
+    /// <returns>The original output directory and a validated exchange-set artifact, excluding mapper input YAML.</returns>
+    /// <exception cref="ArgumentException">The request is not an S-57 candidate or its export identity is invalid.</exception>
+    /// <exception cref="InvalidOperationException">The compiler did not produce the unique non-empty base cell or requested update.</exception>
+    /// <exception cref="InvalidDataException">The archive contains ambiguous, mismatched or unsafe dataset members.</exception>
+    /// <remarks>Only ZIP paths change. Dataset and catalogue bytes, and paths relative to an existing ENC_ROOT, remain intact.</remarks>
+    internal static async Task<ExportEngineResult> ReadS57ExportResultAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateRequest(request);
+        if (request.ProductSpecification != ProductSpecification.S57)
+            throw new ArgumentException("An S-57 candidate is required.", nameof(request));
+        var outputDirectory = Path.GetFullPath(ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update));
+        var datasetDirectory = Path.GetFullPath(ExportOutputPath.GetS57DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update));
+        var datasetFile = new FileInfo(Path.Combine(datasetDirectory, $"{request.DatasetName}.{request.Update:000}"));
+        if (!datasetFile.Exists || datasetFile.Length == 0)
+            throw new InvalidOperationException($"The S-57 compiler did not create a non-empty outgoing dataset for '{request.DatasetName}'.");
+
+        // SevenCs accepts flat and nested output. Preserve an existing exchange-set
+        // root; otherwise wrap the compiler output rather than losing auxiliary files.
+        var exchangeSetDirectory = outputDirectory;
+        for (DirectoryInfo? directory = new(datasetDirectory); directory is not null && !string.Equals(directory.FullName, outputDirectory, StringComparison.OrdinalIgnoreCase); directory = directory.Parent) {
+            if (directory.Name.Equals("ENC_ROOT", StringComparison.OrdinalIgnoreCase)) {
+                exchangeSetDirectory = directory.FullName;
+                break;
+            }
+        }
+        var stagingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            Path.Combine(outputDirectory, $"{request.DatasetName}.yaml")
+        };
+        if (!string.IsNullOrWhiteSpace(request.SourceDatasetName))
+            stagingFiles.Add(Path.Combine(outputDirectory, $"{request.SourceDatasetName}.yaml"));
+        var exchangeSet = await CreateZipAsync(exchangeSetDirectory, cancellationToken, "ENC_ROOT", stagingFiles);
+        // Ready must mean the stored ZIP can pass the same strict preflight as Send.
+        _ = ValidationOutgoingManifest.Read(exchangeSet, "S57", request.DatasetName, request.Update);
         return new ExportEngineResult(outputDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
         ]);
@@ -221,12 +258,20 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
         }
     }
 
-    private static async Task<byte[]> CreateZipAsync(string directory, CancellationToken cancellationToken, string? entryPrefix = null) {
+    /// <summary>Archives compiler output with portable paths and an optional canonical exchange-set root.</summary>
+    /// <param name="directory">Directory whose relative layout is preserved.</param>
+    /// <param name="cancellationToken">Cancels copying compiler output.</param>
+    /// <param name="entryPrefix">Optional top-level exchange-set directory.</param>
+    /// <param name="excludedFiles">Absolute staging-input paths that must not enter the delivery artifact.</param>
+    /// <returns>ZIP bytes without changing any archived file content.</returns>
+    private static async Task<byte[]> CreateZipAsync(string directory, CancellationToken cancellationToken, string? entryPrefix = null, IReadOnlySet<string>? excludedFiles = null) {
         await using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true)) {
             foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)) {
                 cancellationToken.ThrowIfCancellationRequested();
-                var relativePath = Path.GetRelativePath(directory, file);
+                if (excludedFiles?.Contains(Path.GetFullPath(file)) == true)
+                    continue;
+                var relativePath = Path.GetRelativePath(directory, file).Replace(Path.DirectorySeparatorChar, '/').Replace('\\', '/');
                 var entryName = entryPrefix is null ? relativePath : $"{entryPrefix}/{relativePath.Replace(Path.DirectorySeparatorChar, '/')}";
                 var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
                 await using var entryStream = entry.Open();

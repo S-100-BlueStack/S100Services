@@ -689,6 +689,10 @@ namespace TestProductCatalogueAPI
             public int Reservations { get; private set; }
             public int Completed { get; private set; }
             public int Uncertain { get; private set; }
+            public bool PackageMember { get; init; }
+            public bool FailPackageLookup { get; init; }
+            public Task<bool> IsPackageMemberAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken) =>
+                FailPackageLookup ? throw new InvalidOperationException("Private package lookup failure") : Task.FromResult(PackageMember);
             public Task<IcEncDelivery?> ReserveAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken token) {
                 Reservations++;
                 return Task.FromResult<IcEncDelivery?>(new IcEncDelivery(Guid.NewGuid(), datasetName, specification, edition, update, [1]));
@@ -737,13 +741,33 @@ namespace TestProductCatalogueAPI
             Assert.Equal(SendToIcEncMode.Simulation, jobs.LastRequest.Mode);
         }
 
+        /// <summary>Single-member routes cannot bypass paired sending, and failed package reads retain the safe setup-error contract.</summary>
+        [Theory]
+        [InlineData(false, StatusCodes.Status409Conflict)]
+        [InlineData(true, StatusCodes.Status503ServiceUnavailable)]
+        public async Task SingularPackageSendCannotEnqueueOrExposeLookupFailures(bool failLookup, int expectedStatus) {
+            var tracks = new InMemoryProductRepository();
+            var track = await tracks.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 0);
+            await tracks.BeginExportAsync(track.Id, 5, 0, "test", DateTime.UtcNow);
+            await tracks.SetStateAsync(track.Id, ProductState.ReadyForDistribution, "test", DateTime.UtcNow);
+            var jobs = new RecordingSendJobService();
+            var deliveries = new RecordingDeliveryRepository { PackageMember = true, FailPackageLookup = failLookup };
+            var controller = Controller(new RecordingProductRepository(null), new ThrowingLockService(), jobs, SendToIcEncMode.Simulation, tracks, ValidationEmailMode.Simulation, deliveries);
+            var result = Assert.IsType<ObjectResult>(await controller.UploadSingularProduct(DatasetName, CancellationToken.None));
+            Assert.Equal(expectedStatus, result.StatusCode);
+            Assert.Equal(0, jobs.EnqueueCalls);
+            Assert.Equal(0, deliveries.Reservations);
+            Assert.DoesNotContain("Private package lookup failure", JsonSerializer.Serialize(result.Value), StringComparison.Ordinal);
+        }
+
         private static UploadController Controller(
             RecordingProductRepository repository,
             IDatasetLockService locks,
             ISendToIcEncJobService jobs,
             SendToIcEncMode mode,
             IProductWorkflowRepository? workflowRepository = null,
-            ValidationEmailMode? emailMode = null
+            ValidationEmailMode? emailMode = null,
+            IIcEncDeliveryRepository? deliveryRepository = null
         ) {
             var controller = new UploadController(
                 NullLogger<UploadController>.Instance,
@@ -754,6 +778,7 @@ namespace TestProductCatalogueAPI
                 new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode, OperatorKey = mode == SendToIcEncMode.Live ? "operator-secret" : null }),
                 TimeProvider.System,
                 new FreezeProductManager(new FreezeElectronicProductManager()),
+                deliveryRepository: deliveryRepository,
                 emailOptions: emailMode.HasValue ? Options.Create(new ValidationEmailOptions { Mode = emailMode.Value }) : null
             ) {
                 ControllerContext = new ControllerContext {

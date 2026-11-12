@@ -1,3 +1,4 @@
+import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
 import { apiRequest } from "../../../shared/api/apiClient.js";
 import { getApiResultErrorMessage } from "../../../shared/api/apiResult.js";
 import {
@@ -11,7 +12,7 @@ const REQUEST_TIMEOUT = 15000;
 const JOB_POLL_MS = 1000;
 const JOB_WAIT_MS = 30000;
 
-// Keep simulated delivery opt-in and unavailable in production builds.
+// Legacy demo preferences never grant backend send permission.
 export function isPackageDemoEnabled(env = import.meta.env) {
   return env?.DEV === true && env?.VITE_PACKAGE_DEMO_ENABLED === "true";
 }
@@ -93,7 +94,13 @@ export function createPackageActionSession({
       canPause: get("canPause") === true,
       canResume: get("canResume") === true,
       canDiscard: get("canDiscard") === true,
-      canSend: get("canSend") === true,
+      canSend:
+        get("canSend") === true &&
+        normalizeEncPackageStatus(get("status")) === 2 &&
+        !get("errorMessage") &&
+        eligibleMembers.length === 2 &&
+        eligibleMembers.some((member) => member.key === "s101") &&
+        eligibleMembers.some((member) => member.key === "s57"),
       eligibleMembers,
       restrictionCode: ["MEMBER_TRACK_MISSING", "MEMBERS_NOT_READY"].includes(
         get("restrictionCode")
@@ -166,11 +173,11 @@ export function createPackageActionSession({
         discard: !busy && !simulatedAccept && snapshot?.canDiscard === true,
         send:
           !busy &&
-          (snapshot?.canSend === true || demoEnabled) &&
+          snapshot?.canSend === true &&
           !simulatedAccept &&
           !snapshot?.paused &&
           !hasDiscarded,
-        accept: !busy && demoEnabled && simulatedAccept && !hasDiscarded,
+        accept: false,
       },
     };
   }
