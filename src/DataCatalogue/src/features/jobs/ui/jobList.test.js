@@ -172,6 +172,14 @@ test("Live Jobs list uses contextual shortId cards without redundant expansion c
     const { store } = fixture("live");
     const view = createJobList({ store, sourceMode: "live" });
     const card = findByClass(view.element, "job-card")[0];
+    assert.equal(card.classList.contains("job-card--live"), true);
+    const statusGroup = findByClass(card, "job-card__actions")[0];
+    assert.equal(statusGroup.attributes.get("role"), "group");
+    assert.equal(statusGroup.attributes.get("aria-label"), "Update Package status");
+    assert.deepEqual(
+      findByTag(statusGroup, "calcite-button").map((button) => button.textContent),
+      ["Done", "No update"]
+    );
     assert.equal(findByClass(view.element, "job-card__expand-action").length, 0);
     assert.equal(findByClass(view.element, "job-card__details-action").length, 1);
     assert.equal(findByClass(view.element, "job-card__title")[0].textContent, "NM1000");
@@ -200,6 +208,9 @@ test("Live Job Details show unique context and editable status without duplicate
 
     const details = findByClass(view.element, "job-details")[0];
     assert.equal(details.focused, true);
+    assert.equal(details.classList.contains("job-details--live"), true);
+    assert.equal(findByClass(view.element, "job-details__header--live").length, 1);
+    assert.equal(findByClass(view.element, "job-details__header-actions").length, 0);
     assert.equal(findByClass(view.element, "job-details__title")[0].textContent, "NM1000");
     assert.equal(
       findByClass(view.element, "job-details__package-title")[0].textContent,
@@ -284,6 +295,9 @@ test("Mock Jobs retain expansion, AOI details and existing map actions", () => {
       1
     );
     assert.equal(findByClass(view.element, "job-details__aoi-item").length, 1);
+    assert.equal(findByClass(view.element, "job-details--live").length, 0);
+    assert.equal(findByClass(view.element, "job-details__header--live").length, 0);
+    assert.equal(findByClass(view.element, "job-details__header-actions").length, 1);
     assert.ok(
       findByClass(view.element, "job-details__fact-label").some(
         (e) => e.textContent === "Package ID"

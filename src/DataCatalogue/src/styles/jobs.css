@@ -691,18 +691,32 @@
   outline: 2px solid var(--calcite-color-brand, #007ac2);
 }
 
-/* Live Jobs keep the identity and Pipeline/Workspace scope visible without extra expansion UI. */
+/* Live Package identity leads; secondary metadata and status controls remain compact. */
 .job-card--live {
-  padding: 0.55rem 0.65rem;
+  padding: 0.6rem 0.65rem;
 }
 
 .job-card--live .job-card__summary-layout {
-  gap: 0.4rem;
+  gap: 0.45rem;
+}
+
+.job-card--live .job-card__title {
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .job-card--live .job-card__bottom-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--dc-border);
+}
+
+.job-card--live .job-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  width: min(100%, 15rem);
 }
 
 .job-card__identity {
@@ -710,10 +724,11 @@
 }
 
 .job-card__context {
-  margin: 0.2rem 0 0;
+  margin: 0.15rem 0 0;
   color: var(--dc-text-muted);
-  font-size: 0.77rem;
-  line-height: 1.3;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
@@ -732,4 +747,108 @@
 
 .job-details__section--live-status .job-card__actions {
   justify-content: flex-start;
+}
+
+/* The live details header and facts use the same type scale as the list. */
+.job-card--live .job-card__priority--severity,
+.job-details__header--live .job-card__priority--severity {
+  min-height: 1.4rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 500;
+  text-align: start;
+}
+
+.job-details__header--live {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0.6rem 0.75rem;
+}
+
+.job-details__header--live .job-details__title {
+  font-size: 0.96rem;
+  font-weight: 600;
+}
+
+.job-details__header--live .job-details__badge-row {
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.job-details__header--live .job-details__status {
+  min-width: 0;
+  min-height: 1.4rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.job-details--live .job-details__section--live-status {
+  padding: 0.5rem 0.75rem;
+  background: var(--dc-surface-alt);
+}
+
+.job-details--live .job-details__section--live-status .job-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  width: min(100%, 15rem);
+}
+
+.job-card--live .job-status-button,
+.job-details--live .job-status-button {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+
+.job-card--live .job-status-button--active::part(button),
+.job-details--live .job-status-button--active::part(button) {
+  font-weight: 600;
+}
+
+.job-details--live .job-details__section--live-facts {
+  padding: 0.6rem 0.75rem;
+}
+
+.job-details--live .job-details__fact-grid {
+  gap: 0;
+  border: 1px solid var(--dc-border);
+}
+
+.job-details--live .job-details__fact {
+  grid-template-columns: minmax(5rem, 0.35fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  border-top: 1px solid var(--dc-border);
+}
+
+.job-details--live .job-details__fact:first-child {
+  border-top: 0;
+}
+
+.job-details--live .job-details__fact:nth-child(even) {
+  background: var(--dc-surface-alt);
+}
+
+.job-details--live .job-details__fact-label {
+  font-size: 0.77rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.job-details--live .job-details__fact-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+@media (max-width: 34rem) {
+  .job-details--live .job-details__fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
 }

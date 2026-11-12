@@ -1,3 +1,18 @@
+## DC-UX-03D — Live Packages typography and status grouping (2026-11-12)
+
+The live main-map Packages list and Details keep public `calcite-action` and
+`calcite-button` components. The existing application-owned HTML/CSS controls
+the surrounding identity, Severity badge, status group and `<dl>` field rows,
+since these are presentation choices rather than new Calcite widget behavior.
+The two existing status actions use the public `kind`, `appearance`, `scale` and
+`aria-pressed` interfaces; only application-owned container styles and the
+existing public button `::part(button)` styling are adjusted. No Calcite
+shadow-root queries, private selectors, replacement widget or dependency are
+introduced. Neutral `--dc-*` tokens keep the live presentation theme-aware.
+Mock Packages and the shared focus-recovery implementation are unchanged.
+
+---
+
 ## DC-SDK-02 — Explicit Gallery/Expand color scheme (2026-11-11)
 
 The Esri `arcgis-expand` and `arcgis-basemap-gallery` components remain public

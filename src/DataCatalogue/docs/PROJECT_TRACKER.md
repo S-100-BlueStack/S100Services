@@ -1,3 +1,33 @@
+## DC-UX-03D — Packages list and detail hierarchy (candidate, 2026-11-12)
+
+The uploaded commit-pinned context uses `b3de325d57100170be49415b5d7ea8e122bb23cc`,
+which differs from the last user-reported accepted commit
+`0cbe2c99fa5e1c7ce196e734389c6dca9b593184`. The source ZIP validated
+successfully against its Git blob IDs and SHA-256 manifest; ancestry between
+those commits was not independently established here. This candidate targets
+only the uploaded snapshot and must not be applied onto a different file state
+without comparing the manifest's source hashes.
+
+- In the live main-map Packages list, the short ID remains the primary line;
+  Pipeline/Workspace context and exact Severity are muted secondary information.
+  A subtle divider anchors the `Done` / `No update` controls directly beneath
+  each Package, with equal control widths and no new status choices.
+- In live Package Details, the existing selected-Package title, status and
+  Severity stay present with lighter type weights. The empty header action
+  container is omitted for live mode; fact fields use compact bordered
+  definition-list rows with neutral alternating surfaces, and the status actions
+  occupy a consistent two-column strip. Both remain single-panel views; no
+  new detail route, collapsible section or backend metadata is invented.
+- Live status controls are labeled as an accessible group on list rows.
+  Existing pressed state, keyboard/pointer focus recovery, mock behavior,
+  notice flow, HTTP reads, contextual identity, map actions and Basemap Gallery
+  remain unchanged. No API/backend, dependency or auth change.
+
+See [DC_UX_03D_VALIDATION.md](DC_UX_03D_VALIDATION.md) for regression results
+and browser verification requirements. Visual acceptance is still pending.
+
+---
+
 ## DC-SDK-02 — Basemap Styles authorization and Gallery theme (candidate, 2026-11-11)
 
 Authoritative baseline: `6388ee0d60eb72144c2b21a1353c0532295dd880`

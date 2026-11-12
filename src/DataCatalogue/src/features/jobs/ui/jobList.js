@@ -514,6 +514,7 @@ function renderJobDetailsView({
 
   const detailsElement = document.createElement("article");
   detailsElement.className = "job-details";
+  if (selectedJob.source === "live") detailsElement.classList.add("job-details--live");
   detailsElement.dataset.jobDetailsId = selectedJob.id;
   detailsElement.dataset.jobId = selectedJob.id;
   detailsElement.tabIndex = -1;
@@ -537,6 +538,7 @@ function renderJobDetailsView({
 function createJobDetailsHeader({ job, requestJobMapFocus, clearJobMapFocus }) {
   const headerElement = document.createElement("div");
   headerElement.className = "job-details__header";
+  if (job.source === "live") headerElement.classList.add("job-details__header--live");
 
   const titleGroupElement = document.createElement("div");
   titleGroupElement.className = "job-details__title-group";
@@ -582,7 +584,8 @@ function createJobDetailsHeader({ job, requestJobMapFocus, clearJobMapFocus }) {
 
     actionsElement.append(focusMapButton, clearMapFocusButton);
   }
-  headerElement.append(titleGroupElement, actionsElement);
+  headerElement.append(titleGroupElement);
+  if (!livePresentation) headerElement.append(actionsElement);
 
   return headerElement;
 }
@@ -1223,6 +1226,10 @@ function createStatusActions({
 }) {
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-card__actions";
+  if (job.source === "live") {
+    actionsElement.setAttribute("role", "group");
+    actionsElement.setAttribute("aria-label", "Update Package status");
+  }
 
   for (const statusOption of JOB_STATUS_OPTIONS) {
     actionsElement.appendChild(

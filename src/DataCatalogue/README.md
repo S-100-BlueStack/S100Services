@@ -26,6 +26,19 @@ Live maps do not display Package/Workspace overlays until the approved geographi
 verified. Workspace list and Package/Job access remain usable independently of map readiness.
 Demo geometry URLs must not be treated as live catalogue joins.
 
+## Main-map Packages presentation
+
+In the live main-map Packages panel, the Package short ID is the primary item
+identity. Pipeline/Workspace context and exact Severity remain visible without
+treating every value as a heading. Status actions (`Done` and `No update`) are
+presented together on each row and in Package Details. Details use compact
+label/value rows with alternating neutral surfaces in light and dark modes.
+This changes presentation only: contextual identity, temporary status mutations,
+keyboard focus recovery, Refresh and map behavior remain unchanged. Mock Packages
+retain their existing distinct presentation.
+
+See [DC-UX-03D validation](docs/DC_UX_03D_VALIDATION.md) for browser acceptance.
+
 ## Local development
 
 DC-SDK-01 declares matching exact 5.2.1 versions of ArcGIS Core, Map Components,
