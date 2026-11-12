@@ -231,19 +231,25 @@ The creation script includes this column for new databases.
 
 The package popup reads CanSend from GET /electronicproducts/packages/{source}/actions.
 POST /electronicproducts/packages/{source}/send with {"packageId":"<active-guid>"}
-requires the distribute policy and queues the ready members with their exact
+requires the distribute policy and queues both Ready, error-free members with their exact
 immutable revision IDs. GET /electronicproducts/packages/send-jobs/{jobId}
 reports completion. The production frontend no longer needs a Vite demo flag.
 Pause, discarded packages, manual holds and stale snapshots still block sends.
-Members are attempted independently, including when the first member fails.
+Both members are validated first. One SQL transaction commits both permanently
+marked simulated deliveries, manifests, InTransit states and history. An invalid
+sibling artifact rolls the whole attempt back; neither member is sent. Generated
+responses are captured after that commit, then processed. A retry of the SAME
+Hangfire job resumes its already committed pair and captured random outcomes;
+it does not authorize a new Send while either member is InTransit.
 
 The Worker records a simulated send, generates one random reply per member and
 immediately runs the normal parser/matcher/acknowledgement pipeline. Its minute
 poll recovers pending captured responses. The same job ID reuses its reservation
 and captured outcome on retry, including after a connection loss during capture.
-The single-product /Upload/{datasetName} route also reads the current export track
-and uses this workflow when both modes are Simulation. Its existing job metadata
-continues to say NotDelivered: no network transfer was made.
+The singular /Upload/{datasetName} route rejects active ENC package members:
+use package Send so an individual request cannot bypass paired dispatch. It
+remains available for standalone products. Aggregate Send is Simulation-only in
+this baseline; paired live transport is not introduced by this correction.
 
 ValidationEmail:DryRun applies to live mailbox decisions and standalone previews.
 It does not suppress state changes for explicitly reserved workflow simulations.

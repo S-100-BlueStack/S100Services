@@ -226,7 +226,7 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true)) {
             foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)) {
                 cancellationToken.ThrowIfCancellationRequested();
-                var relativePath = Path.GetRelativePath(directory, file);
+                var relativePath = Path.GetRelativePath(directory, file).Replace(Path.DirectorySeparatorChar, '/').Replace('\\', '/');
                 var entryName = entryPrefix is null ? relativePath : $"{entryPrefix}/{relativePath.Replace(Path.DirectorySeparatorChar, '/')}";
                 var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
                 await using var entryStream = entry.Open();

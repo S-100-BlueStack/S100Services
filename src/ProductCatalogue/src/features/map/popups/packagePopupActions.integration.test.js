@@ -1092,6 +1092,7 @@ test("refreshing an open popup reloads CanSend even when member metadata is unch
       { Key: "s57", DatasetName: "SECONDARY" },
     ],
     CanSend: false,
+    Status: 2,
   };
   h.actions(state);
   try {

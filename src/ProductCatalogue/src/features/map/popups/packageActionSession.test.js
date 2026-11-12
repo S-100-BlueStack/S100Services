@@ -26,7 +26,11 @@ function createHarness({ initial = {}, demoEnabled = false } = {}) {
     canPause: true,
     canResume: false,
     canDiscard: true,
-    eligibleMembers: [{ key: "s101", datasetName: "PRIMARY" }],
+    status: 2,
+    eligibleMembers: [
+      { key: "s101", datasetName: "PRIMARY" },
+      { key: "s57", datasetName: "SECONDARY" },
+    ],
     ...initial,
   };
   const handler = async (url, options) => {
@@ -108,20 +112,12 @@ test("live Pause and Resume use the exact snapshot and successive SQL control to
   h.session.destroy();
 });
 
-test("Send and Accept are local-only transitions with explicit demo notices", async () => {
+test("development demo settings cannot override absent server send permission", async () => {
   const h = createHarness({ demoEnabled: true });
   await h.session.start();
-  assert.equal(h.session.projection().primaryAction, "send");
-  assert.equal(await h.session.invoke("send"), true);
-  assert.equal(h.session.projection().primaryAction, "accept");
-  assert.equal(await h.session.invoke("accept"), true);
-  assert.equal(h.session.projection().primaryAction, "send");
-  assert.deepEqual(
-    h.requests.map((request) => request.options.method),
-    ["GET"]
-  );
-  assert.match(h.notices[0][2], /no products were sent/i);
-  assert.match(h.notices[1][2], /no results were acknowledged/i);
+  assert.equal(await h.session.invoke("send"), false);
+  assert.equal(await h.session.invoke("accept"), false);
+  assert.deepEqual(h.requests.map((request) => request.options.method), ["GET"]);
   h.session.destroy();
 });
 
@@ -131,7 +127,7 @@ test("the URL query cannot enable demo Send/Accept", async () => {
   const session = createPackageActionSession({
     sourceName: "PRIMARY",
     identityKey: "identity",
-    memberNames: { s101: "PRIMARY" },
+    memberNames: { s101: "PRIMARY", s57: "SECONDARY" },
     isCurrent: () => true,
     request: async () => ({
       success: true,
@@ -161,8 +157,8 @@ test("demo Send never becomes a live request even without an available backend s
   const h = createHarness({ demoEnabled: true, initial: { sourceDatasetName: "WRONG" } });
   await h.session.start();
   assert.equal(h.session.projection().actionEligibility.discard, false);
-  assert.equal(await h.session.invoke("send"), true);
-  assert.equal(await h.session.invoke("accept"), true);
+  assert.equal(await h.session.invoke("send"), false);
+  assert.equal(await h.session.invoke("accept"), false);
   assert.equal(h.requests.length, 1);
   h.session.destroy();
 });
@@ -236,7 +232,7 @@ test("a completed Discard remains successful if the selected details cannot be r
   const session = createPackageActionSession({
     sourceName: "PRIMARY",
     identityKey: "identity",
-    memberNames: { s101: "PRIMARY" },
+    memberNames: { s101: "PRIMARY", s57: "SECONDARY" },
     isCurrent: () => true,
     request: async (url) => {
       if (url.endsWith("/actions")) return { success: true, data: h.state };
@@ -332,20 +328,14 @@ test("unverified member names fail closed before any live mutation", async () =>
   h.session.destroy();
 });
 
-test("a simulated Send locks real Pause and Discard until demo Accept", async () => {
+test("a disabled simulated Send does not change Pause or Discard permission", async () => {
   const h = createHarness({ demoEnabled: true });
   await h.session.start();
-  assert.equal(await h.session.invoke("send"), true);
-  assert.equal(h.session.projection().actionEligibility.pause, false);
-  assert.equal(h.session.projection().actionEligibility.discard, false);
-  assert.equal(await h.session.invoke("discard"), false);
-  assert.equal(await h.session.invoke("pause"), false);
-  assert.equal(await h.session.invoke("accept"), true);
+  assert.equal(await h.session.invoke("send"), false);
   assert.equal(h.session.projection().actionEligibility.pause, true);
-  assert.deepEqual(
-    h.requests.map((item) => item.options.method),
-    ["GET"]
-  );
+  assert.equal(h.session.projection().actionEligibility.discard, true);
+  assert.equal(h.session.projection().actionEligibility.accept, false);
+  assert.deepEqual(h.requests.map((request) => request.options.method), ["GET"]);
   h.session.destroy();
 });
 
@@ -407,7 +397,7 @@ test("server simulation send dispatches without a development flag and waits for
   const session = createPackageActionSession({
     sourceName: "PRIMARY",
     identityKey: "identity",
-    memberNames: { s101: "PRIMARY" },
+    memberNames: { s101: "PRIMARY", s57: "SECONDARY" },
     demoEnabled: false,
     isCurrent: () => true,
     onChange() {},
@@ -458,13 +448,17 @@ test("Resume reloads server CanSend before publishing send availability", async 
     canResume: true,
     canDiscard: true,
     canSend: false,
-    eligibleMembers: [{ key: "s101", datasetName: "PRIMARY" }],
+    status: 2,
+    eligibleMembers: [
+      { key: "s101", datasetName: "PRIMARY" },
+      { key: "s57", datasetName: "SECONDARY" },
+    ],
   };
   const requests = [];
   const session = createPackageActionSession({
     sourceName: "PRIMARY",
     identityKey: "identity",
-    memberNames: { s101: "PRIMARY" },
+    memberNames: { s101: "PRIMARY", s57: "SECONDARY" },
     demoEnabled: false,
     isCurrent: () => true,
     notify: {},
@@ -487,4 +481,23 @@ test("Resume reloads server CanSend before publishing send availability", async 
   } finally {
     session.destroy();
   }
+});
+
+for (const status of [0, 3, 4, 5, undefined]) {
+  test(`Send remains disabled for package status ${status} even with CanSend and demo enabled`, async () => {
+    const h = createHarness({ demoEnabled: true, initial: { canSend: true, status } });
+    await h.session.start();
+    assert.equal(h.session.projection().actionEligibility.send, false);
+    assert.equal(await h.session.invoke("send"), false);
+    assert.equal(h.requests.length, 1);
+    h.session.destroy();
+  });
+}
+
+test("one eligible export cannot authorize a package send", async () => {
+  const h = createHarness({ initial: { canSend: true, eligibleMembers: [{ key: "s101", datasetName: "PRIMARY" }] } });
+  await h.session.start();
+  assert.equal(await h.session.invoke("send"), false);
+  assert.equal(h.requests.length, 1);
+  h.session.destroy();
 });

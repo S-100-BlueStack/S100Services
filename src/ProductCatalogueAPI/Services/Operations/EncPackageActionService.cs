@@ -1,4 +1,5 @@
 using Hangfire;
+using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.ValidationEmail;
 using ProductCatalogueAPI.Data.Models;
@@ -73,18 +74,15 @@ public sealed class EncPackageActionService(
         var tracksReady = EncPackageActionEligibility.CanActOnUnsentPackage(s101, s57);
         var canAct = !active.S101Discarded && !active.S57Discarded && tracksReady;
         var canDiscard = EncPackageActionEligibility.CanDiscard(active, s101, s57);
-        var eligible = new List<EncPackageEligibleMember>(2);
-        if (!active.S101Discarded && s101?.State == ProductState.ReadyForDistribution)
-            eligible.Add(new("s101", active.SourceDatasetName));
-        if (!active.S57Discarded && s57?.State == ProductState.ReadyForDistribution)
-            eligible.Add(new("s57", active.S57DatasetName));
+        var pairReady = EncPackageSendEligibility.CanSend(active, s101, s57);
+        IReadOnlyList<EncPackageEligibleMember> eligible = pairReady
+            ? [new("s101", active.SourceDatasetName), new("s57", active.S57DatasetName)] : [];
         var restriction = s101 is null || s57 is null ? "MEMBER_TRACK_MISSING" :
             !tracksReady ? "MEMBERS_NOT_READY" : null;
         return new(active.Id, active.SourceDatasetName, control.IsPaused,
             control.RowVersion is null ? null : Convert.ToBase64String(control.RowVersion),
             canAct && !control.IsPaused, canAct && control.IsPaused, canDiscard, eligible, restriction) {
-            CanSend = SimulationEnabled() && !control.IsPaused && !active.S101Discarded && !active.S57Discarded &&
-                s101 is { IsManuallyFrozen: false, State: not ProductState.Frozen } && s57 is { IsManuallyFrozen: false, State: not ProductState.Frozen } && eligible.Count > 0,
+            CanSend = SimulationEnabled() && pairReady,
             Status = EncPackageStatusResolver.Resolve(active, s57, s101),
             BuiltAtUtc = active.BuiltAtUtc,
             ErrorMessage = EncPackageStatusResolver.GetErrorMessage(active, s57, s101)
@@ -110,6 +108,7 @@ public sealed class EncPackageActionService(
             if (track is null || track.State != ProductState.ReadyForDistribution || track.CandidateEdition is null || track.CandidateUpdate is null || revision is null) return null;
             members.Add(new(member.DatasetName, specification, track.CandidateEdition.Value, track.CandidateUpdate.Value, revision.Value));
         }
+        if (members.Count != 2) return null;
         return jobs.Enqueue<SendEncPackageJob>(job => job.RunAsync(snapshot.SourceDatasetName, packageId, members.ToArray(), CancellationToken.None, null));
     }
 

@@ -178,7 +178,7 @@ export function createAnalyzePackageActions({
       return false;
     const succeeded = await entry.session.invoke(operation);
     if (!succeeded || !isEntryCurrent(entry)) return succeeded;
-    if (["pause", "resume", "discard"].includes(operation)) {
+    if (["pause", "resume", "discard", "send"].includes(operation)) {
       const refreshed = await refreshProduct?.(entry.product.datasetName);
       if (refreshed === false && !destroyed) {
         warn("Analyze refresh pending", "Refresh Analyze to see the latest package state.");

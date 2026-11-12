@@ -202,11 +202,13 @@ Analyze owns the session per current, enabled work-unit identity; it does not re
 Only a resolved Package with matching member identities and backend-owned
 `hasActivePackage === true` may read `electronicproducts/packages/{name}/actions`. Each operation
 requires the latest server-projected eligibility, including after the Discard confirmation.
-Send/Accept remains limited to the existing opt-in development demo mode and never simulates
-production authorization. An unknown, inactive or non-Package Product cannot dispatch.
+Send requires explicit backend permission for a complete Ready, error-free S-101/S-57 pair;
+InTransit and Error deny a new send. A development demo flag cannot override these rules,
+and the shared session does not enable manual Accept. An unknown, inactive or non-Package
+Product cannot dispatch.
 
 The controller destroys sessions when Products are removed, disabled, replaced or the page
-is destroyed. Successful Pause/Resume/Discard requests trigger targeted Analyze refresh;
+is destroyed. Successful Pause/Resume/Discard/Send requests trigger targeted Analyze refresh;
 accepted R01B incremental caching, off-map layer replacement and full manual Refresh remain
 unchanged. Action projection changes update existing popup buttons in place, preserving focus and
 open report sections. The sidebar does not render workflow buttons; Tools is not included in the
@@ -223,8 +225,7 @@ This UI change does not create an IC-ENC download endpoint.
 
 ## Public route
 
-The empty workspace uses `/Analyze`; selected Products use
-`/Analyze?Datasets=ProductA,ProductB`. See
+The canonical route is `/Analyze?Datasets=ProductA,ProductB`. See
 [workspace routing](../../shared/routing/README.md) for the shared URL boundary and temporary
 legacy-path compatibility. The URL continues to represent enabled Products; disabled list entries
 remain local workspace composition state.

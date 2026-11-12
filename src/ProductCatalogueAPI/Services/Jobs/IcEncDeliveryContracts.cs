@@ -1,4 +1,5 @@
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Jobs;
 
 namespace ProductCatalogueAPI.Services.Jobs;
 
@@ -19,6 +20,21 @@ public interface IIcEncDeliveryRepository
     /// <param name="revisionId">Expected immutable revision; guards rebuilds reusing version numbers.</param>
     /// <returns>The existing or new simulated reservation, or null after a stale or ineligible request.</returns>
     Task<IcEncDelivery?> ReserveSimulationAsync(string datasetName, ProductSpecification specification, int edition, int update, string jobId, DateTime nowUtc, CancellationToken cancellationToken, Guid? packageId = null, Guid? revisionId = null) => throw new NotSupportedException("Simulation delivery reservations are not supported by this repository.");
+    /// <summary>Validates both stored exchange sets before committing both simulated deliveries and InTransit states in one SQL transaction.</summary>
+    /// <param name="sourceName">Canonical S-101 package source.</param>
+    /// <param name="packageId">Expected shared snapshot.</param>
+    /// <param name="members">Exactly one immutable S-101 and one immutable S-57 candidate.</param>
+    /// <param name="jobId">Stable aggregate job identity; a retry resumes only its own complete reservation.</param>
+    /// <param name="nowUtc">UTC send instant.</param>
+    /// <param name="cancellationToken">Cancels before transaction commit.</param>
+    /// <returns>The complete committed pair, or null for changed, blocked or incomplete work.</returns>
+    Task<IReadOnlyList<IcEncDelivery>?> ReserveSimulationPackageAsync(string sourceName, Guid packageId, IReadOnlyList<EncPackageSendMember> members, string jobId, DateTime nowUtc, CancellationToken cancellationToken) => throw new NotSupportedException("Paired simulation reservations are not supported.");
+    /// <summary>Identifies active package members so singular endpoints cannot bypass paired sending.</summary>
+    /// <param name="datasetName">Canonical requested member.</param>
+    /// <param name="specification">Exact product specification.</param>
+    /// <param name="cancellationToken">Cancels the read before enqueueing.</param>
+    /// <returns>True when a current ENC package owns this member.</returns>
+    Task<bool> IsPackageMemberAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken) => throw new NotSupportedException("Package membership lookup is unavailable.");
     /// <summary>Records successful transport without implying IC-ENC validation acceptance.</summary>
     Task MarkDeliveredAsync(Guid deliveryId, DateTime nowUtc, CancellationToken cancellationToken);
     /// <summary>Locks an uncertain transfer against unsafe automatic resending.</summary>
