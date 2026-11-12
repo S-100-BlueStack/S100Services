@@ -1011,9 +1011,16 @@ test("Last refreshed timestamp reports only successful live Package list reads",
     assert.equal(refreshed.hidden, false);
     assert.equal(refreshed.textContent, "Last refreshed: —");
     await flush();
-    assert.match(refreshed.textContent, /^Last refreshed: /);
     assert.ok(Number.isFinite(Date.parse(refreshed.dateTime)));
     const firstTime = refreshed.dateTime;
+    const expectedTime = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date(firstTime));
+    assert.equal(refreshed.textContent, `Last refreshed: ${expectedTime}`);
+    assert.match(refreshed.textContent, /^Last refreshed: ([01][0-9]|2[0-3]):[0-5][0-9]$/);
+    assert.ok(refreshed.title.includes(`at ${expectedTime} local time`));
 
     failNext = true;
     dom.get("feature-retry").click();
@@ -1021,6 +1028,7 @@ test("Last refreshed timestamp reports only successful live Package list reads",
     assert.equal(searchCalls, 2);
     assert.match(dom.get("list-status").textContent, /Package list unavailable/);
     assert.equal(refreshed.dateTime, firstTime);
+    assert.equal(refreshed.textContent, `Last refreshed: ${expectedTime}`);
   } finally {
     page?.destroy();
     dom.restore();

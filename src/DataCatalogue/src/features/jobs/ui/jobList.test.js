@@ -194,7 +194,73 @@ test("Live Jobs list uses contextual shortId cards without redundant expansion c
         .length,
       0
     );
+    const assignmentLinks = findByClass(card, "job-card__assignment-link");
+    assert.equal(assignmentLinks.length, 1);
+    assert.equal(assignmentLinks[0].tagName, "a");
+    assert.equal(assignmentLinks[0].href, "/assignments/packages/package");
+    assert.equal(assignmentLinks[0].target, "_blank");
+    assert.equal(assignmentLinks[0].rel, "noopener noreferrer");
+    assert.equal(
+      assignmentLinks[0].attributes.get("aria-label"),
+      "Open Package assignment for NM1000 in new tab"
+    );
+    assert.equal(findByTag(assignmentLinks[0], "calcite-icon")[0].icon, "launch");
     assert.equal(card.dataset.jobId, '["package","enc","east"]');
+    view.destroy();
+  });
+});
+
+test("Package shortcut keeps the base path and excludes missing or invalid identities", () => {
+  const originalLocation = globalThis.location;
+  globalThis.location = { pathname: "/catalogue/" };
+  try {
+    withDocument(() => {
+      const { store, job } = fixture("live");
+      job.packageId = "opaque/id?x=1";
+      const view = createJobList({ store, sourceMode: "live" });
+      const link = findByClass(view.element, "job-card__assignment-link")[0];
+      assert.equal(link.href, "/catalogue/assignments/packages/opaque%2Fid%3Fx%3D1");
+      view.destroy();
+
+      job.packageId = "";
+      const noIdView = createJobList({ store, sourceMode: "live" });
+      assert.equal(findByClass(noIdView.element, "job-card__assignment-link").length, 0);
+      noIdView.destroy();
+
+      job.packageId = "\uD800";
+      const invalidView = createJobList({ store, sourceMode: "live" });
+      assert.equal(findByClass(invalidView.element, "job-card__assignment-link").length, 0);
+      invalidView.destroy();
+    });
+  } finally {
+    if (originalLocation === undefined) delete globalThis.location;
+    else globalThis.location = originalLocation;
+  }
+});
+
+test("Different contextual Jobs link to the same canonical Package assignment", () => {
+  withDocument(() => {
+    const { job } = fixture("live");
+    const sibling = {
+      ...job,
+      id: '["package","paper","west"]',
+      pipelineName: "Paper Charts",
+      workspaceName: "Western Denmark",
+    };
+    const snapshot = { jobs: [job, sibling], isLoading: false, error: null };
+    const store = {
+      getSnapshot: () => snapshot,
+      subscribe(listener) {
+        listener(snapshot);
+        return () => {};
+      },
+    };
+    const view = createJobList({ store, sourceMode: "live" });
+    assert.deepEqual(
+      findByClass(view.element, "job-card__assignment-link").map((link) => link.href),
+      ["/assignments/packages/package", "/assignments/packages/package"]
+    );
+    assert.equal(findByClass(view.element, "job-card__context").length, 2);
     view.destroy();
   });
 });
@@ -295,6 +361,7 @@ test("Mock Jobs retain expansion, AOI details and existing map actions", () => {
       1
     );
     assert.equal(findByClass(view.element, "job-details__aoi-item").length, 1);
+    assert.equal(findByClass(view.element, "job-card__assignment-link").length, 0);
     assert.equal(findByClass(view.element, "job-details--live").length, 0);
     assert.equal(findByClass(view.element, "job-details__header--live").length, 0);
     assert.equal(findByClass(view.element, "job-details__header-actions").length, 1);

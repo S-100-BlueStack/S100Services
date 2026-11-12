@@ -343,6 +343,9 @@ validation, geometry projection, partial failure reports, map ownership and mock
 - `public/components/navbar.html` owns the separate `Package assignment` page link.
   `app/ui/createWorkflowNavigation.js` owns page navigation, history and optional Package
   deep links (`/assignments/packages/{encodedPackageId}`) without a new router dependency.
+  The shared `shared/navigation/workflowRoutes.js` helpers retain canonical Package
+  identity and resolve the frontend mount prefix; the live Packages list renders a
+  native new-tab deep link without controlling window navigation programmatically.
   Existing draft-navigation guards are preserved. Production host SPA fallback is not yet
   verified; local direct-link testing is required.
 - The `assignmentPageContract.js` target list now includes `map-focus`, fixing the

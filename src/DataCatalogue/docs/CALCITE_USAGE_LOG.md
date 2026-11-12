@@ -1,3 +1,17 @@
+## DC-UX-03E — Package new-tab link (2026-11-12)
+
+The live Packages list uses a native HTML anchor with `target="_blank"` and
+`rel="noopener noreferrer"` for standard browser new-tab behavior. The anchor
+contains the public `calcite-icon` (`launch`) and has an accessible name that
+includes the Package's visible short ID. Focus styling is application-owned
+(`:focus-visible`) and themed with public Calcite colors. This intentionally
+avoids a `calcite-action` or a JavaScript `window.open` click handler so that
+standard link behavior, context menus, keyboard Enter activation and browser
+pop-up handling stay intact. The link is constructed from the existing
+application route contract, not from a backend URL.
+
+---
+
 ## DC-UX-03D — Live Packages typography and status grouping (2026-11-12)
 
 The live main-map Packages list and Details keep public `calcite-action` and

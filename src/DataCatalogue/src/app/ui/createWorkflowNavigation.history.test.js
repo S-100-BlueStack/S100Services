@@ -70,10 +70,14 @@ function fixture({ initialPath = "/" } = {}) {
     element: new Element(),
     allowLeave: async () => true,
     activate() {},
-    selectPackage: async () => true,
+    selectPackage: async (id) => {
+      selectedPackageIds.push(id);
+      return true;
+    },
     destroy() {},
   };
   let jobsOpens = 0;
+  const selectedPackageIds = [];
   let onPackageSelected;
   const navigation = createWorkflowNavigation({
     locationRef,
@@ -102,6 +106,7 @@ function fixture({ initialPath = "/" } = {}) {
     locationRef,
     historyChanges,
     getJobsOpens: () => jobsOpens,
+    getSelectedPackageIds: () => [...selectedPackageIds],
     async selectPackage(id) {
       onPackageSelected(id);
     },
@@ -307,4 +312,25 @@ test("Navigation moves focus only when the active element is inside the hidden w
   } finally {
     f.navigation.destroy();
   }
+});
+
+test("IIS subapplication routes open the selected Package and return to the local main map", async () => {
+  const f = fixture({ initialPath: "/catalogue/" });
+  assert.equal(await f.navigation.openAssignment(), true);
+  assert.equal(f.locationRef.pathname, "/catalogue/assignments");
+  await f.selectPackage("pkg/100");
+  assert.equal(f.locationRef.pathname, "/catalogue/assignments/packages/pkg%2F100");
+  assert.equal(await f.navigation.openJobs(), true);
+  assert.equal(f.locationRef.pathname, "/catalogue/");
+  f.navigation.destroy();
+});
+
+test("IIS Package deep links open directly and preserve their mount path", async () => {
+  const f = fixture({ initialPath: "/catalogue/assignments/packages/pkg%2F100" });
+  await flush();
+  assert.equal(f.jobsWorkflowHost.hidden, true);
+  assert.equal(f.locationRef.pathname, "/catalogue/assignments/packages/pkg%2F100");
+  assert.deepEqual(f.getSelectedPackageIds(), ["pkg/100"]);
+  assert.equal(f.button.attributes.get("aria-current"), "page");
+  f.navigation.destroy();
 });

@@ -1,3 +1,30 @@
+## DC-UX-03E — Package assignment shortcuts and local refresh time (candidate, 2026-11-12)
+
+Authoritative source baseline: `4419b3af9bf169eb56241f3ed6ab5ac5c9621674`
+(user-reported accepted DC-UX-03D commit). The committed files were exported as 77
+Git-blob-verified source files with a clean working tree at export.
+
+- Live Packages cards now include a small native link beside the short ID using
+  the public Calcite `launch` icon. It opens the existing assignment deep link
+  for the **canonical Package ID**, not the composite contextual Job ID or
+  display-only short ID, in a new browser tab with `noopener noreferrer`.
+  Mock Jobs and the existing Package Details action are unchanged. Missing or
+  unencodable Package identifiers do not produce broken links.
+- Assignment route helpers recognize the same frontend mount prefix as the
+  main-map URL, including IIS subapplication paths; direct links and local
+  Back/Forward navigation remain inside that prefix. The host still must
+  provide an SPA fallback for direct deep-link reloads (not verified here).
+- Package Assignment's last successful list-read indicator displays only
+  `Last refreshed: HH:MM` in the browser's local time (24-hour clock).
+  The `<time>` element keeps its ISO `dateTime` metadata. Failed, aborted and
+  stale reads must not advance the visible time. Other Refresh semantics remain
+  unchanged.
+- No API, persistence, dependency, basemap, ArcGIS map lifecycle, status,
+  theme, or backend changes. Test and browser acceptance are detailed in
+  [DC_UX_03E_VALIDATION.md](DC_UX_03E_VALIDATION.md).
+
+---
+
 ## DC-UX-03D — Packages list and detail hierarchy (candidate, 2026-11-12)
 
 The uploaded commit-pinned context uses `b3de325d57100170be49415b5d7ea8e122bb23cc`,

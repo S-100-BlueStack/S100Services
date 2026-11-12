@@ -1,3 +1,7 @@
+import {
+  assignmentPath,
+  getApplicationBasePath,
+} from "../../../shared/navigation/workflowRoutes.js";
 import { severityLabel } from "../../../shared/domain/severity.js";
 import {
   filterJobs,
@@ -1073,7 +1077,34 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
     titleRowElement.append(detailsButton);
     const textElement = document.createElement("div");
     textElement.className = "job-card__identity";
-    textElement.append(titleElement);
+    const headingElement = document.createElement("div");
+    headingElement.className = "job-card__identity-heading";
+    headingElement.append(titleElement);
+    // Package IDs are canonical API/deep-link identities; the visible short ID is not.
+    if (typeof job.packageId === "string" && job.packageId.trim()) {
+      try {
+        const link = document.createElement("a");
+        link.className = "job-card__assignment-link";
+        link.href = assignmentPath(
+          job.packageId,
+          getApplicationBasePath(globalThis.location?.pathname ?? "/")
+        );
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.title = `Open Package assignment for ${livePresentation.shortId} in new tab`;
+        link.setAttribute("aria-label", link.title);
+
+        const icon = document.createElement("calcite-icon");
+        icon.icon = "launch";
+        icon.scale = "s";
+        icon.setAttribute("aria-hidden", "true");
+        link.append(icon);
+        headingElement.append(link);
+      } catch {
+        // An unencodable external identifier must not break the Packages list.
+      }
+    }
+    textElement.append(headingElement);
     if (livePresentation.context) {
       const contextElement = document.createElement("p");
       contextElement.className = "job-card__context";

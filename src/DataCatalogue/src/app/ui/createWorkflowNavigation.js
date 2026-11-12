@@ -1,22 +1,10 @@
-export function assignmentPath(packageId = null) {
-  return packageId == null
-    ? "/assignments"
-    : `/assignments/packages/${encodeURIComponent(packageId)}`;
-}
+import {
+  assignmentPath,
+  getApplicationBasePath,
+  parseWorkflowPath,
+} from "../../shared/navigation/workflowRoutes.js";
 
-export function parseWorkflowPath(pathname) {
-  if (pathname === "/assignments" || pathname === "/assignments/")
-    return { assignment: true, packageId: null };
-  const match = /^\/assignments\/packages\/([^/]+)\/?$/.exec(pathname);
-  if (match) {
-    try {
-      return { assignment: true, packageId: decodeURIComponent(match[1]) };
-    } catch {
-      return { assignment: true, packageId: null };
-    }
-  }
-  return { assignment: false, packageId: null };
-}
+export { assignmentPath, parseWorkflowPath } from "../../shared/navigation/workflowRoutes.js";
 
 export function createWorkflowNavigation({
   shellElement,
@@ -42,6 +30,7 @@ export function createWorkflowNavigation({
   let currentIntent = null;
   let queuedIntent = null;
   let acceptedPath = locationRef?.pathname ?? "/";
+  const basePath = getApplicationBasePath(acceptedPath);
 
   function syncJobsButtonState() {
     navbar.jobsButton.disabled = !active && !isJobsStartupComplete();
@@ -60,7 +49,7 @@ export function createWorkflowNavigation({
       documentRef.title = "Data Catalogue";
       return;
     }
-    const route = parseWorkflowPath(acceptedPath);
+    const route = parseWorkflowPath(acceptedPath, basePath);
     const shortId = page?.getSelectedPackageShortId?.(route.packageId);
     documentRef.title = shortId ? `Package assignment: ${shortId}` : "Package assignment";
   }
@@ -132,7 +121,7 @@ export function createWorkflowNavigation({
         page = createPage({
           onPackageSelected(id) {
             if (alive && active && !transitioning) {
-              setRoute(assignmentPath(id));
+              setRoute(assignmentPath(id, basePath));
               syncDocumentTitle();
             }
           },
@@ -164,7 +153,7 @@ export function createWorkflowNavigation({
       if (!isCurrent()) return false;
 
       if (intent.fromHistory) acceptedPath = intent.path;
-      else setRoute(intent.assignment ? assignmentPath() : "/");
+      else setRoute(intent.assignment ? assignmentPath(null, basePath) : basePath);
       syncDocumentTitle();
       return true;
     } catch (error) {
@@ -205,7 +194,7 @@ export function createWorkflowNavigation({
   function openFromLocation() {
     const path = locationRef?.pathname ?? "/";
     return navigate({
-      ...parseWorkflowPath(path),
+      ...parseWorkflowPath(path, basePath),
       path,
       fromHistory: true,
       openJobs: true,
@@ -216,7 +205,7 @@ export function createWorkflowNavigation({
     return navigate({
       assignment: show,
       packageId: null,
-      path: show ? assignmentPath() : "/",
+      path: show ? assignmentPath(null, basePath) : basePath,
       fromHistory: false,
       openJobs,
     });
@@ -254,7 +243,7 @@ export function createWorkflowNavigation({
     signal: abort.signal,
   });
   syncNavigation();
-  if (parseWorkflowPath(locationRef?.pathname ?? "/").assignment) void openFromLocation();
+  if (parseWorkflowPath(locationRef?.pathname ?? "/", basePath).assignment) void openFromLocation();
 
   return {
     openAssignment: () => showAssignment(true),

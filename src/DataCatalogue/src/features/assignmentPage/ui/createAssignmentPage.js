@@ -1,3 +1,4 @@
+import { formatLastRefreshedTime } from "./formatLastRefreshedTime.js";
 import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
 import { renderPackageDescriptions } from "./renderPackageDescriptions.js";
 import { createPipelineRow } from "./createPipelineRow.js";
@@ -244,13 +245,9 @@ export function createAssignmentPage({
         const refreshed = new Date();
         const display = get("feature-last-refreshed");
         display.dateTime = refreshed.toISOString();
-        display.textContent = `Last refreshed: ${refreshed.toLocaleString(undefined, {
-          month: "numeric",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}`;
-        display.title = `Package list fetched at ${refreshed.toLocaleString()}. This is not the server's modification time.`;
+        const localTime = formatLastRefreshedTime(refreshed);
+        display.textContent = `Last refreshed: ${localTime}`;
+        display.title = `Package list fetched at ${localTime} local time. This is not the server's modification time.`;
       }
     } catch (error) {
       if (isCurrent()) {
