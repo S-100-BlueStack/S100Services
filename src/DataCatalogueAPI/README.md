@@ -165,9 +165,16 @@ links retain their existing HTTP(S) validation. MA descriptions already use
 `en`. General Submission samples now default their description language to
 `en`; an optional `language` string in `submission.json` overrides that default
 and is trimmed and lowercased. This labels source text; it does not translate it.
-The two ENC workspace fixtures are distinct axis-aligned envelope rectangles.
-Their existing extents are retained. Paper Chart footprints retain their source
-polygons. Restart the development API to recreate samples from these changes.
+The ENC workspace fixtures contain one workspace per unique `PRODUCTNAME` in
+the supplied DK2 dataset snapshot: 16 workspaces from 18 source polygons. Their
+display names are the dataset identifiers. Each AOI is the axis-aligned WGS84
+envelope of every polygon belonging to that dataset; `DK20133C` and `DK20149C`
+each combine two source polygons into one rectangular workspace. Coordinates
+retain the supplied extent precision, and display scales retain the existing
+sample defaults. These are development fixtures loaded through the existing
+controller-based initializer, not a live dataset synchronization. Paper Chart
+footprints retain their source polygons. Restart the development API to recreate
+samples from these changes.
 
 Regression coverage includes `PackageGeometryPageTests`,
 `PackageGeometryReadTests`, `PackageSampleTests`,
