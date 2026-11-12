@@ -65,13 +65,15 @@ public sealed class SamplePackageReader(ArcGisDispatcher dispatcher, ILogger<Sam
             var title = Text(manifest, "title");
             var source = Text(manifest, "source");
             var description = Text(manifest, "description");
+            var language = Text(manifest, "language");
+            language = string.IsNullOrWhiteSpace(language) ? "en" : language.Trim().ToLowerInvariant();
             var geometry = await dispatcher.ExecuteAsync(() => {
                 try { return ReadGeometry(directory, cancellationToken); }
                 catch (Exception exception) when (exception is ArcGIS.Core.Data.Exceptions.GeodatabaseException or ArcGIS.Core.Geometry.Exceptions.GeometryObjectException or ArgumentException) {
                     throw new InvalidDataException("Could not read polygon geometry from the submission shapefile.", exception);
                 }
             }).ConfigureAwait(false);
-            var submission = new GeneralSubmission(new PackageMetaData(null, "GeneralSubmission", title, source, null, DateTimeOffset.UtcNow), geometry, description is null ? null : [new PackageDescription(null, description)]);
+            var submission = new GeneralSubmission(new PackageMetaData(null, "GeneralSubmission", title, source, null, DateTimeOffset.UtcNow), geometry, description is null ? null : [new PackageDescription(language, description)]);
             return new CreatePackageRequest {
                 Category = "GeneralSubmission",
                 AbsoluteUri = new Uri(Path.GetFullPath(sourceFile)).AbsoluteUri,

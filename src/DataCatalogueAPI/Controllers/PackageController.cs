@@ -20,7 +20,7 @@ namespace DataCatalague.Api.Controllers
     [ApiVersion(ApiVersions.V1Text)]
     [Route("v{version:apiVersion}/packages")]
     [Produces("application/json")]
-    public sealed class PackageController(IEventStore eventstore, PackageRepository packageRepository, PackageGeometryService geometryService, PackageCreationService creationService, DispatcherResourceService resources, IOptions<PackagesOptions> options, ILogger<PackageController> logger) : ControllerBase
+    public sealed class PackageController(IEventStore eventstore, PackageRepository packageRepository, PackageGeometryService geometryService, PackageCreationService creationService, DispatcherResourceService resources, PipelineAssignmentIndex assignments, IOptions<PackagesOptions> options, ILogger<PackageController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
 
@@ -105,6 +105,10 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
+        /// <summary>Gets a package and all its active pipeline assignments, independently of AOI filters.</summary>
+        /// <param name="id">The package identifier.</param>
+        /// <param name="cancellationToken">Cancels the event-state read.</param>
+        /// <returns>Current package metadata, assignment status and active pipeline binding identifiers.</returns>
         [HttpGet("{id}", Name = "GetPackage.V1")]
         [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -126,6 +130,37 @@ namespace DataCatalague.Api.Controllers
                     title: "Package not found.",
                     detail: $"No package exists with identifier {id}.",
                     statusCode: StatusCodes.Status404NotFound);
+            }
+        }
+
+        /// <summary>Lists a bounded page of current package AOIs, optionally including every detail group.</summary>
+        /// <param name="cancellationToken">Cancels filtering and geometry reads.</param>
+        /// <param name="category">Optional exact category ID.</param>
+        /// <param name="geometry">Optional Esri JSON envelope or polygon with an explicit spatial reference; intersects the current AOI.</param>
+        /// <param name="page">One-based page number; default 1.</param>
+        /// <param name="pageSize">Page size from 1 to 200; default 20.</param>
+        /// <param name="hasPipeline">True for assigned packages, false for unassigned, or omitted for both.</param>
+        /// <param name="pipelineId">Optional exact pipeline assignment, combined with the other filters.</param>
+        /// <param name="includeDetails">False returns only the simplified AOI; true also returns all stored points, curves and surfaces.</param>
+        /// <returns>Package IDs and geometry with the matching count before pagination, ordered by package ID.</returns>
+        /// <remarks>Only the selected page is hydrated. Simplified means the stored AOI, without reducing detail vertices. A missing referenced row fails the whole read.</remarks>
+        [HttpGet("geometry")]
+        [ProducesResponseType<PagedResponse<PackageGeometryItemResponse>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<PagedResponse<PackageGeometryItemResponse>>> GetGeometries(CancellationToken cancellationToken, [FromQuery] string? category = null, [FromQuery, StringLength(16384)] string? geometry = null, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize, [FromQuery] bool? hasPipeline = null, [FromQuery] string? pipelineId = null, [FromQuery] bool includeDetails = false) {
+            try {
+                return this.Ok(await this._geometryService.GetPageAsync(category, cancellationToken, geometry, page, pageSize, hasPipeline, pipelineId, includeDetails));
+            }
+            catch (InvalidDataException exception) {
+                this.ModelState.AddModelError(nameof(geometry), exception.Message);
+                return this.ValidationProblem(this.ModelState);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException) {
+                this._logger.LogError(exception, "Could not read package geometry page. Category: {Category}, PipelineId: {PipelineId}, Page: {Page}, PageSize: {PageSize}, IncludeDetails: {IncludeDetails}.", category, pipelineId, page, pageSize, includeDetails);
+                return this.Problem(title: "Could not retrieve package geometries.", statusCode: StatusCodes.Status500InternalServerError);
             }
         }
 
@@ -218,7 +253,7 @@ namespace DataCatalague.Api.Controllers
             });
         }
 
-        private static PackageResponse Map(Domain.PackageState state) => new() {
+        private PackageResponse Map(Domain.PackageState state) => new() {
             Id = state.Id,
             Category = state.Category,
             FileName = state.FileName,
@@ -229,6 +264,7 @@ namespace DataCatalague.Api.Controllers
             Charts = state.Charts,
             DisplayScale = state.DisplayScale,
             LastUpdatedUtc = state.LastUpdatedUtc,
+            PipelineBindings = assignments.GetPipelines(state.Id!.Value).Select(pipelineId => new PackagePipelineBindingResponse($"{state.Id.Value}::{pipelineId}", pipelineId)).ToArray(),
         };
 
     }

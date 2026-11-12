@@ -12,3 +12,10 @@ public sealed record PackageGeometryResponse(JsonElement? Aoi, PackageDetailedGe
 /// <param name="Curves">The multipart Esri polyline, or null when absent.</param>
 /// <param name="Surfaces">The Esri polygon including all rings and holes, or null when absent.</param>
 public sealed record PackageDetailedGeometryResponse(IReadOnlyList<JsonElement> Points, JsonElement? Curves, JsonElement? Surfaces);
+
+/// <summary>A package's current geometry within a filtered page.</summary>
+/// <param name="PackageId">Catalogue package identifier, used to retrieve metadata or full coordinates.</param>
+/// <param name="ShortId">The human-readable package identifier.</param>
+/// <param name="Aoi">Current stored AOI as an Esri JSON object with its spatial reference.</param>
+/// <param name="DetailedGeometry">All available detail groups when requested, otherwise null.</param>
+public sealed record PackageGeometryItemResponse(string PackageId, string? ShortId, JsonElement? Aoi, PackageDetailedGeometryResponse? DetailedGeometry);

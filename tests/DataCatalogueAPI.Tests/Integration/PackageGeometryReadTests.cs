@@ -4,6 +4,7 @@ using System.Text.Json;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models.V1;
+using DataCatalague.Api.Models;
 using DataCatalogue.Api.Tests.Infrastructure;
 using Eventuous;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +50,16 @@ public sealed class PackageGeometryReadTests(CatalogueFixture runtime) : Catalog
         Assert.True(details.Curves.Value.TryGetProperty("spatialReference", out _));
         Assert.Equal(2, details.Surfaces!.Value.GetProperty("rings").GetArrayLength());
         Assert.True(details.Surfaces.Value.TryGetProperty("spatialReference", out _));
+
+        // The page endpoint must expose the same complete groups as the direct read.
+        await this.App.EventuallyAsync(async () => {
+            var page = (await this.Client.GetFromJsonAsync<PagedResponse<PackageGeometryItemResponse>>("/v1/packages/geometry?includeDetails=true"))!;
+            return page.Items.SingleOrDefault()?.DetailedGeometry?.Surfaces is not null;
+        });
+        var page = (await this.Client.GetFromJsonAsync<PagedResponse<PackageGeometryItemResponse>>("/v1/packages/geometry?includeDetails=true"))!;
+        var item = Assert.Single(page.Items);
+        Assert.Equal(package.Id, item.PackageId);
+        Assert.Equal(JsonSerializer.Serialize(result.DetailedGeometry), JsonSerializer.Serialize(item.DetailedGeometry));
     }
 
     [Fact]

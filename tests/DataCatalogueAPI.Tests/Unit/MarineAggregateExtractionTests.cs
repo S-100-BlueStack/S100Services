@@ -48,7 +48,13 @@ public sealed class MarineAggregateExtractionTests
         Assert.Equal("Builder", site.MetaData.Type);
         Assert.Null(site.MetaData.ShortId);
         Assert.Null(site.MetaData.CreatedUTC);
-        var html = Assert.Single(site.Descriptions).Description;
+        var description = Assert.Single(site.Descriptions);
+        Assert.Equal("en", description.Language);
+        var html = description.Description;
+        Assert.Contains("<p><strong>Area number:</strong> 562-PA</p>", html);
+        Assert.DoesNotContain("<dl", html);
+        Assert.DoesNotContain("<dt", html);
+        Assert.DoesNotContain("<dd", html);
         Assert.Contains("Status in supplied snapshot", html);
         Assert.Contains("2024-05-02T22:00:00", html);
         Assert.Contains("&lt;script&gt;", html);

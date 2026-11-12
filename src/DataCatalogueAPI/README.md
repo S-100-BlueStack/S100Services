@@ -104,6 +104,75 @@ Windows x64 with .NET 10, licensed ArcGIS Pro and the `s100ed17.zip` template:
 dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter FullyQualifiedName~PackageGeometryReadTests
 ```
 
+## Filtered package geometry pages
+
+Use `GET /api/v1/packages/geometry` to draw packages across categories or
+pipelines without one HTTP request per package. Geometry belongs to packages;
+`pipelineId` restricts the selection to an explicit pipeline assignment.
+This uses the same subscription-backed filtering as `GET /api/v1/packages`.
+
+| Query parameter | Meaning |
+| --- | --- |
+| `includeDetails` | Default `false`: load only the simplified, stored AOI. `true`: also load every available point, curve and surface. |
+| `geometry` | Optional Esri JSON envelope or polygon with `spatialReference`; intersects the current package AOI. |
+| `category` | Optional exact category ID. |
+| `pipelineId` | Optional exact active pipeline assignment. |
+| `hasPipeline` | Optional `true` for assigned, `false` for unassigned, omitted for both. |
+| `page`, `pageSize` | One-based page (default 1); size 1–200 (default 20). |
+
+The response has `items`, `page`, `pageSize`, `totalCount`, and `totalPages`.
+Each item contains `packageId`, `shortId`, `aoi`, and `detailedGeometry`.
+Geometry fields have the same shape as the individual geometry endpoint.
+When `includeDetails=false`, `detailedGeometry` is null and detail rows are
+never fetched. With `true`, all three groups are included if present; absent
+points are `[]`, absent curves/surfaces are null. If no detail exists, the
+whole `detailedGeometry` is null. Simplified means the stored AOI, not a
+generalization of the detailed geometry's vertices.
+
+```http
+GET /api/v1/packages/geometry?includeDetails=false&pageSize=200
+GET /api/v1/packages/geometry?category=GeneralSubmission&includeDetails=true&page=1&pageSize=20
+GET /api/v1/packages/geometry?pipelineId=PIPELINE_ID&includeDetails=true
+```
+
+All filters combine with AND. Items are ordered by ordinal package ID, with
+counting and pagination before coordinate hydration. Only the selected page
+is read, using one ArcGIS dispatcher action and one geodatabase connection.
+Retained historical AOIs cannot match after replacement. Missing referenced
+geometry returns a generic 500 rather than a partial 200 result; malformed
+queries return 400. The endpoint has the existing access policy. An unmatched
+filter or a page beyond the last page returns an empty `items` array with the
+matching total count. Fetch subsequent pages to obtain all matching packages.
+
+## Package pipeline assignment status
+
+Package responses (including `GET /api/v1/packages/{id}` and package listings)
+now include `hasPipeline` and `pipelineBindings`. Each binding contains the
+existing dispatcher binding `id` and `pipelineId`. Bindings are all active
+assignments, ordered by pipeline ID, independently of workspace intersections,
+AOI filters and the pipeline filter used to select a package. An unassigned
+package returns `false` and `[]`. These fields use the existing assignment
+index, which is updated by successful binding mutations and protected against
+delayed subscription updates; reading metadata does not trigger spatial queries.
+Removed assignments disappear, while restoring an assignment makes it visible
+again. This is routing status; it does not introduce a workflow state enum.
+
+## Sample descriptions and workspace coverage
+
+MA descriptions use paragraphs and bold field labels (`p`, `strong`), rather
+than definition-list markup. External values remain HTML-encoded and permit
+links retain their existing HTTP(S) validation. MA descriptions already use
+`en`. General Submission samples now default their description language to
+`en`; an optional `language` string in `submission.json` overrides that default
+and is trimmed and lowercased. This labels source text; it does not translate it.
+The two ENC workspace fixtures are distinct axis-aligned envelope rectangles.
+Their existing extents are retained. Paper Chart footprints retain their source
+polygons. Restart the development API to recreate samples from these changes.
+
+Regression coverage includes `PackageGeometryPageTests`,
+`PackageGeometryReadTests`, `PackageSampleTests`,
+`MarineAggregateExtractionTests`, and `InitializationAndSecurityTests`.
+
 ## Binding read performance
 
 `GET /api/v1/dispatcher/bindings?packageId=...` returns active Pipeline

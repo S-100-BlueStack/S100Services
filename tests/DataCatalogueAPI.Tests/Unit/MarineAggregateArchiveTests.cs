@@ -27,7 +27,11 @@ public sealed class MarineAggregateArchiveTests
             Assert.True(ids.Add(parsed.Site.MetaData.RefId!));
             Assert.Null(parsed.Site.MetaData.CreatedUTC);
             Assert.NotNull(parsed.Site.Geometry.Surfaces);
-            Assert.Contains("Unknown", parsed.Site.Descriptions[^1].Description);
+            var description = Assert.Single(parsed.Site.Descriptions);
+            Assert.Equal("en", description.Language);
+            Assert.Contains("Area number:", description.Description);
+            Assert.Contains("Submission source:", description.Description);
+            Assert.Contains("Unknown", description.Description);
             Assert.True(input.CanRead);
             using var archive = ZipFile.OpenRead(files[i]);
             using var text = new StreamReader(archive.GetEntry("areas.geojson")!.Open());
@@ -47,7 +51,10 @@ public sealed class MarineAggregateArchiveTests
         using var input = Archive(files);
         var result = await MarineAggregateArchive.ReadAsync(input, default);
         Assert.Equal(new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero), result.Manifest.RetrievedAtUtc);
-        Assert.Contains("documents/permit.pdf", result.Site.Descriptions[^1].Description);
+        var description = Assert.Single(result.Site.Descriptions);
+        Assert.Contains("Area number:", description.Description);
+        Assert.Contains("2026-11-04T12:00:00", description.Description);
+        Assert.Contains("documents/permit.pdf", description.Description);
     }
 
     [Theory]
