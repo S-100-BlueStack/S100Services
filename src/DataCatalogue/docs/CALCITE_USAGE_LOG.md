@@ -1,3 +1,17 @@
+## DC-UX-03F — Native metadata and long-description disclosure (2026-11-12)
+
+The live Package Assignment Details panel deliberately retains semantic native
+HTML `<dl>`, `<dt>` and `<dd>` nodes for a read-only list of backend-derived
+metadata, rather than converting each short field into a Calcite expansion
+item. A native `<details>`/`<summary>` is created only for descriptions over
+650 visible characters: it provides built-in keyboard and expanded/collapsed
+semantics without extra component registration or private DOM access. Source
+HTML remains behind the existing sanitizer. Field separators and alternating
+surfaces use the existing theme-aware `--dc-*` tokens backed by public Calcite
+colors. No Calcite component or SDK version is changed.
+
+---
+
 ## DC-UX-03E — Package new-tab link (2026-11-12)
 
 The live Packages list uses a native HTML anchor with `target="_blank"` and

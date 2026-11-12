@@ -1,3 +1,17 @@
+## DC-UX-03F — Live Package Assignment Details presentation (2026-11-12)
+
+`features/assignmentPage/ui/renderInformationFields.js` owns the small
+read-only definition-list renderer for assignment details. It receives the
+existing normalized display fields from `createAssignmentPage.js`; the latter
+retains Package selection, session lifecycle and Severity formatting. Live
+fields use theme-aware compact `<dt>`/`<dd>` rows. Only a long Details value
+receives a native `<details>` disclosure, after `renderPackageDescriptions.js`
+has already sanitized the source HTML. Disclosure state never affects saved
+bindings or the map and does not persist across Package selections. Mock
+Feature information continues to use the prior flat list.
+
+---
+
 ## DC-UX-02 — Shared visual language without shared state (2026-11-09)
 
 `public/components/navbar.html` and `src/styles/navbar.css` remain owned by

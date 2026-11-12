@@ -1,6 +1,6 @@
 import { formatLastRefreshedTime } from "./formatLastRefreshedTime.js";
 import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
-import { renderPackageDescriptions } from "./renderPackageDescriptions.js";
+import { renderInformationFields } from "./renderInformationFields.js";
 import { createPipelineRow } from "./createPipelineRow.js";
 import { matchesLoadedPackage } from "../state/matchesLoadedPackage.js";
 import { severityLabel } from "../../../shared/domain/severity.js";
@@ -510,8 +510,10 @@ export function createAssignmentPage({
   }
 
   function renderInformation(feature) {
-    get("information").replaceChildren();
-    if (!feature) return;
+    if (!feature) {
+      get("information").replaceChildren();
+      return;
+    }
 
     const fields = live
       ? [
@@ -530,20 +532,10 @@ export function createAssignmentPage({
           ["Nautical charts", feature.nauticalCharts],
           ["Publication", feature.publication],
         ];
-    const dl = document.createElement("dl");
-    for (const [label, value] of fields) {
-      const dt = document.createElement("dt");
-      dt.textContent = label;
-      const dd = document.createElement("dd");
-      dd.className = "dc-assignment-text";
-      if (live && label === "Details") {
-        renderPackageDescriptions(dd, feature.descriptionEntries, value);
-      } else {
-        dd.textContent = value || "Not provided";
-      }
-      dl.append(dt, dd);
-    }
-    get("information").append(dl);
+    renderInformationFields(get("information"), fields, {
+      live,
+      descriptionEntries: feature.descriptionEntries,
+    });
   }
 
   const unsubscribe = session.subscribe((state) => {

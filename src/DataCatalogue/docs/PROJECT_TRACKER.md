@@ -1,3 +1,33 @@
+## DC-UX-03F — Package Assignment Details hierarchy (candidate, 2026-11-12)
+
+Authoritative baseline: `eaceae8ff8be286c22cd886a05ff14edf3ebce96`
+(user-reported accepted DC-UX-03E commit). The source export contains 49
+Git-blob-verified files and recorded a clean working tree.
+
+- Live Package Assignment Details retains the six existing metadata fields,
+  Package title, and confirmed saved Pipeline/Workspace bindings. Fields remain
+  semantic `<dl>` term/value pairs with compact separators and neutral
+  alternating surfaces. The accepted follow-up gives field titles bold text and
+  a short text-only underline (not a full-width heading divider), using the
+  existing light/dark theme tokens.
+- Details descriptions still pass through the established allowlist sanitizer.
+  Only descriptions exceeding 650 **rendered text characters** gain a native
+  `Full details` disclosure; no raw backend HTML is reparsed, and other fields
+  stay visible without extra interactive controls.
+- Mock Feature assignment, selection/loading/retry lifecycle, draft bindings,
+  Save/reconciliation, routes, map geometry, basemaps, API calls, authentication
+  and dependencies remain unchanged. The disclosure is local UI state only.
+- DC-UX-03F v3 follow-up: the native Assignment map `Retry map` action is hosted
+  in public `MapView.ui`, whose UI subtree may keep a light color scheme. Its
+  application-owned background, icon/text and hover colors now explicitly
+  follow the `html[data-theme]` mode without moving the control, changing its
+  retry lifecycle, or modifying SDK/Calcite internals.
+- Browser verification for light/dark, HTML tables, keyboard activation,
+  loading and selection transitions is required. See
+  [DC_UX_03F_VALIDATION.md](DC_UX_03F_VALIDATION.md).
+
+---
+
 ## DC-UX-03E — Package assignment shortcuts and local refresh time (candidate, 2026-11-12)
 
 Authoritative source baseline: `4419b3af9bf169eb56241f3ed6ab5ac5c9621674`
