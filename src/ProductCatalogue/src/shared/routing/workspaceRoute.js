@@ -31,7 +31,10 @@ export function buildWorkspaceUrl(
   if (names.some((value) => value.includes(","))) return null;
   const base = new URL(String(baseUrl).replace(/\/?$/, "/"), origin);
   const url = new URL(path, base);
-  url.searchParams.set("Datasets", names.join(","));
+  // An empty Product selection has no route data; keep workspace home links query-free.
+  if (names.length > 0) {
+    url.searchParams.set("Datasets", names.join(","));
+  }
   return url.pathname + url.search;
 }
 

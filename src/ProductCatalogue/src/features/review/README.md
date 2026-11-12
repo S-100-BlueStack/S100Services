@@ -167,7 +167,8 @@ control an already opened Review workspace.
 
 ## Public route
 
-The canonical route is `/Review?Datasets=ProductA,ProductB`. See
+The empty workspace uses `/Review`; selected Products use
+`/Review?Datasets=ProductA,ProductB`. See
 [workspace routing](../../shared/routing/README.md) for the shared URL boundary, local picker
 synchronization, and temporary legacy-path compatibility. Content toggles remain local state.
 

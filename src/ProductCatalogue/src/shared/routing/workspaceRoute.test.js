@@ -59,6 +59,48 @@ for (const name of ["analyze", "review"]) {
     assert.deepEqual(parseWorkspaceRoute(url, options).datasetNames, ["ProductB", "ProductA"]);
   });
 
+  test(`${name} omits empty Datasets query values in new links`, () => {
+    for (const names of [[], undefined, [null, "", "   "]]) {
+      assert.equal(buildWorkspaceUrl(name, names, options), path);
+      assert.deepEqual(parseWorkspaceRoute(path, options), { name, datasetNames: [] });
+      assert.equal(
+        buildWorkspaceUrl(name, names, { origin, baseUrl: "/catalogue/" }),
+        `/catalogue${path}`
+      );
+    }
+  });
+
+  test(`${name} removes stale empty Datasets parameters without losing other URL state`, (t) => {
+    const calls = browser(t, `${path}?Datasets=&view=compact#report`);
+    assert.deepEqual(getAppRoute(), { name, datasetNames: [] });
+    assert.equal(setWorkspaceRouteUrl(name, []), true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, "replaceState");
+    assert.equal(calls[0].url, `${path}?view=compact#report`);
+    assert.deepEqual(calls[0].state, {
+      retained: true,
+      route: name,
+      datasetNames: [],
+    });
+    assert.equal(setWorkspaceRouteUrl(name, []), false);
+    assert.equal(calls.length, 1);
+  });
+
+  test(`${name} preserves selected Products across a query-free history entry`, (t) => {
+    const selectedUrl = `${path}?Datasets=A%26B&view=compact#report`;
+    const calls = browser(t, selectedUrl);
+    assert.equal(setWorkspaceRouteUrl(name, [], { replace: false }), true);
+    assert.equal(calls[0].method, "pushState");
+    assert.equal(calls[0].url, `${path}?view=compact#report`);
+    assert.deepEqual(getAppRoute(), { name, datasetNames: [] });
+    // The browser restores the previous URL on Back without asking the route helper to write it.
+    window.location = new URL(selectedUrl, origin);
+    assert.deepEqual(getAppRoute(), { name, datasetNames: ["A&B"] });
+    window.location = new URL(calls[0].url, origin);
+    assert.deepEqual(getAppRoute(), { name, datasetNames: [] });
+    assert.equal(calls.length, 1);
+  });
+
   test(`${name} round trips reserved characters without double decoding`, () => {
     const names = ["A&B", "C+D", "E/F", "G?H#I", "J=K%20", "Æ Ø:;@!$'()[]"];
     const url = buildWorkspaceUrl(name, names, options);
@@ -155,6 +197,8 @@ test("Review picker mutations preserve order without extra history", (t) => {
 
 test("shared navigation helpers used by Collection and Dashboard emit canonical links", (t) => {
   browser(t, "/");
+  assert.equal(buildAnalyzeUrl([]), "/Analyze");
+  assert.equal(buildReviewUrl([]), "/Review");
   assert.equal(buildAnalyzeUrl(["B", "A", "B"]), "/Analyze?Datasets=B%2CA");
   assert.equal(buildReviewUrl(["B", "A", "B"]), "/Review?Datasets=B%2CA");
   // Public integration boundary: producers must delegate serialization to the feature helpers.

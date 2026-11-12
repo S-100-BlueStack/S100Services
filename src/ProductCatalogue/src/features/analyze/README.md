@@ -223,7 +223,8 @@ This UI change does not create an IC-ENC download endpoint.
 
 ## Public route
 
-The canonical route is `/Analyze?Datasets=ProductA,ProductB`. See
+The empty workspace uses `/Analyze`; selected Products use
+`/Analyze?Datasets=ProductA,ProductB`. See
 [workspace routing](../../shared/routing/README.md) for the shared URL boundary and temporary
 legacy-path compatibility. The URL continues to represent enabled Products; disabled list entries
 remain local workspace composition state.
