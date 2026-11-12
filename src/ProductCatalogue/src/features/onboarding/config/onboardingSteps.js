@@ -1,6 +1,6 @@
 // Version only changed routes so existing completions elsewhere stay intact.
 export const ONBOARDING_FLOW_VERSION = 3;
-export const MAIN_ONBOARDING_FLOW_VERSION = 5;
+export const MAIN_ONBOARDING_FLOW_VERSION = 6;
 
 export function getOnboardingFlowVersion(routeName) {
   const normalizedRouteName = String(routeName ?? "main")
@@ -41,7 +41,7 @@ export const ONBOARDING_STEPS = Object.freeze({
       id: "main-product-search",
       title: "Find a Product",
       description:
-        "Use Find product in the navbar to search Products from active map sources. Choose a result to locate the Product on the map and open its popup.",
+        "Open the navbar Product search action to search Products from active map sources. Choose a result to locate the Product on the map and open its popup.",
       selectors: ["[data-onboarding-target='product-search']"],
       placement: "below",
     },

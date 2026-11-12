@@ -1,11 +1,10 @@
 # Main-map geographic Locator
 
-FI-027 places the Locator action immediately beside the always-visible Product search
-in the Main-map navbar, without combining their search or selection lifecycles.
-The light-mode hover contrast correction was accepted at
-`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. Locator icon contrast must remain
-legible in idle, hover, focus and expanded states in both light and dark mode; use
-public Calcite/application tokens rather than private component selectors.
+FI-027 originally placed Locator beside an always-visible Product search. R03B replaces that
+presentation with two icon-only navbar actions while retaining their independent lifecycles.
+The FI-027 light-mode hover correction at `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`
+remains a contrast requirement: the actions must be legible in both themes and all states,
+using public Calcite/application tokens rather than private component selectors.
 
 FI-012 adds a geographic Locator beside the existing Main-map Product search. The two workflows are
 intentionally separate:
@@ -100,45 +99,27 @@ markers.
 
 ## Main-map layout and lifecycle
 
-`mainMapSearchControls.js` is the neutral layout boundary for the two sibling controls. FI-027
-moves the shared search controls into the Main-map navbar before Filters and Data sources. Product
-search remains visible, while the Locator action expands the second field as before. At narrower
-widths, the Main-map navbar wraps without changing the underlying Locator session lifecycle.
+R03B places Product search and Locator in two icon-only navbar actions. Locator uses the Calcite
+`pin-tear` icon with an accessible `Locator` name and an application-owned tooltip. Opening either
+search shows a compact panel below the navbar; the actions themselves do not shift or expand.
+`mainMapSearchControls.js` owns the panel position and delegates popover mutual exclusion to the
+existing `navbarPopoverCoordinator`. Product search and Locator remain independent controllers.
 
-The layout owns independent host slots and the compact inline open/closed presentation. The same neutral boundary
-owns the decorative open/close transition: the Locator slot remains present while its `flex-basis`
-collapses so the action can slide back with the field instead of jumping when Search is removed. The
-layout marks this interval as `closing` and finalizes `closed` on the slot's `transitionend`. A newer
-open state invalidates any older close completion, and reduced-motion users skip directly to the final
-closed layout. The Locator action remains a square Calcite action, centers its icon through the public
-`alignment="center"` contract, and leaves Calcite Action's native internal layout untouched. Application
-CSS owns only the external 32x32 footprint and visuals. The visual border is an inset shadow rather than
-a real host border, and the component uses Calcite's documented action styling tokens for light/dark
-background, hover/press color, text color, and angular corner treatment:
-
-```text
-closed: Product search | Locator action
-open:   Product search | Locator search | Locator action
-```
-
-Product search still owns Product indexing, suggestions, Product navigation, selected-Product
-behavior, and popup opening. Locator still owns geographic Search component lifecycle and geographic
-sources. The layout receives only a neutral Locator open-state flag. It does not import either feature
-implementation.
-
-The app composition layer closes active Filters/Data sources popovers, then invokes Product search's
-public `close()` boundary when Locator opens. This closes an open Product suggestion list without
-clearing its query or coupling Locator to Product-search internals.
+The Locator action is still created by `mainMapLocator.js`. Its optional `onToggle` callback delegates
+the button click to the neutral navbar popover coordinator, while standalone callers can retain the
+original open/close behavior. When a Locator session closes, its Search component is retired before
+the panel is hidden; no result, graphic or in-flight request is retained for the next open. Escape
+restores focus to the Locator action, and outside-click / switching to Product search retires the
+session. All icon and button styling uses public Calcite action properties and application CSS only.
 
 Each Locator open creates a fresh `arcgis-search` session. Closing the Locator first marks that
 session inactive, then sets `autoNavigateDisabled = true`, calls the component's documented `clear()`
 method, resets source-local transient suggestion state, removes the component from the surface, and
-destroys that component instance before publishing the visual closed state. A later response belonging
-to the retired instance therefore cannot navigate even if the neutral shell is still collapsing or a
-new Locator session has already been opened. The empty surface container may remain during the short
-CSS collapse solely to preserve layout geometry; it contains no active Search component or provider
-session. `clear()` is used to clear the term, suggestions, results, result graphics, and menus; FI-012
-does not assume that `clear()` itself cancels an in-flight network request.
+destroys that component instance before publishing the closed state. A later response belonging to
+the retired instance therefore cannot navigate even if a new Locator session has already opened.
+The empty surface remains mounted but hidden when Locator is closed; it contains no active Search
+component or provider session. `clear()` clears the term, suggestions, results, result graphics, and
+menus; FI-012 does not assume that `clear()` itself cancels an in-flight network request.
 
 ArcGIS Search exposes `searchTerm` as writable state, but `results` and `suggestions` are readonly and
 `clear()` is the supported public API that retires the completed Search UI. There is no supported
@@ -164,9 +145,9 @@ Opening a new session enables normal Search auto-navigation again. Replacing sea
 inside the same open Search session remains ArcGIS Search responsibility; FI-012 does not duplicate
 its request-generation handling.
 
-Locator uses the existing Main-map Escape priority through its public `close()` method. Escape close
-restores focus to the Locator action. The controller also listens for outside pointer interactions and
-composed `focusin` events. Focus paths that still contain the Locator host, including focus inside the
+Locator uses the existing Main-map Escape priority through its public `close()` method, coordinated
+with the navbar popover controller. Escape close restores focus to the Locator action. The controller
+also listens for outside pointer interactions and composed `focusin` events. Focus paths that still contain the Locator host, including focus inside the
 `arcgis-search` shadow DOM, remain open; focus moving to Product search or another external control
 closes and clears Locator without stealing focus back. Both document listeners are removed during
 teardown.

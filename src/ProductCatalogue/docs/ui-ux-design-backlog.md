@@ -1,5 +1,11 @@
 # Product Catalogue UI/UX design backlog
 
+### PC-UX-R03B – Search and Locator navbar composition (candidate)
+
+Two icon-only Search and Locator (`pin-tear`) actions open mutually exclusive compact surfaces below
+the Main-map navbar, coordinated with existing Filters/Sources/Preferences panels. No changes to
+Product lookup or geographic provider contracts. Candidate pending local browser acceptance.
+
 **Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
 **Current documentation-audit snapshot:** `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10).
 **Purpose:** A compact index of _current UX decisions, accepted behavior and outstanding design work_. This is not a new manual acceptance report or an instruction to reopen completed tasks. Historical per-iteration plans and detailed original requirements are available in the Git history of this file.

@@ -12,6 +12,8 @@ export function initMainMapProductSearch({
   host,
   isGraphicAllowed,
   subscribeFilterChanges,
+  onDismiss,
+  onProductOpened,
 } = {}) {
   if (!(host instanceof HTMLElement) || !productSearchIndex) return createNoopSearch();
   const form = document.createElement("form");
@@ -42,7 +44,6 @@ export function initMainMapProductSearch({
 
   form.append(input, results);
   host.replaceChildren(form);
-  host.hidden = false;
 
   let isOpen = false;
   let selectedResultId = null;
@@ -183,9 +184,16 @@ export function initMainMapProductSearch({
       return;
     const location = createProductPopupLocation(graphic);
     openProductPopup(view, graphic, location);
+    onProductOpened?.();
   }
   function handleInputKeydown(event) {
     if (event.key === "Escape") {
+      if (onDismiss) {
+        onDismiss();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const closed = closeResults();
       input.blur();
       if (closed) {
@@ -202,6 +210,12 @@ export function initMainMapProductSearch({
   }
   function handleResultsKeydown(event) {
     if (event.key === "Escape") {
+      if (onDismiss) {
+        onDismiss();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       closeResults();
       input.blur();
       event.preventDefault();
@@ -305,6 +319,9 @@ export function initMainMapProductSearch({
   });
   return {
     close: closeResults,
+    focusInput() {
+      if (!destroyed) input.focus({ preventScroll: true });
+    },
     cancelPendingSelection,
     clearSelection() {
       cancelPendingSelection();
@@ -357,10 +374,8 @@ function createProductOption(result, onClick, { showSource = false } = {}) {
   option.className = "main-map-product-search__option";
   option.setAttribute("role", "option");
   option.dataset.searchResultId = result.id;
-  const sourceSuffix = result.sourceLabel ? ` from ${result.sourceLabel}` : "";
   option.textContent =
     showSource && result.sourceLabel ? `${result.label} · ${result.sourceLabel}` : result.label;
-  option.title = `Open ${result.label}${sourceSuffix} on map`;
   option.addEventListener("click", onClick, { once: true });
   return option;
 }
@@ -394,6 +409,7 @@ function getResultOptions(container) {
 function createNoopSearch() {
   return {
     close: () => false,
+    focusInput() {},
     cancelPendingSelection() {},
     clearSelection() {},
     destroy() {},

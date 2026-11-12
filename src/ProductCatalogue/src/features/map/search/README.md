@@ -7,29 +7,29 @@ This workflow remains separate from Locator/FI-012 and from backend or connected
 
 ## Shared Main-map search controls
 
-`mainMapSearchControls.js` mounts independent Product search and Locator hosts at the start of the
-Main-map navbar's right-side controls, before Filters and Data sources. Product search is permanently
-visible; the Locator action expands the adjacent Locator search field on demand. Dashboard, Analyze
-and Review do not mount the Main-map search controls. At narrower widths the Main-map navbar wraps
-so the search and existing controls remain reachable.
+R03B replaces the old permanently visible Product input and expanding inline Locator with two
+icon-only navbar actions: Product search (`search`) and Locator (`pin-tear`). Both controls mount
+before Filters, use the same Calcite action styling as the other navbar actions, and expose accessible
+names and application tooltips. A selected action opens a small, square-edged search surface below
+the navbar. The controls are deliberately optimized for desktop; neither the navbar nor its width
+changes when a search opens.
 
-FI-027 navbar search was accepted at `a0fde73c58a554c58028c2220399e3ae1691121b`.
-The Locator light-mode hover contrast correction followed at
-`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`; application-owned Locator
-foreground/pressed colors must remain legible in both themes. Verify hover, keyboard
-focus and the open Search state when changing shared Calcite navbar styling.
+`mainMapSearchControls.js` owns only the shared layout and popover registration. The existing
+`navbarPopoverCoordinator` enforces mutual exclusion with each other and with Filters, Sources and
+Preferences. A Search action reopens its last query where relevant; Locator still creates and retires
+a fresh ArcGIS Search session per open. Escape returns focus to the owning action. Outside clicks close
+the search and retire any pending Product navigation or Locator session, so stale work cannot act on
+the map. Repositioning uses the navbar's public bounding rectangle on resize/scroll rather than
+private ArcGIS or Calcite layout internals. Onboarding highlights the two action buttons.
 
-The layout boundary owns the decorative Locator slot transition. Closing immediately targets the collapsed layout, keeps the empty application-owned
-Locator slot present while `flex-basis` collapses, and finalizes the layout state on `transitionend`.
-Reopening during that transition cancels the old completion through a generation/state guard. Reduced
-motion finalizes the collapsed layout immediately. None of this keeps an ArcGIS Search session alive.
-Product search still owns its index, suggestions, Product navigation, selected Product behavior, and
-popup opening. Locator owns geographic source configuration and geographic navigation.
+The Product search index, source-aware identity, filter gating, selected-Product popup and request
+generations remain owned by `mainMapProductSearch.js`. Locator retains its independent geographic
+provider and MapView navigation lifecycle. The common layout never dispatches search requests.
 
-The app composition layer closes open Filters/Data sources popovers when either search receives
-focus, and calls Product search's public `close()` boundary when Locator opens so the two suggestion
-surfaces do not overlap. These actions never clear the Product query, change Product selection, or
-create a dependency between the two search implementations.
+The earlier FI-027 permanently visible Product search was accepted at
+`a0fde73c58a554c58028c2220399e3ae1691121b` and its Locator contrast fix at
+`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. R03B deliberately supersedes **only the
+presentation and opening behavior**, not those workflows' source and navigation contracts.
 
 ## Index provider contract
 

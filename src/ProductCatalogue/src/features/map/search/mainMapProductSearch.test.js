@@ -89,7 +89,7 @@ async function flush() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-async function createHarness({ isGraphicAllowed = null } = {}) {
+async function createHarness({ isGraphicAllowed = null, onProductOpened, onDismiss } = {}) {
   const previous = {
     HTMLElement: globalThis.HTMLElement,
     document: globalThis.document,
@@ -167,6 +167,8 @@ async function createHarness({ isGraphicAllowed = null } = {}) {
       filterListeners.add(listener);
       return () => filterListeners.delete(listener);
     },
+    onProductOpened,
+    onDismiss,
   });
   const form = host.children[0];
   const [input, results] = form.children;
@@ -513,6 +515,36 @@ test("typing an exact filtered Product name cannot submit an empty popup", async
     assert.equal(h.popups.length, 0);
     assert.equal(h.input.value, "Product A");
     assert.equal(h.input["aria-expanded"], "true");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("successful Product navigation dismisses the search surface only after the popup opens", async () => {
+  let dismissed = 0;
+  const h = await createHarness({ onProductOpened: () => dismissed++ });
+  try {
+    h.select("A");
+    assert.equal(dismissed, 0);
+    await h.completeNavigation(0);
+    await h.nextFrame();
+    assert.deepEqual(
+      h.popups.map((entry) => entry.id),
+      ["A"]
+    );
+    assert.equal(dismissed, 1);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("Escape delegates to the search surface owner for focus restoration", async () => {
+  let dismissed = 0;
+  const h = await createHarness({ onDismiss: () => dismissed++ });
+  try {
+    h.input.focus();
+    h.input.emit("keydown", { key: "Escape" });
+    assert.equal(dismissed, 1);
   } finally {
     h.cleanup();
   }

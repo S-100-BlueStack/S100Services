@@ -1,123 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  createLocatorLayoutTransitionController,
-  initMainMapSearchControls,
-} from "./mainMapSearchControls.js";
-
-function createTransitionTarget() {
-  const listeners = new Set();
-  return {
-    addEventListener(type, listener) {
-      if (type === "transitionend") listeners.add(listener);
-    },
-    removeEventListener(type, listener) {
-      if (type === "transitionend") listeners.delete(listener);
-    },
-    emit(propertyName = "flex-basis") {
-      for (const listener of [...listeners]) {
-        listener({ target: this, propertyName });
-      }
-    },
-    snapshotListeners() {
-      return [...listeners];
-    },
-    listenerCount() {
-      return listeners.size;
-    },
-  };
-}
-
-function createController({ reducedMotion = false } = {}) {
-  const host = { dataset: {} };
-  const transitionTarget = createTransitionTarget();
-  const controller = createLocatorLayoutTransitionController({
-    host,
-    transitionTarget,
-    prefersReducedMotion: () => reducedMotion,
-  });
-  return { controller, host, transitionTarget };
-}
-
-test("Locator layout close enters collapsing state before transition completion", () => {
-  const { controller, host, transitionTarget } = createController();
-
-  assert.equal(controller.setOpen(true), true);
-  assert.equal(host.dataset.locatorState, "open");
-  assert.equal(host.dataset.locatorOpen, "true");
-
-  assert.equal(controller.setOpen(false), true);
-  assert.equal(controller.getState(), "closing");
-  assert.equal(host.dataset.locatorState, "closing");
-  assert.equal(host.dataset.locatorOpen, "false");
-  assert.equal(transitionTarget.listenerCount(), 1);
-});
-
-test("Locator layout finalizes collapsed state after flex-basis transition", () => {
-  const { controller, host, transitionTarget } = createController();
-
-  controller.setOpen(true);
-  controller.setOpen(false);
-  transitionTarget.emit("width");
-  assert.equal(controller.getState(), "closing");
-
-  transitionTarget.emit("flex-basis");
-  assert.equal(controller.getState(), "closed");
-  assert.equal(host.dataset.locatorState, "closed");
-  assert.equal(host.dataset.locatorOpen, "false");
-  assert.equal(transitionTarget.listenerCount(), 0);
-});
-
-test("rapid close then open prevents stale close completion from collapsing the new state", () => {
-  const { controller, host, transitionTarget } = createController();
-
-  controller.setOpen(true);
-  controller.setOpen(false);
-  const [staleCloseListener] = transitionTarget.snapshotListeners();
-
-  assert.equal(controller.setOpen(true), true);
-  assert.equal(controller.getState(), "open");
-  assert.equal(transitionTarget.listenerCount(), 0);
-
-  staleCloseListener?.({ target: transitionTarget, propertyName: "flex-basis" });
-
-  assert.equal(controller.getState(), "open");
-  assert.equal(host.dataset.locatorState, "open");
-  assert.equal(host.dataset.locatorOpen, "true");
-});
-
-test("repeated close while collapsing is harmless", () => {
-  const { controller, transitionTarget } = createController();
-
-  controller.setOpen(true);
-  assert.equal(controller.setOpen(false), true);
-  assert.equal(controller.setOpen(false), false);
-  assert.equal(controller.getState(), "closing");
-  assert.equal(transitionTarget.listenerCount(), 1);
-});
-
-test("reduced motion finalizes close immediately without waiting for a transition", () => {
-  const { controller, host, transitionTarget } = createController({ reducedMotion: true });
-
-  controller.setOpen(true);
-  assert.equal(controller.setOpen(false), true);
-
-  assert.equal(controller.getState(), "closed");
-  assert.equal(host.dataset.locatorState, "closed");
-  assert.equal(host.dataset.locatorOpen, "false");
-  assert.equal(transitionTarget.listenerCount(), 0);
-});
+import { createNavbarPopoverCoordinator } from "../../../shared/ui/navbarPopoverCoordinator.js";
+import { initMainMapSearchControls } from "./mainMapSearchControls.js";
 
 function createFakeElement(tagName = "div") {
-  const children = [];
+  const attributes = new Map();
+  const listeners = new Map();
+  const styles = new Map();
   const node = {
     tagName,
     id: "",
     className: "",
     dataset: {},
+    hidden: false,
+    active: false,
     parentNode: null,
-    children,
+    children: [],
+    style: {
+      setProperty(name, value) {
+        styles.set(name, value);
+      },
+      getPropertyValue(name) {
+        return styles.get(name);
+      },
+    },
     classList: {
       values: new Set(),
       add(value) {
@@ -130,75 +37,317 @@ function createFakeElement(tagName = "div") {
         return this.values.has(value);
       },
     },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    },
+    getAttribute(name) {
+      return attributes.get(name);
+    },
+    addEventListener(name, handler) {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name).add(handler);
+    },
+    removeEventListener(name, handler) {
+      listeners.get(name)?.delete(handler);
+    },
+    emit(name, event = {}) {
+      for (const handler of listeners.get(name) ?? []) handler({ target: this, ...event });
+    },
     append(...elements) {
       for (const element of elements) {
         element.parentNode = node;
-        children.push(element);
+        node.children.push(element);
       }
     },
     prepend(element) {
       element.parentNode = node;
-      children.unshift(element);
+      node.children.unshift(element);
     },
     remove() {
       if (!node.parentNode) return;
-      const index = node.parentNode.children.indexOf(node);
-      if (index >= 0) node.parentNode.children.splice(index, 1);
+      const i = node.parentNode.children.indexOf(node);
+      if (i >= 0) node.parentNode.children.splice(i, 1);
       node.parentNode = null;
     },
-    addEventListener() {},
-    removeEventListener() {},
+    contains(target) {
+      return node === target || node.children.some((child) => child.contains(target));
+    },
+    getBoundingClientRect() {
+      return { left: node === header ? 0 : 480, bottom: 50 };
+    },
+    focus() {
+      globalThis.document.activeElement = node;
+    },
   };
   return node;
 }
 
-test("mounts Main-map searches before navbar actions, not in a floating map overlay", () => {
-  const previousDocument = globalThis.document;
-  const previousWindow = globalThis.window;
-  const header = createFakeElement();
+let header = null;
+function createHarness() {
+  const oldDocument = globalThis.document;
+  const oldWindow = globalThis.window;
+  header = createFakeElement("header");
   const actions = createFakeElement();
-  const filterAction = createFakeElement("calcite-action");
-  filterAction.id = "filter-button";
-  actions.append(filterAction);
+  const filterButton = createFakeElement("calcite-action");
+  filterButton.id = "filter-button";
+  actions.append(filterButton);
   header.querySelector = (selector) => (selector === ".header-right" ? actions : null);
-  const elements = new Map([["header", header]]);
-  globalThis.document = {
-    getElementById: (id) => elements.get(id) ?? null,
+
+  const events = new Map();
+  const fakeDocument = {
+    activeElement: null,
+    documentElement: { clientWidth: 1440 },
+    getElementById: (id) => (id === "header" ? header : null),
     createElement: createFakeElement,
+    addEventListener(name, listener) {
+      if (!events.has(name)) events.set(name, new Set());
+      events.get(name).add(listener);
+    },
+    removeEventListener(name, listener) {
+      events.get(name)?.delete(listener);
+    },
+    emit(name, event) {
+      for (const listener of events.get(name) ?? []) listener(event);
+    },
   };
-  globalThis.window = { matchMedia: () => ({ matches: false }) };
+  globalThis.document = fakeDocument;
+  const windowEvents = new Map();
+  globalThis.window = {
+    innerWidth: 1440,
+    addEventListener(name, listener) {
+      if (!windowEvents.has(name)) windowEvents.set(name, new Set());
+      windowEvents.get(name).add(listener);
+    },
+    removeEventListener(name, listener) {
+      windowEvents.get(name)?.delete(listener);
+    },
+  };
 
+  const coordinator = createNavbarPopoverCoordinator({ eventTarget: fakeDocument });
+  const controls = initMainMapSearchControls({ navbarPopoverCoordinator: coordinator });
+  const counts = {
+    closeProduct: 0,
+    cancelProduct: 0,
+    focusProduct: 0,
+    openLocator: 0,
+    closeLocator: 0,
+  };
+  const productSearch = {
+    close() {
+      counts.closeProduct++;
+    },
+    cancelPendingSelection() {
+      counts.cancelProduct++;
+    },
+    focusInput() {
+      counts.focusProduct++;
+    },
+  };
+  let locatorOpen = false;
+  const locator = {
+    open() {
+      locatorOpen = true;
+      controls.setLocatorOpen(true);
+      counts.openLocator++;
+    },
+    close() {
+      if (!locatorOpen) return false;
+      locatorOpen = false;
+      controls.setLocatorOpen(false);
+      counts.closeLocator++;
+      return true;
+    },
+    isOpen() {
+      return locatorOpen;
+    },
+  };
+  controls.bind({ productSearch, locator });
+  coordinator.start();
+  return {
+    controls,
+    counts,
+    coordinator,
+    actions,
+    filterButton,
+    document: fakeDocument,
+    cleanup() {
+      controls.destroy();
+      coordinator.destroy();
+      globalThis.document = oldDocument;
+      globalThis.window = oldWindow;
+      header = null;
+    },
+  };
+}
+
+test("mounts two compact search actions before Filters, with closed surfaces", () => {
+  const h = createHarness();
   try {
-    const controls = initMainMapSearchControls();
-    assert.equal(actions.children[0], controls.host);
-    assert.equal(actions.children[1], filterAction);
-    assert.deepEqual(controls.host.children, [controls.productSearchHost, controls.locatorHost]);
-    assert.equal(controls.productSearchHost.dataset.onboardingTarget, "product-search");
+    assert.equal(h.actions.children[0], h.controls.host);
+    assert.equal(h.actions.children[1], h.filterButton);
+    assert.equal(h.controls.productButton.id, "main-map-product-search-button");
+    assert.equal(h.controls.productButton.icon, "search");
+    assert.equal(h.controls.productButton.textEnabled, false);
+    assert.equal(h.controls.productButton.dataset.onboardingTarget, "product-search");
+    assert.deepEqual(h.controls.host.children, [
+      h.controls.productButton,
+      h.controls.locatorHost,
+      h.controls.productSearchHost,
+    ]);
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.controls.host.dataset.locatorOpen, "false");
     assert.equal(header.classList.contains("has-main-map-search"), true);
-
-    controls.setLocatorOpen(true);
-    assert.equal(controls.host.dataset.locatorOpen, "true");
-    controls.destroy();
-    assert.equal(actions.children.includes(controls.host), false);
-    assert.equal(header.classList.contains("has-main-map-search"), false);
   } finally {
-    globalThis.document = previousDocument;
-    globalThis.window = previousWindow;
+    h.cleanup();
+  }
+});
+
+test("Product search opens under navbar and closes any other registered popover", () => {
+  const h = createHarness();
+  try {
+    let otherOpen = false;
+    h.coordinator.register("filters", {
+      open() {
+        otherOpen = true;
+      },
+      close() {
+        otherOpen = false;
+      },
+      isOpen() {
+        return otherOpen;
+      },
+    });
+    h.coordinator.open("filters");
+    assert.equal(otherOpen, true);
+
+    h.controls.productButton.emit("click");
+    assert.equal(otherOpen, false);
+    assert.equal(h.controls.productSearchHost.hidden, false);
+    assert.equal(h.controls.productButton.getAttribute("aria-expanded"), "true");
+    assert.equal(h.counts.focusProduct, 1);
+    assert.equal(h.controls.host.style.getPropertyValue("--pc-main-search-top"), "56px");
+    assert.equal(h.controls.host.style.getPropertyValue("--pc-main-search-left"), "480px");
+
+    h.coordinator.open("filters");
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.counts.cancelProduct, 1);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("switching Product search and Locator keeps only one active search session", () => {
+  const h = createHarness();
+  try {
+    h.controls.productButton.emit("click");
+    h.controls.toggleLocator();
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.counts.cancelProduct, 1);
+    assert.equal(h.counts.openLocator, 1);
+    assert.equal(h.controls.host.dataset.locatorOpen, "true");
+
+    h.controls.productButton.emit("click");
+    assert.equal(h.counts.closeLocator, 1);
+    assert.equal(h.controls.host.dataset.locatorOpen, "false");
+    assert.equal(h.controls.productSearchHost.hidden, false);
+
+    h.controls.toggleLocator();
+    h.controls.toggleLocator();
+    assert.equal(h.counts.openLocator, 2);
+    assert.equal(h.counts.closeLocator, 2);
+    assert.equal(h.controls.host.dataset.locatorOpen, "false");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("Escape closes Product search and restores focus to its action", () => {
+  const h = createHarness();
+  try {
+    h.controls.productButton.emit("click");
+    const event = {
+      key: "Escape",
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      stopPropagation() {},
+    };
+    h.document.emit("keydown", event);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.document.activeElement, h.controls.productButton);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("outside click closes Product search and cancels pending Product navigation", () => {
+  const h = createHarness();
+  try {
+    h.controls.productButton.emit("click");
+    h.document.emit("click", { target: createFakeElement() });
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.counts.cancelProduct, 1);
+    assert.equal(h.counts.closeProduct, 1);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("selection-complete closes the floating Product surface without restoring button focus", () => {
+  const h = createHarness();
+  try {
+    h.controls.productButton.emit("click");
+    h.controls.closeProductAfterSelection();
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.document.activeElement, null);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("hiding a search surface after selection never strands keyboard focus inside it", () => {
+  const h = createHarness();
+  try {
+    const input = createFakeElement("input");
+    h.controls.productSearchHost.append(input);
+    h.controls.productButton.emit("click");
+    input.focus();
+    h.controls.closeProductAfterSelection();
+    assert.equal(h.controls.productSearchHost.hidden, true);
+    assert.equal(h.document.activeElement, h.controls.productButton);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("destroy unregisters search popovers and removes both actions", () => {
+  const h = createHarness();
+  try {
+    h.controls.productButton.emit("click");
+    h.controls.destroy();
+    assert.equal(h.coordinator.getActiveId(), null);
+    assert.equal(h.actions.children.includes(h.controls.host), false);
+    assert.equal(header.classList.contains("has-main-map-search"), false);
+    assert.equal(h.controls.toggleLocator(), false);
+  } finally {
+    h.cleanup();
   }
 });
 
 test("does not mount Main-map search controls on routes without a navbar action host", () => {
-  const previousDocument = globalThis.document;
-  const header = createFakeElement();
-  header.querySelector = () => null;
-  globalThis.document = { getElementById: () => header };
-
+  const oldDocument = globalThis.document;
+  const fakeHeader = createFakeElement();
+  fakeHeader.querySelector = () => null;
+  globalThis.document = { getElementById: () => fakeHeader };
   try {
     const controls = initMainMapSearchControls();
     assert.equal(controls.host, null);
     assert.equal(controls.locatorHost, null);
-    assert.equal(controls.setLocatorOpen(true), undefined);
+    assert.equal(controls.toggleLocator(), false);
+    assert.equal(controls.bind(), false);
   } finally {
-    globalThis.document = previousDocument;
+    globalThis.document = oldDocument;
   }
 });

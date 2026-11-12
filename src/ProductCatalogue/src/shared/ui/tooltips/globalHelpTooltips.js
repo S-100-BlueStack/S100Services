@@ -32,7 +32,7 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: ".main-map-product-search__input",
+    selector: "#main-map-product-search-button",
     title: "Find a product on the map",
     mode: "replace-generic",
   },
@@ -40,11 +40,6 @@ const GLOBAL_HELP_RULES = [
     selector: "#main-map-locator-button",
     title: "Find a place on the map",
     mode: "replace-generic",
-  },
-  {
-    selector: ".main-map-product-search__option",
-    title: (element) => getAuthoredTitle(element) || `Open ${getElementText(element)} on the map`,
-    mode: "fill-empty",
   },
   {
     selector: ".pc-product-picker__input",
@@ -327,6 +322,12 @@ function hasHelpSource(element, rule) {
 }
 
 function isApplicationControl(element, rule) {
+  // The Product search placeholder and suggestions already describe their actions.
+  // Hover help would cover suggestions in the compact search surface.
+  if (element.matches?.(".main-map-product-search__input, .main-map-product-search__option")) {
+    return false;
+  }
+
   // Primary navigation already has a visible, descriptive label. A second
   // hover surface distracts from its full-height click and focus indicator.
   if (element.matches?.(".navbar-title-link")) return false;

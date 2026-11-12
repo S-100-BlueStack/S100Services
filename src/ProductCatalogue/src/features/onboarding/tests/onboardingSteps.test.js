@@ -88,7 +88,7 @@ for (const [route, suffixes] of Object.entries(expected)) {
 }
 
 test("preserves route completion versions and rejects unknown route steps", () => {
-  assert.equal(getOnboardingFlowVersion("main"), 5);
+  assert.equal(getOnboardingFlowVersion("main"), 6);
   for (const route of ["dashboard", "analyze", "review"])
     assert.equal(getOnboardingFlowVersion(route), 3);
   assert.deepEqual(getOnboardingSteps("unknown"), []);
@@ -102,7 +102,7 @@ test("separates Product search and Locator and teaches the accepted direct-selec
   const steps = getOnboardingSteps("main");
   assert.match(
     steps.find((step) => step.id === "main-product-search").description,
-    /Find product in the navbar.*active map sources.*popup/
+    /navbar Product search action.*active map sources.*popup/
   );
   assert.match(
     steps.find((step) => step.id === "main-locator").description,

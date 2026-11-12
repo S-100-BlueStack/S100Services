@@ -32,7 +32,8 @@ test("keeps Calcite Action host styling out of the component's native icon layou
   assert.doesNotMatch(buttonRule, /\bdisplay\s*:/);
   assert.doesNotMatch(buttonRule, /\b(?:align-items|justify-content|padding|margin|transform)\s*:/);
   assert.doesNotMatch(buttonRule, /(^|\n)\s*border\s*:/);
-  assert.match(buttonRule, /inset 0 0 0 1px var\(--pc-border\)/);
+  assert.match(buttonRule, /width:\s*32px/);
+  assert.doesNotMatch(buttonRule, /box-shadow|inset 0 0 0/);
 });
 
 test("wires generic Locator provider-state reset into the Search lifecycle", () => {

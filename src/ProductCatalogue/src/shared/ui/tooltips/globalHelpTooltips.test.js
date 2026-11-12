@@ -75,3 +75,45 @@ test("global help does not restore native titles on application-owned popup cont
   assert.equal(popupControl.hasAttribute("title"), false);
   assert.equal(popupControl.getAttribute("aria-label"), "Discard");
 });
+
+test("Product search help belongs to the navbar action, not the search input", () => {
+  const attributes = new Map([["aria-label", "Search products"]]);
+  const action = {
+    dataset: {},
+    tagName: "CALCITE-ACTION",
+    textContent: "",
+    getAttribute(name) {
+      return attributes.get(name) ?? null;
+    },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+    },
+    matches(selector) {
+      return selector === "#main-map-product-search-button";
+    },
+    closest() {
+      return null;
+    },
+    hasAttribute(name) {
+      return attributes.has(name);
+    },
+  };
+  const searchInput = {
+    hasAttribute() {
+      return false;
+    },
+  };
+  applyGlobalHelpTooltips({
+    querySelectorAll(selector) {
+      if (selector === "#main-map-product-search-button") return [action];
+      if (selector === ".main-map-product-search__input") return [searchInput];
+      return [];
+    },
+  });
+  assert.equal(action.getAttribute("aria-label"), "Search products");
+  assert.equal(action.hasAttribute("data-app-help"), true);
+  assert.equal(searchInput.hasAttribute("title"), false);
+});

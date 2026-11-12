@@ -33,7 +33,7 @@ navbar: the four native route links remain keyboard-accessible in a horizontally
 scrollable first row, while the right-hand controls wrap onto the second row.
 This does not change the desktop full-height links and 3 px indicators. Main Map
 continues to use its dedicated `has-main-map-search` responsive layout, including
-the Product search and Locator.
+the Product search and Locator icon actions.
 
 Verify Preferences and Notifications remain reachable at 320, 390, 500, 650
 and 820 px, that keyboard focus scrolls clipped navigation links into view,

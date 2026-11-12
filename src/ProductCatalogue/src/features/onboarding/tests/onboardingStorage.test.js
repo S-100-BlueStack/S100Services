@@ -29,7 +29,7 @@ test("returns route-specific default state when no introduction preference exist
   );
 });
 test("updates route storage versions for the revised onboarding guidance", () => {
-  assert.equal(getOnboardingStorageKey("main"), "pc.onboarding.main.v5");
+  assert.equal(getOnboardingStorageKey("main"), "pc.onboarding.main.v6");
   assert.equal(getOnboardingStorageKey("dashboard"), "pc.onboarding.dashboard.v3");
   assert.equal(getOnboardingStorageKey("analyze"), "pc.onboarding.analyze.v3");
   assert.equal(getOnboardingStorageKey("review"), "pc.onboarding.review.v3");

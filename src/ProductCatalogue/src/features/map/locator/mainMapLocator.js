@@ -13,6 +13,7 @@ export function initMainMapLocator({
   unavailableReason = "Locator unavailable.",
   onOpen,
   onOpenStateChange,
+  onToggle,
 } = {}) {
   if (!(host instanceof HTMLElement)) return createNoopLocator();
 
@@ -29,6 +30,9 @@ export function initMainMapLocator({
   const surface = document.createElement("div");
   surface.id = LOCATOR_SURFACE_ID;
   surface.className = "main-map-locator__surface";
+  surface.setAttribute("role", "dialog");
+  surface.setAttribute("aria-label", "Locator search");
+  surface.setAttribute("aria-modal", "false");
   host.replaceChildren(surface, button);
   button.setAttribute("aria-controls", LOCATOR_SURFACE_ID);
 
@@ -88,6 +92,10 @@ export function initMainMapLocator({
   };
 
   const handleButtonClick = () => {
+    if (typeof onToggle === "function") {
+      onToggle();
+      return;
+    }
     if (!closeLocator({ restoreFocus: false })) openLocator();
   };
   const handleDocumentPointerDown = (event) => {
@@ -178,8 +186,8 @@ function createLocatorButton({ available, unavailableReason }) {
   const button = document.createElement("calcite-action");
   button.id = LOCATOR_BUTTON_ID;
   button.className = "main-map-locator__button";
-  button.icon = "locator";
-  button.scale = "s";
+  button.icon = "pin-tear";
+  button.scale = "m";
   button.alignment = "center";
   button.text = "Locator";
   button.textEnabled = false;

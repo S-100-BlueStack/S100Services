@@ -122,20 +122,16 @@ export function initMap() {
   const productCollectionTray = initProductCollectionTray({
     getFallbackFocusTargets: () => [getProductCollectionHeaderButton(view), view.container],
   });
-  const mainMapSearchControls = initMainMapSearchControls();
+  const mainMapSearchControls = initMainMapSearchControls({ navbarPopoverCoordinator });
   const productSearch = initMainMapProductSearch({
     view,
     productSearchIndex,
     host: mainMapSearchControls.productSearchHost,
     isGraphicAllowed,
     subscribeFilterChanges: filterService.subscribe,
+    onDismiss: mainMapSearchControls.closeProductFromEscape,
+    onProductOpened: mainMapSearchControls.closeProductAfterSelection,
   });
-  const closeNavbarPopoversOnProductFocus = () =>
-    navbarPopoverCoordinator.closeAll({ restoreFocus: false });
-  mainMapSearchControls.productSearchHost?.addEventListener(
-    "focusin",
-    closeNavbarPopoversOnProductFocus
-  );
   const locatorConfiguration = createConfiguredLocatorSearchSources();
   const locator = initMainMapLocator({
     view,
@@ -145,13 +141,10 @@ export function initMap() {
     navigationOptions: locatorConfiguration.navigationOptions,
     resetSourceState: locatorConfiguration.resetTransientState,
     unavailableReason: locatorConfiguration.unavailableReason,
-    onOpen: () => {
-      navbarPopoverCoordinator.closeAll({ restoreFocus: false });
-      productSearch.cancelPendingSelection();
-      productSearch.close();
-    },
+    onToggle: mainMapSearchControls.toggleLocator,
     onOpenStateChange: mainMapSearchControls.setLocatorOpen,
   });
+  mainMapSearchControls.bind({ productSearch, locator });
   const cleanupKeyboardClose = bindMainMapKeyboardClose({
     view,
     preferencesPanel,
@@ -268,13 +261,9 @@ export function initMap() {
       cleanupOverlapPicker?.();
       cleanupPopupHoverSync?.();
       refreshService.destroy?.();
+      mainMapSearchControls?.destroy?.();
       locator?.destroy?.();
       productSearch?.destroy?.();
-      mainMapSearchControls.productSearchHost?.removeEventListener(
-        "focusin",
-        closeNavbarPopoversOnProductFocus
-      );
-      mainMapSearchControls?.destroy?.();
       filterPanel?.destroy?.();
       dataSourceRuntime.destroy();
       hoverManager.destroy?.();
