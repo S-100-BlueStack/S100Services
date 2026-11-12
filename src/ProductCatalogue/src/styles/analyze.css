@@ -38,6 +38,7 @@ body.pc-analyze-route {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  padding: 10px;
   color: var(--pc-text);
   background: var(--pc-surface);
 }
@@ -54,9 +55,9 @@ body.pc-analyze-route {
   gap: 7px;
   min-width: 0;
   padding: 8px;
-  background: var(--pc-surface-alt);
+  background: var(--pc-surface);
   border: 1px solid var(--pc-border);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .analyze-dataset-form {
@@ -272,15 +273,17 @@ body.pc-analyze-route {
 .analyze-products__actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .analyze-products__action-button {
   padding: 5px 9px;
   color: var(--pc-button-secondary-text);
-  background: var(--pc-button-secondary-bg);
+  background: transparent;
   border: 1px solid var(--pc-button-secondary-border);
-  border-radius: 4px;
+  border-radius: 0;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -289,6 +292,17 @@ body.pc-analyze-route {
 
 .analyze-products__action-button:hover {
   background: var(--pc-button-secondary-bg-hover);
+}
+
+.analyze-workspace-refresh {
+  display: inline-flex;
+  flex: 0 0 1.85rem;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  min-width: 1.85rem;
+  padding: 0;
 }
 
 .analyze-products__list {
@@ -357,10 +371,16 @@ body.pc-analyze-route {
   color: var(--pc-text-muted);
   background: var(--pc-surface-alt);
   border: 1px solid var(--pc-border);
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.analyze-product-card__status.pc-status-chip--colored {
+  background: var(--pc-status-chip-background);
+  border-color: var(--pc-status-chip-border);
+  color: var(--pc-text);
 }
 
 .analyze-product-card__content {

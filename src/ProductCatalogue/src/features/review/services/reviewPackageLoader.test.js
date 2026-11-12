@@ -208,3 +208,74 @@ test("backend mapping changed during optional content reads rejects the complete
   assert.equal(product.resolutionFailed, true);
   assert.equal(product.members, undefined);
 });
+
+test("Review Edition prefers the verified member detail over AOI when top-level is absent", async () => {
+  const h = createReviewPackageFixture();
+  const fetchProduct = async (name) => {
+    const detail = await h.options.fetchProduct(name);
+    const members = detail.data.workUnitMetadata.members;
+    return {
+      ...detail,
+      data: {
+        ...detail.data,
+        edition: "-",
+        workUnitMetadata: {
+          members: {
+            s101: { ...members.s101, edition: 31 },
+            s57: { ...members.s57, edition: 41 },
+          },
+        },
+      },
+    };
+  };
+  const [review] = await loadReviewHistories(packageNames, { ...h.options, fetchProduct });
+  assert.equal(review.loadState, "loaded", review.error);
+  assert.deepEqual(
+    review.members.map((member) => member.edition),
+    [31, 41]
+  );
+});
+
+test("Review Edition leaves absent version unknown when Product detail and AOI provide none", async () => {
+  const h = createReviewPackageFixture();
+  const fetchProduct = async (name) => {
+    const detail = await h.options.fetchProduct(name);
+    const members = detail.data.workUnitMetadata.members;
+    return {
+      ...detail,
+      data: {
+        ...detail.data,
+        edition: "-",
+        workUnitMetadata: {
+          members: {
+            s101: { ...members.s101, edition: undefined },
+            s57: { ...members.s57, edition: undefined },
+          },
+        },
+      },
+    };
+  };
+  const [review] = await loadReviewHistories(packageNames, { ...h.options, fetchProduct });
+  assert.equal(review.loadState, "loaded", review.error);
+  assert.deepEqual(
+    review.members.map((member) => member.edition),
+    [null, null]
+  );
+});
+
+test("Review Edition preserves explicit zero instead of substituting an AOI version", async () => {
+  const h = createReviewPackageFixture();
+  const fetchProduct = async (name) => {
+    const detail = await h.options.fetchProduct(name);
+    return {
+      ...detail,
+      data: { ...detail.data, edition: name === packageNames[0] ? 0 : detail.data.edition },
+    };
+  };
+  const [review] = await loadReviewHistories(packageNames, { ...h.options, fetchProduct });
+  assert.equal(review.loadState, "loaded", review.error);
+  assert.deepEqual(
+    review.members.map((member) => member.edition),
+    [0, 7]
+  );
+});

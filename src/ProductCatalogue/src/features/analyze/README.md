@@ -91,6 +91,23 @@ desktop sidebar remains full width at the existing narrow-screen breakpoint. The
 changes do not alter Product composition, routing, targeted source resolution, workspace freshness,
 manual Refresh, or independent content failure behavior.
 
+## PC-UX-R04 Product status and layout (candidate)
+
+The Product picker, selection, refresh and action ownership remain unchanged. The sidebar
+uses one consistent surface and inset for Product controls, the icon-only Refresh and
+collapse controls, empty/loading messages and metadata cards. The refresh control remains
+an ordinary accessible button carrying the existing `pc-analyze-refresh` event.
+
+Leaf Product cards use the existing ProductState palette for their status chip. The status
+row is not repeated in the body; Edition and Issue date remain available.
+Update is intentionally omitted from the Analyze metadata rows, but continues to
+exist in the backend contract and any historical audit records. The Refresh,
+Open all and Collapse all controls align to the right-hand inset of the panel. When a
+Product reports an error message, the status chip exposes the exact backend message on
+hover and through its accessible label, without hiding the existing Message row.
+An ENC Package heading is a grouping label, not a ProductState or aggregate Package
+status: it remains neutral, and each verified S-101/S-57 member is colored independently.
+
 ## Shared workspace Product picker
 
 Analyze uses the shared source-aware workspace catalog/resolver in:

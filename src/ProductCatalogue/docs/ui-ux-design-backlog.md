@@ -1,11 +1,30 @@
 # Product Catalogue UI/UX design backlog
 
-### PC-UX-R03C – Empty workspace URL canonicalization (candidate)
+### PC-UX-R04 – Analyze/Review information hierarchy (candidate)
+
+This candidate keeps the accepted R01–R03 workflows and changes only presentation:
+Analyze panel spacing, uniform surfaces, right-aligned Refresh/Open all/Collapse all,
+leaf-Product status colors/error hover and omission of the retired Update metadata row.
+Review shows both S-101 and S-57 names inline beside their member labels and renders
+member-specific ProductState/Edition chips, including a verified nested Edition fallback.
+History markers distinguish recognized resulting ProductStates rather than showing
+Refresh for every status transition; record bounds/Update are omitted from Review's
+compact History display. Aggregate ENC Package headings remain neutral. No backend,
+API, map-layer, action, focus or refresh contracts are changed.
+
+The latest accepted R03C commit is `1fe4d24a55b1900883a6ae2fbfbe6ccec7183ef3`.
+Source for this candidate was reconstructed from the verified earlier Git archive and
+accepted R03C replacement files; the exact commit snapshot was not available in this
+environment. Check the candidate's original Git blob preimages against that commit
+before applying. Browser acceptance and local format/check remain outstanding.
+
+### PC-UX-R03C – Empty workspace URL canonicalization (accepted)
 
 `/Analyze` and `/Review` are the canonical empty-workspace URLs; `Datasets=` is retained
 only when selected Products exist. Existing direct Product links, legacy empty-query parsing,
 unrelated query state, hashes and browser-history behavior are preserved. Candidate based on
-`540141e0eb4e29e56590acd60a5d3bb853ed2048`; local browser acceptance pending.
+`540141e0eb4e29e56590acd60a5d3bb853ed2048`; user-tested and committed at
+`1fe4d24a55b1900883a6ae2fbfbe6ccec7183ef3`.
 
 ### PC-UX-R03B – Search and Locator navbar composition (accepted)
 

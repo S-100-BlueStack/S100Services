@@ -1,4 +1,5 @@
-import { getStatusName } from "../../data/stores/statusStore.js";
+import { getStatusIdByName, getStatusName } from "../../data/stores/statusStore.js";
+import { applyProductStatusTone } from "../../../shared/ui/productStatusTone.js";
 import "@esri/calcite-components/components/calcite-icon";
 import "@esri/calcite-components/components/calcite-link";
 import {
@@ -6,11 +7,7 @@ import {
   createProductHistoryStateMessage,
   formatHistoryTimestamp,
 } from "../../timeline/ui/productHistoryRenderers.js";
-import {
-  REVIEW_CONTENT_TYPES,
-  getEnabledReviewContentTypes,
-  getReviewContentTypeDefinitions,
-} from "../domain/reviewProductList.js";
+import { REVIEW_CONTENT_TYPES, getEnabledReviewContentTypes } from "../domain/reviewProductList.js";
 import {
   REVIEW_CONTENT_PRESENTATION_STATE,
   getReviewHistoryPresentation,
@@ -110,11 +107,8 @@ function createProductReviewColumn(productItem, product) {
   title.className = "pc-review-column__title";
   title.textContent = productItem.datasetName;
   title.title = productItem.datasetName;
-  const meta = document.createElement("div");
-  meta.className = "pc-review-column__meta";
-  meta.textContent = createColumnMeta(productItem);
-
-  header.append(title, meta);
+  // The selected content is already visible in the cards and sidebar controls.
+  header.appendChild(title);
 
   const content = document.createElement("div");
   content.className = "pc-review-column__content pc-scrollbar";
@@ -166,35 +160,33 @@ function createPackageMemberSection(productItem, member) {
   header.className = "pc-review-member__header";
   const heading = document.createElement("h3");
   heading.className = "pc-review-member__title";
-  heading.textContent = `${member.memberLabel} · ${member.datasetName}`;
-  const metadata = document.createElement("p");
+  heading.textContent = member.memberLabel;
+  const memberName = document.createElement("span");
+  memberName.className = "pc-review-member__dataset-name";
+  memberName.textContent = member.datasetName;
+  const identity = document.createElement("div");
+  identity.className = "pc-review-member__identity";
+  // Members retain their own name even when it matches the Package column title.
+  identity.append(heading, memberName);
+  const metadata = document.createElement("div");
   metadata.className = "pc-review-member__meta";
-  const status =
+  const status = document.createElement("span");
+  status.className = "pc-review-member__status";
+  status.textContent =
     member.status === null || member.status === undefined
       ? "Unknown"
-      : (getStatusName(member.status) ?? String(member.status));
-  metadata.textContent = `${member.sourceLabel} · Status: ${status} · Edition: ${member.edition ?? "-"} · Update: ${member.update ?? "-"}`;
-  header.append(heading, metadata);
+      : String(getStatusName(member.status) ?? member.status);
+  applyProductStatusTone(status, member.status);
+  const edition = document.createElement("span");
+  edition.className = "pc-review-member__edition";
+  edition.textContent = `Edition ${member.edition ?? "-"}`;
+  metadata.append(status, edition);
+  header.append(identity, metadata);
   section.appendChild(header);
   const types = getEnabledReviewContentTypes(productItem);
   for (const type of types) section.appendChild(createReviewContentCard(member, type));
   if (!types.length) section.appendChild(createContentStateMessage("No review content selected."));
   return section;
-}
-
-function createColumnMeta(productItem) {
-  const enabledContentTypes = getEnabledReviewContentTypes(productItem);
-
-  if (enabledContentTypes.length === 0) {
-    return "No content";
-  }
-  const labelsById = new Map(
-    getReviewContentTypeDefinitions().map((definition) => [definition.id, definition.shortLabel])
-  );
-
-  return enabledContentTypes
-    .map((contentType) => labelsById.get(contentType) ?? contentType)
-    .join(" · ");
 }
 
 function createReviewContentCard(product, contentType) {
@@ -407,7 +399,8 @@ function createCompactHistoryList(events) {
 }
 function createCompactHistoryItem(event) {
   const item = document.createElement("li");
-  item.className = `pc-review-history-list__item pc-review-history-list__item--${normalizeType(event.type)}`;
+  const presentationType = event.presentationType ?? event.type;
+  item.className = `pc-review-history-list__item pc-review-history-list__item--${normalizeType(presentationType)}`;
 
   const details = document.createElement("details");
   details.className = "pc-review-history-event";
@@ -416,7 +409,7 @@ function createCompactHistoryItem(event) {
   summary.className = "pc-review-history-event__summary";
   const marker = document.createElement("span");
   marker.className = "pc-review-history-event__marker";
-  marker.appendChild(createEventIcon(event.type));
+  marker.appendChild(createEventIcon(presentationType, event));
 
   const title = document.createElement("span");
   title.className = "pc-review-history-event__title";
@@ -454,9 +447,9 @@ function createCompactHistoryItem(event) {
 
   return item;
 }
-function createEventIcon(type) {
+function createEventIcon(type, event) {
   const icon = document.createElement("calcite-icon");
-  icon.icon = getEventIcon(type);
+  icon.icon = getEventIcon(type, event);
   icon.scale = "s";
   icon.setAttribute("aria-hidden", "true");
 
@@ -480,7 +473,10 @@ function createEventDetails(details) {
 }
 
 function getVisibleEventDetails(details) {
-  return details.filter((detail) => normalizeDetailLabel(detail.label) !== "owner");
+  // Review already shows the event timestamp. Retain historical transport data,
+  // but omit repetitive record bounds and the retired Update field here.
+  const hidden = new Set(["owner", "from", "to", "update"]);
+  return details.filter((detail) => !hidden.has(normalizeDetailLabel(detail.label)));
 }
 
 function normalizeDetailLabel(label) {
@@ -489,7 +485,7 @@ function normalizeDetailLabel(label) {
     .toLowerCase();
 }
 
-function getEventIcon(type) {
+function getEventIcon(type, event) {
   switch (type) {
     case "freeze":
       return "snow";
@@ -504,9 +500,44 @@ function getEventIcon(type) {
     case "analysis":
       return "magnifying-glass";
     case "status":
-      return "information";
+      return getStatusEventIcon(event);
     default:
       return "clock";
+  }
+}
+
+function getStatusEventIcon(event) {
+  // Legacy History records expose the resulting ProductState in these normalized
+  // detail rows. Use its authoritative lookup; unknown states remain neutral.
+  const status = event.details?.find((detail) => {
+    const label = normalizeDetailLabel(detail.label);
+    return label === "new status" || label === "status";
+  })?.value;
+  const mappedId = getStatusIdByName(status);
+  const numericId =
+    typeof status === "number"
+      ? status
+      : typeof status === "string" && /^\d+$/.test(status.trim())
+        ? Number(status.trim())
+        : null;
+  switch (mappedId ?? numericId) {
+    case 7:
+    case 15:
+      return "x-circle";
+    case 2:
+    case 11:
+    case 12:
+    case 13:
+      return "check";
+    case 6:
+      return "send";
+    case 1:
+    case 8:
+    case 9:
+    case 10:
+      return "clock";
+    default:
+      return "information";
   }
 }
 function normalizeType(type) {

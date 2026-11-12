@@ -71,13 +71,29 @@ export async function loadReviewHistories(
               }
             }
             const attributes = context.data.attributes;
+            const detailMember = detail.data.workUnitMetadata.members[member.key];
+            const aoiMember = attributes.workUnitMetadata?.members?.[member.key];
+            const matchingAoiMember =
+              reviewDatasetKey(aoiMember?.datasetName) === reviewDatasetKey(member.datasetName)
+                ? aoiMember
+                : null;
             return {
               ...product,
               memberKey: member.key,
               memberLabel: member.label,
               status: detail.data.status ?? attributes.status ?? null,
-              edition: detail.data.edition ?? attributes.edition ?? null,
-              update: detail.data.update ?? attributes.update ?? null,
+              edition: firstVersionValue(
+                detail.data.edition,
+                detailMember.edition,
+                matchingAoiMember?.edition,
+                attributes.edition
+              ),
+              update: firstVersionValue(
+                detail.data.update,
+                detailMember.update,
+                matchingAoiMember?.update,
+                attributes.update
+              ),
               issueDate: detail.data.issueDate ?? attributes.issueDate ?? null,
               usageBand: detail.data.usageBand ?? attributes.usageBand ?? null,
               productSpecification: attributes.productSpecification,
@@ -159,4 +175,18 @@ async function loadMember(
     history,
     error,
   };
+}
+
+function firstVersionValue(...values) {
+  // Product-detail transport sometimes uses "-" for missing top-level versions.
+  // Only fall back to metadata already verified for this same Package member.
+  return (
+    values.find(
+      (value) =>
+        value !== null &&
+        value !== undefined &&
+        String(value).trim() !== "" &&
+        String(value).trim() !== "-"
+    ) ?? null
+  );
 }
