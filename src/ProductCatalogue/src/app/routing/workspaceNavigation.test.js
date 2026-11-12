@@ -52,15 +52,15 @@ test("workspace-to-workspace primary navigation remains in the same tab", () => 
 });
 
 test("link policy retains href semantics and scopes new-tab attributes to Main", () => {
-  const link = createLink("/catalogue/Analyze?Datasets=");
+  const link = createLink("/catalogue/Analyze");
 
   applyWorkspaceLinkNavigation(link, { name: "main" }, "analyze");
-  assert.equal(link.href, "/catalogue/Analyze?Datasets=");
+  assert.equal(link.href, "/catalogue/Analyze");
   assert.equal(link.target, "_blank");
   assert.equal(link.rel, "noopener noreferrer");
 
   applyWorkspaceLinkNavigation(link, { name: "review" }, "analyze");
-  assert.equal(link.href, "/catalogue/Analyze?Datasets=");
+  assert.equal(link.href, "/catalogue/Analyze");
   assert.equal(link.target, undefined);
   assert.equal(link.rel, undefined);
 });

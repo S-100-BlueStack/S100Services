@@ -1,10 +1,18 @@
 # Product Catalogue UI/UX design backlog
 
-### PC-UX-R03B – Search and Locator navbar composition (candidate)
+### PC-UX-R03C – Empty workspace URL canonicalization (candidate)
 
-Two icon-only Search and Locator (`pin-tear`) actions open mutually exclusive compact surfaces below
-the Main-map navbar, coordinated with existing Filters/Sources/Preferences panels. No changes to
-Product lookup or geographic provider contracts. Candidate pending local browser acceptance.
+`/Analyze` and `/Review` are the canonical empty-workspace URLs; `Datasets=` is retained
+only when selected Products exist. Existing direct Product links, legacy empty-query parsing,
+unrelated query state, hashes and browser-history behavior are preserved. Candidate based on
+`540141e0eb4e29e56590acd60a5d3bb853ed2048`; local browser acceptance pending.
+
+### PC-UX-R03B – Search and Locator navbar composition (accepted)
+
+Accepted and committed at `540141e0eb4e29e56590acd60a5d3bb853ed2048`. Two icon-only
+Search and Locator (`pin-tear`) actions open mutually exclusive compact surfaces below the
+Main-map navbar, coordinated with existing Filters/Sources/Preferences panels. Product lookup
+and geographic provider contracts are unchanged.
 
 **Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
 **Current documentation-audit snapshot:** `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10).

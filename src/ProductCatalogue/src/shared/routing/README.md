@@ -3,6 +3,8 @@
 Canonical public routes:
 
 ```text
+/Analyze
+/Review
 /Analyze?Datasets=ProductA,ProductB
 /Review?Datasets=ProductA,ProductB
 ```
@@ -26,7 +28,8 @@ There is no sorting or source-name branching.
 The canonical parameter is case-sensitive `Datasets`. One comma-delimited value is serialized with
 `URL` and `URLSearchParams`; the browser may display the separator as `%2C`. Ampersands, plus signs,
 slashes, question marks, hashes, percent signs, spaces, and Unicode are encoded as data. Parsing
-uses the platform decoder exactly once. Missing or empty values yield an empty Product list.
+uses the platform decoder exactly once. New URLs omit `Datasets` when no Products are enabled;
+the path alone is canonical. Legacy `?Datasets=` links remain readable and yield an empty Product list.
 If `Datasets` occurs more than once, the first value wins. When query and legacy path values coexist,
 `Datasets` takes precedence, including an explicitly empty value.
 
