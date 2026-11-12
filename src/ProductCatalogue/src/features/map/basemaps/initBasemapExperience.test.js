@@ -82,7 +82,7 @@ test("MapView basemap controls follow Theme and clean up their own UI and observ
           assert.equal(options.length, 1);
           assert.deepEqual(
             { position: options[0].position, index: options[0].index },
-            { position: "top-left", index: 1 }
+            { position: "top-right", index: 1 }
           );
           this.host = options[0].component;
         },

@@ -16,6 +16,7 @@ function fixture({ loadComponent = async () => {} } = {}) {
   const previousDocument = globalThis.document;
   const created = [];
   const added = [];
+  const moved = [];
   const removed = [];
   const ready = [];
   globalThis.document = {
@@ -43,6 +44,9 @@ function fixture({ loadComponent = async () => {} } = {}) {
       add(items) {
         added.push(...items);
       },
+      move(item) {
+        moved.push(item);
+      },
       remove(item) {
         removed.push(item);
       },
@@ -52,6 +56,7 @@ function fixture({ loadComponent = async () => {} } = {}) {
     created,
     ready,
     added,
+    moved,
     removed,
     view,
     init(options = {}) {
@@ -78,7 +83,8 @@ test("Zoom replaces the built-in widget only after its first component is ready"
     assert.equal(zoom.style.colorScheme, "dark");
     assert.equal(zoom.hidden, true);
     assert.equal(zoom.visualScale, "m");
-    assert.deepEqual(f.added[0], { component: zoom, position: "top-left", index: 0 });
+    assert.deepEqual(f.added[0], { component: zoom, position: "top-right", index: 0 });
+    assert.deepEqual(f.moved, [{ component: "zoom", position: "top-right", index: 0 }]);
     assert.deepEqual(f.removed, [], "retain the original Zoom until replacement is ready");
 
     f.ready[0].resolve();
@@ -262,6 +268,7 @@ test("A failed component import preserves the built-in Zoom", async () => {
     const owner = f.init();
     await f.flush();
     assert.equal(f.created.length, 0);
+    assert.deepEqual(f.moved, [{ component: "zoom", position: "top-right", index: 0 }]);
     assert.deepEqual(f.removed, []);
     assert.equal(warnings.length, 1);
     owner.destroy();

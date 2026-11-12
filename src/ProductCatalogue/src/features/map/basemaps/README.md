@@ -38,11 +38,12 @@ Preferences controls.
 ## Component and cleanup boundaries
 
 `initBasemapExperience.js` registers the selected basemap on the existing map
-and adds its control beneath Zoom using the public
-`view.ui.add([{ component, position: "top-left", index: 1 }])` API.
-`map/controls/initZoomControl.js` now lazily registers `arcgis-zoom` through its
-public `view` property at index zero. The built-in MapView Zoom widget is
-removed with `view.ui.remove("zoom")` only after the replacement component
+and adds its control beneath Zoom in the **top-right** corner using the public
+`view.ui.add([{ component, position: "top-right", index: 1 }])` API.
+`map/controls/initZoomControl.js` moves the built-in Zoom fallback to the
+same corner with public `view.ui.move`, then lazily registers `arcgis-zoom`
+through its public `view` property at index zero. The built-in MapView Zoom
+widget is removed with `view.ui.remove("zoom")` only after the replacement component
 is ready; a failed import/readiness step keeps the working legacy Zoom widget.
 At teardown the application-owned component is removed and destroyed. A
 Theme change creates a fresh `arcgis-zoom` host with the new mode instead of
@@ -113,10 +114,10 @@ both development and the deployed IIS origin. The selector does not intercept or
 
 ## Local verification
 
-1. On Main Map and Analyze, confirm the native Basemap Gallery trigger remains
-   below the Zoom controls and uses approximately the same control size. In
-   both light and dark themes, check the floating panel background, item text,
-   selection states and controls for appropriate contrast. Reload in each mode,
+1. On Main Map and Analyze, confirm Zoom and the native Basemap Gallery trigger
+   appear in the **top-right** corner, with the Gallery below Zoom. Both
+   controls should use approximately the same size. In light and dark themes,
+   check the floating panel background, item text, selection states and controls for appropriate contrast. Reload in each mode,
    switch Light → Dark → Light and Dark → Light → Dark without reloading, and
    confirm both control hover and Gallery panel colors follow the **current**
    theme. Compare the trigger's hover color to the new Zoom component. Click

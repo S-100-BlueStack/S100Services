@@ -13,6 +13,10 @@ export function initZoomControl(
     return { setThemeMode() {}, destroy() {} };
   }
 
+  // The built-in control must share the replacement position while the
+  // component loads or if its chunk fails. UI.move is a public MapView API.
+  view.ui.move?.({ component: "zoom", position: "top-right", index: 0 });
+
   let alive = true;
   let mode = themeMode === "dark" ? "dark" : "light";
   let generation = 0;
@@ -56,7 +60,7 @@ export function initZoomControl(
       // current control remains usable during asynchronous component startup.
       nextZoom.hidden = true;
       pendingZoom = nextZoom;
-      view.ui.add([{ component: nextZoom, position: "top-left", index: 0 }]);
+      view.ui.add([{ component: nextZoom, position: "top-right", index: 0 }]);
       await nextZoom.componentOnReady?.();
       if (!alive || view.destroyed || token !== generation || pendingZoom !== nextZoom) return;
 

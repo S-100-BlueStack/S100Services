@@ -93,6 +93,16 @@ mutual exclusion, pointer/keyboard focus and Escape, Review repeat-selection wit
 and rapid status updates in both themes. SDK 6.0 readiness and Calcite version changes are a
 separate branch/workstream and must not be mixed into the R01A acceptance.
 
+## PC-UX-R03A - map control alignment and compact Preferences (candidate)
+
+Candidate based on `e4a40dd51f7f1c8aaa5c81d1e85a2aadfc56c78c`. Main Map and
+Analyze place Zoom and Basemap Gallery together at the top right, including the
+built-in Zoom fallback while the component loads. Preferences places Start
+introduction alongside Restore defaults in a responsive action row, and Main Map
+Product-search suggestions use normal font weight. The existing behavior,
+keyboard focus, independent Product search/Locator ownership and route navigation
+remain unchanged. Local browser acceptance and developer commit are pending.
+
 ## Accepted interaction boundaries
 
 The details below are preservation constraints. A new task must use current code and feature tests from its explicit commit before modifying them.

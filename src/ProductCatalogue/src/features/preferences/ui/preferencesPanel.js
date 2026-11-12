@@ -131,6 +131,16 @@ export function initPreferencesPanel({
           <div class="pc-preferences-panel__restore-row">
             <button
               type="button"
+              class="pc-preferences-panel__introduction-action"
+              data-preference-action="start-introduction"
+              aria-label="Start introduction"
+              title="Show a short guide to the controls on this page."
+            >
+              <calcite-icon icon="information" scale="s" aria-hidden="true"></calcite-icon>
+              <span>Start introduction</span>
+            </button>
+            <button
+              type="button"
               class="pc-preferences-panel__restore"
               data-preference-action="reset-all"
               title="${
@@ -145,18 +155,6 @@ export function initPreferencesPanel({
             >Restore defaults</button>
           </div>
         </section>
-      <section class="pc-preferences-panel__introduction" aria-label="Introduction">
-        <button
-          type="button"
-          class="pc-preferences-panel__introduction-action"
-          data-preference-action="start-introduction"
-          aria-label="Start introduction"
-          title="Show a short guide to the controls on this page."
-        >
-          <calcite-icon icon="information" scale="s" aria-hidden="true"></calcite-icon>
-          <span>Start introduction</span>
-        </button>
-      </section>
       </div>
     `;
 

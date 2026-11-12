@@ -187,7 +187,10 @@
 
 .pc-preferences-panel__restore-row {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 4px 6px 0;
   padding-top: 6px;
   border-top: 1px solid var(--pc-border);
@@ -201,11 +204,6 @@
   .pc-preferences-panel__theme-default {
     justify-self: start;
   }
-}
-
-.pc-preferences-panel__introduction {
-  padding: 6px;
-  border-top: 1px solid var(--pc-border);
 }
 
 .pc-preferences-panel__introduction-action {

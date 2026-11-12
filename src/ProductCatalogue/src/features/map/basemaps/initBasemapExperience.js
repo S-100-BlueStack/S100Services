@@ -27,9 +27,9 @@ export function initBasemapExperience(view) {
   const host = document.createElement("div");
   host.className = "pc-basemap-controls";
   const selector = createBasemapSelector({ container: host, settings });
-  // Keep the selector immediately below Zoom regardless of whether the SDK
-  // replacement has loaded. The Zoom owner installs at index zero.
-  view.ui.add([{ component: host, position: "top-left", index: 1 }]);
+  // Keep the selector immediately below Zoom on both map routes. The Zoom
+  // owner places the built-in fallback and replacement at index zero.
+  view.ui.add([{ component: host, position: "top-right", index: 1 }]);
   selector.setView(view);
   const zoomControl = initZoomControl(view, { themeMode: settings.getThemeMode() });
   const themeHandle = onThemeChanged((theme) => {

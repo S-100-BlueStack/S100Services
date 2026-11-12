@@ -187,10 +187,12 @@ for (const route of ["analyze", "review", "dashboard", "other-shared-page"]) {
       panel.html,
       /icon="brightness"[\s\S]*id="preferences-dark-mode"[\s\S]*icon="moon"/
     );
-    assert.match(
-      panel.html,
-      /class="pc-preferences-panel__introduction"[\s\S]*data-preference-action="start-introduction"/
-    );
+    const actionRow = panel.html.match(
+      /<div class="pc-preferences-panel__restore-row">([\s\S]*?)<\/div>/
+    )?.[1];
+    assert.ok(actionRow, "the shared Preferences action row is rendered");
+    assert.match(actionRow, /data-preference-action="start-introduction"/);
+    assert.match(actionRow, /data-preference-action="reset-all"/);
     assert.match(panel.html, /title="Show a short guide to the controls on this page\."/);
     assert.doesNotMatch(panel.html, /Show a short guide[^"]*<\/small>/);
     assert.match(panel.html, /<h3 id="preferences-display-heading">Display<\/h3>/);
