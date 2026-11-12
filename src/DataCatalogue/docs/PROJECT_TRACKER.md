@@ -1,3 +1,37 @@
+## DC-SDK-02 — Basemap Styles authorization and Gallery theme (candidate, 2026-11-11)
+
+Authoritative baseline: `6388ee0d60eb72144c2b21a1353c0532295dd880`
+(user-reported accepted DC-UX-03C commit). The user reports that the same
+ArcGIS API key works in ProductCatalogue but DataCatalogue's Human Geography Dark
+validation rejects it, and that Esri Basemap Gallery has stopped following
+application theme changes.
+
+- Source comparison confirmed ProductCatalogue configures
+  `esriConfig.apiKeys.basemapStyles` before map use; DataCatalogue v6 attempted
+  a protected `Basemap.load()` without setting its configured key on the SDK.
+  DC-SDK-02 uses `BasemapStyle.apiKey` for an isolated access probe, then sets
+  `esriConfig.apiKeys.basemapStyles` only after success and the settings
+  lifecycle accepts the result, without assigning
+  `esriConfig.apiKey` or altering Catalogue API auth. An invalid key cannot
+  poison the global Basemap Styles configuration or the normal defaults.
+  The protected style remains unavailable until verification succeeds; a
+  rejected request keeps both maps on usable defaults. External origin/referrer
+  restrictions and actual Esri authorization require browser verification.
+- The Gallery selector previously consumed only the basemap ID from settings
+  notifications, ignoring the provided theme mode. It now explicitly updates
+  `color-scheme` on its MapView UI host, `arcgis-expand`, and
+  `arcgis-basemap-gallery`, both at mount and on live theme changes. This uses
+  Calcite 5.2's public CSS mode contract, not deprecated mode classes or private
+  shadow DOM. No MapView recreation, popup/focus reset, or replacement gallery.
+- Keep saved/manual basemap selection, Preferences defaults, both MapViews,
+  asynchronous generation guards, and existing API/deployment behavior. No
+  dependency, backend, credential-storage or unrelated UI change.
+
+See [DC_SDK_02_VALIDATION.md](DC_SDK_02_VALIDATION.md) for the test matrix and
+unverified browser checks. The original DC-SDK-01 notes below remain historical.
+
+---
+
 ## DC-UX-03C — Pipelines panel hierarchy and bounded Workspace lists (candidate, 2026-11-11)
 
 Authoritative source baseline: `5e3350778e98eb7997a628ea9af00e7878a5cee7`

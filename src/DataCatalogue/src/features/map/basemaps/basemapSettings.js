@@ -19,13 +19,35 @@ export const BASEMAP_OPTIONS = Object.freeze([
 
 const DEFAULTS = Object.freeze({ light: DEFAULT_BASEMAP, dark: DEFAULT_DARK_BASEMAP });
 
-async function verifyProtectedBasemap() {
-  // A configured key is not proof of access. Basemap.load checks the actual
-  // ArcGIS Basemap Styles service before a protected basemap reaches a MapView.
-  const { default: Basemap } = await import("@arcgis/core/Basemap.js");
-  const id = "arcgis/human-geography-dark";
-  const basemap = Basemap.fromId(id) ?? new Basemap({ style: { id } });
+// Probe with a class-scoped key so an invalid credential cannot affect the
+// default basemaps. Only a verified key is shared with later Gallery requests.
+export async function verifyProtectedBasemap(
+  apiKey,
+  {
+    loadModules = () =>
+      Promise.all([
+        import("@arcgis/core/config.js"),
+        import("@arcgis/core/Basemap.js"),
+        import("@arcgis/core/support/BasemapStyle.js"),
+      ]),
+  } = {}
+) {
+  if (typeof apiKey !== "string" || !apiKey.trim()) {
+    throw new Error("A Basemap Styles API key is required.");
+  }
+  const [{ default: esriConfig }, { default: Basemap }, { default: BasemapStyle }] =
+    await loadModules();
+  const key = apiKey.trim();
+  const basemap = new Basemap({
+    style: new BasemapStyle({ id: "arcgis/human-geography-dark", apiKey: key }),
+  });
   await basemap.load();
+  // The owning settings lifecycle decides whether the verified result is still current.
+  return {
+    activate() {
+      esriConfig.apiKeys.basemapStyles = key;
+    },
+  };
 }
 
 function supportedBasemap(id, hasApiKey) {
@@ -63,7 +85,8 @@ export function createBasemapSettings({
   validateProtectedBasemap = verifyProtectedBasemap,
   onUnavailable,
 } = {}) {
-  const hasApiKey = Boolean(apiKey?.trim());
+  const basemapApiKey = typeof apiKey === "string" ? apiKey.trim() : "";
+  const hasApiKey = Boolean(basemapApiKey);
   if (storage === undefined) {
     try {
       storage = globalThis.localStorage;
@@ -123,10 +146,11 @@ export function createBasemapSettings({
     if (!alive || keyStatus !== "unchecked") return;
     keyStatus = "checking";
     void Promise.resolve()
-      .then(() => validateProtectedBasemap())
-      .then((available) => {
-        if (available === false) throw new Error("Basemap access unavailable");
+      .then(() => validateProtectedBasemap(basemapApiKey))
+      .then((verification) => {
+        if (verification === false) throw new Error("Basemap access unavailable");
         if (!alive) return;
+        verification?.activate?.();
         keyStatus = "verified";
         notify();
       })
@@ -141,7 +165,8 @@ export function createBasemapSettings({
         try {
           onUnavailable?.({
             id: "arcgis/human-geography-dark",
-            message: "Human Geography Dark is unavailable. Check the ArcGIS API key.",
+            message:
+              "Human Geography Dark could not be loaded. Check basemap access and connectivity.",
           });
         } catch {
           // Error reporting must not affect the MapView lifecycle.

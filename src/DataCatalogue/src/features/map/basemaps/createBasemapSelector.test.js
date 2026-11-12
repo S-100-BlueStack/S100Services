@@ -8,6 +8,7 @@ class FakeElement extends EventTarget {
     super();
     this.tagName = tagName;
     this.children = [];
+    this.style = {};
   }
   append(...children) {
     this.children.push(...children);
@@ -48,7 +49,12 @@ class LocalBasemapsSource {
 const fakeModules = [null, null, { default: Basemap }, { default: LocalBasemapsSource }];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-function createFixture({ apiKey = "", validateProtectedBasemap, loadModules } = {}) {
+function createFixture({
+  apiKey = "",
+  themeMode = "light",
+  validateProtectedBasemap,
+  loadModules,
+} = {}) {
   const oldDocument = globalThis.document;
   const oldCustomElements = globalThis.customElements;
   const created = [];
@@ -68,6 +74,7 @@ function createFixture({ apiKey = "", validateProtectedBasemap, loadModules } = 
   const container = new FakeElement("div");
   const settings = createBasemapSettings({
     apiKey,
+    themeMode,
     storage: null,
     validateProtectedBasemap: validateProtectedBasemap ?? (async () => true),
   });
@@ -300,6 +307,66 @@ test("custom elements are defined before the gallery is constructed and connecte
     callbacks[0]();
     await f.ready();
     assert.equal(f.gallery.tagName, "arcgis-basemap-gallery");
+  } finally {
+    f.dispose();
+  }
+});
+
+test("Gallery follows theme changes without replacing active components", async () => {
+  const f = createFixture();
+  try {
+    f.selector.setView(f.view("main"));
+    await f.ready();
+    const expand = f.expand;
+    const gallery = f.gallery;
+    select(gallery, "oceans");
+    expand.expanded = true;
+    assert.equal(f.container.style.colorScheme, "light");
+    assert.equal(expand.style.colorScheme, "light");
+    assert.equal(gallery.style.colorScheme, "light");
+
+    f.settings.setThemeMode("dark");
+    assert.equal(f.container.style.colorScheme, "dark");
+    assert.equal(expand.style.colorScheme, "dark");
+    assert.equal(gallery.style.colorScheme, "dark");
+    assert.equal(f.expand, expand);
+    assert.equal(f.gallery, gallery);
+    assert.equal(gallery.activeBasemap.id, "oceans");
+    assert.equal(expand.expanded, true);
+
+    f.settings.setThemeMode("light");
+    assert.equal(expand.style.colorScheme, "light");
+    assert.equal(gallery.style.colorScheme, "light");
+    assert.equal(f.gallery, gallery);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("selector mounts with the latest theme across views and async imports", async () => {
+  let completeLoad;
+  const modulesPending = new Promise((resolve) => {
+    completeLoad = resolve;
+  });
+  const f = createFixture({
+    themeMode: "dark",
+    loadModules: () => modulesPending,
+  });
+  try {
+    f.selector.setView(f.view("main"));
+    f.settings.setThemeMode("light");
+    f.settings.setThemeMode("dark");
+    assert.equal(f.container.style.colorScheme, "dark");
+    completeLoad(fakeModules);
+    await f.ready();
+    assert.equal(f.expand.style.colorScheme, "dark");
+    assert.equal(f.gallery.style.colorScheme, "dark");
+    const original = f.expand;
+    f.selector.setView(f.view("assignment"));
+    await f.ready();
+    assert.notEqual(f.expand, original);
+    assert.equal(f.expand.style.colorScheme, "dark");
+    assert.equal(f.gallery.style.colorScheme, "dark");
   } finally {
     f.dispose();
   }

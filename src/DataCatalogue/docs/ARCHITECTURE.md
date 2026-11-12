@@ -301,7 +301,14 @@ its existing source mode to the list so no mode is guessed from an empty result.
   connected to the retained `MapView` via `view`. Only basemap style requests receive
   the optional browser API key (`esriConfig.apiKeys.basemapStyles`). Per-map center
   and zoom persistence is implemented as an opt-in Preferences setting, disabled
-  by default.
+  by default. The protected Human Geography Dark style is verified separately
+  with the configured, public `BasemapStyle.apiKey`, only assigning it to
+  `esriConfig.apiKeys.basemapStyles` after success and the app-scoped
+  lifecycle accepts the result. Invalid keys cannot affect
+  other default basemaps or unrelated ArcGIS services and the Catalogue API.
+  A failed access probe excludes that style but never blocks MapView startup.
+  The selector listens to settings' theme mode and applies public CSS
+  `color-scheme` to its host, Expand and Gallery, including after View reparenting.
 - Package descriptions are normalized as language-specific entries in the API adapter;
   `renderPackageDescriptions.js` parses inert HTML and copies only allowlisted nodes/attrs
   into the DOM, preserving simple tables and entities. Scripts, forms, SVG, event handler

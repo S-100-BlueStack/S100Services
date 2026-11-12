@@ -1,3 +1,17 @@
+## DC-SDK-02 — Explicit Gallery/Expand color scheme (2026-11-11)
+
+The Esri `arcgis-expand` and `arcgis-basemap-gallery` components remain public
+Map Components attached through `view` to the existing `MapView`. During a live
+theme change, the application updates the standard `color-scheme` CSS property
+on the selector host and both components. This supports Calcite 5.2's
+`light-dark()` theme model even when MapView UI reparents the host or Expand
+renders floating content. The components keep ownership of thumbnail layout,
+selection and keyboard behavior. No private shadow selectors, deprecated
+`calcite-mode-*` classes, internal widget styling or new component framework is
+used. Browser verification is still needed for the actual floating Gallery.
+
+---
+
 ## DC-UX-03C — Compact Pipeline / Workspace groups (2026-11-11)
 
 The main-map Pipelines panel keeps its existing application-owned native checkbox

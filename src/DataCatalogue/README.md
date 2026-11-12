@@ -78,8 +78,29 @@ from the build environment (`.env`, mode-specific files or process variables), a
 changing them requires a rebuild and redeployment of the frontend static assets.
 See [DC-DEPLOY-01 validation](docs/DC_DEPLOY_01_VALIDATION.md) for concrete checks.
 
+### Optional ArcGIS Basemap Styles key
+
+`VITE_ARCGIS_BASEMAP_API_KEY` is an optional **public browser** key for the
+Human Geography Dark basemap. If configured, `features/map/basemaps/basemapSettings.js`
+verifies the style with `BasemapStyle.apiKey`, then uses
+`esriConfig.apiKeys.basemapStyles` only after successful validation and
+a live settings lifecycle accepts the result.
+The protected choice is hidden until validation succeeds; the other three
+basemaps and both maps remain usable
+if validation fails. Never use this value for the Catalogue API or Windows SSO.
+
+A key working on another site does not prove that it is allowed on this site's
+origin: verify the credential's Basemap Styles privileges and referrer restrictions
+in ArcGIS, and examine the failed network request without copying the key into
+logs or support reports. Changing the Vite variable requires rebuilding the app.
+The Esri Gallery and Expand use the active application's `color-scheme` for
+light/dark styling, independently of the selected basemap color palette.
+See [DC-SDK-02 validation](docs/DC_SDK_02_VALIDATION.md) for local checks.
+
 `VITE_*` configuration is public in the browser and read at build/start time. Never store
-passwords, tokens or service credentials there. Restart Vite after changing source mode.
+private credentials, user access tokens or passwords there. The scoped browser-visible
+Basemap Styles API key above must have appropriate privileges and origin restrictions.
+Restart Vite after changing source mode.
 Windows Negotiate is configured in the backend source; actual SSO permissions, origin and
 CORS must be checked locally. Backend in-memory persistence is acceptable for integration
 testing only and may be lost at restart.
@@ -124,3 +145,4 @@ paths must not contain secrets or authentication tokens.
 - [Local verification](docs/DC_API_LOCAL_VERIFICATION.md).
 - [IIS route alignment](docs/DC_DEPLOY_01_VALIDATION.md).
 - [Calcite usage decisions](docs/CALCITE_USAGE_LOG.md).
+- [Basemap authorization and theme checks](docs/DC_SDK_02_VALIDATION.md).

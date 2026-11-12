@@ -20,6 +20,18 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
   let ui = null;
   let modulesPromise = null;
   let currentSelection = settings.getValue();
+  let themeMode = settings.getThemeMode();
+
+  function applyTheme() {
+    // MapView.ui can reparent the selector and Expand can float above the map.
+    // Give both public components an explicit color scheme so the Gallery does
+    // not keep the mode from its first render after an app theme change.
+    container.style.colorScheme = themeMode;
+    if (ui) {
+      ui.expand.style.colorScheme = themeMode;
+      ui.gallery.style.colorScheme = themeMode;
+    }
+  }
 
   function syncSelection() {
     if (!ui?.ready) return;
@@ -48,8 +60,10 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
     syncSelection();
   }
 
-  const unsubscribe = settings.subscribe((value) => {
+  const unsubscribe = settings.subscribe((value, mode) => {
     currentSelection = value;
+    themeMode = mode === "dark" ? "dark" : "light";
+    applyTheme();
     refreshOptions();
     syncSelection();
   });
@@ -108,12 +122,14 @@ export function createBasemapSelector({ container, settings, loadModules = loadB
     expand.mode = "floating";
     expand.visualScale = "m";
     expand.autoDestroyDisabled = true;
+    expand.style.colorScheme = themeMode;
 
     const gallery = document.createElement("arcgis-basemap-gallery");
     gallery.className = "dc-basemap-gallery";
     gallery.label = "Basemaps";
     gallery.headingLevel = 3;
     gallery.autoDestroyDisabled = true;
+    gallery.style.colorScheme = themeMode;
 
     const mounted = {
       expand,
