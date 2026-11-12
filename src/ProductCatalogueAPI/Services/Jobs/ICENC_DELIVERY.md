@@ -15,6 +15,8 @@ Configure the API and worker with the same `SendToIcEnc` settings. Use `Mode=Sim
 
 The worker uploads the files inside `ENC_ROOT` or `S100_ROOT` from the stored candidate ZIP to `<remote root>/<dataset>_<edition>_<update:000>/`. Working YAML and `.vld` files are excluded. It refuses to overwrite an existing delivery directory. Confirm this directory convention with IC-ENC before using Live; the legacy S-57 client sometimes used an `ENC_ROOT` destination and a special update name, while the S-101 convention was absent from that client.
 
+S-57 export packaging accepts the flat and nested compiler layouts used by SevenCs validation and always stores a ZIP with one top-level `ENC_ROOT/`. Existing `ENC_ROOT` contents retain their relative paths; flat output is wrapped without changing dataset, catalogue or support-file bytes. Source and mapped staging YAML are excluded. The exact non-empty outgoing dataset and completed ZIP manifest are checked before returning the artifact, so an invalid layout cannot become Ready and fail only when Send starts. Rebuild candidates created before this packaging fix through the normal export workflow: sending uses the stored immutable ZIP, so redeploying or editing the export folder does not replace an older artifact. No database repair script is required.
+
 POST `/Upload/{datasetName}` with header `X-ICENC-Operator-Key` to queue the ready candidate. Hangfire `/jobs/{id}` reports `AwaitingAcknowledgement` after upload. This is a transfer result, **not** an IC-ENC acceptance. Receipt/acceptance processing is separate.
 
 ## Acknowledgements and publication
