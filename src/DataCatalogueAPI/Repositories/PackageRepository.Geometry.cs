@@ -10,10 +10,22 @@ public partial class PackageRepository
     internal (string Aoi, IReadOnlyList<string> Points, string? Curves, string? Surfaces) ReadPackageGeometry(PackageState state, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
         using var connector = this.createGeodatabase();
+        return this.ReadPackageGeometry(connector, state, true, cancellationToken);
+    }
+
+    /// <summary>Hydrates only the selected page in one dispatcher action and geodatabase scope.</summary>
+    internal IReadOnlyList<(string Aoi, IReadOnlyList<string> Points, string? Curves, string? Surfaces)> ReadPackageGeometries(IReadOnlyList<PackageState> states, bool includeDetails, CancellationToken cancellationToken) {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (states.Count == 0) { return []; }
+        using var connector = this.createGeodatabase();
+        return states.Select(state => this.ReadPackageGeometry(connector, state, includeDetails, cancellationToken)).ToArray();
+    }
+
+    private (string Aoi, IReadOnlyList<string> Points, string? Curves, string? Surfaces) ReadPackageGeometry(Geodatabase connector, PackageState state, bool includeDetails, CancellationToken cancellationToken) {
         var aoi = ReadAoi(connector, state, cancellationToken);
         var points = new List<string>();
         string? curves = null, surfaces = null;
-        if (state.DetailedGeometry is { } details) {
+        if (includeDetails && state.DetailedGeometry is { } details) {
             // Older events may have only PointRef; PointRefs also includes it in current events.
             IEnumerable<string> references = details.PointRefs.Count > 0 ? details.PointRefs : details.PointRef is { } point ? [point] : [];
             foreach (var reference in references.Distinct(StringComparer.OrdinalIgnoreCase)) {

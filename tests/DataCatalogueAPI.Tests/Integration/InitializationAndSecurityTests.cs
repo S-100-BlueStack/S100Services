@@ -50,6 +50,10 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
         Assert.Equal(expected - expected / 2, (await this.PackagesAsync("?hasPipeline=false&pageSize=200")).TotalCount);
         var bindingCounts = pipelines.Items.ToDictionary(pipeline => pipeline.Id, _ => 0);
         foreach (var package in (await this.PackagesAsync("?pageSize=200")).Items) {
+            if (package.Category is "GeneralSubmission" or "MarineAggregateExtraction") {
+                Assert.NotEmpty(package.Descriptions!);
+                Assert.All(package.Descriptions!, description => Assert.Equal("en", description.Language));
+            }
             var geometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/v1/packages/{package.Id}/geometry"))!;
             Assert.True(geometry.Aoi.HasValue, package.Id);
             Assert.NotEmpty(geometry.Aoi.Value.GetProperty("rings").EnumerateArray());

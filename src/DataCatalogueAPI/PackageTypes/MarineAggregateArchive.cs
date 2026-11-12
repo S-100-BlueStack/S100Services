@@ -99,7 +99,8 @@ public sealed record MarineAggregateArchive(MarineAggregateManifest Manifest, Ma
             if (manifest.Documents is { Length: > 0 }) {
                 provenance += "<p>Documents retained in the original ZIP: " + string.Join(", ", manifest.Documents.Select(WebUtility.HtmlEncode)) + "</p>";
             }
-            return new MarineAggregateArchive(manifest, site with { Descriptions = [.. site.Descriptions, new("en", provenance)] });
+            var description = site.Descriptions[0] with { Description = site.Descriptions[0].Description + provenance };
+            return new MarineAggregateArchive(manifest, site with { Descriptions = [description] });
         }
         catch (Exception exception) when (exception is JsonException or DecoderFallbackException or OverflowException) {
             throw new InvalidDataException("Invalid MA archive manifest, GeoJSON or expanded size.", exception);

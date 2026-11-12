@@ -114,7 +114,7 @@ public sealed record MarineAggregateExtraction(PackageMetaData MetaData, Package
     private static string Description(SourceProperties properties) {
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "Unspecified");
         static string Date(DateTimeOffset? value) => value?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) ?? "Unspecified";
-        var html = "<p>Supplied MARIS snapshot; permit dates and status have not been verified against the current register.</p><dl>";
+        var html = "<p>Supplied MARIS snapshot; permit dates and status have not been verified against the current register.</p>";
         foreach (var entry in new[] {
             ("Area number", properties.Number), ("Site name", properties.Name), ("Extraction type", properties.Type),
             ("Subsite", properties.Subsite), ("Is subsite", properties.IsSubsite?.ToString()),
@@ -122,9 +122,8 @@ public sealed record MarineAggregateExtraction(PackageMetaData MetaData, Package
             ("Status in supplied snapshot", properties.Status), ("Remarks", properties.Remarks),
             ("Source deadline value", properties.Deadline?.ToString(CultureInfo.InvariantCulture)), ("Volume ID", properties.VolumeId),
         }) {
-            html += $"<dt>{entry.Item1}</dt><dd>{Encode(entry.Item2)}</dd>";
+            html += $"<p><strong>{entry.Item1}:</strong> {Encode(entry.Item2)}</p>";
         }
-        html += "</dl>";
         if (Uri.TryCreate(properties.LicenseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") {
             html += $"<p><a href=\"{Encode(uri.AbsoluteUri)}\" rel=\"noopener noreferrer\">Source permit</a></p>";
         }

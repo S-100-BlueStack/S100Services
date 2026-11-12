@@ -3,6 +3,7 @@ using ArcGIS.Core.Geometry.Exceptions;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models.V1;
+using DataCatalague.Api.Models;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 using System.Security.Cryptography;
@@ -31,6 +32,37 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
         // even if a new replacement commits while its geometries are being read.
         var geometry = await dispatcher.ExecuteAsync(() => repository.ReadPackageGeometry(stream.State, cancellationToken));
         cancellationToken.ThrowIfCancellationRequested();
+        return Map(geometry);
+    }
+
+    /// <summary>Filters and pages package states before reading their current geometry references.</summary>
+    /// <param name="category">Optional exact category ID.</param>
+    /// <param name="cancellationToken">Cancels filtering and geometry reads.</param>
+    /// <param name="geometry">Optional Esri JSON envelope or polygon with a spatial reference.</param>
+    /// <param name="page">One-based page number.</param>
+    /// <param name="pageSize">Number of packages per page, bounded by the repository.</param>
+    /// <param name="hasPipeline">Optional assignment status filter.</param>
+    /// <param name="pipelineId">Optional exact pipeline ID.</param>
+    /// <param name="includeDetails">Whether to hydrate points, curves and surfaces in addition to the AOI.</param>
+    /// <returns>The matching geometry page and total count before pagination.</returns>
+    public async Task<PagedResponse<PackageGeometryItemResponse>> GetPageAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20, bool? hasPipeline = null, string? pipelineId = null, bool includeDetails = false) {
+        var selected = await repository.GetPackagesAsync(category, cancellationToken, geometry, page, pageSize, hasPipeline, pipelineId);
+        // Keep the captured states, including their current references, throughout this
+        // read. Concurrent replacements retain the rows those states still reference.
+        var geometries = await dispatcher.ExecuteAsync(() => repository.ReadPackageGeometries(selected.Items, includeDetails, cancellationToken));
+        var items = new List<PackageGeometryItemResponse>(selected.Items.Count);
+        for (var index = 0; index < selected.Items.Count; index++) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var state = selected.Items[index];
+            var mapped = Map(geometries[index]);
+            items.Add(new(state.Id!.Value, state.MetaData?.ShortId, mapped.Aoi, mapped.DetailedGeometry));
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return new() { Items = items, Page = page, PageSize = pageSize, TotalCount = selected.TotalCount };
+    }
+
+    private static PackageGeometryResponse Map((string Aoi, IReadOnlyList<string> Points, string? Curves, string? Surfaces) geometry) {
+        // Each group is independent: packages can contain all three simultaneously.
         var hasDetails = geometry.Points.Count > 0 || geometry.Curves is not null || geometry.Surfaces is not null;
         var details = !hasDetails ? null : new PackageDetailedGeometryResponse(geometry.Points.Select(json => JsonSerializer.Deserialize<JsonElement>(json)).ToArray(), ParseJson(geometry.Curves), ParseJson(geometry.Surfaces));
         return new(ParseJson(geometry.Aoi), details);
