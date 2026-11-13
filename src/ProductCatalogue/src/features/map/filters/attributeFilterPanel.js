@@ -45,6 +45,8 @@ export function initAttributeFilterPanel({
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "false");
   panel.setAttribute("aria-label", "Product filters");
+  // The dialog receives initial focus, not its destructive Clear all action.
+  panel.tabIndex = -1;
   document.body.append(panel);
 
   let hasInitializedFilterState = false;
@@ -91,7 +93,9 @@ export function initAttributeFilterPanel({
       positionPanel(button, panel);
 
       if (focusInitial) {
-        panel.querySelector("button, input, calcite-slider")?.focus?.();
+        // Keyboard Tab still reaches Clear all first, but opening the panel must
+        // not show that button's tooltip before the user moves focus to it.
+        panel.focus({ preventScroll: true });
       }
     } else if (restoreFocus) {
       button.focus();

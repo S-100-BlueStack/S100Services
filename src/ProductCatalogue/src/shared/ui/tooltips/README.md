@@ -13,3 +13,26 @@ An `aria-label` on a non-interactive table heading or action-row container is on
 Do not attach custom tooltips to ArcGIS-owned map chrome or reach into ArcGIS/Calcite shadow DOM. The application-owned popup header actions remain explicitly bound through their existing public host controls. Keep accessible labels, `aria-describedby` relationships, keyboard behavior, Escape, focus and reduced-motion behavior intact.
 
 The separate popup Product-error overlay remains selectable and copyable; it is not a short action tooltip.
+
+## R05 onboarding isolation and self-describing controls (candidate)
+
+During an active Introduction tour, `onboardingUi` marks `document.body` with
+`data-pc-onboarding-active` and publishes the application-owned `pc-onboarding-start`
+event. Shared help dismisses a visible tooltip and refuses to show another one
+while the tour is active. The tour removes the marker during ordinary completion,
+Escape, restart and teardown; later pointer or focus interactions can show help
+again. No framework shadow DOM is inspected, and accessible control names are
+not removed.
+
+Visible Dashboard filters and page-size choices and Review content choices
+no longer show redundant hover help. Product names already printed in Dashboard
+and Review likewise have no repeated name tooltip. The existing Review checkbox
+`aria-label` values, unavailable-action reasons, icon-only action help and the
+selectable popup error details remain available.
+
+The reviewed Current-to-Proposed wording is implemented in the R05 v2
+candidate: navbar, search, Filters, Dashboard activity/reports, Analyze/Review,
+Preferences and ordinary popup action help use shorter labels. Visible Product
+option names do not produce redundant hover titles. This change does not
+override backend-supplied disabled reasons, remove accessible names or suppress
+selectable Product-error details. Local browser acceptance remains pending.

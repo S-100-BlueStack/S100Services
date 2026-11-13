@@ -176,3 +176,12 @@ the initially hidden Filter panel. Both handles have descriptive `min-label`/`ma
 names for assistive technology. No filter values, range semantics, persistence, or
 focus/rerender ownership change. The suspected link to the reported Slider exception
 requires browser confirmation; do not claim a verified Calcite library defect.
+
+## PC-UX-R05 initial filter focus (candidate)
+
+Opening Filters moves keyboard focus to the labelled dialog instead of
+its first action, Clear all. This prevents an unsolicited Clear all hover-help
+overlay from appearing as soon as the panel is opened. Clear all remains the
+first available button through Tab, with normal help when the user actually
+focuses or hovers it. Escape and trigger focus restoration are unchanged.
+Local browser acceptance remains pending.

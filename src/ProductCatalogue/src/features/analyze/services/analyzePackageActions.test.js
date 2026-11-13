@@ -197,7 +197,11 @@ test("Send/Accept reflects backend and demo projection and never invents permiss
   h.projection.actionEligibility.send = true;
   assert.equal(await h.action("send").onClick({}), true);
   assert.deepEqual(h.sessions[0].invokes, ["send"]);
-  assert.deepEqual(h.refreshes, [memberNames[0]], "Send refreshes through the Analyze Product owner");
+  assert.deepEqual(
+    h.refreshes,
+    [memberNames[0]],
+    "Send refreshes through the Analyze Product owner"
+  );
   h.projection.primaryAction = "accept";
   h.projection.actionEligibility.accept = true;
   const action = h.action("accept");
@@ -375,25 +379,29 @@ for (const status of [3, 4, 5]) {
     const manager = createAnalyzePackageActions({
       getProduct: (key) => (key === product.workUnit.identityKey ? product : null),
       isEnabled: () => true,
-      createSession: (config) => createPackageActionSession({
-        ...config,
-        demoEnabled: true,
-        notify: {},
-        request: async (url, options) => {
-          requests.push({ url, options });
-          return { success: true, data: {
-            PackageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
-            SourceDatasetName: memberNames[0],
-            Paused: false,
-            CanSend: false,
-            Status: status,
-            EligibleMembers: [
-              { Key: "s101", DatasetName: memberNames[0] },
-              { Key: "s57", DatasetName: memberNames[1] },
-            ],
-          } };
-        },
-      }),
+      createSession: (config) =>
+        createPackageActionSession({
+          ...config,
+          demoEnabled: true,
+          notify: {},
+          request: async (url, options) => {
+            requests.push({ url, options });
+            return {
+              success: true,
+              data: {
+                PackageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+                SourceDatasetName: memberNames[0],
+                Paused: false,
+                CanSend: false,
+                Status: status,
+                EligibleMembers: [
+                  { Key: "s101", DatasetName: memberNames[0] },
+                  { Key: "s57", DatasetName: memberNames[1] },
+                ],
+              },
+            };
+          },
+        }),
     });
     try {
       manager.reconcile([product], [product.datasetName]);

@@ -784,7 +784,7 @@ function createRefreshStatus({ loading, lastSuccessfulLoadAt }) {
   button.dataset.dashboardFocusKey = "refresh";
   button.disabled = loading;
   button.setAttribute("aria-label", "Refresh dashboard");
-  button.title = "Reload dashboard activity for the applied range.";
+  button.title = "Refresh activity";
 
   const icon = document.createElement("calcite-icon");
   icon.icon = "refresh";
@@ -1353,7 +1353,6 @@ function createActivityRow(activity, timeZone) {
   const product = document.createElement("td");
   product.className = "pc-dashboard-activity-table__product";
   product.textContent = activity.datasetName || "-";
-  product.title = activity.datasetName || "";
 
   const activityCell = document.createElement("td");
   activityCell.className = "pc-dashboard-activity-table__activity";
@@ -1471,7 +1470,7 @@ function createDashboardHistoryLink(activity) {
   );
   button.title = button.disabled
     ? "History is not available for this activity."
-    : `Open product history for ${activity.datasetName}.`;
+    : `Open History for ${activity.datasetName}`;
 
   if (!button.disabled) {
     button.addEventListener("click", () => {
@@ -1654,7 +1653,7 @@ function createDashboardHistoryPanel() {
   closeButton.className = "pc-dashboard-history-panel__close";
   closeButton.textContent = "Close";
   closeButton.setAttribute("aria-label", "Close product history");
-  closeButton.title = "Close product history (Esc)";
+  closeButton.title = "Close History (Esc)";
   closeButton.addEventListener("click", closeDashboardHistory);
 
   header.append(titleWrap, closeButton);

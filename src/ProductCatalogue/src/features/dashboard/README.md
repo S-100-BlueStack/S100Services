@@ -392,3 +392,12 @@ The following work remains intentionally outside phase 1:
 - Verify whether Dashboard activity report IDs should map to a specific validation artifact rather than the Product's available artifact history.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
 - Consider richer dashboard charts only if they remain compact and data-oriented.
+
+## PC-UX-R05 tooltip follow-up (candidate)
+
+The visible Product cell, Search/Type/Status/Importance/Reports/Product filter
+controls and Rows per page selector use their existing visible labels and native
+controls without a second hover-help overlay. Screen-reader labels and helpful
+icon-only actions remain unchanged. The approved short copy for Refresh,
+History, IC-ENC and Validation help is included in R05 v2, without changing
+report capability checks or unavailable-state behavior.

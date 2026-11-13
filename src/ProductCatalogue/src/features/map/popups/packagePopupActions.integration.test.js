@@ -990,14 +990,14 @@ test("ordinary Product controls retain Calcite sizing and use the shared popup t
     assert.equal(action.hasAttribute("title"), false);
     action.emit("pointerenter");
     const help = h.doc.body.querySelector(".popup-action-help");
-    assert.equal(help.textContent, "This product cannot be changed right now");
+    assert.equal(help.textContent, "Action currently unavailable");
     assert.equal(
       updateActionButton(action, { ...config, disabledReason: "Updated Product explanation." }),
       true
     );
     assert.equal(action.hasAttribute("title"), false);
     assert.equal(h.doc.body.querySelector(".popup-action-help"), help);
-    assert.equal(help.textContent, "This product cannot be changed right now");
+    assert.equal(help.textContent, "Action currently unavailable");
     action.click();
     assert.equal(h.requests.length, 0);
     action.emit("pointerleave");

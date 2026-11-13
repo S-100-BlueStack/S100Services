@@ -190,7 +190,7 @@ test("global and popup tooltips share one compact overlay with native title clea
     doc.emit("pointerover", { target: filter });
     let tooltip = doc.body.children.at(-1);
     assert.equal(tooltip.getAttribute("role"), "tooltip");
-    assert.equal(tooltip.textContent, "Filter products");
+    assert.equal(tooltip.textContent, "Filters");
     assert.equal(tooltip.className.includes("pc-help-tooltip"), true);
     assert.match(filter.getAttribute("aria-describedby"), /^filter-help pc-help-tooltip-/);
     assert.ok(Number.parseFloat(tooltip.style.left) >= 0, "help stays inside the viewport");
@@ -242,6 +242,40 @@ test("global and popup tooltips share one compact overlay with native title clea
     assert.equal(actionBar.getAttribute("aria-label"), "Popup actions");
     assert.equal(errorTrigger.getAttribute("aria-label"), "S-101: show full error");
 
+    const dashboardFilter = doc.body.appendChild(new Element("select"));
+    dashboardFilter.className = "pc-dashboard-filter__control";
+    dashboardFilter.setAttribute("aria-label", "Status filter");
+    const pageSize = doc.body.appendChild(new Element("select"));
+    pageSize.className = "pc-dashboard-page-size__select";
+    pageSize.setAttribute("aria-label", "Rows per page");
+    const dashboardName = doc.body.appendChild(new Element("td"));
+    dashboardName.className = "pc-dashboard-activity-table__product";
+    dashboardName.setAttribute("title", "Product name");
+    const reviewName = doc.body.appendChild(new Element("span"));
+    reviewName.className = "pc-review-product-list__item-name";
+    reviewName.setAttribute("title", "Product name");
+    const reviewLabel = doc.body.appendChild(new Element("label"));
+    reviewLabel.className = "pc-review-product-list__content-type";
+    reviewLabel.setAttribute("title", "Show History");
+    const reviewCheckbox = reviewLabel.appendChild(new Element("input"));
+    reviewCheckbox.setAttribute("aria-label", "History for Product name");
+    applyGlobalHelpTooltips(doc);
+    for (const target of [
+      dashboardFilter,
+      pageSize,
+      dashboardName,
+      reviewName,
+      reviewLabel,
+      reviewCheckbox,
+    ]) {
+      doc.emit("pointerover", { target });
+      assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 0);
+    }
+    for (const target of [dashboardName, reviewName, reviewLabel]) {
+      assert.equal(target.getAttribute("title"), null);
+    }
+    assert.equal(reviewCheckbox.getAttribute("aria-label"), "History for Product name");
+
     const popup = doc.body.appendChild(new Element("button"));
     popupHelp = bindPopupActionHelp(popup, "Discard the package. This cannot be undone.");
     popup.emit("pointerenter");
@@ -253,6 +287,16 @@ test("global and popup tooltips share one compact overlay with native title clea
       tooltip,
       "global manager does not rebind popup-owned help"
     );
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 1);
+
+    doc.body.setAttribute("data-pc-onboarding-active", "");
+    doc.emit("pc-onboarding-start");
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 0);
+    assert.equal(popup.getAttribute("aria-describedby"), null);
+    popupHelp.show();
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 0);
+    doc.body.removeAttribute("data-pc-onboarding-active");
+    popupHelp.show();
     assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 1);
   } finally {
     popupHelp?.destroy();

@@ -1,9 +1,9 @@
 const ACTION_HELP = Object.freeze({
-  "freeze-feature": "Freeze this product.",
-  "unfreeze-feature": "Unfreeze this product.",
-  "send-immediately": "Send this product to IC-ENC.",
-  export: "Create an export for this product.",
-  rollback: "Cancel the current export.",
+  "freeze-feature": "Freeze product.",
+  "unfreeze-feature": "Unfreeze product.",
+  "send-immediately": "Send to IC-ENC.",
+  export: "Export product.",
+  rollback: "Cancel export.",
   tools: "More actions.",
   analyze: "Open Analyze.",
   review: "Open Review.",
@@ -18,14 +18,14 @@ export function getPopupActionHelpText(config) {
   if (config?.disabled) {
     const reason = String(config.disabledReason ?? "");
     if (/wait until|still running|in progress|in use/i.test(reason)) {
-      return "Wait for the current action to finish.";
+      return "Wait for current action.";
     }
-    if (/unfreeze/i.test(reason)) return "Unfreeze the product first.";
-    if (/in transit/i.test(reason)) return "This product is already in transit.";
-    if (config.id === "rollback") return "No export is available to cancel.";
-    if (config.id === "send-immediately") return "This product cannot be sent right now.";
+    if (/unfreeze/i.test(reason)) return "Unfreeze product first.";
+    if (/in transit/i.test(reason)) return "Product already in transit.";
+    if (config.id === "rollback") return "No export to cancel.";
+    if (config.id === "send-immediately") return "Sending is currently unavailable.";
     if (config.id === "freeze-feature" || config.id === "unfreeze-feature") {
-      return "This product cannot be changed right now.";
+      return "Action currently unavailable.";
     }
     return "This action is not available right now.";
   }

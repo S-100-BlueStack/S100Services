@@ -134,7 +134,7 @@ export function initPreferencesPanel({
               class="pc-preferences-panel__introduction-action"
               data-preference-action="start-introduction"
               aria-label="Start introduction"
-              title="Show a short guide to the controls on this page."
+              title="Start introduction"
             >
               <calcite-icon icon="information" scale="s" aria-hidden="true"></calcite-icon>
               <span>Start introduction</span>
@@ -143,15 +143,7 @@ export function initPreferencesPanel({
               type="button"
               class="pc-preferences-panel__restore"
               data-preference-action="reset-all"
-              title="${
-                context.mapPreferences
-                  ? "Restore map view, filters, Scale hiding, source selection, Basemap and Theme."
-                  : context.basemapSettings
-                    ? "Restore Basemap and Theme to their defaults."
-                    : document.body.classList.contains("pc-dashboard-route")
-                      ? "Restore Theme and Dashboard page size to 50."
-                      : "Restore Theme to Light."
-              } Auto-save choices are unchanged."
+              title="Restore defaults (Auto-save unchanged)"
             >Restore defaults</button>
           </div>
         </section>

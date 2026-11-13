@@ -101,6 +101,10 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
   `;
 
   document.body.append(highlightLayer, popover);
+  // Suppress ordinary hover help for the duration of the tour. The guide owns
+  // this surface and should not compete with tooltips over highlighted controls.
+  document.body.setAttribute("data-pc-onboarding-active", "");
+  document.dispatchEvent(new Event("pc-onboarding-start"));
 
   popover.addEventListener("click", (event) => {
     // Tour interaction is owned by the onboarding surface. Do not let these clicks
@@ -176,6 +180,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
     remove() {
       highlightLayer.remove();
       popover.remove();
+      document.body.removeAttribute("data-pc-onboarding-active");
     },
   };
 }

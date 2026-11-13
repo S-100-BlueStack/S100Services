@@ -61,12 +61,12 @@ target. Main-map Data sources guidance
 describes source enable/disable without inventing a nonzero in-session requirement; FI-031 still
 allows all Product sources to be disabled for the current session.
 
-| Route         | Ordered steps                                                                                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Main map (11) | Navigation; Product search; Locator; Data sources; Filters; hover/normal click/overlap picker; direct-selection shortcuts; popup actions; Product Collection; runtime Preferences; Saved preferences |
-| Dashboard (9) | Navigation; range; Refresh/last-successful time; filters; sorting; paging/page size; activity links/History; runtime Preferences; Saved preferences                                                  |
-| Analyze (7)   | Navigation; Product search/composition; Product enable/remove; Product cards/content; Refresh; runtime Preferences; Saved preferences                                                                |
-| Review (8)    | Navigation; Product composition; workspace Content toggles; per-Product enable/overrides; Refresh; Product columns/scrolling; runtime Preferences; Saved preferences                                 |
+| Route         | Ordered steps                                                                                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main map (10) | Navigation; Product search; Locator; Data sources; Filters; hover/normal click/overlap picker and platform-specific direct-selection shortcuts; popup actions; Product Collection; runtime Preferences; Saved preferences |
+| Dashboard (9) | Navigation; range; Refresh/last-successful time; filters; sorting; paging/page size; activity links/History; runtime Preferences; Saved preferences                                                                       |
+| Analyze (7)   | Navigation; Product search/composition; Product enable/remove; Product cards/content; Refresh; runtime Preferences; Saved preferences                                                                                     |
+| Review (8)    | Navigation; Product composition; workspace Content toggles; per-Product enable/overrides; Refresh; Product columns/scrolling; runtime Preferences; Saved preferences                                                      |
 
 Shortcut wording: **Ctrl-click on Windows/Linux**, **Cmd-click on macOS**. With map focus,
 **Ctrl+Enter / Cmd+Enter** opens only the **current transient highlighted Product**. The compact
@@ -316,3 +316,34 @@ Focused V6 verification in this environment:
   route coverage, the new stable empty-state anchor contract and current workspace guidance wording.
 - Full `npm run check` remains a local verification step because the changed-files candidate does not contain
   the complete unchanged baseline tree.
+
+## PC-UX-R05 v2 correction candidate (browser acceptance pending)
+
+Main Map steps 2 and 3 position their guidance beside the navbar Product search
+and Locator buttons. When the corresponding lightweight search panel is open,
+the card follows the visible panel and stays outside its results. The prior
+`left-center` placement was intentionally removed because it placed guidance
+against the viewport edge rather than beside the target control.
+
+The former shortcut-only step is removed. Step 6 (Inspect Products) explains
+normal click, overlap selection and direct selection. Its text displays only
+`Ctrl-click` / `Ctrl+Enter` on Windows/Linux or `Cmd-click` / `Cmd+Enter` on
+macOS, based on the browser's reported platform. The next step (7) always
+introduces popup actions when a Product popup is open. It highlights only the
+visible, application-owned `.popup-action-bar` inside the rendered popup
+container; if actions have not appeared yet, the tour card remains visible
+without highlighting the entire popup and automatically picks up the action
+row when it renders. Products without an action row remain valid and can
+continue to Product Collection. Product Collection keeps its existing
+missing-control behavior.
+
+Shared hover/focus help is suppressed only while a tour is active, and
+restored on teardown. The previously reviewed shorter tooltip text is now
+implemented, with context-specific backend disabled reasons retained. Other
+route onboarding, Product workflows and route-completion versions remain
+unchanged; the revised guide is available through Preferences without forcing
+a new welcome popup on previously completed users.
+
+Manual desktop browser checks are still required: Main Map steps 2, 3, 6, 7
+and 8, late action-row rendering, popup closure and changing Product identity,
+Filters focus, Analyze/Review tours, keyboard/Escape and both themes.
