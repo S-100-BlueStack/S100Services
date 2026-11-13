@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
@@ -15,6 +16,33 @@ namespace TestProductCatalogueAPI;
 
 public sealed class ExportOperationServiceTests
 {
+    /// <summary>Critical findings are still blocking and preserve diagnostics, but produce Warning rather than Error events.</summary>
+    [Fact]
+    public async Task Logging_CriticalFindingsRemainFailedWithoutErrorEvents() {
+        var repository = new RecordingWorkflowRepository();
+        var logger = new TestLogCapture<ExportOperationService>();
+        var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "critical finding"u8.ToArray());
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Critical = 1 }, [diagnostic], logger: logger);
+        var exception = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, "operator"));
+        Assert.True(exception.IsFindingFailure);
+        Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("failed validation", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level is LogLevel.Error or LogLevel.Critical);
+    }
+
+    /// <summary>Validation service outages remain operational errors, rather than being hidden with returned findings.</summary>
+    [Fact]
+    public async Task Logging_ValidationOutagesRemainErrorEvents() {
+        var repository = new RecordingWorkflowRepository();
+        var logger = new TestLogCapture<ExportOperationService>();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse(), validationFailure: new IOException("Validation service unavailable"), logger: logger);
+        var exception = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, "operator"));
+        Assert.False(exception.IsFindingFailure);
+        Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Error && entry.Exception is ExportValidationException { IsFindingFailure: false });
+    }
+
     [Fact]
     public async Task NewEditionUsesReadOnlySnapshotAndStopsBeforeS128Publication() {
         var products = new RecordingElectronicProductManager();
@@ -420,12 +448,12 @@ public sealed class ExportOperationServiceTests
         Assert.Equal(0, engine.ExportCalls);
     }
 
-    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null, IEncPackageRepository? packages = null, FakeSevenCsService? sevenCs = null) => new(
+    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null, IEncPackageRepository? packages = null, FakeSevenCsService? sevenCs = null, ILogger<ExportOperationService>? logger = null) => new(
         new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, sevenCs ?? new FakeSevenCsService(validation, diagnostics ?? [], validationFailure),
-        new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml", packages);
+        new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml", packages, logger);
 
-    private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml, IEncPackageRepository? packages)
-        : ExportOperationService(productManager, engines, repository, sevenCs, timeProvider, NullLogger<ExportOperationService>.Instance, packages)
+    private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml, IEncPackageRepository? packages, ILogger<ExportOperationService>? logger = null)
+        : ExportOperationService(productManager, engines, repository, sevenCs, timeProvider, logger ?? NullLogger<ExportOperationService>.Instance, packages)
     {
         protected override string SerializeDataset(YamlDataset dataset) => yaml;
     }

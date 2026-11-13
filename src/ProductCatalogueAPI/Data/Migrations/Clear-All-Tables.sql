@@ -1,3 +1,5 @@
+-- Stop API and Worker before clearing job data. Hangfire's Schema row is
+-- installation metadata, not job data, and must survive a development reset.
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
@@ -52,7 +54,10 @@ WHERE t.is_ms_shipped = 0
                   = t.name COLLATE Latin1_General_100_BIN2
           )
       )
-      OR LOWER(s.name) COLLATE Latin1_General_100_BIN2 = N'hangfire'
+      OR (
+          LOWER(s.name) COLLATE Latin1_General_100_BIN2 = N'hangfire'
+          AND LOWER(t.name) COLLATE Latin1_General_100_BIN2 <> N'schema'
+      )
   );
 
 DECLARE @Remaining TABLE (ObjectId int PRIMARY KEY);

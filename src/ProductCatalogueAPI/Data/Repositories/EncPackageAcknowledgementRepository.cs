@@ -231,6 +231,14 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
             package.SourceDatasetName != publication.S101DatasetName)
             throw new InvalidOperationException("The ENC package changed during finalization.");
 
+        // A completed delivery must not carry its source's Pause into the next DPC package.
+        // Lock the control before the tracks, matching the package action transactions.
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE dbo.EncPackageControl WITH (UPDLOCK, HOLDLOCK)
+            SET is_paused = 0, paused_at_utc = NULL, updated_at_utc = @NowUtc
+            WHERE source_dataset_name = @SourceDatasetName;
+            """, new { package.SourceDatasetName, NowUtc = nowUtc }, transaction, cancellationToken: cancellationToken));
+
         foreach (var product in new[] { (DatasetName: publication.S57DatasetName, Specification: "S57", Edition: publication.S57Edition, Update: publication.S57Update),
                                         (DatasetName: publication.S101DatasetName, Specification: "S101", Edition: publication.S101Edition, Update: publication.S101Update) }) {
             var changed = await connection.ExecuteAsync(new CommandDefinition("""

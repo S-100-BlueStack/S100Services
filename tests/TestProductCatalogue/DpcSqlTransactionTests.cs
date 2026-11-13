@@ -228,8 +228,13 @@ public sealed class DpcSqlTransactionTests
         Assert.NotNull(publication);
         Assert.Equal(1, publication.S101Edition);
         Assert.Equal(5, publication.S57Edition);
+        await db.ExecuteAsync("""
+            INSERT dbo.EncPackageControl (source_dataset_name, is_paused, paused_at_utc, updated_at_utc)
+            VALUES (@Source, 1, @At, @At);
+            """, new { At = DpcRunFixture.Utc(11), Source = DpcRunFixture.Source });
         await db.Acknowledgements.CompleteAsync(publication, DpcRunFixture.Utc(12), default);
         await db.Acknowledgements.CompleteAsync(publication, DpcRunFixture.Utc(13), default);
+        Assert.False(await db.QueryAsync<bool>("SELECT is_paused FROM dbo.EncPackageControl WHERE source_dataset_name = @Source;", new { Source = DpcRunFixture.Source }));
 
         Assert.Null(await db.Packages.GetByIdAsync(seed.Package.Id));
         var s101 = await db.Workflows.GetTrackAsync(DpcRunFixture.Source, ProductSpecification.S101);
@@ -532,7 +537,9 @@ internal sealed class DpcSqlDatabase : IAsyncDisposable
             await connection.ExecuteAsync($"CREATE DATABASE [{db._databaseName}];");
         try {
             var directory = Path.Combine(AppContext.BaseDirectory, "DpcMigrations");
-            var files = Directory.GetFiles(directory, "*.sql").OrderBy(Path.GetFileName, StringComparer.Ordinal).ToArray();
+            var files = Directory.GetFiles(directory, "*.sql")
+                .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^\d{3}_.*\.sql$", RegexOptions.CultureInvariant))
+                .OrderBy(Path.GetFileName, StringComparer.Ordinal).ToArray();
             Assert.Contains(files, path => Path.GetFileName(path) == "001_ReplaceJobTableWithProductWorkflow.sql");
             Assert.Contains(files, path => Path.GetFileName(path) == "007_AddIcEncAcknowledgements.sql");
             foreach (var file in files) {

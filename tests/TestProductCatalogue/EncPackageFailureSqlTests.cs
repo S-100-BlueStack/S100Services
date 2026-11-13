@@ -75,6 +75,11 @@ public sealed class EncPackageFailureSqlTests
         await db.ExecuteAsync("UPDATE dbo.ProductIcEncDelivery SET is_simulation = 1 WHERE delivery_id = @Id;", new { Id = deliveryId });
         await db.Mailbox.RecordWorkflowProcessingFailureAsync(message, default);
         Assert.Equal(EncPackageFailureRules.SendFailureMessage, (await db.Packages.GetByIdAsync(seed.Package.Id))!.ErrorMessage);
+        Assert.Equal(EncPackageFailureAcknowledgementStatus.Conflict,
+            (await db.Packages.TryAcknowledgeFailureAsync(DpcRunFixture.Source, seed.Package.Id, "operator", DpcRunFixture.Utc(12))).Status);
+        Assert.NotNull(await db.Packages.GetByIdAsync(seed.Package.Id));
+        // Retire this fixture through an actual provider rejection before checking stale processing.
+        await db.Workflows.SetStateAsync(seed.S101Track, ProductState.Rejected, "provider", DpcRunFixture.Utc(12), "IC_ENC_REJECTED", "Rejected");
         Assert.Equal(EncPackageFailureAcknowledgementStatus.Acknowledged,
             (await db.Packages.TryAcknowledgeFailureAsync(DpcRunFixture.Source, seed.Package.Id, "operator", DpcRunFixture.Utc(12))).Status);
         var replacement = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = DpcRunFixture.Source, S57DatasetName = DpcRunFixture.S57,
@@ -84,12 +89,29 @@ public sealed class EncPackageFailureSqlTests
         Assert.Null((await db.Packages.GetByIdAsync(replacement.Id))!.ErrorMessage);
     }
 
+    /// <summary>SevenCs failures cannot retire candidates or create an acknowledgement cutoff through a direct API retry.</summary>
+    [DpcSqlFact]
+    public async Task ValidationFailureCannotBeAcknowledgedInTheTransaction() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var seed = await db.SeedAsync(deliver: false);
+        await db.Workflows.SetStateAsync(seed.S101Track, ProductState.Error, "validator", DpcRunFixture.Utc(11), "SEVENCS_VALIDATION_FAILED", "Critical findings");
+        await db.Packages.SetErrorAsync(seed.Package.Id, "A candidate failed validation.");
+
+        var result = await db.Packages.TryAcknowledgeFailureAsync(DpcRunFixture.Source, seed.Package.Id, "operator", DpcRunFixture.Utc(12));
+
+        Assert.Equal(EncPackageFailureAcknowledgementStatus.Conflict, result.Status);
+        Assert.NotNull(await db.Packages.GetByIdAsync(seed.Package.Id));
+        Assert.Null(await db.Packages.GetFailureAcknowledgedAtUtcAsync(DpcRunFixture.Source));
+        Assert.Equal(ProductState.Error, (await db.Workflows.GetTrackAsync(DpcRunFixture.Source, ProductSpecification.S101))!.State);
+        Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductExportTrack WHERE candidate_edition IS NOT NULL;"));
+    }
+
     /// <summary>A second-member database failure rolls back the first reset, cutoff, edition floor, replay deletion and package deletion.</summary>
     [DpcSqlFact]
     public async Task SecondMemberFailureRollsBackTheCompleteAcknowledgement() {
         await using var db = await DpcSqlDatabase.CreateAsync();
         var seed = await db.SeedAsync(deliver: false);
-        await db.Packages.SetErrorAsync(seed.Package.Id, "Send failed");
+        await db.Workflows.SetStateAsync(seed.S101Track, ProductState.Rejected, "provider", DpcRunFixture.Utc(11), "IC_ENC_REJECTED", "Rejected");
         await db.Packages.MarkReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8));
         await db.ExecuteAsync("""
             CREATE TRIGGER dbo.FailFailureAcknowledgement ON dbo.ProductExportTrack AFTER UPDATE AS
@@ -103,14 +125,18 @@ public sealed class EncPackageFailureSqlTests
         Assert.Equal(DpcRunFixture.Utc(8), (await db.Packages.GetReplayBoundsAsync())[DpcRunFixture.Source]);
     }
 
-    /// <summary>A preflight failure exposes acknowledgement without forging delivery states; stale jobs cannot mark a retired package.</summary>
+    /// <summary>A preflight failure cannot retire candidates; an eventual provider rejection can, and stale jobs cannot reopen them.</summary>
     [DpcSqlFact]
-    public async Task ExactSendFailureCanBeAcknowledgedAndCannotReappearFromAnOldJob() {
+    public async Task ExactSendFailureRequiresRejectionBeforeAcknowledgement() {
         await using var db = await DpcSqlDatabase.CreateAsync();
         var seed = await db.SeedAsync(deliver: false);
         EncPackageSendMember[] members = [new(DpcRunFixture.Source, ProductSpecification.S101, 1, 0, seed.S101Revision), new(DpcRunFixture.S57, ProductSpecification.S57, 5, 0, seed.S57Revision)];
         await db.Packages.RecordSendFailureAsync(DpcRunFixture.Source, seed.Package.Id, members, "job-1");
         Assert.NotNull((await db.Packages.GetByIdAsync(seed.Package.Id))!.ErrorMessage);
+        Assert.Equal(EncPackageFailureAcknowledgementStatus.Conflict,
+            (await db.Packages.TryAcknowledgeFailureAsync(DpcRunFixture.Source, seed.Package.Id, "operator", DpcRunFixture.Utc(12))).Status);
+        Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductExportTrack WHERE candidate_edition IS NOT NULL;"));
+        await db.Workflows.SetStateAsync(seed.S101Track, ProductState.Rejected, "provider", DpcRunFixture.Utc(12), "IC_ENC_REJECTED", "Rejected");
         Assert.Equal(EncPackageFailureAcknowledgementStatus.Acknowledged,
             (await db.Packages.TryAcknowledgeFailureAsync(DpcRunFixture.Source, seed.Package.Id, "operator", DpcRunFixture.Utc(12))).Status);
         await db.Packages.RecordSendFailureAsync(DpcRunFixture.Source, seed.Package.Id, members, "job-1");

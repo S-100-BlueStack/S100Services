@@ -645,8 +645,17 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         }
     }
 
+    /// <summary>Records a failed member and package; returned findings are warnings while persistence and execution failures remain errors.</summary>
+    /// <param name="package">Exact shared snapshot that owns the candidate.</param>
+    /// <param name="datasetName">Failed member's canonical dataset name.</param>
+    /// <param name="specification">Failed member's product specification.</param>
+    /// <param name="exception">Original validation or operational failure.</param>
+    /// <returns>Completion after durable failure handling.</returns>
     private async Task RecordCandidateFailureAsync(EncPackage package, string datasetName, ProductSpecification specification, Exception exception) {
-        logger.LogError(exception, "ENC candidate failed. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
+        if (exception is ExportValidationException { IsFindingFailure: true } findings)
+            logger.LogWarning("ENC candidate failed validation. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}. ValidationMessage: {ValidationMessage}", package.Id, datasetName, findings.PublicMessage);
+        else
+            logger.LogError(exception, "ENC candidate failed. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
         var message = exception is ExportValidationException validation
             ? PublicExportError.Message(validation.Code, validation.PublicMessage)
             : PublicExportError.GenericMessage;

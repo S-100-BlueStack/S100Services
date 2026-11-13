@@ -290,6 +290,11 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         _ => throw new ArgumentOutOfRangeException(nameof(revisionType), revisionType, null)
     };
 
+    /// <summary>Preserves failed workflow state while separating expected validation findings from operational faults in logs.</summary>
+    /// <param name="trackId">Track whose candidate failed.</param>
+    /// <param name="user">Audit owner of the export attempt.</param>
+    /// <param name="exception">Original failure; persistence faults remain separate Error events.</param>
+    /// <returns>Completion after the best-effort state write and classified log event.</returns>
     private async Task SetErrorBestEffortAsync(Guid trackId, string? user, Exception exception) {
         try {
             var (errorCode, errorMessage) = GetPublicFailure(exception);
@@ -299,7 +304,10 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             _logger.LogError(persistenceException, "Failed to persist Error state after candidate export failure. TrackId: {TrackId}.", trackId);
         }
 
-        _logger.LogError(exception, "Candidate export failed and defaulted to Error. TrackId: {TrackId}.", trackId);
+        if (exception is ExportValidationException { IsFindingFailure: true } validation)
+            _logger.LogWarning("Candidate export failed validation and defaulted to Error. TrackId: {TrackId}. DatasetName: {DatasetName}. ValidationMessage: {ValidationMessage}", trackId, validation.DatasetName, validation.PublicMessage);
+        else
+            _logger.LogError(exception, "Candidate export failed and defaulted to Error. TrackId: {TrackId}.", trackId);
     }
 
     private static (string Code, string Message) GetPublicFailure(Exception exception) => exception switch {

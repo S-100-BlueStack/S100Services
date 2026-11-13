@@ -60,6 +60,9 @@ public sealed class ExportValidationException : Exception
     /// <summary>Gets the stable failure code persisted with workflow history.</summary>
     public string Code { get; }
 
+    /// <summary>True only for returned validation findings; service outages and incomplete validation remain operational errors.</summary>
+    public bool IsFindingFailure => Code == "SEVENCS_VALIDATION_FAILED";
+
     /// <summary>Gets the safe message returned to clients and shown in product details.</summary>
     public string PublicMessage { get; }
 

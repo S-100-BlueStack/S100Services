@@ -402,7 +402,9 @@ https://iho.int/uploads/user/pubs/standards/s-57/10CRC.pdf
 
 Suggested commit: Replace legacy IC-ENC email import and add isolated response simulation
 
-Failed workflow packages now expose CanAcknowledge in GetActions. Use the manage
+Only workflow packages with a current IC-ENC Rejected candidate expose
+CanAcknowledge in GetActions. SevenCs validation, send and processing errors
+alone do not qualify; validation failures retain Discard and Pause/Hold. Use the manage
 policy and POST /electronicproducts/packages/{sourceName}/acknowledge with the
 exact packageId to retire both failed candidates to Idle. This includes mixed
 accepted/rejected or InTransit/rejected pairs. It records a per-source UTC cutoff
@@ -410,4 +412,11 @@ and preserves retired edition floors in existing history. DPC waits for a later
 source change and builds higher new editions for both members; it cannot replay
 the acknowledged failure window. HTTP 200 returns the original acknowledgedAtUtc
 on retries; a healthy pending pair or successful publication remains protected.
+When both candidates are accepted, worker response processing immediately awaits
+S-128 publication and the SQL completion transaction in both simulation and live
+modes. Completion clears both candidates to Idle, resets the delivery Pause and
+removes the active package, preserving the replay bound for later DPC edits.
+API-only manual acknowledgements queue this worker operation. Failed completion
+keeps durable acceptance pending for queued/DPC recovery; the two stores are not
+one atomic transaction.
 No GUI, schema migration or recovery SQL is supplied for this action.
