@@ -97,6 +97,12 @@ public sealed class ProductExportTrackRecord
     /// <summary>Gets or sets the edition known to be publicly distributed.</summary>
     public int PublishedEdition { get; set; }
 
+    /// <summary>Highest candidate edition retired by an operator's failed-package acknowledgement; never a published version.</summary>
+    public int? AcknowledgedEdition { get; set; }
+
+    /// <summary>Next new edition, above both the published version and every acknowledged failed candidate.</summary>
+    public int NextNewEdition => checked(Math.Max(PublishedEdition, AcknowledgedEdition ?? 0) + 1);
+
     /// <summary>Gets or sets the update known to be publicly distributed.</summary>
     public int PublishedUpdate { get; set; }
 

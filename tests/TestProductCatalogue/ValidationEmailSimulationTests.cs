@@ -6,19 +6,16 @@ using System.Text.Json;
 
 namespace TestProductCatalogue;
 
-/// <summary>Verifies all sample variants, mode isolation and durable randomness without SQL, Graph or ArcGIS.</summary>
+/// <summary>Verifies unconditional acceptance, mode isolation and durable captured evidence without SQL, Graph or ArcGIS.</summary>
 public sealed class ValidationEmailSimulationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 10, 9, 0, 0, TimeSpan.Zero);
 
-    /// <summary>Exercises each of the eight observed variants for both actual ENC naming formats.</summary>
+    /// <summary>Former random selections cannot influence simulation for either format.</summary>
     public static IEnumerable<object[]> Templates() {
-        foreach (var specification in new[] { "S57", "S101" }) {
-            yield return [specification, 0, 0, ValidationEmailOutcome.Registered];
-            for (var index = 0; index < 4; index++) yield return [specification, 1, index, ValidationEmailOutcome.Rejected];
-            yield return [specification, 2, 0, ValidationEmailOutcome.Accepted];
-            for (var index = 0; index < 2; index++) yield return [specification, 3, index, ValidationEmailOutcome.PendingConditions];
-        }
+        foreach (var specification in new[] { "S57", "S101" })
+            for (var selection = 0; selection < 4; selection++)
+                yield return [specification, selection, 0, ValidationEmailOutcome.Accepted];
     }
 
     /// <summary>Synthetic reports use real candidate identity, edition/update and verifiable format-specific CRCs.</summary>
@@ -26,7 +23,8 @@ public sealed class ValidationEmailSimulationTests
     [MemberData(nameof(Templates))]
     public void EveryTemplateUsesNormalParserAndExactMatcher(string specification, int selection, int variant, ValidationEmailOutcome expected) {
         var candidate = Candidate(specification);
-        var generator = new IcEncResponseGenerator(new RandomSequence(selection, variant));
+        var random = new RandomSequence(selection, variant);
+        var generator = new IcEncResponseGenerator(random);
         var message = generator.Generate(candidate, "send:123", Now);
         var parsed = new IcEncReportParser().Parse(message);
         Assert.True(message.IsSimulation);
@@ -34,6 +32,7 @@ public sealed class ValidationEmailSimulationTests
         Assert.Contains("SIMULATION", message.Body);
         Assert.True(parsed.CanMatch, string.Join(',', parsed.Diagnostics));
         Assert.Equal(expected, parsed.Outcome);
+        Assert.Equal(0, random.Calls);
         Assert.Equal(candidate.Edition, parsed.Edition);
         Assert.Equal(candidate.Update, parsed.Update);
         Assert.Equal(candidate.Specification, parsed.Specification);
@@ -76,7 +75,7 @@ public sealed class ValidationEmailSimulationTests
         var saved = await service.GenerateAsync("DK5OTERP", "S57", 3, 1, "send:123", default);
         Assert.Same(store.Records["send:123"], saved);
         Assert.Equal(ValidationEmailOutcome.Accepted, new IcEncReportParser().Parse(saved!.Message).Outcome);
-        Assert.Equal(1, random.Calls);
+        Assert.Equal(0, random.Calls);
         Assert.Single(store.Records);
     }
 

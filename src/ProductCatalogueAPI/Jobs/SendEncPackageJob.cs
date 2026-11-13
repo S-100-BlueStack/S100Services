@@ -1,11 +1,13 @@
 using Hangfire;
+using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Services.Jobs;
 using Hangfire.Server;
 using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI.Jobs;
 
 /// <summary>Commits the complete simulated package before making generated replies available for processing.</summary>
-public sealed class SendEncPackageJob(IValidationEmailSimulatedSend simulation, ILogger<SendEncPackageJob> logger)
+public sealed class SendEncPackageJob(IValidationEmailSimulatedSend simulation, ILogger<SendEncPackageJob> logger, IEncPackageRepository? packages = null)
 {
     /// <summary>SQL rechecks both exact candidates and atomically reserves the pair; a local failure leaves both unsent.</summary>
     /// <param name="sourceName">S-101 package source.</param>
@@ -24,8 +26,15 @@ public sealed class SendEncPackageJob(IValidationEmailSimulatedSend simulation, 
             logger.LogInformation("Simulated ENC package pair committed and responses captured. JobId: {JobId}. PackageId: {PackageId}. DatasetName: {DatasetName}", jobId, packageId, sourceName);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (EncPackageSendUnavailableException) { throw; } // An obsolete/duplicate queued request is not a new send failure.
         catch (Exception exception) {
             logger.LogError(exception, "Simulated ENC package send failed. JobId: {JobId}. PackageId: {PackageId}. DatasetName: {DatasetName}", jobId, packageId, sourceName);
+            if (packages is not null) {
+                try { await packages.RecordSendFailureAsync(sourceName, packageId, members, jobId, CancellationToken.None); }
+                catch (Exception persistenceException) {
+                    logger.LogError(persistenceException, "ENC send failure could not be recorded. PackageId: {PackageId}. JobId: {JobId}", packageId, jobId);
+                }
+            }
             throw;
         }
     }

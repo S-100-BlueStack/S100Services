@@ -66,6 +66,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
         if (replay.TryGetValue(sourceName, out var replayFrom) && replayFrom < scanFrom) scanFrom = replayFrom;
         scanFrom = DpcArchiveBaseline.Clamp(scanFrom, baselineUtc);
+        var acknowledged = (await packages.GetFailureAcknowledgedAtUtcAsync(sourceName, cancellationToken)).GetValueOrDefault();
+        if (acknowledged > scanFrom) scanFrom = acknowledged;
         var changes = (await _products.GetPendingEditsAsync(scanFrom, now)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
         cancellationToken.ThrowIfCancellationRequested();
         if (changes.Values.Any(change => change.EditDate is null || change.EditDate.Value.Kind != DateTimeKind.Utc || change.EditDate > now.AddMinutes(5)))
@@ -76,7 +78,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         string yaml;
         try {
             var required = changes.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted).Select(pair => pair.Key).ToArray();
-            var snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, checked(s101.PublishedEdition + 1), 0, required, cancellationToken);
+            var snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, s101.NextNewEdition, 0, required, cancellationToken);
             yaml = snapshot.Dataset.Serialize();
             if (snapshot.SuppressedMetadataSurfaces.Count > 0)
                 yaml = EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(yaml, snapshot.SuppressedMetadataSurfaces);
@@ -157,13 +159,17 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         foreach (var incomplete in (await packages.GetActiveAsync(incompleteNames, cancellationToken, includeSourceYaml: false)).Values)
             await packages.MarkReplayAsync(incomplete.SourceDatasetName, incomplete.ScanFromUtc, cancellationToken);
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
-        var snapshotAttempts = await packages.GetSnapshotAttemptBoundsAsync(cancellationToken);
+        var acknowledgedBounds = await packages.GetFailureAcknowledgementBoundsAsync(cancellationToken);
+        var snapshotAttempts = (await packages.GetSnapshotAttemptBoundsAsync(cancellationToken))
+            .Where(entry => !acknowledgedBounds.TryGetValue(entry.Key, out var acknowledged) || entry.Value > acknowledged)
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
         IArchiveChangeScan? archiveHistory = null;
         if (_products is IArchiveScanSource archiveSource) {
             var inspectedNames = pending.Keys.Concat(replay.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             var historicalPackages = await packages.GetActiveAsync(inspectedNames, cancellationToken, includeSourceYaml: false);
             var lowerBounds = historicalPackages.Values.SelectMany(package => new[] { package.ScanFromUtc, package.DetectedAtUtc })
                 .Concat(replay.Values)
+                .Concat(acknowledgedBounds.Where(entry => inspectedNames.Contains(entry.Key, StringComparer.OrdinalIgnoreCase) && entry.Value < scanStartedUtc).Select(entry => entry.Value))
                 .Concat(snapshotAttempts.Where(entry => inspectedNames.Contains(entry.Key, StringComparer.OrdinalIgnoreCase)).Select(entry => entry.Value))
                 .Append(sinceUtc);
             var comparisonBounds = lowerBounds.Select(bound => DpcArchiveBaseline.Clamp(DateTime.SpecifyKind(bound, DateTimeKind.Utc), baselineUtc)).Distinct().ToArray();
@@ -238,7 +244,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                             continue;
                         }
                     }
-                    pending[entry.Key] = await ScanSourceAsync(group.Key, entry.Key);
+                    var lowerBound = acknowledgedBounds.TryGetValue(entry.Key, out var acknowledged) && acknowledged > group.Key ? acknowledged : group.Key;
+                    pending[entry.Key] = lowerBound >= scanStartedUtc ? new(StringComparer.OrdinalIgnoreCase) : await ScanSourceAsync(lowerBound, entry.Key);
                 }
             }
         }
@@ -265,6 +272,14 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         if (latestArchiveEditUtc > workerUtc.AddMinutes(5))
             throw new InvalidOperationException($"S-101 archive edit at {latestArchiveEditUtc:O} is more than five minutes ahead of the worker clock at {workerUtc:O}. Check the archive timestamp zone and clock synchronization; DPC preserved its watermark and candidates.");
 
+        // Acknowledgement consumes source edits through its own cutoff, even if the
+        // global watermark or an old replay cursor still points to the failed window.
+        foreach (var sourceName in pending.Keys.ToArray()) {
+            if (!acknowledgedBounds.TryGetValue(sourceName, out var acknowledged)) continue;
+            var lowerBound = replay.GetValueOrDefault(sourceName, sinceUtc);
+            if (acknowledged > lowerBound) lowerBound = acknowledged;
+            pending[sourceName] = lowerBound >= scanStartedUtc ? new(StringComparer.OrdinalIgnoreCase) : await ScanSourceAsync(lowerBound, sourceName);
+        }
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);
         // Finish every required archive inspection before destructive candidate work. A later
         // replay/history scan failure must not leave earlier sources partly replaced.
@@ -292,6 +307,13 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             if (s57Lock is null)
                 throw new InvalidOperationException($"Mapped S-57 export lock for '{s57Name}' is busy. The scan watermark was preserved.");
 
+            var freshAcknowledged = (await packages.GetFailureAcknowledgedAtUtcAsync(sourceName, cancellationToken)).GetValueOrDefault();
+            if (freshAcknowledged > acknowledgedBounds.GetValueOrDefault(sourceName)) {
+                // An API acknowledgement committed after this scan captured its history.
+                // Defer rather than applying stale candidates or undeclared archive bounds.
+                await packages.MarkReplayAsync(sourceName, freshAcknowledged, cancellationToken);
+                continue;
+            }
             if (snapshotAttempts.TryGetValue(sourceName, out var attemptedThroughUtc) &&
                 (!active.TryGetValue(sourceName, out var attemptedPackage) || attemptedPackage.DetectedAtUtc <= attemptedThroughUtc)) {
                 var newerChanges = await ScanSourceAsync(attemptedThroughUtc, sourceName);
@@ -304,6 +326,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var packageChanges = changes;
             var snapshotChanges = changes;
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
+            DateTime? acknowledgedReplayFromUtc = freshAcknowledged > packageScanFromUtc ? packageScanFromUtc : null;
+            if (freshAcknowledged > packageScanFromUtc) packageScanFromUtc = freshAcknowledged;
             EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
                 if (!string.Equals(existing.S57DatasetName, s57Name, StringComparison.OrdinalIgnoreCase))
@@ -322,7 +346,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 snapshotChanges = await ScanSourceAsync(existing.DetectedAtUtc, sourceName);
                 if (!snapshotChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
                     await RecoverIncompletePackageAsync(existing, cancellationToken);
-                    retiredReplay[sourceName] = packageScanFromUtc;
+                    retiredReplay[sourceName] = acknowledgedReplayFromUtc ?? packageScanFromUtc;
                     continue;
                 }
                 packageChanges = await ScanSourceAsync(existing.ScanFromUtc, sourceName);
@@ -352,11 +376,11 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 .Select(path => new ProductChange(pair.Key, pair.Value.Code, path, pair.Value.EditDate ?? scanStartedUtc, pair.Value.Deleted))).ToArray();
             if (summaryChanges.Length == 0 && previous is null) {
                 await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
-                retiredReplay[sourceName] = packageScanFromUtc;
+                retiredReplay[sourceName] = acknowledgedReplayFromUtc ?? packageScanFromUtc;
                 logger.LogInformation("ENC archive rows had no net feature difference. SourceDatasetName: {SourceDatasetName}.", sourceName);
                 continue;
             }
-            var edition = checked(s101.PublishedEdition + 1);
+            var edition = s101.NextNewEdition;
             var requiredFeatures = packageChanges.Concat(snapshotChanges)
                 .Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted)
                 .Select(pair => pair.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -413,6 +437,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     var published = await _products.GetLatestDatasetYAML(sourceName, s101.PublishedEdition);
                     priorMembers.UnionWith(EncSnapshotMembership.FindSourceMembers(published.yaml, possibleRemovals));
                 }
+                if (previous is null && (s101.AcknowledgedEdition ?? 0) >= s101.PublishedEdition && s101.AcknowledgedEdition.HasValue) {
+                    // A partially accepted pair can contain features absent from the last
+                    // published S-128 edition. Their later removal still requires a new pair.
+                    var retiredYaml = await packages.GetAcknowledgedSourceYamlAsync(sourceName, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(retiredYaml)) priorMembers.UnionWith(EncSnapshotMembership.FindSourceMembers(retiredYaml, possibleRemovals));
+                }
             }
             bool IsRelevant(KeyValuePair<string, ArchiveRow> change) =>
                 EncChangeSummary.GetObservedAttributePaths(change.Value).Count > 0 &&
@@ -430,7 +460,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 if (previous is null) await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
                 if (previous is not null && !await DiscardForRefreshAsync(previous, cancellationToken))
                     continue;
-                retiredReplay[sourceName] = packageScanFromUtc;
+                retiredReplay[sourceName] = acknowledgedReplayFromUtc ?? packageScanFromUtc;
                 logger.LogInformation("ENC source returned to its cumulative baseline. SourceDatasetName: {SourceDatasetName}.", sourceName);
                 continue;
             }
@@ -465,7 +495,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     await RecordCandidateFailureAsync(package, name, specification, exception);
                 }
             }
-            retiredReplay[sourceName] = packageScanFromUtc;
+            retiredReplay[sourceName] = acknowledgedReplayFromUtc ?? packageScanFromUtc;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -550,7 +580,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     private async Task<bool> CanRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
         var s57 = await workflowRepository.GetTrackAsync(package.S57DatasetName, ProductSpecification.S57, cancellationToken);
         var s101 = await workflowRepository.GetTrackAsync(package.SourceDatasetName, ProductSpecification.S101, cancellationToken);
-        return !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101) && await packages.CanRefreshAsync(package.Id, cancellationToken);
+        return package.ErrorMessage != EncPackageFailureRules.SendFailureMessage && !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101) && await packages.CanRefreshAsync(package.Id, cancellationToken);
     }
 
     /// <summary>Requires a later archive edit before replacing a package; the global scan cursor is not evidence of a new edit.</summary>
@@ -562,7 +592,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
     /// <summary>Protects an operator hold, a build in progress, or a candidate submitted for approval.</summary>
     internal static bool IsRefreshBlocked(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true ||
-        track?.State is ProductState.Frozen or ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published or ProductState.Exporting or ProductState.Validating;
+        track?.State is ProductState.Rejected or ProductState.Frozen or ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published or ProductState.Exporting or ProductState.Validating;
 
     /// <summary>A standalone final Product candidate cannot be adopted by a newly detected package.</summary>
     internal static bool HasUnownedFinalCandidate(EncPackage? activePackage, ProductExportTrackRecord s101, ProductExportTrackRecord s57) =>

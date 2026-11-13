@@ -355,7 +355,7 @@ public sealed class DpcSqlTransactionTests
     [InlineData("Uncertain", ProductState.Error, false)]
     [InlineData("Accepted", ProductState.ReadyForDistribution, false)]
     [InlineData("Rejected", ProductState.Error, false)]
-    [InlineData("Rejected", ProductState.Rejected, true)]
+    [InlineData("Rejected", ProductState.Rejected, false)]
     [InlineData("NotDelivered", ProductState.ReadyForDistribution, true)]
     public async Task PairedRefreshChecksBothMembersAndExactOutcomeBeforeAnyMutation(string status, ProductState state, bool allowed) {
         await using var db = await DpcSqlDatabase.CreateAsync();
@@ -435,21 +435,21 @@ public sealed class DpcSqlTransactionTests
     }
 
     [DpcSqlFact]
-    public async Task RejectedDeliveryEvidenceDoesNotStrandAnInterruptedReplacementAtTheSameVersion() {
+    public async Task AcknowledgedRejectionDoesNotStrandAnInterruptedHigherEdition() {
         await using var db = await DpcSqlDatabase.CreateAsync();
         var seed = await db.SeedAsync(deliver: false);
         await db.InsertDeliveryAsync(seed.S101Track, seed.S101Revision, "Rejected");
         await db.Workflows.SetStateAsync(seed.S101Track, ProductState.Rejected, "fixture", DpcRunFixture.Utc(11));
-        Assert.Equal(EncPackageDiscardStatus.Discarded, (await db.Packages.TryDiscardForRefreshAsync(seed.Package.Id, DpcRunFixture.Utc(12))).Status);
+        Assert.Equal(EncPackageFailureAcknowledgementStatus.Acknowledged, (await db.Packages.TryAcknowledgeFailureAsync(DpcRunFixture.Source, seed.Package.Id, "operator", DpcRunFixture.Utc(12))).Status);
         var replacement = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = DpcRunFixture.Source,
-            S57DatasetName = DpcRunFixture.S57, ScanFromUtc = seed.Package.ScanFromUtc, DetectedAtUtc = DpcRunFixture.Utc(12), DatasetYaml = "replacement yaml", SummaryYaml = "replacement summary" };
+            S57DatasetName = DpcRunFixture.S57, ScanFromUtc = DpcRunFixture.Utc(12), DetectedAtUtc = DpcRunFixture.Utc(12), DatasetYaml = "replacement yaml", SummaryYaml = "replacement summary" };
         Assert.True(await db.Packages.TryCreateAsync(replacement));
-        await db.Workflows.BeginExportAsync(seed.S101Track, 1, 0, "fixture", DpcRunFixture.Utc(12));
-        await db.Workflows.AddRevisionAsync(new(seed.S101Track, ExportRevisionType.NewEdition, 1, 0,
+        await db.Workflows.BeginExportAsync(seed.S101Track, 2, 0, "fixture", DpcRunFixture.Utc(12));
+        await db.Workflows.AddRevisionAsync(new(seed.S101Track, ExportRevisionType.NewEdition, 2, 0,
             replacement.DatasetYaml, replacement.SummaryYaml, "fixture", DpcRunFixture.Utc(12)));
         await db.Workflows.SetStateAsync(seed.S101Track, ProductState.Validating, "fixture", DpcRunFixture.Utc(12));
         Assert.True(await db.Workflows.TryFailInterruptedPackageExportAsync(replacement.Id, seed.S101Track,
-            DpcRunFixture.Source, ProductSpecification.S101, ProductState.Validating, DpcRunFixture.Utc(12), 1, 0, DpcRunFixture.Utc(14)));
+            DpcRunFixture.Source, ProductSpecification.S101, ProductState.Validating, DpcRunFixture.Utc(12), 2, 0, DpcRunFixture.Utc(14)));
         Assert.Equal(ProductState.Error, (await db.Workflows.GetTrackAsync(DpcRunFixture.Source, ProductSpecification.S101))!.State);
         Assert.Equal("Rejected", await db.QueryAsync<string>("SELECT status FROM dbo.ProductIcEncDelivery;"));
         Assert.NotNull(await db.Packages.GetByIdAsync(replacement.Id));
@@ -511,7 +511,7 @@ internal sealed class DpcSqlDatabase : IAsyncDisposable
     internal readonly ProductRepository Workflows;
     internal readonly EncPackageRepository Packages;
     internal readonly EncPackageAcknowledgementRepository Acknowledgements;
-    private readonly IcEncDeliveryRepository _deliveries;
+    internal readonly ProductCatalogueAPI.Services.ValidationEmail.ValidationEmailRepository Mailbox;
     private DpcSqlDatabase(string master) {
         var builder = new SqlConnectionStringBuilder(master);
         if (!string.Equals(builder.InitialCatalog, "master", StringComparison.OrdinalIgnoreCase))
@@ -524,7 +524,7 @@ internal sealed class DpcSqlDatabase : IAsyncDisposable
         Workflows = new(factory);
         Packages = new(factory);
         Acknowledgements = new(factory);
-        _deliveries = new(factory);
+        Mailbox = new(factory, TimeProvider.System, new ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc.IcEncReportParser());
     }
     internal static async Task<DpcSqlDatabase> CreateAsync() {
         var db = new DpcSqlDatabase(Environment.GetEnvironmentVariable(ConnectionVariable)!);
@@ -563,10 +563,12 @@ internal sealed class DpcSqlDatabase : IAsyncDisposable
         var s57 = await CandidateAsync(DpcRunFixture.S57, ProductSpecification.S57, 4);
         Guid? delivery101 = null, delivery57 = null;
         if (deliver) {
-            delivery101 = (await _deliveries.ReserveAsync(DpcRunFixture.Source, ProductSpecification.S101, 1, 0, "fixture101", DpcRunFixture.Utc(10), default))!.Id;
-            delivery57 = (await _deliveries.ReserveAsync(DpcRunFixture.S57, ProductSpecification.S57, 5, 0, "fixture57", DpcRunFixture.Utc(10), default))!.Id;
-            await _deliveries.MarkDeliveredAsync(delivery101.Value, DpcRunFixture.Utc(10), default);
-            await _deliveries.MarkDeliveredAsync(delivery57.Value, DpcRunFixture.Utc(10), default);
+            // Seed persisted receipt evidence directly: active package members cannot
+            // use singular ReserveAsync, and these tests do not exercise transport/ZIP preflight.
+            delivery101 = await InsertDeliveryAsync(s101.Track, s101.Revision, "Delivered");
+            delivery57 = await InsertDeliveryAsync(s57.Track, s57.Revision, "Delivered");
+            await Workflows.SetStateAsync(s101.Track, ProductState.InTransit, "fixture", DpcRunFixture.Utc(10));
+            await Workflows.SetStateAsync(s57.Track, ProductState.InTransit, "fixture", DpcRunFixture.Utc(10));
         }
         return new(package, s101.Track, s57.Track, s101.Revision, s57.Revision, delivery101, delivery57);
     }

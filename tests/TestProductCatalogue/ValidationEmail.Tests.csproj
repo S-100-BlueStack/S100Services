@@ -17,6 +17,10 @@
     <Compile Include="ValidationEmailTests.cs" />
     <Compile Include="ValidationEmailWorkflowTests.cs" />
     <Compile Include="EncPackageSendSafetyTests.cs" />
+    <Compile Include="EncPackageFailureRulesTests.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Data/Models/EncPackageFailureAcknowledgement.cs" Link="Production/EncPackageFailureAcknowledgement.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Operations/EncPackageFailureRules.cs" Link="Production/EncPackageFailureRules.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Jobs/EncPackageSendUnavailableException.cs" Link="Production/EncPackageSendUnavailableException.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Jobs/EncPackageSendMember.cs" Link="Production/EncPackageSendMember.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Services/Jobs/EncPackageSendEligibility.cs" Link="Production/EncPackageSendEligibility.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Data/Models/EncPackage.cs" Link="Production/EncPackage.cs" />

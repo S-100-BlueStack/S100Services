@@ -81,7 +81,7 @@ public sealed class EncPackageSendSafetyTests
         await coordinator.SendPackageAsync("101DK0041335E", packageId, members, "job-123", default);
         Assert.Equal(2, repository.Reservations);
         Assert.Equal(2, capture.Messages.Count);
-        Assert.Equal(2, random.Calls);
+        Assert.Equal(0, random.Calls);
         Assert.Equal(2, inbox.Polls);
     }
 
@@ -96,6 +96,19 @@ public sealed class EncPackageSendSafetyTests
         await Assert.ThrowsAsync<InvalidDataException>(() => coordinator.SendPackageAsync("101DK0041335E", Guid.NewGuid(), members, "job-123", default));
         Assert.Empty(capture.Messages);
         Assert.Equal(0, inbox.Polls);
+    }
+
+    /// <summary>A captured report in Review cannot make a failed response application look like a successful completed send.</summary>
+    [Theory]
+    [InlineData("Review", null)]
+    [InlineData("Pending", "INFRASTRUCTURE_FAILURE")]
+    public async Task CapturedResponseFailureIsSurfacedToTheSendJob(string status, string? errorCode) {
+        var repository = new PairRepository();
+        var capture = new Capture { ProcessingStatus = status, ErrorCode = errorCode };
+        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(new AlwaysAccepted()), new Inbox(capture), new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
+        var members = repository.Deliveries.Select(d => new EncPackageSendMember(d.DatasetName, d.Specification, d.Edition, d.Update, d.RevisionId)).ToArray();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.SendPackageAsync("101DK0041335E", Guid.NewGuid(), members, "job-123", default));
+        Assert.Equal(2, capture.Messages.Count);
     }
 
     private static EncPackage Package() => new() { SourceDatasetName = "101DK0041335E", S57DatasetName = "DK41335E" };
@@ -127,8 +140,10 @@ public sealed class EncPackageSendSafetyTests
     private sealed class Capture : IValidationEmailSimulationStore
     {
         public Dictionary<string, ValidationEmailSimulationRecord> Messages { get; } = [];
+        public string? ProcessingStatus { get; init; }
+        public string? ErrorCode { get; init; }
         public Task<ValidationSimulationCandidate?> GetSimulationCandidateAsync(string name, string? specification, int? edition, int? update, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<ValidationEmailSimulationRecord?> FindSimulationAsync(string key, CancellationToken cancellationToken) => Task.FromResult(Messages.GetValueOrDefault(key));
+        public Task<ValidationEmailSimulationRecord?> FindSimulationAsync(string key, CancellationToken cancellationToken) => Task.FromResult(Messages.TryGetValue(key, out var value) ? value with { ProcessingStatus = ProcessingStatus, ErrorCode = ErrorCode } : null);
         public Task<ValidationEmailSimulationRecord> SaveSimulationAsync(string key, ValidationEmailMessage message, CancellationToken cancellationToken) { Messages.TryAdd(key, new(Guid.NewGuid(), message)); return Task.FromResult(Messages[key]); }
     }
     private sealed class Inbox(Capture capture) : IValidationEmailInboxProcessor

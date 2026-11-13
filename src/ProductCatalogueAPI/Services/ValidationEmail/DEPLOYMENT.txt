@@ -239,10 +239,10 @@ Both members are validated first. One SQL transaction commits both permanently
 marked simulated deliveries, manifests, InTransit states and history. An invalid
 sibling artifact rolls the whole attempt back; neither member is sent. Generated
 responses are captured after that commit, then processed. A retry of the SAME
-Hangfire job resumes its already committed pair and captured random outcomes;
+Hangfire job resumes its already committed pair and captured reports;
 it does not authorize a new Send while either member is InTransit.
 
-The Worker records a simulated send, generates one random reply per member and
+The Worker records a simulated send, generates one unconditional acceptance report per member and
 immediately runs the normal parser/matcher/acknowledgement pipeline. Its minute
 poll recovers pending captured responses. The same job ID reuses its reservation
 and captured outcome on retry, including after a connection loss during capture.
@@ -259,13 +259,12 @@ reply puts its member/package into Error. Two accepted replies trigger existing
 idempotent S-128 publication. That publication and SQL finalization remain separate
 recoverable operations, not one cross-store transaction.
 
-Four outcomes are equally likely: Registered, Rejected, Accepted and
-PendingConditions. Within Rejected one of four supplied report scenarios is
-selected, and within PendingConditions one of two holding scenarios is selected.
-This covers all eight original sample variants. Dataset name, edition/update and
-CRC come from the actual immutable candidate and stored exchange set; response
-metadata is not copied from unrelated sample products. S-101 synthetic reports
-omit an unverified CRC rather than applying S-57 checksum semantics.
+Simulation always generates Accepted for both S-57 and S-101. No random outcome
+or variant is selected. Candidate identity, edition/update and CRC still come
+from the immutable stored exchange set; S-101 never invents an S-57 CRC. These
+synthetic reports go through the normal parser, matcher and simulation-only
+acknowledgement path. Previously captured evidence is not overwritten on retry.
+Live registration/rejection/conditional parsing remains unchanged.
 
 To generate another response explicitly, use Swagger:
 POST /upload/icenc-emails/simulate
@@ -273,8 +272,8 @@ POST /upload/icenc-emails/simulate
 ProductSpecification can be S57, S101 or omitted when unambiguous. The caller must
 have the existing distribute policy. No operator key is needed for this preview
 operation. A current candidate and its stored exchange set are required. Reuse
-the same RequestId for an idempotent replay; use a NEW RequestId to roll another
-random response. Reusing it for a different product/version is rejected.
+the same RequestId for an idempotent replay; use a NEW RequestId to capture another
+synthetic acceptance preview. Reusing it for a different product/version is rejected.
 
 Inspect the returned original synthetic message and then:
 GET /upload/icenc-emails?isSimulation=true
@@ -402,3 +401,13 @@ https://learn.microsoft.com/en-us/graph/outlook-immutable-id
 https://iho.int/uploads/user/pubs/standards/s-57/10CRC.pdf
 
 Suggested commit: Replace legacy IC-ENC email import and add isolated response simulation
+
+Failed workflow packages now expose CanAcknowledge in GetActions. Use the manage
+policy and POST /electronicproducts/packages/{sourceName}/acknowledge with the
+exact packageId to retire both failed candidates to Idle. This includes mixed
+accepted/rejected or InTransit/rejected pairs. It records a per-source UTC cutoff
+and preserves retired edition floors in existing history. DPC waits for a later
+source change and builds higher new editions for both members; it cannot replay
+the acknowledged failure window. HTTP 200 returns the original acknowledgedAtUtc
+on retries; a healthy pending pair or successful publication remains protected.
+No GUI, schema migration or recovery SQL is supplied for this action.

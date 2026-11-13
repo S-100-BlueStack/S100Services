@@ -42,6 +42,7 @@ public sealed class EncPackagePauseStatusTests
         Assert.NotNull(paused);
         Assert.True(paused.Paused);
         Assert.True(paused.CanResume);
+        Assert.True(paused.CanAcknowledge);
         Assert.Equal(EncPackageStatus.Hold, paused.Status);
         Assert.Equal(paused.Status, EncPackageStatusResolver.Resolve(package, s57, s101));
         Assert.Equal(failed.ErrorMessage, paused.ErrorMessage);
@@ -51,6 +52,7 @@ public sealed class EncPackagePauseStatusTests
         Assert.NotNull(resumed);
         Assert.False(resumed.Paused);
         Assert.True(resumed.CanPause);
+        Assert.True(resumed.CanAcknowledge);
         Assert.Equal(EncPackageStatus.Error, resumed.Status);
         Assert.Equal(resumed.Status, EncPackageStatusResolver.Resolve(package, s57, s101));
         Assert.Equal(failed.ErrorMessage, resumed.ErrorMessage);

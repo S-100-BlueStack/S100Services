@@ -18,6 +18,44 @@ public interface IEncPackageRepository
     Task RebaseReplayAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("Import replay rebasing is unavailable.");
 
+    /// <summary>Gets per-source exclusive cutoffs recorded by failed-package acknowledgement, independent of the global scan watermark.</summary>
+    /// <param name="cancellationToken">Cancels the System DB read.</param>
+    /// <returns>UTC cutoffs after which source changes may create a new package.</returns>
+    Task<IReadOnlyDictionary<string, DateTime>> GetFailureAcknowledgementBoundsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>Reads the latest cutoff for one source while its Product lock is held, detecting acknowledgement during an older scan.</summary>
+    /// <param name="sourceName">Canonical S-101 identity.</param>
+    /// <param name="cancellationToken">Cancels the System DB read.</param>
+    /// <returns>The original UTC acknowledgement cutoff, or null for an unacknowledged source.</returns>
+    async Task<DateTime?> GetFailureAcknowledgedAtUtcAsync(string sourceName, CancellationToken cancellationToken = default) =>
+        (await GetFailureAcknowledgementBoundsAsync(cancellationToken)).TryGetValue(sourceName, out var value) ? value : null;
+
+    /// <summary>Loads the retired S-101 source membership needed when a later edit removes a feature from an externally submitted failed pair.</summary>
+    /// <param name="sourceName">Canonical S-101 identity.</param>
+    /// <param name="cancellationToken">Cancels reading the historical source artifact.</param>
+    /// <returns>The latest acknowledged source YAML, or null if no immutable revision was created.</returns>
+    Task<string?> GetAcknowledgedSourceYamlAsync(string sourceName, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+
+    /// <summary>Atomically retires both failed candidates, records a detection cutoff and edition floors, and removes the active snapshot.</summary>
+    /// <param name="sourceName">Canonical S-101 identity.</param>
+    /// <param name="packageId">Exact failed snapshot expected by the caller.</param>
+    /// <param name="actor">Authenticated operator recorded in immutable history.</param>
+    /// <param name="nowUtc">Exclusive cutoff and acknowledgement timestamp.</param>
+    /// <param name="cancellationToken">Cancels before the transaction commits.</param>
+    /// <returns>Committed or replayed acknowledgement, or a conflict without mutation.</returns>
+    Task<EncPackageFailureAcknowledgementResult> TryAcknowledgeFailureAsync(string sourceName, Guid packageId, string actor, DateTime nowUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Failed ENC package acknowledgement is unavailable.");
+
+    /// <summary>Records a safe send error only while the same immutable package candidates and job still own the failure.</summary>
+    /// <param name="sourceName">Canonical S-101 identity.</param>
+    /// <param name="packageId">Exact failed snapshot.</param>
+    /// <param name="members">Immutable members captured by the send job.</param>
+    /// <param name="jobId">Job whose own reservations may have failed.</param>
+    /// <param name="cancellationToken">Cancels the guarded failure write.</param>
+    Task RecordSendFailureAsync(string sourceName, Guid packageId, IReadOnlyList<ProductCatalogueAPI.Jobs.EncPackageSendMember> members, string jobId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Guarded ENC send failure recording is unavailable.");
+
     /// <summary>Gets one exact current snapshot without loading its YAML.</summary>
     Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default);
     /// <summary>Atomically discards both unsent member candidates for the exact snapshot.</summary>

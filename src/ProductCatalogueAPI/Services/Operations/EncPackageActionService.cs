@@ -1,4 +1,5 @@
 using Hangfire;
+using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.ValidationEmail;
@@ -14,6 +15,14 @@ namespace ProductCatalogueAPI.Services.Operations;
 public interface IEncPackageActionService
 {
     bool Enabled { get; }
+    /// <summary>Retires an exact failed pair to Idle and records a source cutoff; provider decisions remain immutable.</summary>
+    /// <param name="sourceName">S-101 source name.</param>
+    /// <param name="packageId">Exact failed snapshot.</param>
+    /// <param name="actor">Authenticated operator.</param>
+    /// <param name="cancellationToken">Cancels lock acquisition and persistence before commit.</param>
+    /// <returns>Committed acknowledgement, stable retry receipt or conflict.</returns>
+    Task<EncPackageFailureAcknowledgementResult> AcknowledgeFailureAsync(string sourceName, Guid packageId, string actor, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new EncPackageFailureAcknowledgementResult(EncPackageFailureAcknowledgementStatus.Conflict));
     /// <summary>Queues both eligible members of the verified current package for simulated delivery.</summary>
     Task<string?> QueueSendAsync(string sourceName, Guid packageId, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
     Task<EncPackageActionSnapshot?> ReadAsync(string sourceName, CancellationToken cancellationToken = default);
@@ -35,6 +44,8 @@ public sealed record EncPackageActionSnapshot(
 {
     /// <summary>Server-owned permission to queue generated-response delivery for the current ready members.</summary>
     public bool CanSend { get; init; }
+    /// <summary>Whether an operator can retire this failed pair, including a healthy accepted/in-transit sibling.</summary>
+    public bool CanAcknowledge { get; init; }
     /// <summary>The aggregate status of both export members at the time eligibility was read.</summary>
     public EncPackageStatus Status { get; init; }
     /// <summary>UTC creation time of the active shared package snapshot, when recorded.</summary>
@@ -50,7 +61,7 @@ public sealed class EncPackageActionService(
     IBackgroundJobClient jobs,
     IConfiguration configuration,
     IHostEnvironment environment,
-    TimeProvider clock) : IEncPackageActionService
+    TimeProvider clock, IDatasetLockService? locks = null) : IEncPackageActionService
 {
     public bool Enabled => DiscardEncPackageJob.EncPackageActionsEnabled(configuration, environment);
 
@@ -83,6 +94,7 @@ public sealed class EncPackageActionService(
             control.RowVersion is null ? null : Convert.ToBase64String(control.RowVersion),
             canAct && !control.IsPaused, canAct && control.IsPaused, canDiscard, eligible, restriction) {
             CanSend = SimulationEnabled() && pairReady,
+            CanAcknowledge = EncPackageFailureRules.CanAcknowledge(active, s101, s57),
             Status = EncPackageStatusResolver.Resolve(active, s57, s101),
             BuiltAtUtc = active.BuiltAtUtc,
             ErrorMessage = EncPackageStatusResolver.GetErrorMessage(active, s57, s101)
@@ -121,6 +133,23 @@ public sealed class EncPackageActionService(
             clock.GetUtcNow().UtcDateTime, cancellationToken, requirePreSend: true);
     }
 
+    /// <inheritdoc/>
+    public async Task<EncPackageFailureAcknowledgementResult> AcknowledgeFailureAsync(string sourceName, Guid packageId, string actor, CancellationToken cancellationToken = default) {
+        if (!Enabled || locks is null || string.IsNullOrWhiteSpace(sourceName) || packageId == Guid.Empty)
+            return new(EncPackageFailureAcknowledgementStatus.Conflict);
+        var source = sourceName.Trim().ToUpperInvariant();
+        await using var sourceLock = await locks.TryAcquireAsync(ProductTrackLockKey.For(source, ProductSpecification.S101), cancellationToken);
+        if (sourceLock is null) return new(EncPackageFailureAcknowledgementStatus.Conflict);
+        var package = await packages.GetByIdAsync(packageId, cancellationToken);
+        if (package is null)
+            return await packages.TryAcknowledgeFailureAsync(source, packageId, actor, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (!string.Equals(package.SourceDatasetName, source, StringComparison.OrdinalIgnoreCase))
+            return new(EncPackageFailureAcknowledgementStatus.Conflict);
+        await using var memberLock = await locks.TryAcquireAsync(ProductTrackLockKey.For(package.S57DatasetName, ProductSpecification.S57), cancellationToken);
+        if (memberLock is null) return new(EncPackageFailureAcknowledgementStatus.Conflict);
+        return await packages.TryAcknowledgeFailureAsync(source, packageId, actor, clock.GetUtcNow().UtcDateTime, cancellationToken);
+    }
+
     public async Task<string?> QueueDiscardAsync(string sourceName, Guid packageId, CancellationToken cancellationToken = default) {
         if (!Enabled) return null;
         var snapshot = await ReadAsync(sourceName, cancellationToken);
@@ -136,7 +165,8 @@ public static class EncPackageActionEligibility
         s101 is not null && s57 is not null && IsPreSendFinal(s101) && IsPreSendFinal(s57);
 
     public static bool CanDiscard(EncPackage package, ProductExportTrackRecord? s101, ProductExportTrackRecord? s57) =>
-        s101 is not null && s57 is not null &&
+        package.ErrorMessage != EncPackageFailureRules.SendFailureMessage &&
+        s101 is not null && s57 is not null && s101.State != ProductState.Rejected && s57.State != ProductState.Rejected &&
         (package.S101Discarded ? IsAlreadyDiscarded(s101) : IsPreSendFinal(s101)) &&
         (package.S57Discarded ? IsAlreadyDiscarded(s57) : IsPreSendFinal(s57)) &&
         ((!package.S101Discarded && HasCandidate(s101)) || (!package.S57Discarded && HasCandidate(s57)));

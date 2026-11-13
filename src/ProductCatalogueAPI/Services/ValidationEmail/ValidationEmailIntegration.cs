@@ -20,14 +20,22 @@ public sealed class ValidationEmailService(ValidationEmailRepository repository,
         using var connection = storage.GetConnection();
         using var gate = connection.AcquireDistributedLock(LockName, TimeSpan.FromSeconds(5));
         foreach (var id in await repository.PendingAsync(settings.Mode == ValidationEmailMode.Simulation, cancellationToken)) {
+            ValidationEmailMessage? message = null;
             try {
-                var message = await repository.GetMessageAsync(id, cancellationToken);
+                message = await repository.GetMessageAsync(id, cancellationToken);
                 var review = await repository.GetPendingReviewAsync(id, cancellationToken);
-                if (message is not null) LogResult(id, await processor.ProcessAsync(id, message, settings.DryRun, settings.ApplyReceivedAfterUtc, review, cancellationToken, ApplySimulation));
+                if (message is not null) {
+                    var result = await processor.ProcessAsync(id, message, settings.DryRun, settings.ApplyReceivedAfterUtc, review, cancellationToken, ApplySimulation);
+                    LogResult(id, result);
+                    if (ApplySimulation && result.Status == "Review")
+                        await repository.RecordWorkflowProcessingFailureAsync(message, cancellationToken);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception exception) {
                 await repository.FailedAsync(id, cancellationToken);
+                if (ApplySimulation && message is not null)
+                    await repository.RecordWorkflowProcessingFailureAsync(message, cancellationToken);
                 logger.LogWarning("External validation inbound processing requires retry. MessageId: {MessageId}. FailureType: {FailureType}", id, exception.GetType().Name);
             }
         }
