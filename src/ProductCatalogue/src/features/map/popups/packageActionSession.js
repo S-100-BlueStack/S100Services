@@ -26,6 +26,7 @@ export function createPackageActionSession({
   isCurrent,
   onChange,
   onDiscardSucceeded,
+  onAcknowledgeSucceeded,
   request = apiRequest,
   notify = { error: noticeError, info: noticeInfo, success: noticeSuccess, warning: noticeWarning },
   wait = (ms, signal) =>
@@ -48,7 +49,7 @@ export function createPackageActionSession({
   let busy = false;
   let snapshot = null;
   let simulatedAccept = false;
-  let hasDiscarded = false;
+  let hasRetiredPackage = false;
   let restrictionCode = null;
   const abort = new AbortController();
   const path = `electronicproducts/packages/${encodeURIComponent(sourceName)}`;
@@ -94,6 +95,7 @@ export function createPackageActionSession({
       canPause: get("canPause") === true,
       canResume: get("canResume") === true,
       canDiscard: get("canDiscard") === true,
+      canAcknowledge: get("canAcknowledge") === true,
       canSend:
         get("canSend") === true &&
         normalizeEncPackageStatus(get("status")) === 2 &&
@@ -111,7 +113,7 @@ export function createPackageActionSession({
   }
 
   async function refresh() {
-    if (!current() || busy || hasDiscarded) return false;
+    if (!current() || busy || hasRetiredPackage) return false;
     const id = ++requestId;
     // The AOI/source projection explicitly identifies active package ownership.
     // No package is ordinary; do not probe a mutation-only endpoint for it.
@@ -164,7 +166,7 @@ export function createPackageActionSession({
       liveVerified: Boolean(snapshot),
       identityKey,
       paused: snapshot?.paused ?? false,
-      primaryAction: simulatedAccept ? "accept" : "send",
+      primaryAction: snapshot?.canAcknowledge === true || simulatedAccept ? "accept" : "send",
       eligibleMembers: snapshot?.eligibleMembers ?? [],
       restrictionCode,
       actionEligibility: {
@@ -176,8 +178,8 @@ export function createPackageActionSession({
           snapshot?.canSend === true &&
           !simulatedAccept &&
           !snapshot?.paused &&
-          !hasDiscarded,
-        accept: false,
+          !hasRetiredPackage,
+        accept: !busy && !hasRetiredPackage && snapshot?.canAcknowledge === true,
       },
     };
   }
@@ -185,15 +187,12 @@ export function createPackageActionSession({
   async function invoke(operation) {
     const state = projection();
     if (!state?.actionEligibility?.[operation] || !current()) return false;
-    if ((operation === "send" && snapshot?.canSend !== true) || operation === "accept") {
-      simulatedAccept = operation === "send";
-      notify.info?.(
-        operation === "send" ? "Demo: Send" : "Demo: Accept",
-        operation === "send"
-          ? "Demo only — no products were sent to IC-ENC."
-          : "Demo only — no results were acknowledged or committed.",
-        { countAsUnread: false, storeInCenter: false }
-      );
+    if (operation === "send" && snapshot?.canSend !== true) {
+      simulatedAccept = true;
+      notify.info?.("Demo: Send", "Demo only — no products were sent to IC-ENC.", {
+        countAsUnread: false,
+        storeInCenter: false,
+      });
       publish();
       return true;
     }
@@ -203,19 +202,25 @@ export function createPackageActionSession({
     publish();
     const currentPackageId = snapshot.packageId;
     try {
-      const body =
-        operation === "discard" || operation === "send"
-          ? { packageId: currentPackageId }
-          : { packageId: currentPackageId, expectedControlVersion: snapshot.controlVersion };
-      const result = await request(`${path}/${operation === "discard" ? "discard" : operation}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: abort.signal,
-        timeoutMs: REQUEST_TIMEOUT,
-      });
+      // Accept is the operator-facing action; Acknowledge remains the backend command.
+      const usesAcknowledgeEndpoint = operation === "accept";
+      const body = ["discard", "send", "accept"].includes(operation)
+        ? { packageId: currentPackageId }
+        : { packageId: currentPackageId, expectedControlVersion: snapshot.controlVersion };
+      const result = await request(
+        `${path}/${usesAcknowledgeEndpoint ? "acknowledge" : operation}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: abort.signal,
+          timeoutMs: REQUEST_TIMEOUT,
+        }
+      );
       if (!current()) return false;
       if (!result.success) {
+        // An unsuccessful acceptance invalidates backend permission until a fresh snapshot.
+        if (operation === "accept") snapshot = null;
         notify.error?.(
           "Package action failed",
           getApiResultErrorMessage(result, "The package action was rejected.")
@@ -236,10 +241,48 @@ export function createPackageActionSession({
           );
         return completed;
       }
+      if (operation === "accept") {
+        const resultPackageId = result.data?.packageId ?? result.data?.PackageId;
+        const resultSource = result.data?.sourceDatasetName ?? result.data?.SourceDatasetName;
+        const resultStatus = result.data?.status ?? result.data?.Status;
+        if (
+          resultPackageId !== currentPackageId ||
+          typeof resultSource !== "string" ||
+          resultSource.toUpperCase() !== sourceName.toUpperCase() ||
+          normalizeEncPackageStatus(resultStatus) !== 0
+        ) {
+          // A 200 alone cannot establish that this exact package was resolved.
+          snapshot = null;
+          notify.warning?.("Acceptance unverified", "Refresh the package before continuing.");
+          return false;
+        }
+        hasRetiredPackage = true;
+        snapshot = null;
+        simulatedAccept = false;
+        let detailsRefreshed = true;
+        try {
+          detailsRefreshed = (await onAcknowledgeSucceeded?.()) !== false;
+        } catch {
+          detailsRefreshed = false;
+        }
+        if (!current()) return true;
+        notify.success?.(
+          "Package closed",
+          "The package was returned to Idle. The received IC-ENC decisions remain in history."
+        );
+        if (!detailsRefreshed) {
+          notify.warning?.(
+            "Package details pending",
+            "Refresh the map to update the package after acceptance."
+          );
+        }
+        globalThis.window?.dispatchEvent?.(new CustomEvent("pc-package-action-refresh"));
+        return true;
+      }
       if (operation === "discard") {
         const jobId = result.data?.jobId ?? result.data?.JobId;
         if (!jobId || !(await waitForDiscard(jobId))) return false;
-        hasDiscarded = true;
+        hasRetiredPackage = true;
         snapshot = null;
         simulatedAccept = false;
         let detailsRefreshed = true;

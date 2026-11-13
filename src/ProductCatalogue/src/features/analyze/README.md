@@ -221,7 +221,8 @@ Only a resolved Package with matching member identities and backend-owned
 requires the latest server-projected eligibility, including after the Discard confirmation.
 Send requires explicit backend permission for a complete Ready, error-free S-101/S-57 pair;
 InTransit and Error deny a new send. A development demo flag cannot override these rules,
-and the shared session does not enable manual Accept. An unknown, inactive or non-Package
+and the shared session enables Accept only when the current backend snapshot returns
+`CanAcknowledge: true` for an exact eligible Package. An unknown, inactive or non-Package
 Product cannot dispatch.
 
 The controller destroys sessions when Products are removed, disabled, replaced or the page
@@ -369,3 +370,20 @@ not run against Analyze's reconstructed workspace Graphics. The read-only presen
 shows the representative Product, validated package-member identity/edition/update,
 backend status, and any member error details already loaded for Analyze. It does not
 fetch new Product detail, authorize package mutations, or change Main Map popup behavior.
+
+## PC-ICENC-01: Accept in the Analyze Product popup
+
+Analyze uses its existing shared **Send/Accept** action slot in the Product
+popup, not a separate Acknowledge control or a sidebar action. When its
+page-owned Package action session verifies an active Product and receives
+`CanAcknowledge: true`, that slot becomes enabled **Accept**. Confirming it
+invokes the backend `/acknowledge` command with the exact Package ID.
+
+The confirmation cannot outlive the current Product, layer, page or permission.
+The backend handles the mix of accepted and rejected members; Analyze does not
+invent their final states. After success it refreshes only the affected Product.
+Without permission or for ordinary Products the action stays unavailable.
+
+This supersedes the earlier statement that Analyze's popup cannot expose
+mutations: the metadata remains read-only, while verified backend actions
+are independently owned by `analyzePackageActions.js`.

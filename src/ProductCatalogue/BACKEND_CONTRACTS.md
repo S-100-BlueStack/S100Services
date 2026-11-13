@@ -1275,3 +1275,67 @@ Until JobPlatform is ready and a later implementation package is approved, do no
 - add cross-project references to JobPlatform;
 - introduce an atomic operation registry;
 - enable dual-host Product Catalogue execution.
+
+## PC-ICENC-01: Failed ENC package acknowledgement (verified at `17ff8653`)
+
+Commit `6365ab36855b2f88b1440f73759919d48ca2933f` introduces a new
+**operator acknowledgement of failure**. It is not IC-ENC's acceptance of a
+validation report or a manual publishing command.
+
+- `GET /electronicproducts/packages/{sourceName}/actions`, policy
+  `productmanager:access`: authoritative active Package snapshot now includes
+  optional `CanAcknowledge` (boolean). Its `PackageId` and `SourceDatasetName`
+  identify the exact package.
+- `POST /electronicproducts/packages/{sourceName}/acknowledge`, policy
+  `productmanager:manage`: JSON `{"packageId":"<current GUID>"}`. HTTP 200
+  returns `packageId`, `sourceDatasetName`, `status` (`Idle`),
+  `acknowledgedAtUtc` and `alreadyAcknowledged`.
+- HTTP 400: invalid identity; 409: missing, replaced, busy or ineligible
+  failure; 503: disabled package actions. HTTP 401/403 follow existing
+  authentication and authorization policy.
+- Backend commit `946013f6aab38b8fd8cd941afb1c7da8f0774bb4` restricts
+  `CanAcknowledge` to an exact safe pair with at least one `ProductState.Rejected`
+  member. Internal SevenCs validation errors, outbound send failures, and
+  Error-only pairs cannot authorize this endpoint. The server rechecks the
+  condition inside the acknowledgement transaction; client state never grants it.
+- Successful acknowledgement retires **both current candidates** to `Idle`,
+  records immutable cutoff/history and preserves existing IC-ENC provider
+  evidence. It does not update either `published_edition` or `published_update`
+  and does **not** publish the accepted sibling of a mixed accepted/rejected pair.
+  A new package requires fresh source edits after the cutoff or an authorized
+  manual export. The backend's transaction and locks determine final eligibility.
+
+**Frontend operator action:** The shared Package popup retains its single
+`package-send-accept` slot. It displays **Accept** only when the verified action
+snapshot has `CanAcknowledge: true`; clicking it after explicit confirmation
+posts the backend command `/acknowledge` with the exact active Package ID.
+Otherwise the slot displays Send (enabled only by valid `CanSend`). There is
+no fourth workflow control and no client-side interpretation of which IC-ENC
+members passed. The operator's UI label **Accept** does not change the provider's
+verdict. The current backend's mixed-outcome behavior (retiring both candidates
+without publishing the accepted sibling) differs from the desired workflow;
+that business rule requires a separate backend change and runtime verification.
+
+**Follow-up verification (`946013f6`):** Acknowledge is no longer exposed
+for pre-delivery validation or send errors without a rejected member. The
+frontend relies on `CanAcknowledge` and does not guess from Package status,
+member timestamps, or error messages. A stale permission is still rechecked
+by the server and may return HTTP 409.
+
+**Simulation is distinct:** Paired package Send is backend-authorized only
+when `SendToIcEnc:Mode=Simulation` and `ValidationEmail:Mode=Simulation`, with
+both member candidates Ready. The Worker generates synthetic acceptance replies
+and processes them through the normal matching/publication pipeline. This does not grant a browser permission to create or alter the external
+IC-ENC decision; the operator Accept UI only invokes the server's existing
+Acknowledge command when the server allows it. It does not enable external live Send.
+The deployment document requires `012_AddSimulationDelivery.sql` before
+simulation; the actual migration/deployment state was not verified here.
+
+**Email review is separate:** `GET /upload/validation-emails`,
+`GET /upload/validation-emails/{id}` and privileged
+`POST /upload/validation-emails/{id}/review` are backend operational APIs.
+The review mutation additionally requires a private `X-ICENC-Operator-Key`.
+A frontend cannot safely supply this key as a public build input. No
+Product-scoped, provider-provenance report-link contract was verified for
+Analyze, Review or Dashboard. See
+[PC-ICENC-01 integration gaps](docs/pc-icenc-01-backend-gaps.md).

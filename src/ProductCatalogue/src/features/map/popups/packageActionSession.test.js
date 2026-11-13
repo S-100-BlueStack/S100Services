@@ -13,7 +13,12 @@ test("demo Send/Accept requires explicit Vite development opt-in", () => {
   assert.equal(isPackageDemoEnabled({ VITE_PACKAGE_DEMO_ENABLED: "true" }), false);
 });
 
-function createHarness({ initial = {}, demoEnabled = false } = {}) {
+function createHarness({
+  initial = {},
+  demoEnabled = false,
+  acknowledgeResult = null,
+  onAcknowledgeSucceeded,
+} = {}) {
   const requests = [];
   const notices = [];
   let changes = 0;
@@ -54,6 +59,19 @@ function createHarness({ initial = {}, demoEnabled = false } = {}) {
           controlVersion: "AAAAAAAAAAM=",
         },
       };
+    if (url.endsWith("/acknowledge"))
+      return (
+        acknowledgeResult ?? {
+          success: true,
+          data: {
+            packageId: PACKAGE_ID,
+            sourceDatasetName: "PRIMARY",
+            status: 0,
+            acknowledgedAtUtc: "2026-11-13T09:00:00Z",
+            alreadyAcknowledged: false,
+          },
+        }
+      );
     if (url.endsWith("/discard")) return { success: true, data: { jobId: "job-1" } };
     if (url.endsWith("/discard-jobs/job-1"))
       return { success: true, data: { status: "Succeeded" } };
@@ -64,6 +82,7 @@ function createHarness({ initial = {}, demoEnabled = false } = {}) {
     identityKey: "identity",
     memberNames: { s101: "PRIMARY", s57: "SECONDARY" },
     demoEnabled,
+    onAcknowledgeSucceeded,
     isCurrent: () => connected,
     onChange: () => {
       changes++;
@@ -506,6 +525,203 @@ test("one eligible export cannot authorize a package send", async () => {
   });
   await h.session.start();
   assert.equal(await h.session.invoke("send"), false);
+  assert.equal(h.requests.length, 1);
+  h.session.destroy();
+});
+test("server-authorized failed package acknowledgement uses the exact ID and retires this session", async () => {
+  let retired = 0;
+  const h = createHarness({
+    initial: {
+      status: 4,
+      canPause: false,
+      canDiscard: false,
+      canSend: false,
+      canAcknowledge: true,
+      eligibleMembers: [],
+    },
+    onAcknowledgeSucceeded: async () => {
+      retired++;
+      return true;
+    },
+  });
+  await h.session.start();
+  assert.equal(h.session.projection().primaryAction, "accept");
+  assert.equal(h.session.projection().actionEligibility.accept, true);
+  assert.equal(h.session.projection().actionEligibility.send, false);
+  assert.equal(await h.session.invoke("accept"), true);
+  const writes = h.requests.filter((item) => item.options.method === "POST");
+  assert.deepEqual(
+    writes.map((item) => item.url),
+    [`${BASE}/acknowledge`]
+  );
+  assert.deepEqual(JSON.parse(writes[0].options.body), { packageId: PACKAGE_ID });
+  assert.equal(retired, 1);
+  assert.equal(h.session.projection(), null, "retired package cannot grant another mutation");
+  assert.equal(await h.session.invoke("accept"), false);
+  assert.equal(writes.length, 1);
+  assert.equal(h.notices.filter((notice) => notice[0] === "success").length, 1);
+  assert.match(h.notices.find((notice) => notice[0] === "success")[2], /returned to Idle/);
+  h.session.destroy();
+});
+
+test("internal validation or send errors cannot authorize Accept without an explicit backend permission", async () => {
+  for (const reason of ["SEVENCS_VALIDATION_FAILED", "PACKAGE_SEND_FAILED"]) {
+    const h = createHarness({
+      initial: {
+        status: 4,
+        canSend: false,
+        canAcknowledge: false,
+        eligibleMembers: [],
+        errorMessage: reason,
+      },
+    });
+    await h.session.start();
+    assert.equal(h.session.projection().primaryAction, "send");
+    assert.equal(h.session.projection().actionEligibility.accept, false);
+    assert.equal(await h.session.invoke("accept"), false);
+    assert.deepEqual(
+      h.requests.map(({ options }) => options.method),
+      ["GET"]
+    );
+    h.session.destroy();
+  }
+});
+
+test("acknowledgement permission fails closed when missing, malformed or from an unavailable package", async () => {
+  for (const canAcknowledge of [undefined, 1, false]) {
+    const h = createHarness({ initial: { status: 4, canAcknowledge } });
+    await h.session.start();
+    assert.equal(h.session.projection().actionEligibility.accept, false);
+    assert.equal(await h.session.invoke("accept"), false);
+    assert.equal(h.requests.length, 1);
+    h.session.destroy();
+  }
+});
+
+test("an acknowledgement conflict reports failure and never retires candidate state", async () => {
+  let retired = 0;
+  const h = createHarness({
+    initial: { status: 4, canAcknowledge: true, eligibleMembers: [] },
+    acknowledgeResult: {
+      success: false,
+      status: 409,
+      data: { code: "PACKAGE_ACKNOWLEDGE_UNAVAILABLE", message: "Refresh before retrying." },
+    },
+    onAcknowledgeSucceeded: () => {
+      retired++;
+    },
+  });
+  await h.session.start();
+  assert.equal(await h.session.invoke("accept"), false);
+  assert.equal(retired, 0);
+  assert.equal(
+    h.notices.some((notice) => notice[0] === "success"),
+    false
+  );
+  assert.equal(
+    h.notices.some((notice) => notice[0] === "error"),
+    true
+  );
+  h.session.destroy();
+});
+
+test("an unrelated acknowledgement receipt never clears another package", async () => {
+  let retired = 0;
+  const h = createHarness({
+    initial: { status: 4, canAcknowledge: true, eligibleMembers: [] },
+    acknowledgeResult: {
+      success: true,
+      data: {
+        packageId: "f2fa2ec0-3fe9-4dae-b2d4-bc9c44d518bd",
+        sourceDatasetName: "PRIMARY",
+        status: 0,
+      },
+    },
+    onAcknowledgeSucceeded: () => {
+      retired++;
+    },
+  });
+  await h.session.start();
+  assert.equal(await h.session.invoke("accept"), false);
+  assert.equal(retired, 0);
+  assert.equal(h.session.projection(), null, "unverified receipt invalidates mutation permission");
+  assert.equal(
+    h.notices.some((notice) => notice[0] === "success"),
+    false
+  );
+  h.session.destroy();
+});
+test("acknowledgement accepts the backend idempotent receipt without a second mutation", async () => {
+  const h = createHarness({
+    initial: { status: 4, canAcknowledge: true, eligibleMembers: [] },
+    acknowledgeResult: {
+      success: true,
+      data: {
+        PackageId: PACKAGE_ID,
+        SourceDatasetName: "PRIMARY",
+        Status: "Idle",
+        AlreadyAcknowledged: true,
+      },
+    },
+  });
+  await h.session.start();
+  assert.equal(await h.session.invoke("accept"), true);
+  assert.equal(h.requests.filter((request) => request.options.method === "POST").length, 1);
+  assert.equal(await h.session.invoke("accept"), false);
+  h.session.destroy();
+});
+
+test("acknowledgement completion after popup disposal cannot publish state or a success notice", async () => {
+  let respond;
+  let refreshed = false;
+  const h = createHarness({
+    initial: { status: 4, canAcknowledge: true, eligibleMembers: [] },
+    acknowledgeResult: new Promise((resolve) => {
+      respond = resolve;
+    }),
+    onAcknowledgeSucceeded: () => {
+      refreshed = true;
+    },
+  });
+  await h.session.start();
+  const operation = h.session.invoke("accept");
+  h.session.destroy();
+  respond({
+    success: true,
+    data: { packageId: PACKAGE_ID, sourceDatasetName: "PRIMARY", status: 0 },
+  });
+  assert.equal(await operation, false);
+  assert.equal(refreshed, false);
+  assert.equal(
+    h.notices.some((notice) => notice[0] === "success"),
+    false
+  );
+});
+test("PascalCase CanAcknowledge from a server action snapshot is supported without assuming CanSend", async () => {
+  const h = createHarness({
+    initial: { CanAcknowledge: true, status: 4, canSend: false, eligibleMembers: [] },
+  });
+  await h.session.start();
+  assert.equal(h.session.projection().actionEligibility.accept, true);
+  assert.equal(h.session.projection().actionEligibility.send, false);
+  h.session.destroy();
+});
+
+test("CanAcknowledge alone chooses Accept even when a stale snapshot also permits Send", async () => {
+  const h = createHarness({ initial: { status: 2, canSend: true, canAcknowledge: true } });
+  await h.session.start();
+  assert.equal(h.session.projection().primaryAction, "accept");
+  assert.equal(h.session.projection().actionEligibility.accept, true);
+  assert.equal(
+    h.session.projection().actionEligibility.send,
+    true,
+    "backend stays authoritative for both flags"
+  );
+  assert.equal(
+    await h.session.invoke("acknowledge"),
+    false,
+    "frontend only dispatches the Accept operation"
+  );
   assert.equal(h.requests.length, 1);
   h.session.destroy();
 });

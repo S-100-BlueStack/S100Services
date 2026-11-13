@@ -135,6 +135,17 @@ export function createPopup({ readOnly = false, readOnlyActions = null } = {}) {
         stopRefreshingPopup: null,
       };
 
+      async function refreshAfterPackageRetirement() {
+        if (disposed || !container.isConnected || !packageSnapshot?.isCurrent()) {
+          return false;
+        }
+        // The backend retired the old candidates; never keep their detail in the open popup.
+        latestRefreshId += 1;
+        currentAttributes = applyGraphicAttributes(graphic, { exportMetadata: null });
+        render();
+        return refreshAndRender({ showFailureNotice: false, syncSourceOnDrift: false });
+      }
+
       const packageActions =
         productContext?.workUnit?.kind === "package"
           ? createPackageActionSession({
@@ -152,18 +163,8 @@ export function createPopup({ readOnly = false, readOnlyActions = null } = {}) {
                 container.isConnected &&
                 isCurrentPackagePopupContext(productContext, currentAttributes, graphic),
               onChange: () => render(),
-              onDiscardSucceeded: async () => {
-                if (disposed || !container.isConnected || !packageSnapshot?.isCurrent()) {
-                  return false;
-                }
-                // A completed Discard invalidates in-flight candidate detail and its
-                // overlay before the next server read. The AOI-owned statuses remain
-                // untouched until the normal source refresh publishes them.
-                latestRefreshId += 1;
-                currentAttributes = applyGraphicAttributes(graphic, { exportMetadata: null });
-                render();
-                return refreshAndRender({ showFailureNotice: false, syncSourceOnDrift: false });
-              },
+              onDiscardSucceeded: refreshAfterPackageRetirement,
+              onAcknowledgeSucceeded: refreshAfterPackageRetirement,
             })
           : null;
       const packageSnapshot =

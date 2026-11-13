@@ -73,3 +73,36 @@ test("malformed and unknown primary operations fail closed to Send", () => {
   assert.equal(actions[2].disabled, true);
   assert.equal(actions[2].availability.backendAuthorized, null);
 });
+test("Accept reuses the Send slot without exposing an extra acknowledge control", () => {
+  const unauthorized = createPopupWorkflowActions({
+    subject: "package",
+    primaryAction: "send",
+    actionEligibility: { accept: false },
+  });
+  assert.deepEqual(
+    unauthorized.map((action) => action.id),
+    ids
+  );
+  const normal = createPopupWorkflowActions({ subject: "product" });
+  assert.deepEqual(
+    normal.map((action) => action.id),
+    ids
+  );
+  const authorized = createPopupWorkflowActions({
+    subject: "package",
+    primaryAction: "accept",
+    actionEligibility: { accept: true },
+  });
+  assert.deepEqual(
+    authorized.map((action) => action.id),
+    ids
+  );
+  assert.equal(authorized[2].operation, "accept");
+  assert.equal(authorized[2].label, "Accept");
+  assert.equal(authorized[2].availability.backendAuthorized, true);
+  assert.equal(authorized[2].disabled, true, "presentation never grants dispatch");
+  assert.equal(
+    authorized.some((action) => action.operation === "acknowledge"),
+    false
+  );
+});

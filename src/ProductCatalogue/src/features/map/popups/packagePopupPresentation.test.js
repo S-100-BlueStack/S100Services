@@ -128,7 +128,7 @@ test("presentation fixtures support Resume, exact eligible Send counts and Accep
       outcomeText: "S-101 will be committed; the failed S-57 candidate will not be committed.",
     }),
   });
-  assert.equal(accept.actions[2].helpText, "Accept the package results.");
+  assert.equal(accept.actions[2].helpText, "Close the package after an IC-ENC rejection.");
   assert.equal(accept.actions[2].id, first.actions[2].id);
   assert.equal(accept.actions[2].label, "Accept");
   assert.equal(accept.actions[2].icon, "check");
@@ -420,4 +420,49 @@ test("known aggregate Package status suppresses the old Product workflow summary
   assert.equal(model.summary.workflowText, null);
   assert.equal(model.actions[0].label, "Pause");
   assert.equal(model.actions[2].label, "Send");
+});
+test("the existing Accept slot requires verified backend permission and current context", async () => {
+  const options = selection();
+  const calls = [];
+  const confirmations = [];
+  const state = projection(options.productContext, {
+    primaryAction: "accept",
+    liveVerified: true,
+    actionEligibility: {
+      pause: false,
+      resume: false,
+      discard: false,
+      send: false,
+      accept: true,
+    },
+  });
+  const actions = createPopupActionGroups({
+    ...options,
+    confirmAcknowledge: async (request) => {
+      confirmations.push(request);
+      return true;
+    },
+    packageActions: {
+      projection: () => state,
+      invoke: async (operation) => {
+        calls.push(operation);
+        return true;
+      },
+    },
+  }).flat();
+  assert.deepEqual(
+    actions.map((action) => action.id),
+    ["package-pause-resume", "package-discard-export", "package-send-accept", "tools"]
+  );
+  const accept = actions[2];
+  assert.equal(accept.controlKind, "live-package");
+  assert.equal(accept.disabled, false);
+  assert.equal(await accept.onClick(), true);
+  assert.deepEqual(calls, ["accept"]);
+  assert.equal(confirmations[0].title, "Accept IC-ENC results?");
+  assert.equal(confirmations[0].confirmText, "Accept");
+  assert.match(confirmations[0].message, /Both current candidates will be retired/);
+  state.actionEligibility.accept = false;
+  assert.equal(await accept.onClick(), false);
+  assert.deepEqual(calls, ["accept"]);
 });

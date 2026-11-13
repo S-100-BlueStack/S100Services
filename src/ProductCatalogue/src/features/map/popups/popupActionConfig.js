@@ -18,6 +18,7 @@ export function createPopupActionGroups({
   productContext,
   packageActions,
   confirmDiscard = confirmAction,
+  confirmAcknowledge = confirmDiscard,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
   if (!context) return [];
@@ -66,11 +67,14 @@ export function createPopupActionGroups({
       action.disabledReason = null;
       action.availability = { ...action.availability, dispatchImplemented: true };
       action.onClick = async ({ anchorElement } = {}) => {
-        if (action.operation === "discard") {
-          const confirmed = await confirmDiscard({
-            title: "Discard package?",
-            message: "Discard the S-101 and S-57 package candidates? This cannot be undone.",
-            confirmText: "Discard",
+        if (action.operation === "discard" || action.operation === "accept") {
+          const acceptingResults = action.operation === "accept";
+          const confirmed = await (acceptingResults ? confirmAcknowledge : confirmDiscard)({
+            title: acceptingResults ? "Accept IC-ENC results?" : "Discard package?",
+            message: acceptingResults
+              ? "Close this package after the IC-ENC rejection? Both current candidates will be retired, while the received decisions remain in history. This cannot be undone."
+              : "Discard the S-101 and S-57 package candidates? This cannot be undone.",
+            confirmText: acceptingResults ? "Accept" : "Discard",
             anchorElement,
           });
           if (!confirmed) return false;

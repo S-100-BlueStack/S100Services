@@ -18,6 +18,7 @@ export function createAnalyzePackageActions({
   onChange = () => {},
   createSession = createPackageActionSession,
   confirmDiscard = confirmAction,
+  confirmAcknowledge = confirmAction,
   warn = noticeWarning,
 } = {}) {
   const sessions = new Map();
@@ -78,6 +79,7 @@ export function createAnalyzePackageActions({
         // Refresh after invoke() returns so the successful server result can
         // publish its notice before Analyze replaces the accepted Product.
         onDiscardSucceeded: () => true,
+        onAcknowledgeSucceeded: () => true,
       });
       sessions.set(key, entry);
       changed = true;
@@ -159,11 +161,14 @@ export function createAnalyzePackageActions({
   async function invoke(entry, operation, anchorElement) {
     if (!entry || !isEntryCurrent(entry) || (anchorElement && !anchorElement.isConnected))
       return false;
-    if (operation === "discard") {
-      const confirmed = await confirmDiscard({
-        title: "Discard package?",
-        message: "Discard the S-101 and S-57 package candidates? This cannot be undone.",
-        confirmText: "Discard",
+    if (operation === "discard" || operation === "accept") {
+      const acceptingResults = operation === "accept";
+      const confirmed = await (acceptingResults ? confirmAcknowledge : confirmDiscard)({
+        title: acceptingResults ? "Accept IC-ENC results?" : "Discard package?",
+        message: acceptingResults
+          ? "The backend will process the received IC-ENC results for this package, including any mix of approved and rejected members. This cannot be undone."
+          : "Discard the S-101 and S-57 package candidates? This cannot be undone.",
+        confirmText: acceptingResults ? "Accept" : "Discard",
         anchorElement,
       });
       if (!confirmed) return false;
@@ -178,7 +183,7 @@ export function createAnalyzePackageActions({
       return false;
     const succeeded = await entry.session.invoke(operation);
     if (!succeeded || !isEntryCurrent(entry)) return succeeded;
-    if (["pause", "resume", "discard", "send"].includes(operation)) {
+    if (["pause", "resume", "discard", "send", "accept"].includes(operation)) {
       const refreshed = await refreshProduct?.(entry.product.datasetName);
       if (refreshed === false && !destroyed) {
         warn("Analyze refresh pending", "Refresh Analyze to see the latest package state.");
