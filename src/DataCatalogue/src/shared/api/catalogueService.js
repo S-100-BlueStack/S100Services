@@ -1,5 +1,7 @@
 import { normalizeSeverity } from "../domain/severity.js";
 import { normalizePackageGeometry } from "./packageGeometry.js";
+import { normalizePackageAssignmentSummary } from "./packageAssignmentSummary.js";
+import { normalizePackageAoiItem } from "./packageAoiPage.js";
 
 export function requiredId(value) {
   if (typeof value !== "string" || !value.trim())
@@ -10,9 +12,11 @@ export function requiredId(value) {
 export function normalizePackage(value) {
   const id = requiredId(value?.id);
   const metadata = value.metaData ?? {};
+  const assignment = normalizePackageAssignmentSummary(value);
   return {
     id,
     packageId: id,
+    ...assignment,
     shortId: metadata.shortId ?? null,
     name: metadata.shortId || id,
     sourceId: metadata.refId ?? metadata.shortId ?? id,
@@ -132,6 +136,28 @@ export function createCatalogueService(client) {
           signal,
         }),
         normalizePackage
+      );
+    },
+    async packageGeometries({
+      page,
+      pageSize = 200,
+      category,
+      hasPipeline,
+      pipelineId,
+      signal,
+    } = {}) {
+      return normalizePage(
+        await client.request("/v1/packages/geometry", {
+          query: {
+            ...paging({ page, pageSize }),
+            category,
+            hasPipeline,
+            pipelineId,
+            includeDetails: false,
+          },
+          signal,
+        }),
+        normalizePackageAoiItem
       );
     },
     async package(id, { signal } = {}) {

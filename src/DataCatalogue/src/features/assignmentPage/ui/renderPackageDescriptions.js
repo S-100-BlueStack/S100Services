@@ -120,13 +120,17 @@ export function renderPackageDescriptions(container, entries, fallback) {
     if (!entry?.description) continue;
     const section = document.createElement("section");
     section.className = "dc-package-description";
-    const label = document.createElement("div");
-    label.className = "dc-package-description__language";
-    label.textContent = entry.language || "Unspecified language";
+    const language = typeof entry.language === "string" ? entry.language.trim() : "";
     const body = document.createElement("div");
     body.className = "dc-package-description__body";
     appendSanitizedHtml(body, entry.description);
-    section.append(label, body);
+    if (language) {
+      const label = document.createElement("div");
+      label.className = "dc-package-description__language";
+      label.textContent = language;
+      section.append(label);
+    }
+    section.append(body);
     container.append(section);
   }
   if (!container.childNodes.length) container.textContent = fallback || "Not provided";

@@ -1,3 +1,27 @@
+## DC-BE-FE-02 — Consuming verified Pipeline geometry filters
+
+The already verified backend `GET /v1/packages/geometry` route accepts
+`hasPipeline=true` combined with an exact active `pipelineId`. Main Map now
+uses these together for each page, with `includeDetails=false` and 1-based
+transport pages normalized at the client boundary. The response excludes
+unassigned Packages; Package rows without intersecting Workspaces may still
+have valid direct Pipeline bindings and generalized AOIs. Workspace selection
+in the Main Map Packages list is a client-side filter over contextual Jobs,
+**not** a query argument to this geometry endpoint. No new backend route or
+mutable contract is introduced by this correction.
+
+---
+
+## DC-BE-FE-01 — Verified backend read-contract extensions (2026-11-12)
+
+Backend commit `313ea65a4fc07276da587a3f0acb038b72190e66` adds `hasPipeline: boolean` and `pipelineBindings: [{id,pipelineId}]` to the existing Package list/detail response. They represent **active direct Package–Pipeline bindings**, not derived Workspace membership or Job completion. The frontend now maps them to `status` and `pipelineIds` without per-row binding GETs. Missing contract fields remain unknown rather than being treated as an empty binding set. Selection/Save continues to use the existing binding readback and reconciliation.
+
+The same commit adds `GET /v1/packages/geometry` with 1-based page, `pageSize` 1–200, `includeDetails=false` (default), optional category/spatial/assignment filters, and `{ items: [{packageId,shortId,aoi,detailedGeometry}], page, pageSize, totalCount }`. Stored `aoi` is Esri polygon JSON with an explicit spatial reference. The frontend fetches only the `aoi` overview, with bounded pages and rendering. The resource path is relative to the configured API base, which may be `/api` at a given IIS host; it must not be prefixed twice.
+
+The geometry page is not a membership/Jobs read. Historical assertions below that the backend lacks these two read contracts describe earlier snapshots, not the reviewed backend commit. Deployment, authorization and live geometry performance remain unverified. See [DC_BE_FE_01_VALIDATION.md](DC_BE_FE_01_VALIDATION.md).
+
+---
+
 ## DC-DEPLOY-01 — Public vs application-relative API paths (2026-11-11)
 
 The endpoint URLs in this document use the **IIS `/api` subapplication example**.

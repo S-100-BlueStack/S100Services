@@ -142,6 +142,7 @@ export function createAssignmentPage({
   let rows = [];
   let loadedPage = null;
   const pipelineNames = new Map();
+  let pipelineNamesRequest = null;
   let rowsFeatureId = null;
   let workStreamsRequestPending = false;
   const featureRows = new Map();
@@ -219,6 +220,24 @@ export function createAssignmentPage({
     };
   }
 
+  function ensurePipelineNames() {
+    if (!live || pipelineNamesRequest || !services.workStreams?.list) return pipelineNamesRequest;
+    // Only assigned pages need names; do not introduce an extra catalogue read for
+    // unassigned or legacy list pages. Never issue per-Package binding reads.
+    pipelineNamesRequest = services.workStreams
+      .list({ ids: null, signal: abort.signal })
+      .then((result) => {
+        if (!alive || abort.signal.aborted) return;
+        for (const item of result.items) pipelineNames.set(String(item.id), item.name);
+        for (const row of featureRows.values()) updateFeatureRowSummary(row);
+      })
+      .catch(() => {
+        // The row still has an authoritative Pipeline ID if name lookup fails.
+        pipelineNamesRequest = null;
+      });
+    return pipelineNamesRequest;
+  }
+
   async function loadFeatures() {
     clearTimeout(searchTimer);
     featureRequestController?.abort();
@@ -237,9 +256,25 @@ export function createAssignmentPage({
       if (!isCurrent()) return;
       featurePage = result.page;
       loadedPage = result;
+      // Fresh page summaries supersede previously inspected rows. Keep uncertain
+      // selections unavailable until their explicit read-only reconciliation.
+      if (live) {
+        const selected = session.snapshot();
+        for (const item of result.items) {
+          if (
+            item.status != null &&
+            (item.id !== selected.feature?.id || !selected.reconciliationRequired)
+          ) {
+            packageSummaries.delete(item.id);
+          }
+        }
+      }
       // List pagination must never fan out into one bindings request per Package.
       // Previously inspected Package summaries remain available across pages.
       renderFeatureRows(result);
+      if (live && result.items.some((item) => item.pipelineIds?.length)) {
+        void ensurePipelineNames();
+      }
       if (live) {
         // A response is only considered refreshed after its accepted page renders.
         const refreshed = new Date();
@@ -265,7 +300,7 @@ export function createAssignmentPage({
       return;
     if (state.reconciliationRequired) {
       // A timed-out write may have committed; previously read bindings are not authoritative.
-      packageSummaries.delete(state.feature.id);
+      packageSummaries.set(state.feature.id, { status: null, pipelineIds: null });
       return;
     }
     if (!state.record?.relations) return;
@@ -278,9 +313,10 @@ export function createAssignmentPage({
     });
   }
 
-  function updateFeatureRowSummary(button, fallbackStatus = "") {
-    const summary = packageSummaries.get(button.dataset.featureId);
-    const status = summary?.status ?? fallbackStatus;
+  function updateFeatureRowSummary(button) {
+    const feature = loadedPage?.items.find((item) => item.id === button.dataset.featureId);
+    const summary = packageSummaries.get(button.dataset.featureId) ?? feature;
+    const status = summary?.status ?? (live ? "Unknown" : "");
     const badge = button.children[0]?.children[1];
     if (badge) {
       badge.textContent = status;
@@ -290,7 +326,8 @@ export function createAssignmentPage({
     if (!live) return;
     const pipelineSummary = button.children[0]?.children[0]?.children[1];
     if (!pipelineSummary) return;
-    const savedPipelines = (summary?.pipelineIds ?? []).map((id) => pipelineNames.get(id) ?? id);
+    const pipelineIds = Array.isArray(summary?.pipelineIds) ? summary.pipelineIds : [];
+    const savedPipelines = pipelineIds.map((id) => pipelineNames.get(id) ?? id);
     pipelineSummary.textContent = savedPipelines.join(", ");
     pipelineSummary.title = pipelineSummary.textContent;
     pipelineSummary.hidden = !savedPipelines.length;
@@ -329,7 +366,7 @@ export function createAssignmentPage({
         top.append(name, status);
       }
       button.replaceChildren(top);
-      updateFeatureRowSummary(button, feature.status);
+      updateFeatureRowSummary(button);
       nextRows.push(button);
     }
 
@@ -597,8 +634,7 @@ export function createAssignmentPage({
       renderSavedBindings(state);
       const selectedRow = featureRows.get(state.feature?.id);
       if (selectedRow) {
-        const fallback = loadedPage?.items.find((item) => item.id === state.feature.id)?.status;
-        updateFeatureRowSummary(selectedRow, fallback);
+        updateFeatureRowSummary(selectedRow);
       }
     }
     // A pending selection still refers to the previous committed Package, not an empty one.

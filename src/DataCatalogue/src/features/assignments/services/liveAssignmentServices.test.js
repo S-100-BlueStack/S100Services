@@ -134,7 +134,8 @@ test("live Package search sends category and binding filters rather than filteri
   assert.equal(query.category, "cat");
   assert.equal(query.hasPipeline, false);
   assert.equal(result.total, 150);
-  assert.equal(result.items[0].status, "Not assigned");
+  assert.equal(result.items[0].status, null);
+  assert.equal(result.items[0].pipelineIds, null);
 });
 
 test("a response failure after the backend committed is reconciled and never silently called Saved", async () => {
@@ -348,7 +349,8 @@ test("unfiltered Package pages never invent assignment status or bindings", asyn
     }),
   });
   const result = await services.features.search({});
-  assert.equal(result.items[0].status, "");
+  assert.equal(result.items[0].status, null);
+  assert.equal(result.items[0].pipelineIds, null);
 });
 
 test("Package pages never fan out into binding reads before selection", async () => {
@@ -395,4 +397,36 @@ test("Package binding reads remain isolated to the requested identity", async ()
   assert.equal(calls.length, 1);
   assert.equal(calls[0].id, "pkg-7");
   assert.ok(calls[0].signal instanceof AbortSignal);
+});
+
+test("unfiltered Package lists use each backend assignment summary without binding fan-out", async () => {
+  let called = 0;
+  const services = createLiveAssignmentServices({
+    async packages() {
+      called++;
+      return {
+        items: [
+          { id: "p1", status: "Assigned", pipelineIds: ["ENC", "Paper"] },
+          { id: "p2", status: "Not assigned", pipelineIds: [] },
+          { id: "p3", status: null, pipelineIds: null },
+        ],
+        page: 0,
+        pageSize: 25,
+        total: 3,
+      };
+    },
+    async bindings() {
+      throw new Error("List rendering must not fetch per-Package bindings");
+    },
+  });
+  const page = await services.features.search();
+  assert.equal(called, 1);
+  assert.deepEqual(
+    page.items.map((item) => [item.status, item.pipelineIds]),
+    [
+      ["Assigned", ["ENC", "Paper"]],
+      ["Not assigned", []],
+      [null, null],
+    ]
+  );
 });

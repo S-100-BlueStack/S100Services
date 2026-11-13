@@ -164,3 +164,55 @@ test("Workspace detail preserves Esri JSON, validates identity and forwards abor
   assert.equal(detail.esriJSON, esriJSON);
   await assert.rejects(service.workspace("pipe/a", "other"), /different Workspace/);
 });
+
+test("live Package pages expose authoritative Pipeline assignment summaries", async () => {
+  const service = createCatalogueService({
+    request: async () =>
+      page([
+        {
+          id: "p1",
+          hasPipeline: true,
+          pipelineBindings: [{ id: "p1::ENC", pipelineId: "ENC" }],
+        },
+        { id: "p2", hasPipeline: false, pipelineBindings: [] },
+        { id: "p3" },
+      ]),
+  });
+  const result = await service.packages();
+  assert.deepEqual(
+    result.items.map((item) => [item.status, item.pipelineIds]),
+    [
+      ["Assigned", ["ENC"]],
+      ["Not assigned", []],
+      [null, null],
+    ]
+  );
+});
+
+test("paged Package AOI uses the geometry route without detail reads or fabricated features", async () => {
+  const calls = [];
+  const aoi = {
+    rings: [
+      [
+        [10, 54],
+        [11, 54],
+        [11, 55],
+        [10, 55],
+        [10, 54],
+      ],
+    ],
+    spatialReference: { wkid: 4326 },
+  };
+  const service = createCatalogueService({
+    async request(path, options) {
+      calls.push({ path, options });
+      return page([{ packageId: "p", shortId: "NM", aoi }]);
+    },
+  });
+  const result = await service.packageGeometries({ page: 0, pageSize: 200 });
+  assert.equal(calls[0].path, "/v1/packages/geometry");
+  assert.equal(calls[0].options.query.includeDetails, false);
+  assert.equal(calls[0].options.query.pageSize, 200);
+  assert.equal(result.items[0].packageId, "p");
+  assert.deepEqual(result.items[0].aoi, aoi);
+});

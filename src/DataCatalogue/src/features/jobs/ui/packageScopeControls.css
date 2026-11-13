@@ -1,0 +1,199 @@
+/* The Work Scope is the only Pipeline/Workspace visibility control on Main Map. */
+.dc-package-scope {
+  position: sticky;
+  top: var(--dc-jobs-panel-header-height, 48px);
+  z-index: 7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.7rem;
+  gap: 0.45rem 0.5rem;
+  margin: 0 -0.15rem 0.65rem;
+  padding: 0.55rem 0.15rem;
+  border-bottom: 1px solid var(--calcite-color-border-3, #ccc);
+  background: var(--dc-overlay, var(--calcite-color-background, Canvas));
+  color: var(--calcite-color-text-1, CanvasText);
+  color-scheme: inherit;
+}
+.dc-package-scope__dropdown {
+  position: relative;
+  min-width: 0;
+}
+.dc-package-scope__dropdown:first-of-type {
+  grid-column: 1 / -1;
+}
+.dc-package-scope__summary {
+  display: grid;
+  gap: 0.2rem;
+  min-height: 46px;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--calcite-color-border-2, #999);
+  background: var(--calcite-color-foreground-1, Canvas);
+  color: var(--calcite-color-text-1, CanvasText);
+  font-size: 0.76rem;
+  list-style: none;
+  cursor: pointer;
+}
+.dc-package-scope__summary::-webkit-details-marker {
+  display: none;
+}
+.dc-package-scope__summary::after {
+  content: "\25BE";
+  position: absolute;
+  right: 0.45rem;
+  bottom: 0.3rem;
+}
+.dc-package-scope__summary:focus-visible,
+.dc-package-scope__option input:focus-visible {
+  outline: 2px solid var(--calcite-color-focus, #007ac2);
+  outline-offset: 2px;
+}
+.dc-package-scope__label {
+  color: var(--calcite-color-text-2, CanvasText);
+  font-weight: 600;
+}
+.dc-package-scope__value {
+  padding-right: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dc-package-scope__options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: min(360px, 55vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0.3rem;
+  border: 1px solid var(--calcite-color-border-2, #999);
+  background: var(--calcite-color-foreground-1, Canvas);
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.16);
+}
+.dc-package-scope__option {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 30px;
+  padding: 0.2rem 0.3rem;
+  cursor: pointer;
+  font-size: 0.77rem;
+  line-height: 1.25;
+}
+.dc-package-scope__option:hover {
+  background: var(--calcite-color-foreground-2, transparent);
+}
+.dc-package-scope__option input {
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--calcite-color-brand, #007ac2);
+}
+.dc-package-scope__option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dc-package-scope__count {
+  margin-left: auto;
+  color: var(--calcite-color-text-2, CanvasText);
+  white-space: nowrap;
+}
+.dc-package-scope__empty-toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  min-width: 0;
+  font-size: 0.68rem;
+  color: var(--calcite-color-text-2, CanvasText);
+  white-space: nowrap;
+}
+.dc-package-scope__empty-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 2rem;
+  height: 1.125rem;
+  margin: 0;
+  border: 1px solid var(--calcite-color-border-2, #999);
+  border-radius: 1rem;
+  background: var(--calcite-color-foreground-3, #bbb);
+  cursor: pointer;
+}
+.dc-package-scope__empty-switch::before {
+  content: "";
+  position: absolute;
+  width: 0.75rem;
+  height: 0.75rem;
+  top: 0.125rem;
+  left: 0.125rem;
+  border-radius: 50%;
+  background: var(--calcite-color-foreground-1, #fff);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  transition: transform 120ms ease-out;
+}
+.dc-package-scope__empty-switch:checked {
+  background: var(--calcite-color-brand, #007ac2);
+  border-color: var(--calcite-color-brand, #007ac2);
+}
+.dc-package-scope__empty-switch:checked::before {
+  transform: translateX(0.85rem);
+}
+.dc-package-scope__empty-switch:focus-visible {
+  outline: 2px solid var(--calcite-color-focus, #007ac2);
+  outline-offset: 2px;
+}
+/* Center the Package title against the Refresh and Close controls, including Calcite actions. */
+.data-catalogue-jobs-overlay .data-catalogue-overlay-panel__header {
+  align-items: center;
+}
+.data-catalogue-jobs-overlay .data-catalogue-overlay-panel__title {
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dc-package-scope__empty-switch::before {
+    transition: none;
+  }
+}
+.dc-package-scope[hidden] {
+  display: none;
+}
+
+/* Multiple contextual Jobs remain independent while sharing one Package heading. */
+.job-list__package-group {
+  margin-bottom: 0.65rem;
+  border: 1px solid var(--calcite-color-border-3, #ccc);
+}
+.job-list__package-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  background: var(--calcite-color-foreground-1, Canvas);
+}
+.job-list__package-summary:focus-visible {
+  outline: 2px solid var(--calcite-color-focus, #007ac2);
+  outline-offset: -2px;
+}
+.job-list__package-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.job-list__package-meta {
+  margin-left: auto;
+  color: var(--calcite-color-text-2, CanvasText);
+  font-size: 0.73rem;
+}
+.job-list__package-entries {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.4rem;
+}
+.job-list__package-entries .job-card {
+  margin: 0;
+}

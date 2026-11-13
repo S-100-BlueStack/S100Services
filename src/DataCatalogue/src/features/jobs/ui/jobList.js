@@ -27,6 +27,7 @@ import { getJobsForAoiFromJobs } from "../../relations/services/relationService.
 import { createJobStore } from "../state/jobStore.js";
 import { getLiveJobPresentation } from "./liveJobPresentation.js";
 import { createJobsFocusRecovery } from "./createJobsFocusRecovery.js";
+import { filterJobsByPackageScope, groupJobsByPackage } from "../domain/packageScopeFilter.js";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
@@ -50,6 +51,7 @@ export function createJobList({
   let alive = true;
   let currentState = store.getSnapshot();
   let jobFilters = jobFilterStore?.getSnapshot?.().filters ?? null;
+  let packageScope = null;
   let aoiFilter = null;
   let selectedJobId = "";
   let viewMode = JOB_LIST_VIEW_MODE.LIST;
@@ -57,6 +59,7 @@ export function createJobList({
   const expandedJobIds = new Set();
   const visibleCompletedJobIds = new Set();
   const pendingMutationJobIds = new Set();
+  const collapsedPackageIds = new Set();
 
   async function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
     const result = await loadJobs(store, visibleCompletedJobIds, {
@@ -170,11 +173,13 @@ export function createJobList({
       sourceMode,
       jobFilters,
       aoiFilter,
+      packageScope,
       selectedJobId,
       viewMode,
       expandedJobIds,
       visibleCompletedJobIds,
       pendingMutationJobIds,
+      collapsedPackageIds,
       clearAoiFilter,
       clearJobFilters,
       runJobsRefresh,
@@ -199,7 +204,7 @@ export function createJobList({
     makeSelectedCompletedJobVisible(visibleCompletedJobIds, state.jobs, selectedJobId);
     removeInvisibleExpandedJobs(
       expandedJobIds,
-      getFilteredScopedJobs(state.jobs, aoiFilter, jobFilters),
+      getFilteredScopedJobs(state.jobs, aoiFilter, jobFilters, packageScope),
       visibleCompletedJobIds,
       jobFilters
     );
@@ -212,7 +217,7 @@ export function createJobList({
       jobFilters = snapshot.filters;
       removeInvisibleExpandedJobs(
         expandedJobIds,
-        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
+        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters, packageScope),
         visibleCompletedJobIds,
         jobFilters
       );
@@ -221,6 +226,19 @@ export function createJobList({
 
   return {
     element: rootElement,
+    setPackageScope(nextScope) {
+      if (sourceMode !== "live" || !alive) return;
+      const next = nextScope ?? { pipelineIds: [], workspaceKeys: null };
+      if (JSON.stringify(next) === JSON.stringify(packageScope)) return;
+      packageScope = next;
+      removeInvisibleExpandedJobs(
+        expandedJobIds,
+        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters, packageScope),
+        visibleCompletedJobIds,
+        jobFilters
+      );
+      render();
+    },
     refreshJobs({ manual = false } = {}) {
       return runJobsRefresh({
         source: manual ? "manual" : "panel-open",
@@ -285,7 +303,7 @@ export function createJobList({
       makeSelectedCompletedJobVisible(visibleCompletedJobIds, currentState.jobs, selectedJobId);
       removeInvisibleExpandedJobs(
         expandedJobIds,
-        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
+        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters, packageScope),
         visibleCompletedJobIds,
         jobFilters
       );
@@ -323,11 +341,13 @@ function renderJobList({
   sourceMode,
   jobFilters,
   aoiFilter,
+  packageScope,
   selectedJobId,
   viewMode,
   expandedJobIds,
   visibleCompletedJobIds,
   pendingMutationJobIds,
+  collapsedPackageIds,
   clearAoiFilter,
   clearJobFilters,
   runJobsRefresh,
@@ -355,7 +375,7 @@ function renderJobList({
     return;
   }
 
-  const scopedJobs = getScopedJobs(state.jobs, aoiFilter);
+  const scopedJobs = getScopedJobs(state.jobs, aoiFilter, packageScope);
   const filteredScopedJobs = filterJobs(scopedJobs, jobFilters);
   const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleCompletedJobIds, jobFilters);
   const hiddenCompletedCount = getHiddenCompletedCount(
@@ -428,10 +448,32 @@ function renderJobList({
   const listElement = document.createElement("div");
   listElement.className = "job-list__items";
 
-  for (const job of visibleJobs) {
+  const groups =
+    sourceMode === "live"
+      ? groupJobsByPackage(visibleJobs)
+      : visibleJobs.map((job) => ({ key: job.id, jobs: [job] }));
+  for (const group of groups) {
+    if (sourceMode === "live" && group.jobs.length > 1) {
+      listElement.appendChild(
+        createPackageGroup({
+          group,
+          collapsedPackageIds,
+          cardOptions: {
+            selectedJobId,
+            store,
+            expandedJobIds,
+            visibleCompletedJobIds,
+            pendingMutationJobIds,
+            render,
+            openJobDetailsFromList,
+          },
+        })
+      );
+      continue;
+    }
     listElement.appendChild(
       createJobCard({
-        job,
+        job: group.jobs[0],
         selectedJobId,
         store,
         expandedJobIds,
@@ -760,23 +802,20 @@ function createSelectedJobMissingState({ selectedJobId, showJobListFromDetails }
   return containerElement;
 }
 
-function getFilteredScopedJobs(jobs, aoiFilter, jobFilters) {
-  return filterJobs(getScopedJobs(jobs, aoiFilter), jobFilters);
+function getFilteredScopedJobs(jobs, aoiFilter, jobFilters, packageScope) {
+  return filterJobs(getScopedJobs(jobs, aoiFilter, packageScope), jobFilters);
 }
 
-function getScopedJobs(jobs, aoiFilter) {
-  if (!aoiFilter) {
-    return jobs;
+function getScopedJobs(jobs, aoiFilter, packageScope) {
+  // AOI popup relation filters narrow the current Work Scope, never replace it.
+  if (aoiFilter) {
+    if (!aoiFilter.aoiId) return [];
+    return filterJobsByPackageScope(
+      getJobsForAoiFromJobs({ aoiId: aoiFilter.aoiId, jobs }),
+      packageScope
+    );
   }
-
-  if (!aoiFilter.aoiId) {
-    return [];
-  }
-
-  return getJobsForAoiFromJobs({
-    aoiId: aoiFilter.aoiId,
-    jobs,
-  });
+  return filterJobsByPackageScope(jobs, packageScope);
 }
 
 function getVisibleJobs(jobs, visibleCompletedJobIds, jobFilters) {
@@ -909,7 +948,10 @@ function createListToolbar({
 
   const countElement = document.createElement("p");
   countElement.className = "job-list__count";
-  countElement.textContent = `${visibleJobs.length} visible Packages`;
+  const packageCount =
+    sourceMode === "live" ? groupJobsByPackage(visibleJobs).length : visibleJobs.length;
+  countElement.textContent =
+    sourceMode === "live" ? `${packageCount} Packages` : `${packageCount} visible Packages`;
 
   countGroupElement.append(countElement);
   if (hiddenCompletedCount > 0) {
@@ -971,6 +1013,58 @@ function createToolbarButton(label) {
   return buttonElement;
 }
 
+function createPackageGroup({ group, collapsedPackageIds, cardOptions }) {
+  const first = group.jobs[0];
+  const container = document.createElement("details");
+  container.className = "job-list__package-group";
+  container.dataset.packageId = first.packageId;
+  container.open = !collapsedPackageIds.has(group.key);
+
+  const summary = document.createElement("summary");
+  summary.className = "job-list__package-summary";
+  const title = document.createElement("span");
+  title.className = "job-list__package-title";
+  title.textContent = getLiveJobPresentation(first)?.shortId ?? first.title;
+  const meta = document.createElement("span");
+  meta.className = "job-list__package-meta";
+  const pipelineCount = new Set(
+    group.jobs
+      .map(
+        (job) =>
+          normalizeOptionalString(job.pipelineId) || normalizeOptionalString(job.pipelineName)
+      )
+      .filter(Boolean)
+  ).size;
+  const workspaceCount = new Set(
+    group.jobs
+      .map(
+        (job) =>
+          normalizeOptionalString(job.workspaceId) || normalizeOptionalString(job.workspaceName)
+      )
+      .filter(Boolean)
+  ).size;
+  meta.textContent =
+    pipelineCount > 1
+      ? `${pipelineCount} pipelines`
+      : workspaceCount > 1
+        ? `${workspaceCount} workspaces`
+        : `${group.jobs.length} Jobs`;
+  summary.append(title, meta);
+
+  const entries = document.createElement("div");
+  entries.className = "job-list__package-entries";
+  for (const job of group.jobs) {
+    entries.append(createJobCard({ job, nested: true, ...cardOptions }));
+  }
+  container.append(summary, entries);
+  container.addEventListener("toggle", () => {
+    if (!container.isConnected) return;
+    if (container.open) collapsedPackageIds.delete(group.key);
+    else collapsedPackageIds.add(group.key);
+  });
+  return container;
+}
+
 function createJobCard({
   job,
   selectedJobId,
@@ -980,6 +1074,7 @@ function createJobCard({
   pendingMutationJobIds,
   render,
   openJobDetailsFromList,
+  nested = false,
 }) {
   const isExpanded = expandedJobIds.has(job.id);
   const isSelected = job.id === selectedJobId;
@@ -1006,6 +1101,7 @@ function createJobCard({
       store,
       render,
       openJobDetailsFromList,
+      nested,
     })
   );
 
@@ -1025,6 +1121,7 @@ function createJobCardSummary({
   store,
   render,
   openJobDetailsFromList,
+  nested = false,
 }) {
   const summaryElement = document.createElement("div");
   summaryElement.className = "job-card__summary-layout";
@@ -1032,7 +1129,7 @@ function createJobCardSummary({
   const topRowElement = document.createElement("div");
   topRowElement.className = "job-card__top-row";
   topRowElement.append(
-    createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDetailsFromList }),
+    createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDetailsFromList, nested }),
     createBadgeColumn(job)
   );
 
@@ -1054,7 +1151,14 @@ function createJobCardSummary({
   return summaryElement;
 }
 
-function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDetailsFromList }) {
+function createJobTitleRow({
+  job,
+  isExpanded,
+  expandedJobIds,
+  render,
+  openJobDetailsFromList,
+  nested = false,
+}) {
   const titleRowElement = document.createElement("div");
   titleRowElement.className = "job-card__title-row";
 
@@ -1071,7 +1175,10 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
   const titleElement = document.createElement("h3");
   titleElement.className = "job-card__title";
   const livePresentation = getLiveJobPresentation(job);
-  titleElement.textContent = livePresentation?.shortId ?? job.title;
+  titleElement.textContent =
+    nested && livePresentation
+      ? livePresentation.context || livePresentation.shortId
+      : (livePresentation?.shortId ?? job.title);
 
   if (livePresentation) {
     titleRowElement.append(detailsButton);
@@ -1105,7 +1212,7 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
       }
     }
     textElement.append(headingElement);
-    if (livePresentation.context) {
+    if (livePresentation.context && !nested) {
       const contextElement = document.createElement("p");
       contextElement.className = "job-card__context";
       contextElement.textContent = livePresentation.context;
