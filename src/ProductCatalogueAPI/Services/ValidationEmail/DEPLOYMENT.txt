@@ -316,7 +316,7 @@ Do not silently change an already-final decision; conflicting results need revie
 Legacy sends without manifests cannot be auto-applied; do not populate guessed
 historical manifests. Use the existing manual acknowledgement endpoint instead.
 
-Original matched reports use ProductArtifact ValidationReport and appear in the
+Original matched reports use ProductArtifact IcEncReport and appear in the
 existing electronicproducts/{name}/artifacts/history and artifact download routes.
 Unmatched report bytes remain inspectable in the inbound detail response. Dry-run
 never writes candidate artifacts or states, and never enqueues publication.
@@ -420,3 +420,13 @@ API-only manual acknowledgements queue this worker operation. Failed completion
 keeps durable acceptance pending for queued/DPC recovery; the two stores are not
 one atomic transaction.
 No GUI, schema migration or recovery SQL is supplied for this action.
+
+IC-ENC artifact classification (013)
+Apply Data/Migrations/013_ClassifyIcEncReportArtifacts.sql to the System database
+for previously received real and simulated reports. The idempotent migration
+requires IC-ENC email provenance; ordinary SevenCs artifacts remain unchanged.
+New matched real/simulated attachments use IcEncReport through the same writer.
+Existing artifact history/download routes retain their names and now include
+IcEncReport. Deploy API and Worker together so both understand the new enum value.
+No GUI files are changed. The current GUI still groups returned artifacts as
+validation files; separate IC-ENC presentation requires a later frontend change.

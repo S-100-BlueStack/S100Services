@@ -32,6 +32,7 @@ public static class ApplicationServicesConfiguration
         services.AddProblemDetails();
 
         services.AddHealthChecks();
+        services.AddCatalogueMcp();
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
         services.AddTransient<DataCatalague.Api.Services.PackageCreationService>();
         services.AddTransient<DataCatalague.Api.Services.DispatcherResourceService>();

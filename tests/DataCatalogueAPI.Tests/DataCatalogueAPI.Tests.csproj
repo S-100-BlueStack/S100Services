@@ -23,6 +23,7 @@
     <Content Include="../../src/DataCatalogueAPI/Samples/Workspaces/*.json" Link="Samples/Workspaces/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../src/DataCatalogueAPI/Samples/NoticesToMariners/*.json" Link="Samples/NoticesToMariners/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../src/DataCatalogueAPI/Samples/GeneralSubmission/*.zip" Link="Samples/GeneralSubmission/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../src/DataCatalogueAPI/Samples/WorkZone/*.zip" Link="Samples/WorkZone/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../src/DataCatalogueAPI/Samples/MarineAggregateExtraction/*.geojson" Link="Samples/MarineAggregateExtraction/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../src/DataCatalogueAPI/Samples/MarineAggregateExtraction/*.zip" Link="Samples/MarineAggregateExtraction/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

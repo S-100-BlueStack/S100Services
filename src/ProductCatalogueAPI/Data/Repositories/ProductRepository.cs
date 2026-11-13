@@ -644,7 +644,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             ORDER BY created_at_utc DESC, product_artifact_id DESC;
             """, new {
                 ProductRevisionId = productRevisionId,
-                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString() }
+                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString(), ProductArtifactKind.IcEncReport.ToString() }
             }, cancellationToken: cancellationToken));
         return artifacts.ToArray();
     }
@@ -663,7 +663,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             ORDER BY created_at_utc DESC, product_artifact_id DESC;
             """, new {
                 TrackId = trackId,
-                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString() }
+                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString(), ProductArtifactKind.IcEncReport.ToString() }
             }, cancellationToken: cancellationToken));
         return artifacts.ToArray();
     }
@@ -682,7 +682,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             """, new {
                 ArtifactId = artifactId,
                 DatasetName = datasetName,
-                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString() }
+                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString(), ProductArtifactKind.IcEncReport.ToString() }
             }, cancellationToken: cancellationToken));
     }
 
@@ -1045,7 +1045,7 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
 
     private ProductExportTrackRecord FindTrack(Guid trackId) => _tracks.Values.Single(track => track.Id == trackId);
     private static ProductRecord SelectPreferredCurrent(IGrouping<string, ProductRecord> group) => group.OrderBy(product => NormalizeProductSpecification(product.ProductSpecification) == "S101" ? 0 : 1).ThenByDescending(product => product.Date_From).First();
-    private static bool IsValidationArtifact(ProductArtifactKind kind) => kind is ProductArtifactKind.ValidationReport or ProductArtifactKind.ValidationDiagnostic;
+    private static bool IsValidationArtifact(ProductArtifactKind kind) => kind is ProductArtifactKind.ValidationReport or ProductArtifactKind.ValidationDiagnostic or ProductArtifactKind.IcEncReport;
     private static string NormalizeProductSpecification(string value) {
         var normalized = value.Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
         return normalized == "S128" ? "S101" : normalized;

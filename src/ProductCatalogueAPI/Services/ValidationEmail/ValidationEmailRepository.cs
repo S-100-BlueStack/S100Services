@@ -1,5 +1,6 @@
 using Dapper;
 using ProductCatalogueAPI.Data.Database;
+using ProductCatalogueAPI.Data.Models;
 using System.Data;
 using System.Data.Common;
 using System.Security.Cryptography;
@@ -121,8 +122,8 @@ public sealed class ValidationEmailRepository(DbConnectionFactory connections, T
                 await connection.ExecuteAsync(new CommandDefinition("""
                     IF NOT EXISTS (SELECT 1 FROM dbo.ProductArtifact WITH (UPDLOCK, HOLDLOCK) WHERE product_artifact_id = @ArtifactId)
                         INSERT dbo.ProductArtifact (product_artifact_id, product_export_track_id, product_revision_id, artifact_kind, file_name, media_type, content, sha256, metadata_json, created_at_utc)
-                        VALUES (@ArtifactId, @TrackId, @RevisionId, 'ValidationReport', @Name, 'application/octet-stream', @Content, @Hash, @Metadata, @Now);
-                    """, new { ArtifactId = artifactId, result.Match.TrackId, result.Match.RevisionId, attachment.Name, attachment.Content, Hash = hash,
+                        VALUES (@ArtifactId, @TrackId, @RevisionId, @Kind, @Name, 'application/octet-stream', @Content, @Hash, @Metadata, @Now);
+                    """, new { Kind = ProductArtifactKind.IcEncReport.ToString(), ArtifactId = artifactId, result.Match.TrackId, result.Match.RevisionId, attachment.Name, attachment.Content, Hash = hash,
                     Metadata = JsonSerializer.Serialize(new { Source = parser.ProviderName, InboundId = id, result.Match.DeliveryId }), Now = clock.GetUtcNow().UtcDateTime }, transaction, cancellationToken: cancellationToken));
             }
         }

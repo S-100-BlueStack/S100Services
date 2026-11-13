@@ -72,6 +72,7 @@ public static class RequestPipelineConfiguration
         app.MapOpenApi();
 
         app.MapControllers();
+        app.MapCatalogueMcp();
         app.MapHealthChecks("/health");
 
         if (app.Configuration.GetValue<bool>(EnableUiConfigurationKey)) {

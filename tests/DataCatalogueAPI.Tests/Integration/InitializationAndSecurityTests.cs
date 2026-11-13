@@ -20,15 +20,15 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
         }
         await this.App.SeedAsync();
         var extractionCount = Math.Min(10, Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction"), "*.zip").Length);
-        var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount;
+        var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount + 5;
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == expected);
         await this.App.EventuallyAsync(async () => {
             var page = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/v1/pipelines"))!;
             return page.TotalCount == 2 && page.Items.All(pipeline => pipeline.Workspaces.Count == workspaceCounts[pipeline.DisplayName]);
         });
-        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/v1/dispatcher/categories"))!.TotalCount == 3);
+        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/v1/dispatcher/categories"))!.TotalCount == 4);
         var categories = (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/v1/dispatcher/categories"))!;
-        Assert.Equal(new[] { "GeneralSubmission", "MarineAggregateExtraction", "NoticeToMariners" }, categories.Items.Select(item => item.Id).Order().ToArray());
+        Assert.Equal(new[] { "GeneralSubmission", "MarineAggregateExtraction", "NoticeToMariners", "WorkZone" }, categories.Items.Select(item => item.Id).Order().ToArray());
         Assert.All(categories.Items, category => Assert.NotNull(category.Specification));
         var pipelines = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/v1/pipelines"))!;
         Assert.Equal(new[] { "ENC", "Paper Chart" }, pipelines.Items.Select(item => item.DisplayName).Order().ToArray());
@@ -50,7 +50,7 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
         Assert.Equal(expected - expected / 2, (await this.PackagesAsync("?hasPipeline=false&pageSize=200")).TotalCount);
         var bindingCounts = pipelines.Items.ToDictionary(pipeline => pipeline.Id, _ => 0);
         foreach (var package in (await this.PackagesAsync("?pageSize=200")).Items) {
-            if (package.Category is "GeneralSubmission" or "MarineAggregateExtraction") {
+            if (package.Category is "GeneralSubmission" or "MarineAggregateExtraction" or "WorkZone") {
                 Assert.NotEmpty(package.Descriptions!);
                 Assert.All(package.Descriptions!, description => Assert.Equal("en", description.Language));
             }
@@ -66,6 +66,17 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
         Assert.Equal(expected / 2, bindingCounts.Values.Sum());
         Assert.InRange(bindingCounts.Values.Max() - bindingCounts.Values.Min(), 0, 1);
         Assert.Equal(2, (await this.PackagesAsync("?category=GeneralSubmission")).TotalCount);
+        var workZones = await this.PackagesAsync("?category=WorkZone&pageSize=200");
+        Assert.Equal(5, workZones.TotalCount);
+        Assert.All(workZones.Items, package => {
+            Assert.StartsWith("WZ-", package.MetaData!.ShortId);
+            Assert.Equal("WorkZone", package.MetaData.Type);
+            Assert.Equal("WorkZone", package.MetaData.Source);
+            Assert.StartsWith("SAMPLE-2026-", package.MetaData.RefId);
+            Assert.Contains("WorkZone case number:", Assert.Single(package.Descriptions!).Description);
+            Assert.StartsWith("database://", package.AbsoluteUri);
+            Assert.EndsWith(".zip", package.FileName);
+        });
         var extractionPage = await this.PackagesAsync("?category=MarineAggregateExtraction&pageSize=200");
         Assert.Equal(extractionCount, extractionPage.TotalCount);
         foreach (var package in extractionPage.Items) {

@@ -5,7 +5,7 @@ namespace DataCatalague.Api.Models.V1
 {
     public sealed class CreatePackageRequest : IValidatableObject
     {
-        /// <summary>Reads the uploaded ZIP referenced by AbsoluteUri. Currently supported for MarineAggregateExtraction; omit all derived metadata and geometry.</summary>
+        /// <summary>Reads the uploaded ZIP referenced by AbsoluteUri. Supported for MarineAggregateExtraction and WorkZone; omit all derived metadata and geometry.</summary>
         public bool ImportFromArchive { get; init; }
 
         /// <summary>Complete Esri geometry groups; the AOI is recomputed after projection when supplied.</summary>
@@ -42,8 +42,8 @@ namespace DataCatalague.Api.Models.V1
                 }
                 yield break;
             }
-            if (this.Category != "MarineAggregateExtraction") {
-                yield return new ValidationResult("Archive import is currently supported only for MarineAggregateExtraction.", [nameof(this.Category)]);
+            if (this.Category is not ("MarineAggregateExtraction" or "WorkZone")) {
+                yield return new ValidationResult("Archive import is supported for MarineAggregateExtraction and WorkZone.", [nameof(this.Category)]);
             }
             // System.Uri normalizes a bare database://UUID authority to a root path.
             if (!Uri.TryCreate(this.AbsoluteUri, UriKind.Absolute, out var uri) || uri.Scheme != "database"
