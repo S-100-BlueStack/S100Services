@@ -1,4 +1,6 @@
 import { createJobList } from "../../features/jobs/ui/jobList.js";
+import { createPackageScopeControls } from "../../features/jobs/ui/createPackageScopeControls.js";
+import { JOB_STORE_CHANGE_TYPE } from "../../features/jobs/state/jobStore.js";
 
 const LIVE_PACKAGE_PANEL_REUSE_MS = 60_000;
 
@@ -6,6 +8,7 @@ export function createJobsOverlay({
   jobFilterStore,
   jobStore,
   sourceMode = "mock",
+  onScopeChange = () => {},
   now = () => Date.now(),
 } = {}) {
   const jobList = createJobList({
@@ -66,7 +69,18 @@ export function createJobsOverlay({
   headerActionsElement.append(refreshButton);
   headerActionsElement.append(backButton, closeButton);
   headerElement.append(titleGroupElement, headerActionsElement);
-  panelElement.append(headerElement, jobList.element);
+  const scopeControls =
+    sourceMode === "live"
+      ? createPackageScopeControls({
+          onChange(scope) {
+            jobList.setPackageScope(scope);
+            onScopeChange(scope);
+          },
+        })
+      : null;
+  panelElement.append(headerElement);
+  if (scopeControls) panelElement.append(scopeControls.element);
+  panelElement.append(jobList.element);
 
   updateStickyHeaderHeight(panelElement, headerElement);
 
@@ -80,6 +94,15 @@ export function createJobsOverlay({
   headerResizeObserver?.observe(headerElement);
 
   const unsubscribeLoading = jobStore?.subscribe?.((state) => {
+    if (
+      scopeControls &&
+      !state.isLoading &&
+      !state.error &&
+      (state.lastChange?.type === JOB_STORE_CHANGE_TYPE.JOBS_LOADED ||
+        state.lastChange?.type === JOB_STORE_CHANGE_TYPE.JOB_STATUS_UPDATED)
+    ) {
+      scopeControls.setJobs(state.jobs);
+    }
     refreshButton.disabled = state.isLoading;
     const label = state.isLoading ? "Refreshing Packages" : "Refresh Packages";
     refreshButton.title = label;
@@ -89,6 +112,10 @@ export function createJobsOverlay({
   jobList.element.addEventListener("data-catalogue:job-details-mode-changed", (event) => {
     const isDetailsMode = Boolean(event.detail?.isDetailsMode);
 
+    if (scopeControls) {
+      scopeControls.element.hidden = isDetailsMode;
+      scopeControls.element.inert = isDetailsMode;
+    }
     backButton.hidden = !isDetailsMode;
     backButton.setAttribute("aria-hidden", String(!isDetailsMode));
     updateStickyHeaderHeight(panelElement, headerElement);
@@ -98,6 +125,12 @@ export function createJobsOverlay({
     element: panelElement,
     closeButton,
     refreshButton,
+    setPipelineCatalogue(groups) {
+      scopeControls?.setCatalogue(groups);
+    },
+    getWorkScope() {
+      return scopeControls?.getScope() ?? null;
+    },
     refreshJobs({ onPanelOpen = false } = {}) {
       if (onPanelOpen && sourceMode === "live") {
         const snapshot = jobStore.getSnapshot();
@@ -135,6 +168,7 @@ export function createJobsOverlay({
     destroy() {
       headerResizeObserver?.disconnect();
       unsubscribeLoading?.();
+      scopeControls?.destroy();
       jobList.destroy();
     },
   };

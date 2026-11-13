@@ -11,11 +11,20 @@ import {
 // A long group has its own scroll stop so the Pipeline toggle remains visible.
 const MAX_VISIBLE_WORKSPACE_ROWS = 6;
 
-export function createPipelineVisibility({ catalogue, container, onChange, onWorkspacesLoaded }) {
+export function createPipelineVisibility({
+  catalogue,
+  container,
+  onChange,
+  onWorkspacesLoaded,
+  readOnly = false,
+}) {
   const list = document.createElement("div");
   list.className = "dc-pipeline-list";
   list.setAttribute("role", "group");
-  list.setAttribute("aria-label", "Visible Pipelines and Workspaces");
+  list.setAttribute(
+    "aria-label",
+    readOnly ? "Pipeline and Workspace overview" : "Visible Pipelines and Workspaces"
+  );
   const message = document.createElement("p");
   message.className = "dc-pipeline-message";
   message.setAttribute("role", "status");
@@ -42,7 +51,9 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
   let pending = null;
 
   function visible() {
-    return visibleWorkspacePipelines(groups, enabledPipelines, enabledWorkspaces);
+    return readOnly
+      ? groups.flatMap((group) => group.workspaces)
+      : visibleWorkspacePipelines(groups, enabledPipelines, enabledWorkspaces);
   }
 
   function notify(options = {}) {
@@ -50,10 +61,45 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
   }
 
   function updateMessage() {
-    message.textContent = groups.length ? "" : "No Workspaces available.";
+    message.textContent = groups.length
+      ? readOnly
+        ? "Select Workspaces in Packages to filter the map."
+        : ""
+      : "No Workspaces available.";
   }
 
   function render() {
+    if (readOnly) {
+      const nodes = groups.map((group) => {
+        const region = document.createElement("div");
+        region.className = "dc-pipeline-group";
+        region.setAttribute("role", "group");
+        region.setAttribute("aria-label", `${group.name} Pipeline`);
+        const heading = document.createElement("div");
+        heading.className = "dc-pipeline-row dc-pipeline-row--pipeline";
+        const name = document.createElement("span");
+        name.textContent = group.name;
+        const count = document.createElement("small");
+        count.textContent = String(group.workspaces.length);
+        count.title = "Workspaces";
+        heading.append(name, count);
+        const entries = document.createElement("div");
+        entries.className = "dc-pipeline-workspaces";
+        for (const workspace of group.workspaces) {
+          const row = document.createElement("div");
+          row.className = "dc-pipeline-row dc-pipeline-row--workspace";
+          const label = document.createElement("span");
+          label.textContent = workspace.name;
+          row.append(label);
+          entries.append(row);
+        }
+        region.append(heading, entries);
+        return region;
+      });
+      list.replaceChildren(...nodes);
+      updateMessage();
+      return;
+    }
     const nodes = groups.map((group) => {
       const region = document.createElement("div");
       region.className = "dc-pipeline-group";
@@ -143,7 +189,10 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
         groups = next;
         render();
         // Packages use the complete, verified catalogue rather than map visibility.
-        onWorkspacesLoaded?.(groups.flatMap((group) => group.workspaces));
+        onWorkspacesLoaded?.(
+          groups.flatMap((group) => group.workspaces),
+          groups
+        );
         loaded = true;
         notify({ autoFocus: false });
         return { ok: true };

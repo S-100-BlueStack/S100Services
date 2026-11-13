@@ -189,6 +189,7 @@ test("Live Jobs list uses contextual shortId cards without redundant expansion c
     );
     assert.equal(findByClass(view.element, "job-card__date-chip").length, 0);
     assert.equal(findByClass(view.element, "job-card__actions").length, 1);
+    assert.equal(findByClass(view.element, "job-list__count")[0].textContent, "1 Packages");
     assert.equal(
       findByTag(view.element, "calcite-button").filter((e) => e.textContent === "Expand all")
         .length,
@@ -260,8 +261,58 @@ test("Different contextual Jobs link to the same canonical Package assignment", 
       findByClass(view.element, "job-card__assignment-link").map((link) => link.href),
       ["/assignments/packages/package", "/assignments/packages/package"]
     );
-    assert.equal(findByClass(view.element, "job-card__context").length, 2);
+    const groups = findByClass(view.element, "job-list__package-group");
+    assert.equal(groups.length, 1);
+    assert.equal(findByClass(view.element, "job-list__count")[0].textContent, "1 Packages");
+    assert.equal(groups[0].open, true);
+    assert.equal(findByClass(groups[0], "job-list__package-title")[0].textContent, "NM1000");
+    assert.equal(findByClass(groups[0], "job-list__package-meta")[0].textContent, "2 pipelines");
+    assert.deepEqual(
+      findByClass(groups[0], "job-card__title").map((node) => node.textContent),
+      ["ENC / Eastern Denmark", "Paper Charts / Western Denmark"]
+    );
+    assert.equal(findByClass(groups[0], "job-card__actions").length, 2);
+    assert.equal(findByClass(groups[0], "job-card__context").length, 0);
     view.destroy();
+  });
+});
+
+test("a Package in two Workspaces of one Pipeline has concise Workspace metadata", () => {
+  withDocument(() => {
+    const { job } = fixture("live");
+    const sibling = {
+      ...job,
+      id: '["package","enc","west"]',
+      pipelineId: "enc",
+      workspaceId: "west",
+      workspaceName: "Western Denmark",
+      status: "todo",
+    };
+    const snapshot = {
+      jobs: [{ ...job, pipelineId: "enc", workspaceId: "east" }, sibling],
+      isLoading: false,
+      error: null,
+    };
+    const store = {
+      getSnapshot: () => snapshot,
+      subscribe(listener) {
+        listener(snapshot);
+        return () => {};
+      },
+    };
+    const view = createJobList({ store, sourceMode: "live" });
+    try {
+      const groups = findByClass(view.element, "job-list__package-group");
+      assert.equal(groups.length, 1);
+      assert.equal(findByClass(groups[0], "job-list__package-meta")[0].textContent, "2 workspaces");
+      assert.equal(
+        findByClass(groups[0], "job-card").length,
+        2,
+        "both contextual Jobs remain independently actionable"
+      );
+    } finally {
+      view.destroy();
+    }
   });
 });
 
@@ -731,5 +782,39 @@ test("mock Packages panel still reloads on every open", async () => {
       overlay.destroy();
       store.destroy();
     }
+  });
+});
+
+test("Main Map Package list filters a Pipeline and optional Workspace without merging Job statuses", () => {
+  withDocument(() => {
+    const { job } = fixture("live");
+    const jobs = [
+      { ...job, id: "enc:east", pipelineId: "enc", workspaceId: "east" },
+      { ...job, id: "enc:west", pipelineId: "enc", workspaceId: "west", status: "done" },
+      { ...job, id: "paper:north", pipelineId: "paper", workspaceId: "north" },
+    ];
+    const snapshot = { jobs, isLoading: false, error: null };
+    const store = {
+      getSnapshot: () => snapshot,
+      subscribe(listener) {
+        listener(snapshot);
+        return () => {};
+      },
+    };
+    const list = createJobList({ store, sourceMode: "live" });
+    list.setPackageScope({ pipelineId: "enc", workspaceId: null });
+    assert.deepEqual(
+      findByClass(list.element, "job-card").map((card) => card.dataset.jobId),
+      ["enc:east"]
+    );
+    list.setPackageScope({ pipelineId: "paper", workspaceId: "north" });
+    assert.deepEqual(
+      findByClass(list.element, "job-card").map((card) => card.dataset.jobId),
+      ["paper:north"]
+    );
+    list.setPackageScope({ pipelineId: "enc", workspaceId: "west" });
+    // The completed Workspace has its own Job identity and remains hidden by the default status filter.
+    assert.equal(findByClass(list.element, "job-card").length, 0);
+    list.destroy();
   });
 });

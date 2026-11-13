@@ -722,15 +722,15 @@ test("Package list only loads bindings on selection and retains summaries across
     await flush();
     assert.equal(listReads, 1);
     assert.deepEqual(bindingReads, []);
-    assert.equal(status(row("A")), "");
-    assert.equal(status(row("B")), "");
+    assert.equal(status(row("A")), "Unknown");
+    assert.equal(status(row("B")), "Unknown");
 
     assert.equal(await page.selectPackage("A"), true);
     await flush();
     assert.deepEqual(bindingReads, ["A"]);
     assert.equal(status(row("A")), "Assigned");
     assert.equal(pipelines(row("A")), "ENC Production");
-    assert.equal(status(row("B")), "");
+    assert.equal(status(row("B")), "Unknown");
 
     assert.equal(await page.selectPackage("B"), true);
     await flush();
@@ -742,7 +742,7 @@ test("Package list only loads bindings on selection and retains summaries across
     dom.get("feature-next").click();
     await flush();
     assert.equal(row("A"), undefined);
-    assert.equal(status(row("C")), "");
+    assert.equal(status(row("C")), "Unknown");
     assert.deepEqual(bindingReads, ["A", "B"]);
     dom.get("feature-prev").click();
     await flush();
@@ -891,7 +891,7 @@ test("An uncertain Save invalidates cached bindings until read-only reconciliati
     dom.get("save").click();
     await flush();
     assert.equal(dom.get("reconcile").hidden, false);
-    assert.equal(row.children[0].children[1].textContent, "");
+    assert.equal(row.children[0].children[1].textContent, "Unknown");
     dom.get("reconcile").click();
     await flush();
     assert.equal(row.children[0].children[1].textContent, "Assigned");
@@ -1029,6 +1029,66 @@ test("Last refreshed timestamp reports only successful live Package list reads",
     assert.match(dom.get("list-status").textContent, /Package list unavailable/);
     assert.equal(refreshed.dateTime, firstTime);
     assert.equal(refreshed.textContent, `Last refreshed: ${expectedTime}`);
+  } finally {
+    page?.destroy();
+    dom.restore();
+  }
+});
+
+test("Package rows show authoritative assignment and Pipeline names before any Package selection", async () => {
+  const dom = fakeDom();
+  const calls = [];
+  const services = {
+    source: "live",
+    categories: async () => [],
+    features: {
+      search: async () => ({
+        items: [
+          { ...packageData("A"), status: "Assigned", pipelineIds: ["ENC", "Paper"] },
+          { ...packageData("B"), status: "Not assigned", pipelineIds: [] },
+        ],
+        total: 2,
+        page: 0,
+        pageSize: 25,
+      }),
+      get: async (id) => packageData(id),
+    },
+    assignments: {
+      load: async () => {
+        calls.push("bindings");
+        return record(false);
+      },
+    },
+    workStreams: {
+      list: async () => {
+        calls.push("pipelines");
+        return {
+          items: [
+            { id: "ENC", name: "ENC Production" },
+            { id: "Paper", name: "Paper Charts" },
+          ],
+          total: 2,
+        };
+      },
+    },
+  };
+  let page;
+  try {
+    page = createAssignmentPage({
+      services,
+      createMap: () => ({ view: null, destroy() {} }),
+    });
+    await flush();
+    const rows = dom.get("features").children;
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].children[0].children[1].textContent, "Assigned");
+    assert.equal(
+      rows[0].children[0].children[0].children[1].textContent,
+      "ENC Production, Paper Charts"
+    );
+    assert.equal(rows[1].children[0].children[1].textContent, "Not assigned");
+    assert.equal(rows[1].children[0].children[0].children[1].textContent, "");
+    assert.deepEqual(calls, ["pipelines"]);
   } finally {
     page?.destroy();
     dom.restore();

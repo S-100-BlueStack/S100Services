@@ -43,7 +43,7 @@ function createPaperWorkspaces(count, displayName = (number) => `Workspace ${num
   });
 }
 
-function fixture({ onWorkspacesLoaded = null, workspaces = null } = {}) {
+function fixture({ onWorkspacesLoaded = null, workspaces = null, readOnly = false } = {}) {
   const original = globalThis.document;
   globalThis.document = {
     createElement: (name) => new TestElement(name),
@@ -72,6 +72,7 @@ function fixture({ onWorkspacesLoaded = null, workspaces = null } = {}) {
   const controller = createPipelineVisibility({
     catalogue,
     container,
+    readOnly,
     onWorkspacesLoaded(workspaces) {
       loaded.push(workspaces);
       onWorkspacesLoaded?.(workspaces);
@@ -336,4 +337,23 @@ test("Pipeline Workspace scrolling and focus use theme-aware panel styles", () =
   assert.match(css, /\.dc-pipeline-workspaces:focus-visible/);
   assert.match(css, /\.dc-pipeline-row:has\(input:focus-visible\)/);
   assert.doesNotMatch(css, /\.dc-pipeline-row:focus-within/);
+});
+
+test("read-only Pipeline overview has no competing map visibility inputs", async () => {
+  const f = fixture({ readOnly: true });
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(f.loaded.length, 1);
+    assert.equal(f.callbacks.at(-1).workspaces.length, 2);
+    const list = f.container.children[1];
+    assert.equal(list.children.length, 2);
+    for (const group of list.children) {
+      assert.equal(group.children[0].tagName, "div");
+      assert.equal(group.children[1].tagName, "div");
+      assert.ok(group.children[1].children.every((item) => item.tagName === "div"));
+    }
+    assert.match(f.container.children[0].textContent, /Select Workspaces in Packages/);
+  } finally {
+    f.restore();
+  }
 });

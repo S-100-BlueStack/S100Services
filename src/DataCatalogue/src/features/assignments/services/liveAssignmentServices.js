@@ -173,7 +173,10 @@ export function createLiveAssignmentServices(
           items: result.items.map((item) => ({
             ...item,
             type: item.category,
-            status: status || "",
+            // A server-side filter is not evidence of assignment when the response
+            // omits the summary contract. Keep unknown state visible as unknown.
+            status: item.status ?? null,
+            pipelineIds: item.pipelineIds ?? null,
           })),
         };
       },

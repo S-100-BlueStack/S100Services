@@ -1,5 +1,4 @@
-import { isActiveJobStatus } from "../../jobs/domain/jobStatus.js";
-import { workspaceSelectionKey } from "./pipelineVisibility.js";
+import { countOpenJobsByWorkspace } from "../../jobs/domain/packageScopeFilter.js";
 
 // Configuration: threshold lower bounds are inclusive, evaluated from highest to lowest.
 export const WORKSPACE_JOB_COLOR_LEVELS = Object.freeze([
@@ -20,16 +19,4 @@ export function workspaceColorForOpenJobs(count) {
   return UNKNOWN_WORKSPACE_COLOR;
 }
 
-export function countOpenJobsByWorkspace(jobs) {
-  const counts = new Map();
-  const seen = new Map();
-  for (const job of jobs) {
-    if (!job?.pipelineId || !job?.workspaceId || !job?.id) continue;
-    const key = workspaceSelectionKey(job);
-    if (!seen.has(key)) seen.set(key, new Set());
-    if (seen.get(key).has(job.id)) continue;
-    seen.get(key).add(job.id);
-    if (isActiveJobStatus(job.status)) counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return counts;
-}
+export { countOpenJobsByWorkspace };

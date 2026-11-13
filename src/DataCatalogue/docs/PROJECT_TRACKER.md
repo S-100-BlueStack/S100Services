@@ -1,3 +1,231 @@
+## DC-AOI-REG-01 — Package AOI overview and selected-geometry regressions (combined v4 candidate, 2026-11-13)
+
+**Controlled inputs:** uncommitted DC-BE-FE-03 v3 candidate, ZIP SHA-256
+`63CE548D5D98A366D22558CAA653E2056E806A0E65AC059FF29B192EE3069D23`,
+then the DC-AOI-REG-01 v4a Workspace membership correction. Committed frontend
+baseline remains `01ad3b4646f66143f01db09b59cd47dda57795f0`. The selected
+Package renderer was read from a separately verified working-tree snapshot;
+its informational HEAD (`d064ed8234518c7e2d8c0a9866c48c9bae05d2c4`) is not
+used as a substitute for the controlled frontend candidate chain.
+
+- **AOI overview (v4a, browser-confirmed):** Main Map overview AOIs are
+  restricted to Package IDs with confirmed Workspace membership in the active
+  Work Scope. `All Workspaces` means all loaded Workspace memberships, not all
+  Pipeline-bound Packages. A Job marked `Done` or `No update` retains its
+  Workspace membership and does not disappear merely because it is completed.
+  Before a successful membership read no unscoped overview AOIs are shown.
+- **Selected Package geometry (v4 renderer correction):** The renderer accepts
+  a projected Esri `Point` with finite XY even when the SDK returns `null` for
+  `Point.extent`. Polygon and other geometry validation remains extent-based.
+  A selected Package containing a tiny WGS84 AOI plus detailed point Features
+  can be prepared without raising the former empty/unsupported-extent error.
+  When an AOI is unavailable, map focus can use a single Point or the combined
+  extent of multiple Point, line, and surface Features. Overview membership
+  filtering, existing highlights, API geometry normalization, authorization,
+  and the generation-based selection lifecycle are unchanged.
+- **Verification boundary:** Focused geometry tests and isolated SDK-stub
+  integration checks cover the regression; the actual ArcGIS `MapView`, live
+  Package API, full `npm run check`, and browser acceptance still require local
+  verification. See [DC_AOI_REG_01_VALIDATION.md](DC_AOI_REG_01_VALIDATION.md).
+- No backend, API contract, authentication, or dependency changes.
+
+---
+
+## DC-BE-FE-03 v3 — Dropdown dismissal and grouped Package metadata (candidate, 2026-11-13)
+
+**Controlled input:** the uncommitted DC-BE-FE-03 v2 candidate ZIP,
+SHA-256 `057587BD6EAD42627014EAC19198A7F443EE9D2749AC5497E68AB74D8E9BFB32`.
+The committed frontend baseline remains `01ad3b4646f66143f01db09b59cd47dda57795f0`.
+This focused overlay preserves v1/v2 Work Scope selection, Job status isolation,
+Pipeline-scoped AOIs, Workspace visibility and default `All pipelines` behavior.
+
+- Only one native Pipeline/Workspace selection dropdown may be open at a time.
+  Opening one closes the other. A pointer interaction outside both dropdowns
+  dismisses them, including clicks on the external `Show empty` switch and
+  other panel controls. Keyboard focus leaving both also dismisses them.
+  `Escape` continues to restore focus to the active dropdown summary. Dismissal
+  must not redirect focus on outside interaction. Document listeners are removed
+  when the scope component is destroyed.
+- The Packages header vertically centers its title with the existing Refresh
+  and Close controls while retaining the accepted compact typography and
+  sticky-header behavior.
+- Grouped Packages replace contextual/completed-job count prose with one
+  concise scope label: `2 pipelines` when the Package spans more than one
+  Pipeline, otherwise `2 workspaces` when it spans more than one Workspace.
+  Child Jobs retain their own independent statuses and Package assignment links.
+- API services, backend contracts, mock workflows, authentication and
+  dependencies are unchanged. Real-browser acceptance and the full local
+  `npm run check` remain required before commit.
+
+Validation: [DC_BE_FE_03_VALIDATION.md](DC_BE_FE_03_VALIDATION.md).
+
+---
+
+## DC-BE-FE-03 v2 — Main Map scope control polish (candidate, 2026-11-13)
+
+**Controlled input:** the uncommitted DC-BE-FE-03 candidate, ZIP SHA-256
+`246B36CE8E13FEFBD0A5E3A23333449102E0EC4D2CE33A2E5DAF5128DAAE7B69`.
+The committed source baseline remains `01ad3b4646f66143f01db09b59cd47dda57795f0`.
+No backend or dependency change is included. This v2 correction supersedes only the
+DC-BE-FE-03 presentation/default details listed below; all accepted map/list
+scope and contextual Job behavior remains in force.
+
+- Live Main Map starts with **Packages open** instead of the read-only Pipelines
+  catalogue panel. The Pipelines panel/action is removed from live navigation;
+  the catalogue reader remains available to the Jobs adapter, Workspace
+  geometry service and scope controls. Mock navigation remains unchanged.
+- `All pipelines` is the initial selection when the first nonempty verified
+  catalogue arrives; subsequent explicit choices remain valid across reloads.
+  The Pipeline selector spans the panel width. The Workspace selector is on
+  its own row for long names, with a separate `Show empty Workspaces` switch
+  beside it. The switch is outside the dynamic options list and closes an
+  open Workspace menu before its contents change.
+- Dropdown option lists contain wheel/trackpad scrolling at their boundaries;
+  rerenders retain internal scroll position and focused options when still
+  valid. This uses CSS `overscroll-behavior`, not wheel-event interception.
+- The live Packages summary uses only `<count> Packages` and excludes the
+  contextual Job count. The Packages heading receives a modest size increase
+  without a large header/card redesign.
+- Multi-selection, Workspace open-Job counts/sorting, empty Workspace
+  filtering, distinct contextual Job statuses, grouped Packages and
+  Pipeline-assigned AOI union/deduplication are preserved. Package Assignment
+  and all API contracts remain unchanged.
+
+Acceptance and browser validation: [DC_BE_FE_03_VALIDATION.md](DC_BE_FE_03_VALIDATION.md).
+
+---
+
+## DC-BE-FE-03 — Unified Main Map Work Scope (candidate, 2026-11-13)
+
+**Controlled input:** the uncommitted DC-BE-FE-02 candidate (ZIP SHA-256
+`20712E71BF16A8534070223F96AC9290D6BB9AE72BBDFC48C2174CF9E688C22B`),
+which itself overlays DC-BE-FE-01 on frontend commit
+`01ad3b4646f66143f01db09b59cd47dda57795f0`. Backend source contract
+`313ea65a4fc07276da587a3f0acb038b72190e66` is unchanged. This is a
+**frontend-only correction**, not a new commit or live deployment verification.
+See [DC_BE_FE_03_VALIDATION.md](DC_BE_FE_03_VALIDATION.md).
+
+### User-approved scope and behavior
+
+- One authoritative **Work Scope** in the live Main Map Packages panel controls
+  its contextual Jobs list, background Package AOIs and Workspace geometry
+  visibility. The old Pipelines panel is read-only context, **not** a second
+  visibility selector. No independent Layers control is reinstated.
+- Pipeline and Workspace selectors are multi-select. `All pipelines` is an
+  exclusive, explicit option; the initial default is the first concrete
+  Pipeline from the verified catalogue, not `All pipelines`. `All Workspaces`
+  is the default within selected Pipelines. Selections are reconciled against
+  catalogue reloads; Workspace keys include **both** Pipeline ID and Workspace
+  ID to avoid collisions.
+- Workspace options display the number of **open contextual Jobs**, descending.
+  `Done` and `No update` are terminal statuses and do not count as open.
+  Zero-open Workspaces are hidden by default in the Workspace selector and on
+  the map after the first successful Job read. `Show empty Workspaces` enables
+  them again. Until an authoritative Job read exists, unknown counts must not
+  silently classify Workspaces as empty. Counts use existing Job data, not new
+  per-Workspace count requests.
+- When a Package is present in multiple visible Pipeline/Workspace contexts,
+  the list groups those entries beneath one Package ID. Child Jobs retain
+  independent status buttons, canonical identities and Package Assignment
+  links; filtering never merges or mutates contextual status. A native
+  collapsible group limits repeated Package titles while preserving keyboard
+  access. Singleton Packages keep their existing card presentation.
+- Multiple selected Pipelines use **independently bound** backend geometry
+  pages (`hasPipeline=true` with the exact Pipeline ID), then deduplicate the
+  union by canonical Package ID. Workspace narrowing locally filters the
+  fetched Package graphics using the contextual membership Jobs; it does
+  not send Workspace filters to the geometry API or exclude Pipeline-assigned
+  Packages without Workspace overlap when `All Workspaces` is selected.
+  Superseded requests, MapViews and generations cannot publish stale layers.
+- The current display limit is 5,000 unique Package AOIs across the union.
+  Larger overviews fail visibly rather than silently truncate. The backend
+  does not provide a cross-page snapshot token; total-count changes still
+  trigger a retryable error.
+- The approved DC-BE-FE-01 Package Assignment assigned/binding summaries and
+  DC-BE-FE-02 null-language fix remain unchanged. Mock Jobs, temporary status
+  persistence, existing selected Package/Workspace overlays, authentication,
+  backend APIs, dependencies and routes are outside this change.
+
+### Still open
+
+Workspace locking/ownership is not implemented and requires a verified API
+contract; changing Work Scope is **not** locking. Workspace popups/labels,
+Creator/Editor, Notice to Mariners / WorkZone integrations, read-only
+Workspace auto-match UI, Workspace-membership read optimization, and the
+persisted Job statuses remain separate tasks. The earlier DC-BE-FE-02
+single-select/independent-Pipelines-panel design is superseded. Browser
+acceptance, full `npm run check` and deployment verification are pending.
+
+---
+
+## DC-BE-FE-02 — Main Map Package scope correction and meeting outcomes (candidate, 2026-11-12)
+
+**Controlled input:** DC-BE-FE-01 candidate SHA-256
+`C47BF077BF6F77F1DDB6C969AFC22ED75CB13CE50E79E3C48E9A3E1D87A00787`,
+frontend commit `01ad3b4646f66143f01db09b59cd47dda57795f0`,
+backend geometry/assignment contract commit `313ea65a4fc07276da587a3f0acb038b72190e66`.
+The user accepted the new Package Assignment list summaries but rejected the
+unscoped Main Map Layers UI in DC-BE-FE-01. The v1 Layers control must not be
+considered accepted behavior. See [DC_BE_FE_02_VALIDATION.md](DC_BE_FE_02_VALIDATION.md).
+
+### Current correction (candidate, browser acceptance pending)
+
+- Remove the independent Main Map `Layers` popup/checkbox/`Refresh AOIs` action.
+  AOIs must instead follow the selected **Pipeline** in the live Main Map
+  Packages panel. The first available Pipeline is selected when the verified
+  Pipeline catalogue loads; switching Pipelines supersedes previous geometry.
+- Use the verified paged `GET /v1/packages/geometry` read with
+  `hasPipeline=true`, exact selected `pipelineId`, `includeDetails=false`, and
+  normal 200-item pages. **Never draw unassigned Packages** or treat Workspace
+  intersection as a prerequisite for an active Pipeline binding. There is no
+  implicit geometry read without a selected Pipeline.
+- The live Packages panel has a required `Pipeline` selector and optional
+  `Workspace` selector (default `All Workspaces`). Workspace selection narrows
+  **list rows**, not the Pipeline-bound AOI geometry. Preserve each contextual
+  Job identity and independent temporary status; do not flatten one Package
+  appearing in multiple Workspaces into one editable Job. A selected AOI popup
+  explicitly retains its existing cross-Pipeline relation behavior.
+- Keep the Package list Refresh action and use manual Refresh to update the
+  selected Pipeline's AOIs as well. Failures remain visible, and stale
+  responses from an earlier Pipeline/MapView must not publish graphics.
+- In live Package Details, a missing/null description language must not render
+  the fabricated text `Unspecified language`. Display the language label only
+  when it is supplied. Preserve sanitized description HTML.
+- The accepted assigned/binding summaries in Package Assignment remain
+  unchanged. No backend changes, API inventions, new npm dependencies or
+  working-tree commits are part of this candidate.
+
+### New meeting requirements (2026-11-12; **not implemented by DC-BE-FE-02**)
+
+| ID                  | Requirement / decision                                                                                                                                                                                           | Next step / owner                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| DC-MAP-POPUP        | Workspace popups on Main Map must present useful Workspace context                                                                                                                                               | Design and verify existing Workspace layer popup/selection contract before coding                                                               |
+| DC-MAP-LABEL        | Show Workspace/Package labels on Main Map without overwhelming the map                                                                                                                                           | Choose label fields, scale limits and conflict behavior from verified geometry metadata                                                         |
+| DC-WORKSPACE-FILTER | Hide Workspaces with no open Packages by default; expose an opt-in `Show empty Workspaces` filter in the shared Filters panel                                                                                    | Define the active/terminal Job state aggregation per Pipeline/Workspace; keep counts consistent with mock-only status and async catalogue state |
+| DC-PACKAGES-SCOPE   | Use Pipeline then optional Workspace filtering for Main Map Packages                                                                                                                                             | DC-BE-FE-02 candidate; validate contextual duplicates and Package statuses in browser                                                           |
+| DC-ASSIGN-AUTOMATCH | In Package Assignment Bindings, list only automatically matched Workspaces. Manual Workspace assignment must not appear possible; active Pipeline bindings remain distinct from automatic Workspace intersection | Plan a separate UI/domain change; remove obsolete draft-only Workspace include/exclude affordances without inventing a persistence endpoint     |
+| DC-CREATOR-EDITOR   | Add a Creator/Editor page for new Packages and editing existing Packages, including drawing/changing an AOI                                                                                                      | Future separate project phase; requires verified create/update API, geometry rules, concurrency, authorization and editable map contract        |
+| DC-INTEGRATIONS     | Add integrations into external systems, e.g. Notice to Mariners (NM) modal or WorkZone navigation                                                                                                                | Future separate design and backend integration; verify identifiers, access and destinations before linking                                      |
+
+**Existing separate work still open:** high request count from Workspace
+membership plus per-Package metadata in Main Map (`PAGE-02`), persisted Job
+status/history, selected Workspace/Package map enhancements, default empty
+Workspace filter, and the normal remaining UX backlog. Backend geometry pages
+are not Workspace-membership pages; do not replace contextual Jobs with
+`PackageGeometryResponse` alone.
+
+---
+
+## DC-BE-FE-01 — Package assignment summaries and Main Map AOI overview (candidate, 2026-11-12)
+
+Verified backend contract source: `313ea65a4fc07276da587a3f0acb038b72190e66`.
+Frontend baseline: `01ad3b4646f66143f01db09b59cd47dda57795f0`.
+This candidate consumes authoritative `hasPipeline` and `pipelineBindings` on Package pages, and adds an opt-in, paginated Package AOI overview to the live Main Map using `GET /v1/packages/geometry?includeDetails=false`. See [DC_BE_FE_01_VALIDATION.md](DC_BE_FE_01_VALIDATION.md) for acceptance and limits.
+
+**Closed contract prerequisites (in source):** list assignment summaries and bulk generalized Package AOI reads. **Still pending:** full local `npm run check`, deployment and browser verification, and the existing Workspace-by-Workspace Jobs read optimization (`PAGE-02`). The geometry endpoint does not contain Workspace membership. Manual Workspace overrides, comments, persistent Job status and global search remain blocked separately. Earlier `PAGE-01` and `GEO-01` gap statements are historical for the pre-`313ea65a` backend.
+
+---
+
 ## DC-UX-03F — Package Assignment Details hierarchy (candidate, 2026-11-12)
 
 Authoritative baseline: `eaceae8ff8be286c22cd886a05ff14edf3ebce96`

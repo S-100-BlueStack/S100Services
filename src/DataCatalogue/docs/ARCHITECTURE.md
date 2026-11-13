@@ -1,3 +1,86 @@
+## DC-BE-FE-03 v2 — Main Map navigation and scope presentation (2026-11-13)
+
+Live Main Map opens the Packages panel by default. The former read-only
+Pipelines overview is no longer exposed as another navigation destination;
+`createPipelineVisibility()` still provides the verified Pipeline/Workspace
+catalogue to the existing service and map composition. This is not a new
+filter or ownership path. The shared scope controls remain the one authority
+for the Packages list, contextual Jobs and map layers.
+
+`createPackageScopeControls.js` initially selects all verified Pipelines,
+keeps the Pipeline and Workspace selectors in separate rows, and exposes a
+persistent native checkbox with switch semantics for `Show empty Workspaces`
+outside its dynamic option list. The scroll container uses CSS overscroll
+containment and explicit scroll restoration during option rerenders. The
+existing lifecycle, Package grouping and AOI data-access boundaries are
+unchanged.
+
+---
+
+## Unified Main Map Work Scope (DC-BE-FE-03 candidate, 2026-11-13)
+
+The live Packages panel owns **one** Pipeline/Workspace selection via
+`features/jobs/ui/createPackageScopeControls.js`. Its normalized identity and
+filtering functions live in `features/jobs/domain/packageScopeFilter.js`.
+`app/ui/createJobsOverlay.js` publishes the scope to the contextual Jobs list
+and `app/createApp.js` applies the same scope to Main Map visualization.
+
+- `features/map/workspaces/createPipelineVisibility.js` still retrieves and
+  groups the complete Pipeline/Workspace catalogue but renders a **read-only**
+  overview on Main Map. It does not independently toggle Workspace layers.
+- `mapController.setVisibleWorkspaces()` receives only the Workspace geometries
+  allowed by Work Scope. Geometry remains owned by the existing Workspace
+  overlay and is **not** reconstructed by UI controls. After the first
+  successful contextual Jobs read, zero-open Workspaces are hidden unless the
+  scope explicitly requests `Show empty Workspaces`.
+- `features/map/packages/loadPackageAois.js` loads active Pipeline-bound
+  geometry pages for each selected Pipeline with one abort owner, bounded pages
+  and a union deduplicated by canonical Package ID. `createPackageAoiOverview.js`
+  owns its own GraphicsLayer/generation lifecycle and accepts a separate
+  local visible-Package set when Workspace selections narrow the contextual
+  list. `All Workspaces` does **not** discard directly assigned Packages that
+  happen to have no Workspace intersection.
+- `features/jobs/ui/jobList.js` groups visible contextual Jobs by canonical
+  Package identity while retaining distinct Job IDs and independent statuses.
+  `countOpenJobsByWorkspace()` centralizes Workspace counts from the existing
+  Job snapshot rather than adding N+1 count requests.
+- Existing Job/AOI popup selection and map highlight ownership remain with
+  `createApp.js`/`mapController.js`; grouping and Work Scope do not create a
+  new API or write persisted Job status. The UI does not own backend contract
+  normalization or ArcGIS layer construction.
+
+The below DC-BE-FE-02 section documents the superseded single-Pipeline
+behavior and independent Pipeline visibility controls for history.
+
+---
+
+## Main Map assigned-Pipeline AOI scope (DC-BE-FE-02 candidate)
+
+The main map uses one selected Pipeline from the Packages panel to scope a
+read-only background GraphicsLayer of generalized Package AOIs. The geometry
+read requires an active Pipeline binding (`hasPipeline=true`, `pipelineId`)
+and is separate from the contextual Workspace-membership Jobs service.
+The optional Workspace selector narrows the Packages list without narrowing
+the Pipeline AOI background. The user-facing Layers popup in the earlier
+DC-BE-FE-01 candidate is removed. The overview's generation owner rejects
+superseded requests and destroyed MapViews. See `PROJECT_TRACKER.md` and
+`DC_BE_FE_02_VALIDATION.md` for the accepted requirements and remaining gaps.
+
+---
+
+## DC-BE-FE-01 — Package assignment summary and Main Map AOI overview (2026-11-12)
+
+- `shared/api/packageAssignmentSummary.js` validates direct Pipeline assignment summaries before list UI receives `status` and `pipelineIds`.
+- `shared/api/packageAoiPage.js` validates bulk geometry items through the existing `packageGeometry.js` Esri polygon boundary.
+- `features/assignments/services/liveAssignmentServices.js` forwards authoritative server assignment status without deriving it from a request filter.
+- `features/assignmentPage/ui/createAssignmentPage.js` retains selected-Package readback for Save/reconciliation. Pipeline name lookup is per visible assigned page, never per Package.
+- `features/map/packages/loadPackageAois.js` owns bounded, cancellable cross-page geometry retrieval. `createPackageAoiOverview.js` owns the independent MapView GraphicsLayer and opt-in Layers UI; the app merely wires it to the ready live `MapView`, theme and teardown.
+- Existing Workspace and selected-Package layers remain separate. The overview does **not** replace the contextual Jobs service, change job identities, or interpret direct Pipeline bindings as Workspace membership.
+
+See [DC_BE_FE_01_VALIDATION.md](DC_BE_FE_01_VALIDATION.md) for constraints and browser checks.
+
+---
+
 ## DC-UX-03F — Live Package Assignment Details presentation (2026-11-12)
 
 `features/assignmentPage/ui/renderInformationFields.js` owns the small

@@ -1,6 +1,11 @@
 import { createCatalogueClient } from "../shared/api/catalogueClient.js";
 import { createCatalogueService } from "../shared/api/catalogueService.js";
 import { createLiveJobServiceAdapter } from "../features/jobs/services/liveJobServiceAdapter.js";
+import {
+  countOpenJobsByWorkspace,
+  getVisiblePackageIdsForScope,
+  filterWorkspacesByPackageScope,
+} from "../features/jobs/domain/packageScopeFilter.js";
 import { createJobService } from "../features/jobs/services/jobService.js";
 import { createPipelineVisibility } from "../features/map/workspaces/createPipelineVisibility.js";
 import { createBasemapSettings } from "../features/map/basemaps/basemapSettings.js";
@@ -8,8 +13,10 @@ import { createBasemapSelector } from "../features/map/basemaps/createBasemapSel
 import { createPreferencesSettings } from "../features/preferences/state/createPreferencesSettings.js";
 import { createPreferencesPanel } from "../features/preferences/ui/createPreferencesPanel.js";
 import { createWorkspaceJobColorSync } from "../features/map/workspaces/createWorkspaceJobColorSync.js";
+import { createPackageAoiOverview } from "../features/map/packages/createPackageAoiOverview.js";
 import { createAssignmentWorkflow } from "../features/assignmentPage/createAssignmentWorkflow.js";
 import { createWorkflowNavigation } from "./ui/createWorkflowNavigation.js";
+import { getApplicationBasePath, parseWorkflowPath } from "../shared/navigation/workflowRoutes.js";
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
 import { createJobFilterStore } from "../features/jobs/state/jobFilterStore.js";
 import { createJobStore } from "../features/jobs/state/jobStore.js";
@@ -35,6 +42,9 @@ export async function createApp(rootElement) {
   const live = runtimeConfig.sourceMode === "live";
   const preferences = createPreferencesSettings();
   const themeStore = createThemeStore({ storage: preferences.themeStorage });
+  let packageAoiOverview = null;
+  let currentWorkScope = { pipelineIds: [], workspaceKeys: null, showEmptyWorkspaces: false };
+  let scopeWorkspaces = [];
   const basemapSettings = createBasemapSettings({
     apiKey: runtimeConfig.arcgisBasemapApiKey,
     preferences,
@@ -102,8 +112,17 @@ export async function createApp(rootElement) {
     sourceMode: runtimeConfig.sourceMode,
     jobFilterStore,
     jobStore,
+    onScopeChange(scope) {
+      currentWorkScope = scope;
+      applyWorkScopeToMap();
+    },
   });
   const workspace = createMapWorkspace({ live });
+  if (live) {
+    // The catalogue still loads Pipelines and Workspaces; only the redundant panel is hidden.
+    workspace.pipelineAction.hidden = true;
+    workspace.setPipelinesPanelOpen(false);
+  }
   const basemapSelector = createBasemapSelector({
     container: workspace.basemapHost,
     settings: basemapSettings,
@@ -235,6 +254,33 @@ export async function createApp(rootElement) {
   shellElement.append(navbar.element, jobsWorkflowHost, noticeRegion);
 
   rootElement.replaceChildren(shellElement);
+  function updateScopedPackageAois() {
+    if (!live || !packageAoiOverview) return;
+    const snapshot = jobStore.getSnapshot();
+    // A Pipeline binding alone does not establish Workspace membership. Keep
+    // the AOI overview consistent with the authoritative Workspace package lists.
+    // Until a successful membership read, do not render Pipeline-only AOIs.
+    const packageIds =
+      snapshot.lastSuccessfulLoadAt !== null
+        ? getVisiblePackageIdsForScope(snapshot.jobs, currentWorkScope)
+        : [];
+    packageAoiOverview.setVisiblePackageIds(packageIds);
+  }
+
+  function applyWorkScopeToMap() {
+    if (!live) return;
+    const snapshot = jobStore.getSnapshot();
+    // Until the first successful catalogue read, unknown counts must not
+    // incorrectly classify all Workspaces as empty.
+    const counts =
+      snapshot.lastSuccessfulLoadAt !== null ? countOpenJobsByWorkspace(snapshot.jobs) : null;
+    mapController.setVisibleWorkspaces(
+      filterWorkspacesByPackageScope(scopeWorkspaces, currentWorkScope, counts)
+    );
+    packageAoiOverview?.setPipelineIds(currentWorkScope.pipelineIds);
+    updateScopedPackageAois();
+  }
+
   const jobsPanelActions = createJobsPanelActions({
     isOpen: () => !jobsPanel.element.hidden,
     resetContext: resetJobsPanelContext,
@@ -265,10 +311,19 @@ export async function createApp(rootElement) {
     ? createPipelineVisibility({
         catalogue,
         container: workspace.pipelineContent,
-        onChange(workspaces) {
-          mapController.setVisibleWorkspaces(workspaces);
+        readOnly: true,
+        onChange() {
+          // Work Scope owns visibility; this panel is a read-only catalogue overview.
+          applyWorkScopeToMap();
         },
-        onWorkspacesLoaded(workspaces) {
+        onWorkspacesLoaded(workspaces, groups) {
+          const previousPipelines = JSON.stringify(currentWorkScope.pipelineIds);
+          scopeWorkspaces = workspaces;
+          jobsPanel.setPipelineCatalogue(groups);
+          applyWorkScopeToMap();
+          if (previousPipelines === JSON.stringify(currentWorkScope.pipelineIds)) {
+            void packageAoiOverview?.refresh();
+          }
           workspaceJobColorSync.setCatalogue(workspaces);
           void mapController.setWorkspaceCatalog(workspaces, { reload: true, autoFocus: false });
           // Packages belong to every Workspace, regardless of which Pipelines are shown on the map.
@@ -316,7 +371,10 @@ export async function createApp(rootElement) {
   });
 
   const unsubscribeJobStoreSync = jobStore.subscribe((snapshot) => {
-    if (live) workspaceJobColorSync.onJobsChanged(snapshot);
+    if (live) {
+      workspaceJobColorSync.onJobsChanged(snapshot);
+      applyWorkScopeToMap();
+    }
     mapController.refreshAoiPopupContent();
     void mapSyncCoordinator.syncMapAfterJobStoreChange(snapshot);
   });
@@ -441,13 +499,24 @@ export async function createApp(rootElement) {
       void mapSyncCoordinator.refreshMapAfterJobsRefresh({
         jobs: event.detail?.jobs,
       });
+      if (live && event.detail?.source === "manual") {
+        void packageAoiOverview?.refresh();
+      }
     },
     {
       signal: appEventAbortController.signal,
     }
   );
 
-  setJobsPanelOpen(false);
+  const initialPath = globalThis.location?.pathname ?? "/";
+  const initialRoute = parseWorkflowPath(initialPath, getApplicationBasePath(initialPath));
+  if (live && !initialRoute.assignment) {
+    setJobsPanelOpen(true);
+    // Initial list access joins the catalogue read; it does not wait for MapView startup.
+    void jobsPanel.refreshJobs({ onPanelOpen: true });
+  } else {
+    setJobsPanelOpen(false);
+  }
 
   function setJobsPanelOpen(isOpen) {
     setPanelOpen(jobsPanel.element, navbar.jobsButton, isOpen);
@@ -466,18 +535,11 @@ export async function createApp(rootElement) {
     mapController.clearAoiJobScope();
   }
 
-  workspace.pipelineAction.addEventListener(
-    "click",
-    () => {
-      if (!jobsPanel.element.hidden) {
-        jobsPanelActions.toggle();
-        workspace.setPipelinesPanelOpen(true);
-      } else {
-        workspace.togglePipelinesPanel();
-      }
-    },
-    { signal: appEventAbortController.signal }
-  );
+  if (!live) {
+    workspace.pipelineAction.addEventListener("click", () => workspace.togglePipelinesPanel(), {
+      signal: appEventAbortController.signal,
+    });
+  }
 
   navbar.jobsButton.addEventListener("click", () => jobsPanelActions.toggle(), {
     signal: appEventAbortController.signal,
@@ -511,7 +573,20 @@ export async function createApp(rootElement) {
     workflowNavigation.syncJobsButtonState();
     navbar.filtersButton.disabled = false;
     void mapController.start({ requireAois: false, deferJobGeometry: true }).then((result) => {
-      if (result?.ok) basemapSelector.setView(result.data.view);
+      if (!result?.ok || appEventAbortController.signal.aborted) return;
+      basemapSelector.setView(result.data.view);
+      packageAoiOverview ??= createPackageAoiOverview({
+        catalogue,
+        onError(error) {
+          showErrorNoticeAfterStartup({
+            title: "Package AOIs unavailable",
+            message: error.message,
+          });
+        },
+      });
+      packageAoiOverview.setPipelineIds(currentWorkScope.pipelineIds);
+      updateScopedPackageAois();
+      packageAoiOverview.setView(result.data.view);
     });
   } else
     void startupController.runStartup({
@@ -569,6 +644,7 @@ export async function createApp(rootElement) {
 
   return {
     destroy() {
+      packageAoiOverview?.destroy();
       pipelineVisibility?.destroy();
       basemapSelector.destroy();
       preferencesPanel.destroy();

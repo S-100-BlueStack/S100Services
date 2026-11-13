@@ -1,3 +1,31 @@
+## DC-BE-FE-02 — Follow-ups after Pipeline-scoped AOI correction
+
+The selected Pipeline geometry read is available in the backend and now
+used by the frontend candidate, but a Workspace-scoped **bulk geometry**
+contract is not verified. Do not infer Workspace intersections from direct
+Pipeline assignment or send an invented Workspace query parameter to
+`/v1/packages/geometry`. The separate contextual Jobs loader still performs
+one membership read per Workspace and Package metadata hydration per unique
+Package; optimize only with a verified aggregate/batch backend contract.
+Workspace auto-match display is derived from saved Pipeline bindings and
+spatial intersection; manually assigning individual Workspaces has been
+disallowed by the latest meeting requirement. Creator/Editor mutations and
+external NM/WorkZone integration contracts are **not yet verified**.
+
+---
+
+## DC-BE-FE-01 — Backend read gaps reclassified (2026-11-12)
+
+Source verified at backend commit `313ea65a4fc07276da587a3f0acb038b72190e66`. The earlier missing list-summary and bulk Package AOI read prerequisites have been supplied in backend source and are now integrated in a frontend candidate:
+
+- **PAGE-01 assignment summary:** `GET /v1/packages` now returns direct `hasPipeline` and `pipelineBindings`, without per-row binding fan-out. Full-text search and historical Job status discovery are still unsupported.
+- **GEO-01 bulk Package AOI:** `GET /v1/packages/geometry` now supplies paged stored Esri AOIs. The candidate's opt-in overview is not a Feature Service and does not alter selected Package geometry.
+- **PAGE-02 remains open:** the main-map contextual Jobs loader still reads per-Workspace Package membership plus individual Package metadata. The new geometry page supplies no Workspace membership, so it cannot replace those reads.
+
+Manual Workspace overrides, persistent comments and real Job workflow status remain independent backend gaps. Do not mark either newly available endpoint as deployed/accepted without live testing. Earlier statements below reflect the contracts available at their recorded dates. See [DC_BE_FE_01_VALIDATION.md](DC_BE_FE_01_VALIDATION.md).
+
+---
+
 ## DC-UX-01 v5 — Per-page binding fan-out removed (2026-11-06)
 
 `PAGE-01`: The live Package listing still does not provide authoritative saved
