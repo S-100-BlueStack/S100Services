@@ -482,3 +482,4 @@ src/ProductCatalogueAPI/config/hangfire.connection
 *.ps1
 /Start-ProductCatalogueGUI.bat
 /Start-DataCatalogueGUI.bat
+/src/DataCatalogueAPI/appsettings.Development.json
