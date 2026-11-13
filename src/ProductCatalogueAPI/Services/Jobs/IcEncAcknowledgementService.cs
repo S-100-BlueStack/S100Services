@@ -39,10 +39,11 @@ public interface IIcEncAcknowledgementService
     Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, CancellationToken cancellationToken);
 }
 
-/// <summary>Schedules publication only when both delivered products are accepted; DPC recovers missed enqueueing.</summary>
+/// <summary>Finalizes accepted pairs immediately in the worker; API requests queue worker execution and DPC recovers failures.</summary>
 public sealed class IcEncAcknowledgementService(IEncPackageAcknowledgementRepository repository, IBackgroundJobClient jobs,
-    IOptionsMonitor<SendToIcEncOptions> options, TimeProvider clock, ILogger<IcEncAcknowledgementService> logger, IOptions<ValidationEmailOptions>? emailOptions = null) : IIcEncAcknowledgementService
+    IOptionsMonitor<SendToIcEncOptions> options, TimeProvider clock, ILogger<IcEncAcknowledgementService> logger, IOptions<ValidationEmailOptions>? emailOptions = null, IEncPackageFinalizationService? finalization = null) : IIcEncAcknowledgementService
 {
+    /// <inheritdoc/>
     public async Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(acknowledgement);
         var simulation = acknowledgement.Source == IcEncAcknowledgementSource.Simulation;
@@ -70,7 +71,20 @@ public sealed class IcEncAcknowledgementService(IEncPackageAcknowledgementReposi
         else
             logger.LogInformation("IC-ENC email {Decision} recorded for {DatasetName} edition {Edition} update {Update}; delivery {DeliveryId}; already recorded: {AlreadyRecorded}.",
                 acknowledgement.Decision, acknowledgement.DatasetName, acknowledgement.Edition, acknowledgement.Update, result.DeliveryId, result.AlreadyRecorded);
-        if (result.ReadyForFinalization && result.PackageId.HasValue && !result.AlreadyRecorded) {
+        if (result.ReadyForFinalization && result.PackageId.HasValue) {
+            // The finalizer is registered only in the worker, which owns ArcGIS execution.
+            // Finish before returning from inbox processing so a successful simulated send is already Idle.
+            if (finalization is not null) {
+                try {
+                    await finalization.FinalizeAsync(result.PackageId.Value, cancellationToken);
+                    return result;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception ex) {
+                    // Acceptance is durable; never erase it or retire the pair before S-128 and SQL agree.
+                    logger.LogError(ex, "Accepted package {PackageId} could not be finalized immediately; queuing worker recovery.", result.PackageId);
+                }
+            }
             try { jobs.Enqueue<FinalizeEncPackageJob>(job => job.RunAsync(result.PackageId.Value, CancellationToken.None)); }
             catch (Exception ex) {
                 // The notice is committed first; the DPC scan re-queues pending publication without losing the acceptance.

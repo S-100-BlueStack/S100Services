@@ -6,12 +6,13 @@ namespace TestProductCatalogue;
 /// <summary>Checks failed-pair retirement and edition allocation without any external stores or clocks.</summary>
 public sealed class EncPackageFailureRulesTests
 {
-    /// <summary>A failed member permits retiring its in-transit, accepted, rejected or ready sibling.</summary>
+    /// <summary>An IC-ENC rejection permits retiring a safe sibling, including one accepted or in transit.</summary>
     [Theory]
     [InlineData(ProductState.InTransit, ProductState.Rejected)]
     [InlineData(ProductState.AcceptedForDistribution, ProductState.Rejected)]
     [InlineData(ProductState.Rejected, ProductState.AcceptedForDistribution)]
-    [InlineData(ProductState.Error, ProductState.ReadyForDistribution)]
+    [InlineData(ProductState.Rejected, ProductState.ReadyForDistribution)]
+    [InlineData(ProductState.Rejected, ProductState.Rejected)]
     [InlineData(ProductState.Rejected, ProductState.Error)]
     public void FailedPairsCanBeAcknowledged(ProductState s101, ProductState s57) =>
         Assert.True(EncPackageFailureRules.CanAcknowledge(Package(), Track(ProductSpecification.S101, s101), Track(ProductSpecification.S57, s57)));
@@ -24,25 +25,35 @@ public sealed class EncPackageFailureRulesTests
     [InlineData(ProductState.ReadyForDistribution, ProductState.ReadyForDistribution)]
     [InlineData(ProductState.Exporting, ProductState.Error)]
     [InlineData(ProductState.Error, ProductState.Validating)]
+    [InlineData(ProductState.Rejected, ProductState.Validating)]
+    [InlineData(ProductState.Exporting, ProductState.Rejected)]
+    [InlineData(ProductState.Error, ProductState.ReadyForDistribution)]
+    [InlineData(ProductState.ReadyForDistribution, ProductState.Error)]
+    [InlineData(ProductState.Error, ProductState.Error)]
+    [InlineData(ProductState.Error, ProductState.InTransit)]
     public void HealthyOrActivePairsCannotBeAcknowledged(ProductState s101, ProductState s57) =>
         Assert.False(EncPackageFailureRules.CanAcknowledge(Package(), Track(ProductSpecification.S101, s101), Track(ProductSpecification.S57, s57)));
 
-    /// <summary>A preflight/inbox failure can expose acknowledgement without falsifying either export's current state.</summary>
-    [Fact]
-    public void PackageSendErrorPermitsRetirementButNeverInterruptsSuccessfulPublication() {
+    /// <summary>Diagnostic text cannot substitute for an IC-ENC rejection, even if it contains rejection wording.</summary>
+    /// <param name="message">Package and candidate diagnostic that must not grant retirement.</param>
+    [Theory]
+    [InlineData("SevenCs found one critical finding.")]
+    [InlineData(EncPackageFailureRules.SendFailureMessage)]
+    [InlineData("RejectedByIC-ENC")]
+    public void ErrorsWithoutARejectedCandidateCannotBeAcknowledged(string message) {
         var package = Package();
-        package.ErrorMessage = "The package send failed.";
-        var s101 = Track(ProductSpecification.S101, ProductState.ReadyForDistribution);
+        package.ErrorMessage = message;
+        var s101 = Track(ProductSpecification.S101, ProductState.Error);
+        s101.ErrorCode = "SEVENCS_VALIDATION_FAILED";
+        s101.ErrorMessage = message;
         var s57 = Track(ProductSpecification.S57, ProductState.ReadyForDistribution);
-        Assert.True(EncPackageFailureRules.CanAcknowledge(package, s101, s57));
-        s101.State = s57.State = ProductState.AcceptedForDistribution;
         Assert.False(EncPackageFailureRules.CanAcknowledge(package, s101, s57));
     }
 
     /// <summary>Independent manual holds, mismatched identities and missing tracks never authorize a reset.</summary>
     [Fact]
     public void ExactPairAndManualHoldGuardsRemainRequired() {
-        var s101 = Track(ProductSpecification.S101, ProductState.Error);
+        var s101 = Track(ProductSpecification.S101, ProductState.Rejected);
         var s57 = Track(ProductSpecification.S57, ProductState.InTransit);
         s57.IsManuallyFrozen = true;
         Assert.False(EncPackageFailureRules.CanAcknowledge(Package(), s101, s57));

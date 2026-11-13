@@ -47,6 +47,8 @@
     <Compile Include="..\TestProductCatalogue\DpcRunAsyncTests.cs" Link="DpcRegression\DpcRunAsyncTests.cs" />
     <Compile Include="..\TestProductCatalogue\EncPackageFailureSqlTests.cs" Link="DpcRegression\EncPackageFailureSqlTests.cs" />
     <Compile Include="..\TestProductCatalogue\DpcSqlTransactionTests.cs" Link="DpcRegression\DpcSqlTransactionTests.cs" />
+    <Compile Include="..\TestProductCatalogue\IcEncImmediateFinalizationTests.cs" Link="DpcRegression\IcEncImmediateFinalizationTests.cs" />
+    <Compile Include="..\TestProductCatalogue\EncPackageFailureRulesTests.cs" Link="DpcRegression\EncPackageFailureRulesTests.cs" />
     <Compile Include="..\TestProductCatalogue\EncPackagePauseStatusTests.cs" Link="DpcRegression\EncPackagePauseStatusTests.cs" />
     <None Include="..\..\src\ProductCatalogueAPI\Data\Migrations\*.sql" Link="DpcMigrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
