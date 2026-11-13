@@ -1,4 +1,5 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
+import { applyProductStatusTone } from "../../../shared/ui/productStatusTone.js";
 import "@esri/calcite-components/components/calcite-link";
 import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
@@ -103,14 +104,6 @@ function createWorkspaceRefreshButton(datasetItems) {
     "aria-label",
     "Refresh Product metadata, History, and validation content in this Analyze workspace"
   );
-  button.style.inlineSize = "1.85rem";
-  button.style.blockSize = "1.85rem";
-  button.style.minInlineSize = "1.85rem";
-  button.style.flex = "0 0 1.85rem";
-  button.style.display = "inline-flex";
-  button.style.alignItems = "center";
-  button.style.justifyContent = "center";
-  button.style.padding = "0";
   button.disabled = !datasetItems.some((item) => item.enabled);
 
   const icon = document.createElement("calcite-icon");
@@ -322,8 +315,12 @@ function createProductCard(product) {
 
   const status = document.createElement("span");
   status.className = "analyze-product-card__status";
-  status.textContent =
-    product.workUnit?.kind === "package" ? "ENC package" : getStatusName(product.status);
+  if (product.workUnit?.kind === "package") {
+    status.textContent = "ENC package";
+  } else {
+    status.textContent = getStatusName(product.status) ?? "Unknown";
+    applyProductStatusTone(status, product.status, { errorMessage: product.errorMessage });
+  }
 
   summary.appendChild(title);
   summary.appendChild(status);
@@ -357,8 +354,6 @@ function createProductCard(product) {
   const rows = document.createElement("div");
   rows.className = "analyze-product-card__rows";
   rows.appendChild(createInfoRow("Edition", product.edition));
-  rows.appendChild(createInfoRow("Update", product.update));
-  rows.appendChild(createInfoRow("Status", getStatusName(product.status)));
   rows.appendChild(createInfoRow("Issue date", product.issueDate));
 
   if (product.errorMessage) {

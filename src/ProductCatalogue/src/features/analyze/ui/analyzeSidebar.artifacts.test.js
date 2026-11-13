@@ -84,6 +84,10 @@ for (const emptyLegacy of [false, true]) {
       0
     );
     for (const [index, section] of sections.entries()) {
+      const metadataLabels = section
+        .collect((node) => node.className.split(" ").includes("analyze-info-row__label"))
+        .map((node) => node.textContent);
+      assert.deepEqual(metadataLabels, ["Edition", "Issue date"]);
       const links = section.collect((node) => node.tagName === "calcite-link");
       assert.deepEqual(
         links.map((link) => link.href),

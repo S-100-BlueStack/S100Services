@@ -55,13 +55,30 @@ const boardSource = (await readFile(new URL("reviewBoard.js", import.meta.url), 
   .replace(/^import "[^"]+";\s*/gm, "")
   .replace(/^import[\s\S]*?from "[^"]+";\s*/gm, "")
   .replace("export function createReviewBoard", "function createReviewBoard");
-const createBoard = runInNewContext(`${boardSource}\ncreateReviewBoard;`, {
-  document,
-  ...list,
-  ...presentation,
-  ...historyRenderers,
-  getStatusName: (status) => `Member status ${status}`,
-});
+const boardExports = runInNewContext(
+  `${boardSource}\n({createReviewBoard,createCompactHistoryItem,getVisibleEventDetails});`,
+  {
+    document,
+    ...list,
+    ...presentation,
+    ...historyRenderers,
+    getStatusName: (status) => `Member status ${status}`,
+    getStatusIdByName: (name) =>
+      ({
+        Error: 15,
+        "Ready For Distribution": 11,
+        Idle: 1,
+      })[name] ?? null,
+    applyProductStatusTone: (element, status) => {
+      if (status !== null && status !== undefined) element.classList.add("pc-status-chip--colored");
+    },
+  }
+);
+const {
+  createReviewBoard: createBoard,
+  createCompactHistoryItem,
+  getVisibleEventDetails,
+} = boardExports;
 const nodes = (node) => [node, ...node.children.flatMap(nodes)];
 const byClass = (root, name) =>
   nodes(root).filter((node) => node.className.split(" ").includes(name));
@@ -83,14 +100,29 @@ test("board has one package column with two ordered member sections and one ordi
     ["s101", "s57"]
   );
   assert.equal(byClass(columns[1], "pc-review-member").length, 0);
-  assert.match(
-    byClass(sections[0], "pc-review-member__meta")[0].textContent,
-    /Member status 8 · Edition: 3 · Update: 2/
+  assert.deepEqual(
+    byClass(sections[0], "pc-review-member__status").map((node) => node.textContent),
+    ["Member status 8"]
   );
-  assert.match(
-    byClass(sections[1], "pc-review-member__meta")[0].textContent,
-    /Member status 11 · Edition: 7 · Update: 4/
+  assert.deepEqual(
+    byClass(sections[1], "pc-review-member__edition").map((node) => node.textContent),
+    ["Edition 7"]
   );
+  assert.equal(
+    byClass(sections[0], "pc-review-member__dataset-name")[0].textContent,
+    packageNames[0]
+  );
+  assert.equal(
+    byClass(sections[1], "pc-review-member__dataset-name")[0].textContent,
+    packageNames[1]
+  );
+  assert.ok(
+    byClass(sections[0], "pc-review-member__status")[0].className.includes(
+      "pc-status-chip--colored"
+    )
+  );
+  assert.equal(byClass(sections[0], "pc-review-member__meta")[0].children.length, 2);
+  assert.equal(byClass(columns[0], "pc-review-column__meta").length, 0);
   assert.equal(byClass(columns[0], "pc-review-content-card").length, 6);
   assert.ok(
     byClass(columns[0], "pc-review-content-card").every((card) =>
@@ -102,8 +134,13 @@ test("board has one package column with two ordered member sections and one ordi
     const headers = byClass(section, "pc-review-member__header");
     assert.equal(headers.length, 1);
     assert.equal(section.children[0], headers[0]);
-    assert.deepEqual(headers[0].children, [
+    const identity = byClass(section, "pc-review-member__identity")[0];
+    assert.deepEqual(identity.children, [
       byClass(section, "pc-review-member__title")[0],
+      byClass(section, "pc-review-member__dataset-name")[0],
+    ]);
+    assert.deepEqual(headers[0].children, [
+      identity,
       byClass(section, "pc-review-member__meta")[0],
     ]);
     assert.equal(byClass(headers[0], "pc-review-content-card").length, 0);
@@ -207,4 +244,68 @@ test("refreshing package A retains ordinary column DOM, scroll and disclosure st
   assert.equal(byClass(nextColumns[1], "pc-review-column__content")[0].scrollTop, 87);
   assert.equal(byClass(nextColumns[1], "pc-review-history-event")[0], disclosure);
   assert.equal(disclosure.open, true);
+});
+
+test("Review hides redundant History record bounds while keeping event details", () => {
+  const details = [
+    { label: "Status", value: "Accepted" },
+    { label: "From", value: "2026-01-01" },
+    { label: "To", value: "Present" },
+    { label: "Update", value: "2" },
+    { label: "Owner", value: "User" },
+    { label: "Edition", value: "4" },
+  ];
+  assert.deepEqual(
+    Array.from(getVisibleEventDetails(details), (detail) => detail.label),
+    ["Status", "Edition"]
+  );
+});
+
+test("Review History uses explicit event presentation types for markers", () => {
+  const common = {
+    title: "Export: Failed",
+    timestamp: "2026-11-01T09:00:00Z",
+    details: [],
+  };
+  const outcomeNote = createCompactHistoryItem({
+    ...common,
+    type: "export",
+    presentationType: "note",
+  });
+  assert.ok(outcomeNote.className.includes("pc-review-history-list__item--note"));
+  assert.equal(
+    byClass(outcomeNote, "pc-review-history-event__marker")[0].children[0].icon,
+    "clock"
+  );
+  const successfulExport = createCompactHistoryItem({
+    ...common,
+    type: "export",
+    presentationType: "export",
+  });
+  assert.equal(
+    byClass(successfulExport, "pc-review-history-event__marker")[0].children[0].icon,
+    "upload"
+  );
+  const transition = createCompactHistoryItem({ ...common, type: "status" });
+  assert.equal(
+    byClass(transition, "pc-review-history-event__marker")[0].children[0].icon,
+    "information"
+  );
+});
+
+test("Review status history icons use actual ProductState results when known", () => {
+  const row = (value) =>
+    createCompactHistoryItem({
+      type: "status",
+      timestamp: "2026-11-01T09:00:00Z",
+      title: "Status changed",
+      details: [{ label: "New status", value }],
+    });
+  const icon = (value) =>
+    byClass(row(value), "pc-review-history-event__marker")[0].children[0].icon;
+  assert.equal(icon("Error"), "x-circle");
+  assert.equal(icon("Ready For Distribution"), "check");
+  assert.equal(icon("Idle"), "clock");
+  assert.equal(icon("Unknown backend state"), "information");
+  assert.equal(icon("15"), "x-circle");
 });

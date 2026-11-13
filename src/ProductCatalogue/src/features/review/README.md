@@ -16,6 +16,30 @@ The existing floating Product History panel is still the quick-view workflow for
 
 Product Review is the multi-product and multi-content workspace.
 
+## PC-UX-R04 Review information hierarchy (candidate)
+
+The Review column shows its Product name once without restating the selected content
+sections. Verified ENC Package members show their own dataset name directly to the
+right of the S-101/S-57 label, even when the name repeats the Product column title.
+ProductState and Edition stay as separate compact chips below that identity line.
+The Edition chip first uses the member's top-level Product detail; if absent, it
+uses only the same identity-verified member's nested detail metadata, then verified
+AOI metadata when provided. A missing version stays unknown, and zero is preserved.
+The redundant source/status prose and Update field are omitted from the header;
+underlying backend member metadata is unchanged. Unknown statuses stay neutral.
+
+Content-type checkbox labels and section headings use a lighter text weight. Review
+History continues to show the existing event timestamp and normalized event details, but
+omits repetitive `From`, `To`, `Owner` and `Update` rows from its compact event display.
+The full normalized event remains available to other owners; explicit backend audit and
+History record contracts are unchanged. Marker icons follow the normalized
+`presentationType` when present, so failed/unknown outcomes do not receive success
+icons. Legacy status events use the resulting backend ProductState from normalized
+History details when a known state ID can be resolved (for example Error versus Ready),
+with a neutral information marker otherwise; they are no longer presented as Refresh
+actions. This is presentation-only; the existing History, IC-ENC and Validation loaders,
+manual Refresh, source-aware Product resolution and incremental DOM reuse are preserved.
+
 ## Terminology
 
 User-facing Review UI should use `Product` and `Products`, not `Dataset` or `Datasets`.
