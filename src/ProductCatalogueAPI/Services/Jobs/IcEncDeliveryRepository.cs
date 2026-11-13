@@ -1,4 +1,5 @@
 using Dapper;
+using ProductCatalogueAPI.Services.Operations;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
@@ -48,6 +49,15 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
             """, new { PackageId = packageId, SourceName = sourceName }, transaction, cancellationToken: cancellationToken));
         if (!members.Any(m => m.Specification == ProductSpecification.S101 && m.DatasetName == sourceName)) return null;
         if (package is not null && members.Any(m => m.DatasetName != (m.Specification == ProductSpecification.S101 ? package.SourceDatasetName : package.S57DatasetName))) return null;
+        if (await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT CONVERT(bit, CASE WHEN EXISTS (
+                SELECT 1 FROM dbo.ProductStateHistory h JOIN dbo.ProductExportTrack t ON t.product_export_track_id = h.product_export_track_id
+                JOIN dbo.Product p ON p.product_id = t.product_id
+                WHERE p.dataset_name = @SourceName AND t.product_specification = 'S101'
+                    AND h.error_code = @HistoryCode AND h.error_message = @Receipt
+            ) THEN 1 ELSE 0 END);
+            """, new { SourceName = sourceName, EncPackageFailureRules.HistoryCode,
+                Receipt = EncPackageFailureRules.Receipt(packageId) }, transaction, cancellationToken: cancellationToken))) return null;
         var ordered = members.OrderBy(m => m.Specification == ProductSpecification.S101 ? 0 : 1).ToArray();
         var jobIds = ordered.Select(m => jobId + ":" + m.Specification).ToArray();
         var prior = (await connection.QueryAsync<SimulationReservation>(new CommandDefinition("""

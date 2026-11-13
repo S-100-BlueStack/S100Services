@@ -19,6 +19,90 @@ namespace TestProductCatalogueAPI;
 /// <summary>Runs the real detector and export service with bounded archive versions and isolated persistence/encoder boundaries.</summary>
 public sealed class DpcRunAsyncTests
 {
+    /// <summary>New source edits cannot bypass acknowledgement of a rejection or a failed send.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SubmittedFailuresWaitForOperatorAcknowledgement(bool sendFailure) {
+        var f = await DpcRunFixture.CreatedPackageAsync();
+        var package = f.Packages.Active[DpcRunFixture.Source];
+        if (sendFailure) package.ErrorMessage = EncPackageFailureRules.SendFailureMessage;
+        else (await f.TrackAsync(ProductSpecification.S57)).State = ProductState.Rejected;
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.B, DpcRunFixture.Utc(11), 2);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Same(package, f.Packages.Active[DpcRunFixture.Source]);
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.Equal(0, f.Packages.PairedDiscards);
+    }
+
+    /// <summary>Acknowledgement defeats old global/replay bounds; a later edit builds both members above their abandoned editions.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcknowledgedSourceWaitsForNewEditsThenAdvancesBothEditions(bool reusableArchive) {
+        var f = await DpcRunFixture.CreateAsync(reusableArchive: reusableArchive);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.Packages.Acknowledged[DpcRunFixture.Source] = DpcRunFixture.Utc(10);
+        var s101 = await f.TrackAsync(ProductSpecification.S101);
+        var s57 = await f.TrackAsync(ProductSpecification.S57);
+        s101.AcknowledgedEdition = 1;
+        s57.AcknowledgedEdition = 5;
+        // Model a cursor retained by a scan that began before the acknowledgement.
+        f.Packages.Replay[DpcRunFixture.Source] = DpcRunFixture.Utc(8);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Empty(f.Packages.Active);
+        Assert.Empty(f.Engine.Requests);
+        Assert.Equal(DpcRunFixture.Utc(12), await f.WatermarkAsync());
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.B, DpcRunFixture.Utc(13), 2);
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        await f.RunAsync();
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.Equal(2, s101.CandidateEdition);
+        Assert.Equal(6, s57.CandidateEdition);
+        Assert.All(f.Engine.Requests, request => Assert.Equal(0, request.Update));
+        Assert.Equal(ProductState.ReadyForDistribution, s101.State);
+        Assert.Equal(ProductState.ReadyForDistribution, s57.State);
+        Assert.Contains("A=1", f.Packages.Active[DpcRunFixture.Source].DatasetYaml);
+        Assert.Contains("B=2", f.Packages.Active[DpcRunFixture.Source].DatasetYaml);
+    }
+
+    /// <summary>Removing a feature from a partially accepted failed snapshot still creates higher editions even if S-128 never published that feature.</summary>
+    [Fact]
+    public async Task RemovalFromAcknowledgedCandidateUsesRetiredSnapshotMembership() {
+        var f = await DpcRunFixture.CreateAsync();
+        f.PublishedEditions[DpcRunFixture.Source] = 1;
+        f.PublishedYaml[DpcRunFixture.Source] = new YamlDataset { CellName = DpcRunFixture.Source + ".000", Edition = 1 }.Serialize();
+        f.Packages.Acknowledged[DpcRunFixture.Source] = DpcRunFixture.Utc(10);
+        f.Packages.AcknowledgedYaml[DpcRunFixture.Source] = f.Archive.Snapshot(DpcRunFixture.Source, DpcRunFixture.Utc(10), 2).Serialize();
+        (await f.TrackAsync(ProductSpecification.S101)).AcknowledgedEdition = 2;
+        (await f.TrackAsync(ProductSpecification.S57)).AcknowledgedEdition = 5;
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(11), 0, scale: 2000);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.Equal(3, (await f.TrackAsync(ProductSpecification.S101)).CandidateEdition);
+        Assert.Equal(6, (await f.TrackAsync(ProductSpecification.S57)).CandidateEdition);
+        Assert.Contains(DpcRunFixture.A, f.Packages.Active[DpcRunFixture.Source].SummaryYaml);
+    }
+
+    /// <summary>An acknowledgement committed after archive inspection prevents stale work in that same scan.</summary>
+    [Fact]
+    public async Task AcknowledgementDuringScanDefersTheStaleSource() {
+        var f = await DpcRunFixture.CreateAsync(reusableArchive: true);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        f.Locks.OnAcquire = name => {
+            if (name == ProductTrackLockKey.For(DpcRunFixture.Source, ProductSpecification.S101))
+                f.Packages.Acknowledged[DpcRunFixture.Source] = DpcRunFixture.Utc(11);
+        };
+        await f.RunAsync();
+        Assert.Empty(f.Engine.Requests);
+        Assert.Empty(f.Packages.Active);
+        Assert.Equal(DpcRunFixture.Utc(11), f.Packages.Replay[DpcRunFixture.Source]);
+    }
+
     /// <summary>Distinct package windows use source-specific reader calls and still build the same paired replacements.</summary>
     [Fact]
     public async Task ReusableHistoryRoutesEachPackageWindowWithoutWholeDatabaseRescans() {
@@ -538,13 +622,11 @@ public sealed class DpcRunAsyncTests
     [Theory]
     [InlineData(ProductState.ReadyForDistribution)]
     [InlineData(ProductState.Error)]
-    [InlineData(ProductState.Rejected)]
     public async Task LaterRelevantEditReplacesBothEligibleCandidatesAndRetainsBaseline(ProductState state) {
         var f = await DpcRunFixture.CreatedPackageAsync();
         var previous = f.Packages.Active[DpcRunFixture.Source];
         var track = await f.TrackAsync(ProductSpecification.S57);
         track.State = state;
-        if (state == ProductState.Rejected) f.Packages.Delivery[DpcRunFixture.S57] = "Rejected";
         f.Clock.Now = DpcRunFixture.Utc(12);
         f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.B, DpcRunFixture.Utc(11), 2);
 
@@ -1061,9 +1143,11 @@ internal sealed class DpcClock : TimeProvider
 
 internal sealed class DpcLocks : IDatasetLockService
 {
+    internal Action<string>? OnAcquire { get; set; }
     internal HashSet<string> Busy { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Task<IAsyncDisposable?> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default) {
         cancellationToken.ThrowIfCancellationRequested();
+        OnAcquire?.Invoke(datasetName);
         return Task.FromResult<IAsyncDisposable?>(Busy.Contains(datasetName) ? null : new Handle());
     }
     private sealed class Handle : IAsyncDisposable { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
@@ -1197,6 +1281,12 @@ internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, Dpc
         return Task.CompletedTask;
     }
 
+    internal Dictionary<string, string> AcknowledgedYaml { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Task<string?> GetAcknowledgedSourceYamlAsync(string sourceName, CancellationToken cancellationToken = default) => Task.FromResult(AcknowledgedYaml.GetValueOrDefault(sourceName));
+    internal Dictionary<string, DateTime> Acknowledged { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Task<IReadOnlyDictionary<string, DateTime>> GetFailureAcknowledgementBoundsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>(Acknowledged));
+
     internal Dictionary<string, DateTime> SnapshotAttempts { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>(SnapshotAttempts));
@@ -1258,7 +1348,7 @@ internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, Dpc
     public Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid expectedPackageId, string actor, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public async Task<bool> CanRefreshAsync(Guid expectedPackageId, CancellationToken cancellationToken = default) {
         var package = await GetByIdAsync(expectedPackageId, cancellationToken);
-        if (package is null) return false;
+        if (package is null || package.ErrorMessage == EncPackageFailureRules.SendFailureMessage) return false;
         foreach (var (name, spec) in new[] { (package.SourceDatasetName, ProductSpecification.S101), (package.S57DatasetName, ProductSpecification.S57) }) {
             var track = await workflows.GetTrackAsync(name, spec, cancellationToken);
             if (track is null || track.IsManuallyFrozen || EncPackageDetectionService.IsRefreshBlocked(track)) return false;

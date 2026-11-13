@@ -8,7 +8,7 @@ public sealed class EncPackageDetectionEligibilityTests
 {
     [Theory]
     [InlineData(ProductState.Error, false)]
-    [InlineData(ProductState.Rejected, false)]
+    [InlineData(ProductState.Rejected, true)]
     [InlineData(ProductState.ReadyForDistribution, false)]
     [InlineData(ProductState.Idle, false)]
     [InlineData(ProductState.Frozen, true)]
@@ -17,7 +17,7 @@ public sealed class EncPackageDetectionEligibilityTests
     [InlineData(ProductState.InTransit, true)]
     [InlineData(ProductState.AcceptedForDistribution, true)]
     [InlineData(ProductState.Published, true)]
-    public void FreshEditsCanReplaceFailedCandidatesButNotHeldOrSubmittedCandidates(ProductState state, bool blocked) {
+    public void FreshEditsCanReplaceCompilerFailuresButNotRejectedHeldOrSubmittedCandidates(ProductState state, bool blocked) {
         var track = new ProductExportTrackRecord { State = state };
 
         Assert.Equal(blocked, EncPackageDetectionService.IsRefreshBlocked(track));

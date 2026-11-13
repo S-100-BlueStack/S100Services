@@ -277,8 +277,14 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             throw new ExportOperationRejectedException($"An export could not be created now. Current {track.ProductSpecification} state: {track.State}.");
     }
 
+    /// <summary>Allocates a new version without reusing an acknowledged failed package edition.</summary>
+    /// <param name="track">Published version and retained failed-edition floor.</param>
+    /// <param name="revisionType">Requested edition or update operation.</param>
+    /// <returns>A new edition above the retained floor, or a valid update of the current published edition.</returns>
+    /// <exception cref="ExportOperationRejectedException">An update is requested before publication or after retiring a newer failed edition.</exception>
     private static (int Edition, int Update) GetCandidateVersion(ProductExportTrackRecord track, ExportRevisionType revisionType) => revisionType switch {
-        ExportRevisionType.NewEdition => (checked(track.PublishedEdition + 1), 0),
+        ExportRevisionType.NewEdition => (track.NextNewEdition, 0),
+        ExportRevisionType.Update when (track.AcknowledgedEdition ?? 0) > track.PublishedEdition => throw new ExportOperationRejectedException("An acknowledged failed package requires a new edition."),
         ExportRevisionType.Update when track.PublishedEdition > 0 => (track.PublishedEdition, checked(track.PublishedUpdate + 1)),
         ExportRevisionType.Update => throw new ExportOperationRejectedException("An update cannot be created before the first published edition."),
         _ => throw new ArgumentOutOfRangeException(nameof(revisionType), revisionType, null)

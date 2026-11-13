@@ -81,6 +81,28 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
         return Ok(new { status = state switch { "Succeeded" => "Succeeded", "Failed" => "Failed", "Deleted" => "Cancelled", _ => "Running" } });
     }
 
+    /// <summary>Acknowledges a failed ENC package and retires both candidates to Idle without publishing either one.</summary>
+    /// <param name="sourceName">S-101 source identity returned by GetActions.</param>
+    /// <param name="request">Exact failed package expected by the operator.</param>
+    /// <param name="cancellationToken">Cancels persistence before the paired transaction commits.</param>
+    /// <returns>The stable acknowledgement cutoff, or a conflict if the package is no longer eligible.</returns>
+    [Authorize("productmanager:manage")]
+    [HttpPost("{sourceName}/acknowledge")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> Acknowledge(string sourceName, [FromBody] EncPackageAcknowledgeRequest request, CancellationToken cancellationToken) {
+        if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });
+        if (request is null || request.PackageId == Guid.Empty || string.IsNullOrWhiteSpace(sourceName) || sourceName.Length > 64)
+            return BadRequest(new { code = "PACKAGE_ACTION_INVALID", message = "An exact source and failed package are required." });
+        var result = await actions.AcknowledgeFailureAsync(sourceName, request.PackageId, User.Identity?.Name ?? "Authenticated operator", cancellationToken);
+        return result.Status == EncPackageFailureAcknowledgementStatus.Conflict
+            ? Conflict(new { code = "PACKAGE_ACKNOWLEDGE_UNAVAILABLE", message = "The package changed, has no acknowledgeable failure, is held, is building or is completing successful publication. Refresh before retrying." })
+            : Ok(new { packageId = request.PackageId, sourceDatasetName = sourceName.Trim().ToUpperInvariant(), status = ProductCatalogueAPI.Models.EncPackageStatus.Idle,
+                acknowledgedAtUtc = result.AcknowledgedAtUtc, alreadyAcknowledged = result.Status == EncPackageFailureAcknowledgementStatus.AlreadyAcknowledged });
+    }
+
     [Authorize("productmanager:manage")]
     [HttpPost("{sourceName}/discard")]
     public async Task<IActionResult> Discard(string sourceName, [FromBody] EncPackageDiscardRequest request, CancellationToken cancellationToken) {
@@ -130,3 +152,7 @@ public sealed record EncPackageDiscardRequest(Guid PackageId);
 /// <summary>Targets the exact active shared snapshot for simulated delivery.</summary>
 /// <param name="PackageId">Package identity returned by the authoritative action snapshot.</param>
 public sealed record EncPackageSendRequest(Guid PackageId);
+
+/// <summary>Targets an exact failed package; this is not an external provider acceptance notice.</summary>
+/// <param name="PackageId">Failed snapshot identity returned by the authoritative action endpoint.</param>
+public sealed record EncPackageAcknowledgeRequest(Guid PackageId);

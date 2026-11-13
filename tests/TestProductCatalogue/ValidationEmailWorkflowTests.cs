@@ -15,13 +15,13 @@ public sealed class ValidationEmailWorkflowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 11, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>Final replies update only simulated deliveries; provisional replies retain review semantics.</summary>
+    /// <summary>Simulation always produces final acceptance through the normal processor, independent of the former outcome draw.</summary>
     [Theory]
-    [InlineData(0, "Review", 0)]
+    [InlineData(0, "Applied", 1)]
     [InlineData(1, "Applied", 1)]
     [InlineData(2, "Applied", 1)]
-    [InlineData(3, "Review", 0)]
-    public async Task GeneratedWorkflowProcessesEveryOutcome(int outcome, string status, int decisions) {
+    [InlineData(3, "Applied", 1)]
+    public async Task GeneratedWorkflowAlwaysProcessesAcceptance(int outcome, string status, int decisions) {
         var message = Message(outcome);
         var store = new Store(message.SimulatedOutgoingFile!);
         var sink = new Decisions();
@@ -80,7 +80,7 @@ public sealed class ValidationEmailWorkflowTests
         var request = new SendToIcEncJobRequest("DK5OTERP", SendToIcEncMode.Simulation, 3, 1, "trace", Now, ProductSpecification: "S57");
         await Assert.ThrowsAsync<IOException>(() => service.SendAsync(request, "job-123", default));
         await service.SendAsync(request, "job-123", default);
-        Assert.Equal(1, random.Calls);
+        Assert.Equal(0, random.Calls);
         Assert.Equal(1, inbox.Polls);
         Assert.Equal(2, delivery.Reservations);
         Assert.Equal(delivery.Value.Id, store.Saved!.Message.SimulatedOutgoingFile!.DeliveryId);

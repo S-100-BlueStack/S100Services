@@ -770,7 +770,10 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
                t.candidate_edition AS CandidateEdition, t.candidate_update AS CandidateUpdate,
                t.candidate_previous_state AS CandidatePreviousState, t.updated_at_utc AS UpdatedAtUtc,
                CONVERT(bit, CASE WHEN freeze.product_export_track_id IS NULL THEN 0 ELSE 1 END) AS IsManuallyFrozen,
-               h.error_code AS ErrorCode, h.error_message AS ErrorMessage
+               h.error_code AS ErrorCode, h.error_message AS ErrorMessage,
+               (SELECT MAX(retired.edition_number) FROM dbo.ProductStateHistory retired
+                WHERE retired.product_export_track_id = t.product_export_track_id
+                  AND retired.error_code = 'ENC_PACKAGE_ACKNOWLEDGED') AS AcknowledgedEdition
         FROM dbo.ProductExportTrack t
         INNER JOIN dbo.Product p ON p.product_id = t.product_id
         LEFT JOIN dbo.ProductExportTrackFreezeHold freeze ON freeze.product_export_track_id = t.product_export_track_id

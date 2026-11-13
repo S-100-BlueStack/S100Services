@@ -23,10 +23,16 @@ public interface IValidationResponseGenerator
 /// <param name="ExchangeSet">Stored candidate ZIP used to verify its filename and checksum.</param>
 public sealed record ValidationSimulationCandidate(Guid RevisionId, Guid TrackId, string DatasetName, string Specification, int Edition, int Update, byte[] ExchangeSet);
 
-/// <summary>Durably generated synthetic notice; retries reuse its original random outcome.</summary>
+/// <summary>Durably generated synthetic notice; retries reuse its original captured report.</summary>
 /// <param name="Id">Inbound audit identifier.</param>
 /// <param name="Message">Original generated message and immutable synthetic transmission metadata.</param>
-public sealed record ValidationEmailSimulationRecord(Guid Id, ValidationEmailMessage Message);
+public sealed record ValidationEmailSimulationRecord(Guid Id, ValidationEmailMessage Message)
+{
+    /// <summary>Current durable inbox state; null only for stores without processing-state projection.</summary>
+    public string? ProcessingStatus { get; init; }
+    /// <summary>Safe processing failure code, if the captured report is waiting for an infrastructure retry.</summary>
+    public string? ErrorCode { get; init; }
+}
 
 /// <summary>Bounds simulation persistence to candidate reads and inbound audit records.</summary>
 public interface IValidationEmailSimulationStore
@@ -35,7 +41,7 @@ public interface IValidationEmailSimulationStore
     Task<ValidationSimulationCandidate?> GetSimulationCandidateAsync(string datasetName, string? specification, int? edition, int? update, CancellationToken cancellationToken);
     /// <summary>Returns the already generated notice for an idempotency key.</summary>
     Task<ValidationEmailSimulationRecord?> FindSimulationAsync(string sourceKey, CancellationToken cancellationToken);
-    /// <summary>Inserts once, preserving the winning random result under concurrent/repeated requests.</summary>
+    /// <summary>Inserts once, preserving the original captured result under concurrent/repeated requests.</summary>
     Task<ValidationEmailSimulationRecord> SaveSimulationAsync(string sourceKey, ValidationEmailMessage message, CancellationToken cancellationToken);
 }
 
@@ -56,7 +62,7 @@ public sealed class ValidationEmailSimulationRandom : IValidationEmailSimulation
 /// <summary>Optional hook for Send-To-IC-ENC simulation; disabled/live email modes return without generating evidence.</summary>
 public interface IValidationEmailSimulationService
 {
-    /// <summary>Generates at most one random response for a source key, without creating a real delivery or changing states.</summary>
+    /// <summary>Generates at most one unconditional acceptance response for a source key, without creating a real delivery or changing states.</summary>
     Task<ValidationEmailSimulationRecord?> GenerateAsync(string datasetName, string? specification, int? edition, int? update, string sourceKey, CancellationToken cancellationToken);
 }
 

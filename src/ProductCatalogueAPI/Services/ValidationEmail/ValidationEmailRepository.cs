@@ -170,9 +170,9 @@ public sealed class ValidationEmailRepository(DbConnectionFactory connections, T
     /// <inheritdoc/>
     public async Task<ValidationEmailSimulationRecord?> FindSimulationAsync(string sourceKey, CancellationToken cancellationToken) {
         using var connection = await OpenAsync(cancellationToken);
-        var row = await connection.QuerySingleOrDefaultAsync<SimulationRow>(new CommandDefinition("SELECT inbound_id AS Id, message_json AS MessageJson FROM dbo.IcEncInboundEmail WHERE mailbox_key = @Key AND transport_id_hash = @Hash;",
+        var row = await connection.QuerySingleOrDefaultAsync<SimulationRow>(new CommandDefinition("SELECT inbound_id AS Id, message_json AS MessageJson, status AS ProcessingStatus, last_error_code AS ErrorCode FROM dbo.IcEncInboundEmail WHERE mailbox_key = @Key AND transport_id_hash = @Hash;",
             new { Key = SimulationMailboxKey, Hash = SHA256.HashData(Encoding.UTF8.GetBytes(ValidationSimulationIdentity.MessageId(sourceKey))) }, cancellationToken: cancellationToken));
-        return row is null ? null : new(row.Id, JsonSerializer.Deserialize<ValidationEmailMessage>(row.MessageJson)!);
+        return row is null ? null : new(row.Id, JsonSerializer.Deserialize<ValidationEmailMessage>(row.MessageJson)!) { ProcessingStatus = row.ProcessingStatus, ErrorCode = row.ErrorCode };
     }
 
     /// <inheritdoc/>
@@ -182,8 +182,34 @@ public sealed class ValidationEmailRepository(DbConnectionFactory connections, T
         return await FindSimulationAsync(sourceKey, cancellationToken) ?? throw new InvalidOperationException("The simulated email was not durably captured.");
     }
 
+    /// <summary>Exposes a failed generated workflow response on its exact still-current package, including failures on later polling ticks.</summary>
+    /// <param name="message">Original synthetic message whose permanent transmission binding must still match.</param>
+    /// <param name="cancellationToken">Cancels the guarded System DB update.</param>
+    /// <returns>Completion without changing any candidate or external decision.</returns>
+    public async Task RecordWorkflowProcessingFailureAsync(ValidationEmailMessage message, CancellationToken cancellationToken) {
+        var outgoing = message.SimulatedOutgoingFile;
+        if (!message.IsSimulation || !message.SimulationWorkflow || outgoing is null || !outgoing.IsSimulation) return;
+        using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE ep SET error_message = @Message
+            FROM dbo.EncPackage ep
+            JOIN dbo.Product p ON (@Specification = 'S101' AND p.dataset_name = ep.source_dataset_name)
+                OR (@Specification = 'S57' AND p.dataset_name = ep.s57_dataset_name)
+            JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id AND t.product_specification = @Specification AND t.product_export_track_id = @TrackId
+            JOIN dbo.ProductIcEncDelivery d ON d.delivery_id = @DeliveryId AND d.product_export_track_id = t.product_export_track_id
+                AND d.product_revision_id = @RevisionId AND d.is_simulation = 1 AND d.status = 'Delivered'
+            JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
+            WHERE t.state = @InTransit AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number
+              AND r.product_revision_id = (SELECT TOP (1) product_revision_id FROM dbo.ProductRevision
+                  WHERE product_export_track_id = t.product_export_track_id ORDER BY created_at_utc DESC, product_revision_id DESC);
+            """, new { outgoing.Specification, outgoing.TrackId, outgoing.DeliveryId, outgoing.RevisionId,
+                InTransit = ProductCatalogueAPI.Data.Models.ProductState.InTransit, Message = ProductCatalogueAPI.Services.Operations.EncPackageFailureRules.SendFailureMessage }, cancellationToken: cancellationToken));
+    }
+
     private sealed class SimulationRow
     {
+        public string? ProcessingStatus { get; set; }
+        public string? ErrorCode { get; set; }
         public Guid Id { get; set; }
         public string MessageJson { get; set; } = "";
     }

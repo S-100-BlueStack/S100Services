@@ -161,6 +161,7 @@ public sealed class EncPackageSendTransactionTests
             throw new NotSupportedException("Unexpected repository read.");
         }
         private object Scalar(string sql, SqlParameterCollection parameters) {
+            if (sql.Contains("h.error_code = @HistoryCode", StringComparison.Ordinal)) return false;
             Assert.Contains("product_revision_id = @RevisionId", sql);
             return Deliveries.Any(d => d.RevisionId == (Guid)parameters["RevisionId"].Value);
         }
