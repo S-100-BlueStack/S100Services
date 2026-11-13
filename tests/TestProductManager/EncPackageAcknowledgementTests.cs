@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Jobs;
@@ -17,16 +19,25 @@ public sealed class EncPackageAcknowledgementTests
         var repository = new RecordingAcknowledgementRepository(package) { FailNextCompletion = true };
         var products = DispatchProxy.Create<IElectronicProductManager, RecordingElectronicProducts>();
         var recorder = (RecordingElectronicProducts)(object)products;
-        var service = new EncPackageFinalizationService(repository, new FakeManager(products), new AvailableLockService(),
-            TimeProvider.System, NullLogger<EncPackageFinalizationService>.Instance);
+        var logger = new PackageLogger();
+        var service = new EncPackageFinalizationService(repository, new FakeManager(products), new AvailableLockService(), TimeProvider.System, logger);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeAsync(package.PackageId, CancellationToken.None));
         Assert.Equal(1, recorder.PublicationCalls);
         Assert.False(repository.Completed);
 
+        repository.FailNextCompletion = true;
         await service.FinalizePendingAsync(CancellationToken.None);
-        Assert.Equal(2, recorder.PublicationCalls);
+        Assert.False(repository.Completed);
+        await service.FinalizePendingAsync(CancellationToken.None);
+        Assert.Equal(3, recorder.PublicationCalls);
         Assert.True(repository.Completed);
+        Assert.Contains(logger.Messages, message => message.Contains("still requires finalization", StringComparison.Ordinal));
+        Assert.Contains(logger.Messages, message => message.Contains("published and idle", StringComparison.Ordinal));
+        Assert.All(logger.Messages, message => {
+            Assert.Contains(package.S101DatasetName, message);
+            Assert.DoesNotContain(package.PackageId.ToString(), message);
+        });
     }
 
     [Fact]
@@ -48,8 +59,8 @@ public sealed class EncPackageAcknowledgementTests
         public bool Completed { get; private set; }
         public Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, DateTime nowUtc, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
-        public Task<IReadOnlyList<Guid>> GetPendingAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Guid>>(Completed || publication is null ? [] : [publication.PackageId]);
+        public Task<IReadOnlyList<EncPackage>> GetPendingAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<EncPackage>>(Completed || publication is null ? [] : [new EncPackage { Id = publication.PackageId, SourceDatasetName = publication.S101DatasetName }]);
         public Task<EncPackagePublication?> GetPublicationAsync(Guid packageId, CancellationToken cancellationToken) =>
             Task.FromResult(publication?.PackageId == packageId && !Completed ? publication : null);
         public Task CompleteAsync(EncPackagePublication value, DateTime nowUtc, CancellationToken cancellationToken) {
@@ -77,6 +88,19 @@ public sealed class EncPackageAcknowledgementTests
             PublicationCalls++;
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>Captures rendered package diagnostics without requiring a logging provider.</summary>
+    private sealed class PackageLogger : ILogger<EncPackageFinalizationService>
+    {
+        /// <summary>Gets messages emitted during publication and recovery.</summary>
+        internal List<string> Messages { get; } = [];
+        /// <inheritdoc/>
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        /// <inheritdoc/>
+        public bool IsEnabled(LogLevel logLevel) => true;
+        /// <inheritdoc/>
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
 
     private sealed class AvailableLockService : IDatasetLockService

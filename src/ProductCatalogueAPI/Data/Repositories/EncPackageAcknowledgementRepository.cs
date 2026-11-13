@@ -12,8 +12,8 @@ public interface IEncPackageAcknowledgementRepository
 {
     /// <summary>Applies one exact acceptance or rejection and returns whether both current products are accepted.</summary>
     Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, DateTime nowUtc, CancellationToken cancellationToken);
-    /// <summary>Finds packages whose two current deliveries have both been accepted.</summary>
-    Task<IReadOnlyList<Guid>> GetPendingAsync(CancellationToken cancellationToken);
+    /// <summary>Finds identities and source names of packages whose two current deliveries have both been accepted.</summary>
+    Task<IReadOnlyList<EncPackage>> GetPendingAsync(CancellationToken cancellationToken);
     /// <summary>Loads and verifies the accepted versions, shared snapshot and compiler artifacts.</summary>
     Task<EncPackagePublication?> GetPublicationAsync(Guid packageId, CancellationToken cancellationToken);
     /// <summary>Atomically advances both published tracks and removes the package after S-128 publication.</summary>
@@ -34,7 +34,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                    t.product_export_track_id AS TrackId, t.state AS State,
                    t.candidate_edition AS Edition, t.candidate_update AS [Update],
                    r.edition_number AS RevisionEdition, r.update_number AS RevisionUpdate,
-                   ep.package_id AS PackageId, ep.s57_discarded AS S57Discarded, ep.s101_discarded AS S101Discarded
+                   ep.package_id AS PackageId, ep.source_dataset_name AS PackageName, ep.s57_discarded AS S57Discarded, ep.s101_discarded AS S101Discarded
             FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK)
             JOIN dbo.Product p ON p.product_id = t.product_id
             JOIN dbo.ProductIcEncDelivery d WITH (UPDLOCK, HOLDLOCK) ON d.product_export_track_id = t.product_export_track_id
@@ -148,13 +148,13 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                 """, new { delivery.PackageId, Simulation = acknowledgement.Source == IcEncAcknowledgementSource.Simulation, Accepted = ProductState.AcceptedForDistribution }, transaction, cancellationToken: cancellationToken));
         }
         transaction.Commit();
-        return new IcEncAcknowledgementResult(delivery.DeliveryId, delivery.PackageId.Value, ready, alreadyRecorded);
+        return new IcEncAcknowledgementResult(delivery.DeliveryId, delivery.PackageId.Value, ready, alreadyRecorded) { PackageName = delivery.PackageName };
     }
 
-    public async Task<IReadOnlyList<Guid>> GetPendingAsync(CancellationToken cancellationToken) {
+    public async Task<IReadOnlyList<EncPackage>> GetPendingAsync(CancellationToken cancellationToken) {
         using var connection = connectionFactory.Create();
-        var ids = await connection.QueryAsync<Guid>(new CommandDefinition("""
-            SELECT p.package_id FROM dbo.EncPackage p
+        var packages = await connection.QueryAsync<EncPackage>(new CommandDefinition("""
+            SELECT p.package_id AS Id, p.source_dataset_name AS SourceDatasetName FROM dbo.EncPackage p
             WHERE p.s57_discarded = 0 AND p.s101_discarded = 0
               AND EXISTS (SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product prod ON prod.product_id = t.product_id
                           JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
@@ -171,7 +171,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                             AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WHERE newer.product_export_track_id = t.product_export_track_id
                                 AND (newer.created_at_utc > r.created_at_utc OR (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))));
             """, new { Accepted = ProductState.AcceptedForDistribution }, cancellationToken: cancellationToken));
-        return ids.ToArray();
+        return packages.ToArray();
     }
 
     public async Task<EncPackagePublication?> GetPublicationAsync(Guid packageId, CancellationToken cancellationToken) {
@@ -259,6 +259,8 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                     Idle = ProductState.Idle, Accepted = ProductState.AcceptedForDistribution, NowUtc = nowUtc }, transaction, cancellationToken: cancellationToken));
             if (changed != 1)
                 throw new InvalidOperationException("An accepted ENC revision changed before SQL finalization.");
+            // Dapper can bind DateTime as SQL datetime. Convert before adding a microsecond so
+            // SQL completion succeeds and Idle history remains ordered after Published history.
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO dbo.ProductStateHistory
                     (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
@@ -267,7 +269,7 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                 WHERE p.dataset_name = @DatasetName AND t.product_specification = @Specification;
                 INSERT INTO dbo.ProductStateHistory
                     (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
-                SELECT @IdleHistoryId, t.product_export_track_id, @Idle, @Edition, @Update, 'ENC package finalization', DATEADD(microsecond, 1, @NowUtc)
+                SELECT @IdleHistoryId, t.product_export_track_id, @Idle, @Edition, @Update, 'ENC package finalization', DATEADD(microsecond, 1, CONVERT(datetime2(7), @NowUtc))
                 FROM dbo.ProductExportTrack t JOIN dbo.Product p ON p.product_id = t.product_id
                 WHERE p.dataset_name = @DatasetName AND t.product_specification = @Specification;
                 """, new { product.DatasetName, product.Specification, product.Edition, product.Update,
@@ -298,6 +300,8 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
         public int RevisionEdition { get; set; }
         public int RevisionUpdate { get; set; }
         public Guid? PackageId { get; set; }
+        /// <summary>Gets or sets the owning S-101 source name, independently of the acknowledged member.</summary>
+        public string? PackageName { get; set; }
         public bool S57Discarded { get; set; }
         public bool S101Discarded { get; set; }
     }

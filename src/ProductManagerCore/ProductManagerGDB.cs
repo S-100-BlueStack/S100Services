@@ -2428,7 +2428,7 @@ namespace S100FC.ProductCatalogue
 
                 AddElectronicProduct(products["S57"]);
                 AddElectronicProduct(products["S101"]);
-                Logger.Information("Accepted ENC package {PackageId} published in S-128.", publication.PackageId);
+                Logger.Information("Accepted ENC package {PackageName} published in S-128.", publication.S101DatasetName);
             });
 
             static void Write(ZipArchive archive, string name, byte[] bytes) {

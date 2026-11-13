@@ -331,7 +331,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
                 if (!string.Equals(existing.S57DatasetName, s57Name, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException($"The mapped S-57 member of ENC package '{existing.Id}' changed. The watermark and candidates were preserved.");
+                    throw new InvalidOperationException($"The mapped S-57 member of ENC package '{existing.SourceDatasetName}' changed. The watermark and candidates were preserved.");
                 await EncPackageInterruptedExportRecovery.TryRecoverAsync(existing,
                     workflowRepository, packages, clock, logger, cancellationToken);
                 await EnsureMissingTracksAsync(existing, cancellationToken);
@@ -538,8 +538,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 throw new InvalidOperationException($"Import baseline reconciliation is waiting for S-57 '{package.S57DatasetName}'. No scan checkpoint was advanced.");
             await EncPackageInterruptedExportRecovery.TryRecoverAsync(package, workflowRepository, packages, clock, logger, cancellationToken);
             if (!await exports.ExecutePackageRefreshDiscardAsync(package.Id, cancellationToken))
-                throw new InvalidOperationException($"ENC package '{package.Id}' crosses the import baseline but is held or protected by delivery state. Resolve it through the package workflow before detection resumes. No scan checkpoint was advanced.");
-            logger.LogWarning("ENC package invalidated by import baseline. PackageId: {PackageId}. SourceDatasetName: {SourceDatasetName}. PreviousScanFromUtc: {PreviousScanFromUtc:O}. ArchiveBaselineUtc: {ArchiveBaselineUtc:O}. Post-baseline replay retained.", package.Id, package.SourceDatasetName, package.ScanFromUtc, baseline.Value);
+                throw new InvalidOperationException($"ENC package '{package.SourceDatasetName}' crosses the import baseline but is held or protected by delivery state. Resolve it through the package workflow before detection resumes. No scan checkpoint was advanced.");
+            logger.LogWarning("ENC package invalidated by import baseline. PackageName: {PackageName}. PreviousScanFromUtc: {PreviousScanFromUtc:O}. ArchiveBaselineUtc: {ArchiveBaselineUtc:O}. Post-baseline replay retained.", package.SourceDatasetName, package.ScanFromUtc, baseline.Value);
         }
         // Paired discard retains its old replay boundary transactionally. Normalize afterward,
         // including on restart, so the ordinary exact-bound retirement check still works.
@@ -564,7 +564,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         // Commit the retry gate only after both durable error histories succeeded. A failure
         // while recording diagnostics must never suppress the unfinished attempt on restart.
         await packages.MarkSnapshotAttemptAsync(sourceName, replayFromUtc, attemptedThroughUtc, cancellationToken);
-        logger.LogError(exception, "ENC source snapshot failed; replay retained and remaining products will continue. SourceDatasetName: {SourceDatasetName}. ExistingPackageId: {PackageId}. ReplayFromUtc: {ReplayFromUtc:O}.", sourceName, previous?.Id, replayFromUtc);
+        logger.LogError(exception, "ENC source snapshot failed; replay retained and remaining products will continue. PackageName: {PackageName}. ReplayFromUtc: {ReplayFromUtc:O}.", sourceName, replayFromUtc);
     }
 
     /// <summary>Recreates only absent legacy member tracks using each published catalogue version before queue recovery.</summary>
@@ -616,7 +616,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         if (await exports.ExecutePackageRefreshDiscardAsync(package.Id, cancellationToken))
             return true;
         await packages.MarkReplayAsync(package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
-        logger.LogInformation("ENC replacement deferred because a member or its exact delivery is protected. PackageId: {PackageId}. SourceDatasetName: {SourceDatasetName}.", package.Id, package.SourceDatasetName);
+        logger.LogInformation("ENC replacement deferred because a member or its exact delivery is protected. PackageName: {PackageName}.", package.SourceDatasetName);
         return false;
     }
 
@@ -653,9 +653,9 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     /// <returns>Completion after durable failure handling.</returns>
     private async Task RecordCandidateFailureAsync(EncPackage package, string datasetName, ProductSpecification specification, Exception exception) {
         if (exception is ExportValidationException { IsFindingFailure: true } findings)
-            logger.LogWarning("ENC candidate failed validation. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}. ValidationMessage: {ValidationMessage}", package.Id, datasetName, findings.PublicMessage);
+            logger.LogWarning("ENC candidate failed validation. PackageName: {PackageName}. ExportDatasetName: {ExportDatasetName}. ValidationMessage: {ValidationMessage}", package.SourceDatasetName, datasetName, findings.PublicMessage);
         else
-            logger.LogError(exception, "ENC candidate failed. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
+            logger.LogError(exception, "ENC candidate failed. PackageName: {PackageName}. ExportDatasetName: {ExportDatasetName}.", package.SourceDatasetName, datasetName);
         var message = exception is ExportValidationException validation
             ? PublicExportError.Message(validation.Code, validation.PublicMessage)
             : PublicExportError.GenericMessage;
@@ -667,7 +667,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 await workflowRepository.SetStateAsync(track.Id, ProductState.Error, "system", clock.GetUtcNow().UtcDateTime, errorCode, message, CancellationToken.None);
         }
         catch (Exception persistenceException) {
-            logger.LogError(persistenceException, "Could not record the failed ENC export track. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
+            logger.LogError(persistenceException, "Could not record the failed ENC export track. PackageName: {PackageName}. ExportDatasetName: {ExportDatasetName}.", package.SourceDatasetName, datasetName);
         }
 
         // Keep package failure durable even if a cancellation arrives after the encoder fails.

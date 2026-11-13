@@ -50,8 +50,8 @@ internal static class EncPackageInterruptedExportRecovery
                 throw new InvalidOperationException($"ENC interrupted export recovery conflicted for '{name}'. The scan watermark and replay must be preserved.");
 
             recovered++;
-            logger.LogWarning("Interrupted ENC package export recovered as Error. PackageId: {PackageId}. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. PreviousState: {PreviousState}. ErrorCode: {ErrorCode}.",
-                package.Id, name, specification, previousState, "ENC_EXPORT_INTERRUPTED");
+            logger.LogWarning("Interrupted ENC package export recovered as Error. PackageName: {PackageName}. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. PreviousState: {PreviousState}. ErrorCode: {ErrorCode}.",
+                package.SourceDatasetName, name, specification, previousState, "ENC_EXPORT_INTERRUPTED");
         }
         return recovered;
     }

@@ -18,27 +18,29 @@ public interface IEncPackageFinalizationService
 public sealed class EncPackageFinalizationService(IEncPackageAcknowledgementRepository repository, IProductManager productManager, IDatasetLockService locks,
     TimeProvider clock, ILogger<EncPackageFinalizationService> logger) : IEncPackageFinalizationService
 {
+    /// <inheritdoc/>
     public async Task FinalizePendingAsync(CancellationToken cancellationToken) {
-        foreach (var packageId in await repository.GetPendingAsync(cancellationToken)) {
+        foreach (var package in await repository.GetPendingAsync(cancellationToken)) {
             cancellationToken.ThrowIfCancellationRequested();
-            try { await FinalizeAsync(packageId, cancellationToken); }
+            try { await FinalizeAsync(package.Id, cancellationToken); }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch (Exception ex) { logger.LogError(ex, "Accepted ENC package {PackageId} still requires finalization; the next DPC scan will retry.", packageId); }
+            catch (Exception ex) { logger.LogError(ex, "Accepted ENC package {PackageName} still requires finalization; the next DPC scan will retry.", package.SourceDatasetName); }
         }
     }
 
+    /// <inheritdoc/>
     public async Task FinalizeAsync(Guid packageId, CancellationToken cancellationToken) {
         await using var packageLock = await locks.TryAcquireAsync($"ENC-FINALIZE-{packageId:N}", cancellationToken);
         if (packageLock is null) return;
 
         var publication = await repository.GetPublicationAsync(packageId, cancellationToken);
         if (publication is null) return;
-        logger.LogInformation("Publishing accepted ENC package {PackageId} in S-128.", packageId);
+        logger.LogInformation("Publishing accepted ENC package {PackageName} in S-128.", publication.S101DatasetName);
         await productManager.ElectronicProductManager.PublishAcceptedEncPackageAsync(publication, cancellationToken);
         // If this SQL transaction fails, the package remains pending. The S-128 write detects its
         // package ID in the attachment table on retry and does not write duplicate attachments.
         await repository.CompleteAsync(publication, clock.GetUtcNow().UtcDateTime, CancellationToken.None);
-        logger.LogInformation("Accepted ENC package {PackageId} is published and idle.", packageId);
+        logger.LogInformation("Accepted ENC package {PackageName} is published and idle.", publication.S101DatasetName);
     }
 }
 
