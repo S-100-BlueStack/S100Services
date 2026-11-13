@@ -1,9 +1,14 @@
 export const DIRECT_SELECTION_SHORTCUT_TEXT =
-  "Ctrl/Cmd-click or Ctrl/Cmd+Enter to open highlighted Product";
+  "Ctrl-click or Ctrl+Enter to open highlighted Product";
+
+export function getDirectSelectionShortcutText(platform = "") {
+  const modifier = /mac/i.test(String(platform)) ? "Cmd" : "Ctrl";
+  return `${modifier}-click or ${modifier}+Enter to open highlighted Product`;
+}
 
 export function bindDirectSelectionShortcutHint(
   view,
-  { hoverManager, documentRef = globalThis.document } = {}
+  { hoverManager, documentRef = globalThis.document, platform } = {}
 ) {
   if (
     !view?.ui?.add ||
@@ -14,13 +19,16 @@ export function bindDirectSelectionShortcutHint(
     return () => {};
   }
 
+  const detectedPlatform =
+    platform ?? globalThis.navigator?.userAgentData?.platform ?? globalThis.navigator?.platform;
+  const text = getDirectSelectionShortcutText(detectedPlatform);
   const hint = documentRef.createElement("div");
   hint.className = "map-direct-selection-hint";
-  hint.textContent = DIRECT_SELECTION_SHORTCUT_TEXT;
-  hint.title = DIRECT_SELECTION_SHORTCUT_TEXT;
+  hint.textContent = text;
+  hint.title = text;
   hint.hidden = true;
   hint.setAttribute("role", "note");
-  hint.setAttribute("aria-label", DIRECT_SELECTION_SHORTCUT_TEXT);
+  hint.setAttribute("aria-label", text);
 
   view.ui.add(hint, "bottom-left");
 

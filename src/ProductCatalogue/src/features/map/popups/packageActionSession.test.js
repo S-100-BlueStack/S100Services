@@ -117,7 +117,10 @@ test("development demo settings cannot override absent server send permission", 
   await h.session.start();
   assert.equal(await h.session.invoke("send"), false);
   assert.equal(await h.session.invoke("accept"), false);
-  assert.deepEqual(h.requests.map((request) => request.options.method), ["GET"]);
+  assert.deepEqual(
+    h.requests.map((request) => request.options.method),
+    ["GET"]
+  );
   h.session.destroy();
 });
 
@@ -335,7 +338,10 @@ test("a disabled simulated Send does not change Pause or Discard permission", as
   assert.equal(h.session.projection().actionEligibility.pause, true);
   assert.equal(h.session.projection().actionEligibility.discard, true);
   assert.equal(h.session.projection().actionEligibility.accept, false);
-  assert.deepEqual(h.requests.map((request) => request.options.method), ["GET"]);
+  assert.deepEqual(
+    h.requests.map((request) => request.options.method),
+    ["GET"]
+  );
   h.session.destroy();
 });
 
@@ -495,7 +501,9 @@ for (const status of [0, 3, 4, 5, undefined]) {
 }
 
 test("one eligible export cannot authorize a package send", async () => {
-  const h = createHarness({ initial: { canSend: true, eligibleMembers: [{ key: "s101", datasetName: "PRIMARY" }] } });
+  const h = createHarness({
+    initial: { canSend: true, eligibleMembers: [{ key: "s101", datasetName: "PRIMARY" }] },
+  });
   await h.session.start();
   assert.equal(await h.session.invoke("send"), false);
   assert.equal(h.requests.length, 1);

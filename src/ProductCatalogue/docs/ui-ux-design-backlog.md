@@ -235,3 +235,17 @@ Only after the demonstration baseline is accepted, evaluate SDK/Calcite updates,
 ## Historical provenance
 
 The older design matrix, original alternatives, detailed FI-021/FI-026–FI-044 implementation notes and acceptance descriptions were deliberately consolidated. Their original text remains retrievable from Git history before documentation-cleanup v2. Where a current feature README or tests differ from this summary, investigate the explicit task baseline rather than reconstructing behavior from historical tracker prose.
+
+## PC-UX-R05 - Onboarding and tooltip corrections (v2 candidate)
+
+Source baseline: `a036b6a50dfcd55deaedd4dc01924f7ac5078868`.
+R05 v2 supersedes v1. It positions the Main Map search tour beside its
+actual navbar controls or opened panels, combines direct-selection guidance
+into the map step with OS-specific modifier text and keeps popup-action
+guidance visible while a late action row is mounted. The highlight follows
+only the verified action row, never the entire popup. Redundant Dashboard and
+Review hover surfaces stay removed, Filters initial focus stays corrected,
+and the user-approved shortened tooltip copy is applied. Backend-specific
+permission/disabled reasons, Product workflows, data loading and R01-R04
+behavior remain unchanged. No new dependencies. Local browser acceptance
+is pending; do not mark R05 complete from Node tests alone.

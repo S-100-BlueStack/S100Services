@@ -193,7 +193,7 @@ for (const route of ["analyze", "review", "dashboard", "other-shared-page"]) {
     assert.ok(actionRow, "the shared Preferences action row is rendered");
     assert.match(actionRow, /data-preference-action="start-introduction"/);
     assert.match(actionRow, /data-preference-action="reset-all"/);
-    assert.match(panel.html, /title="Show a short guide to the controls on this page\."/);
+    assert.match(panel.html, /title="Start introduction"/);
     assert.doesNotMatch(panel.html, /Show a short guide[^"]*<\/small>/);
     assert.match(panel.html, /<h3 id="preferences-display-heading">Display<\/h3>/);
     assert.match(panel.html, /<h3 id="preferences-saved-heading">Saved preferences<\/h3>/);

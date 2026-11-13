@@ -43,7 +43,9 @@ export const ONBOARDING_STEPS = Object.freeze({
       description:
         "Open the navbar Product search action to search Products from active map sources. Choose a result to locate the Product on the map and open its popup.",
       selectors: ["[data-onboarding-target='product-search']"],
-      placement: "below",
+      // Anchor the card beside the visible search panel, or its navbar trigger.
+      placement: "adjacent-left",
+      positionSelectors: ["#main-map-product-search"],
     },
     {
       id: "main-locator",
@@ -51,7 +53,9 @@ export const ONBOARDING_STEPS = Object.freeze({
       description:
         "Open the navbar Locator action to search addresses, populated places and postal locations in Denmark and Greenland. Choosing a result moves the map without selecting a Product.",
       selectors: ["#main-map-locator-button"],
-      placement: "below",
+      // Position beside the Locator surface without covering its suggestions.
+      placement: "adjacent-left",
+      positionSelectors: ["#main-map-locator-surface"],
     },
     {
       id: "main-data-sources",
@@ -89,20 +93,10 @@ export const ONBOARDING_STEPS = Object.freeze({
       advanceOnReady: true,
     },
     {
-      id: "main-shortcuts",
-      title: "Open the highlighted Product",
-      description:
-        "Ctrl-click (Cmd-click on macOS) to open only the highlighted Product. With map focus, Ctrl+Enter (Cmd+Enter on macOS) opens it using the keyboard.",
-      selectors: ["#viewDiv"],
-      placement: "adjacent-horizontal",
-      popupAnchor: "popup",
-      requires: "main-product-popup",
-    },
-    {
       id: "main-popup-actions",
       title: "Use the Product popup",
       description:
-        "The popup shows Product details and available Pause/Resume, Discard, Send/Accept and Tools actions. Disabled actions explain when an operation is unavailable.",
+        "When available, the popup action row contains Pause/Resume, Discard, Send/Accept and Tools. Disabled actions explain when an operation is unavailable.",
       selectors: ["#viewDiv"],
       placement: "adjacent-horizontal",
       popupAnchor: "actions",
@@ -385,8 +379,26 @@ export const ONBOARDING_STEPS = Object.freeze({
     },
   ],
 });
-export function getOnboardingSteps(routeName) {
-  return ONBOARDING_STEPS[routeName] ?? [];
+export function getOnboardingSteps(routeName, { platform } = {}) {
+  const steps = ONBOARDING_STEPS[routeName] ?? [];
+  if (routeName !== "main") return steps;
+
+  // The selected Product shortcut supports both modifiers; show only the
+  // platform-appropriate key to keep the tour readable.
+  const detectedPlatform =
+    platform ??
+    (typeof navigator === "undefined"
+      ? ""
+      : (navigator.userAgentData?.platform ?? navigator.platform ?? ""));
+  const modifier = /mac/i.test(String(detectedPlatform)) ? "Cmd" : "Ctrl";
+  return steps.map((step) =>
+    step.id === "main-map"
+      ? {
+          ...step,
+          description: `${step.description} Use ${modifier}-click to open only the highlighted Product, or ${modifier}+Enter with map focus.`,
+        }
+      : step
+  );
 }
 
 export function getOnboardingWelcomeContent(routeName) {

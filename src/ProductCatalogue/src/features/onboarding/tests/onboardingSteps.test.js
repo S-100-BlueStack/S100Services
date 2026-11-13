@@ -17,7 +17,6 @@ const expected = {
     "data-sources",
     "filters",
     "map",
-    "shortcuts",
     "popup-actions",
     "product-collection",
     "preferences",
@@ -108,16 +107,32 @@ test("separates Product search and Locator and teaches the accepted direct-selec
     steps.find((step) => step.id === "main-locator").description,
     /navbar Locator action.*without selecting a Product/
   );
-  assert.equal(steps.find((step) => step.id === "main-product-search").placement, "below");
+  assert.equal(steps.find((step) => step.id === "main-product-search").placement, "adjacent-left");
+  assert.deepEqual(steps.find((step) => step.id === "main-product-search").positionSelectors, [
+    "#main-map-product-search",
+  ]);
+  assert.equal(steps.find((step) => step.id === "main-locator").placement, "adjacent-left");
+  assert.deepEqual(steps.find((step) => step.id === "main-locator").positionSelectors, [
+    "#main-map-locator-surface",
+  ]);
   assert.match(
     steps.find((step) => step.id === "main-map").description,
     /Click normally.*overlap picker/
   );
-  const shortcut = steps.find((step) => step.id === "main-shortcuts").description;
-  assert.match(shortcut, /Ctrl-click \(Cmd-click on macOS\).*highlighted Product/);
-  assert.match(shortcut, /map focus, Ctrl\+Enter \(Cmd\+Enter on macOS\)/);
-  assert.doesNotMatch(shortcut, /Linux|compact map hint/);
-  assert.doesNotMatch(shortcut, /Collection/);
+  const mapStep = getOnboardingSteps("main", { platform: "Win32" }).find(
+    (step) => step.id === "main-map"
+  );
+  assert.match(mapStep.description, /Ctrl-click.*Ctrl\+Enter/);
+  assert.doesNotMatch(mapStep.description, /Cmd|macOS|Collection/);
+  const macStep = getOnboardingSteps("main", { platform: "macOS" }).find(
+    (step) => step.id === "main-map"
+  );
+  assert.match(macStep.description, /Cmd-click.*Cmd\+Enter/);
+  assert.doesNotMatch(macStep.description, /Ctrl|Windows/);
+  assert.equal(
+    steps.some((step) => step.id === "main-shortcuts"),
+    false
+  );
   assert.match(steps[0].description, /new tab/);
 
   const dataSourceStep = steps.find((step) => step.id === "main-data-sources");
@@ -237,6 +252,28 @@ test("onboarding import graph cannot initialize main-map or workspace services",
     }
   }
   await visit(new URL("../services/onboardingService.js", import.meta.url));
+});
+
+test("main search guidance stays near its navbar action and beside an opened panel", () => {
+  const triggerPosition = calculatePopoverPosition({
+    popoverRect: { width: 340, height: 190 },
+    targetRect: { left: 750, top: 60, right: 782, bottom: 92, width: 32, height: 32 },
+    placement: "adjacent-left",
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    minimumTop: 68,
+  });
+  assert.deepEqual(triggerPosition, { centered: false, top: 68, left: 398 });
+  const panelPosition = calculatePopoverPosition({
+    popoverRect: { width: 340, height: 190 },
+    targetRect: { left: 750, top: 100, right: 1102, bottom: 350, width: 352, height: 250 },
+    placement: "adjacent-left",
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    minimumTop: 68,
+  });
+  assert.deepEqual(panelPosition, { centered: false, top: 100, left: 398 });
+  assert.ok(panelPosition.left + 340 < 750, "guidance must not cover suggestions");
 });
 
 test("places map guidance to the upper left of Product search", () => {

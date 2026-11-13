@@ -3,12 +3,12 @@ import { bindHelpTooltip, normalizeHelpText } from "./helpTooltip.js";
 const GLOBAL_HELP_RULES = [
   {
     selector: "#filter-button",
-    title: "Filter products",
+    title: "Filters",
     mode: "replace-generic",
   },
   {
     selector: "#data-sources-button",
-    title: "Choose data sources",
+    title: "Data sources",
     mode: "replace-generic",
   },
   {
@@ -18,32 +18,32 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: "#notification-button",
-    title: "View notifications",
+    title: "Notifications",
     mode: "replace-generic",
   },
   {
     selector: "#documentation-button",
-    title: "Open help",
+    title: "Help",
     mode: "replace-generic",
   },
   {
     selector: "#preferences-button, #settings-button, [data-preferences-button]",
-    title: "Open preferences",
+    title: "Preferences",
     mode: "replace-generic",
   },
   {
     selector: "#main-map-product-search-button",
-    title: "Find a product on the map",
+    title: "Search products",
     mode: "replace-generic",
   },
   {
     selector: "#main-map-locator-button",
-    title: "Find a place on the map",
+    title: "Search locations",
     mode: "replace-generic",
   },
   {
     selector: ".pc-product-picker__input",
-    title: "Find or enter a product",
+    title: "Search products",
     mode: "replace-generic",
   },
   {
@@ -52,18 +52,13 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: ".pc-product-picker__option",
-    title: (element) => getAuthoredTitle(element) || `Add ${getElementText(element)}`,
-    mode: "fill-empty",
-  },
-  {
     selector: "[data-clear-all-filters], .pc-filter-clear-all",
-    title: "Clear all filters",
+    title: "Clear filters",
     mode: "replace-generic",
   },
   {
     selector: ".pc-filter-select-all, [data-filter-select-all]",
-    title: "Select all values",
+    title: "Select all",
     mode: "replace-generic",
   },
   {
@@ -78,7 +73,7 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: "calcite-slider[data-filter-range]",
-    title: "Filter by display scale",
+    title: "Display scale",
     mode: "fill-empty",
   },
   {
@@ -110,7 +105,7 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: ".pc-dashboard-summary-row, .pc-dashboard-summary-panel__row",
-    title: "Filter activity by this value",
+    title: "Filter by this value",
     mode: "fill-empty",
   },
   {
@@ -125,7 +120,7 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: ".pc-dashboard-history-panel__close",
-    title: "Close history",
+    title: "Close History (Esc)",
     mode: "replace-generic",
   },
   {
@@ -219,6 +214,15 @@ export function applyGlobalHelpTooltips(root = document) {
 }
 
 function prepareHelpElement(element, matchingRule = null) {
+  if (isSelfDescriptiveHelpTarget(element)) {
+    // Visible labels and form controls already identify these choices. Removing
+    // any native title also avoids a second hover surface on their dropdowns.
+    element.removeAttribute("title");
+    element.removeAttribute("data-app-original-title");
+    element.removeAttribute("data-app-help");
+    if (activeAnchor === element) clearActiveBinding();
+    return;
+  }
   if (element.matches?.(".navbar-title-link")) {
     // A visible route label is its own help. Do not allow a native title or
     // application tooltip to obscure the full-height clickable navigation.
@@ -322,6 +326,7 @@ function hasHelpSource(element, rule) {
 }
 
 function isApplicationControl(element, rule) {
+  if (isSelfDescriptiveHelpTarget(element)) return false;
   // The Product search placeholder and suggestions already describe their actions.
   // Hover help would cover suggestions in the compact search surface.
   if (element.matches?.(".main-map-product-search__input, .main-map-product-search__option")) {
@@ -355,6 +360,16 @@ function isApplicationControl(element, rule) {
     return Boolean(rule && rule !== GLOBAL_HELP_RULES.at(-1));
   }
   return true;
+}
+
+function isSelfDescriptiveHelpTarget(element) {
+  return Boolean(
+    element.matches?.(
+      ".pc-dashboard-filter__control, .pc-dashboard-page-size__select, " +
+        ".pc-dashboard-activity-table__product, .pc-review-product-list__item-name"
+    ) ||
+    element.closest?.(".pc-review-workspace-content__toggle, .pc-review-product-list__content-type")
+  );
 }
 
 function isInteractiveHelpTarget(element) {
@@ -415,8 +430,8 @@ function createDashboardLinkHelp(element) {
     Review: "Open Review",
     Analyze: "Open Analyze",
     History: "Open product history",
-    "IC-ENC": "Open the IC-ENC report",
-    Validation: "Open the validation report",
+    "IC-ENC": "Open IC-ENC report",
+    Validation: "Open Validation report",
   };
   return (
     dashboardLinkHelp[getElementText(element)] || createActionTextHelp(element, "Dashboard action")
@@ -425,8 +440,8 @@ function createDashboardLinkHelp(element) {
 
 function createAnalyzeCollapseActionHelp(element) {
   const text = getElementText(element);
-  if (text === "Open all") return "Open all sections";
-  if (text === "Collapse all") return "Collapse all sections";
+  if (text === "Open all") return "Open all";
+  if (text === "Collapse all") return "Collapse all";
   return createActionTextHelp(element, "Analyze action");
 }
 

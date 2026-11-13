@@ -121,8 +121,14 @@ function createOnboardingService({ routeName }) {
   function findStepTarget(step, { reveal = false } = {}) {
     if (step.popupAnchor && isProductPopupOpen(mapView)) {
       const collectionButton = getPopupCollectionButton?.();
+      const anchor = resolveOnboardingPopupTarget(step, mapView, { collectionButton });
+      // Keep the actions step visible while the popup renders its action row.
+      // The popup is only a positioning fallback, never a highlight target.
+      if (step.popupAnchor === "actions") {
+        return anchor ?? resolveOnboardingPopupTarget({ popupAnchor: "popup" }, mapView);
+      }
       return (
-        resolveOnboardingPopupTarget(step, mapView, { collectionButton }) ??
+        anchor ??
         resolveOnboardingPopupTarget({ popupAnchor: "popup" }, mapView) ??
         resolveOnboardingTarget(step, { reveal })
       );
@@ -131,6 +137,12 @@ function createOnboardingService({ routeName }) {
   }
 
   function findPositionTarget(step, target) {
+    // Search panels are mounted separately below the navbar. Anchor the tour
+    // card beside the panel when open, and beside the button otherwise.
+    for (const selector of step.positionSelectors ?? []) {
+      const surface = document.querySelector(selector);
+      if (isVisibleOnboardingElement(surface)) return surface;
+    }
     // The card stays beside the popup or panel, while highlights can follow
     // small, independently rendered controls inside the same surface.
     if (step.popupAnchor && step.popupAnchor !== "popup") {

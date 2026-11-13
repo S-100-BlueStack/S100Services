@@ -44,7 +44,6 @@ function createWorkspaceContentToggle(productItems, definition) {
   const aggregateState = getReviewContentTypeAggregateState(productItems, definition.id);
   const label = document.createElement("label");
   label.className = "pc-review-workspace-content__toggle";
-  label.title = `Toggle ${definition.label} for all Review Products.`;
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
@@ -69,7 +68,7 @@ function createWorkspaceRefreshButton(productItems, loading) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pc-review-product-list__refresh-button";
-  button.title = "Refresh Product Review workspace data.";
+  button.title = "Refresh selected products";
   button.setAttribute("aria-label", "Refresh Product Review workspace data");
   button.disabled = loading || !productItems.some((item) => item.enabled);
 
@@ -175,7 +174,6 @@ function createProductListItem(productItem) {
   const name = document.createElement("span");
   name.className = "pc-review-product-list__item-name";
   name.textContent = productItem.datasetName;
-  name.title = productItem.datasetName;
 
   content.appendChild(name);
 
@@ -215,7 +213,6 @@ function createContentTypeList(productItem) {
 function createContentTypeToggle(productItem, definition) {
   const label = document.createElement("label");
   label.className = "pc-review-product-list__content-type";
-  label.title = definition.description;
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";

@@ -105,10 +105,11 @@ A compact application-owned hint is added through the public MapView UI only whi
 candidate exists:
 
 ```text
-Ctrl/Cmd-click or Ctrl/Cmd+Enter to open highlighted Product
+Ctrl-click or Ctrl+Enter to open highlighted Product (Windows/Linux)
+Cmd-click or Cmd+Enter to open highlighted Product (macOS)
 ```
 
-The hint is a non-interactive accessible note with matching native title/help text. It is removed
+The hint chooses the browser-reported platform modifier and is a non-interactive accessible note with matching native title/help text. It is removed
 with the overlap-interaction lifecycle and disappears when transient highlight ownership is cleared,
 including popup locking, pointer leave, source/layer cleanup, and teardown. It does not claim
 `aria-keyshortcuts` because the hint itself is not the keyboard owner. Normal click and the overlap

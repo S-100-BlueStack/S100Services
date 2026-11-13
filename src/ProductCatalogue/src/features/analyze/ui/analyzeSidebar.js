@@ -98,8 +98,7 @@ function createWorkspaceRefreshButton(datasetItems) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "analyze-products__action-button analyze-workspace-refresh";
-  button.title =
-    "Refresh Product metadata, History, and validation content in this Analyze workspace.";
+  button.title = "Refresh selected products' metadata";
   button.setAttribute(
     "aria-label",
     "Refresh Product metadata, History, and validation content in this Analyze workspace"
@@ -197,7 +196,6 @@ function createDatasetListItem(datasetItem) {
   const name = document.createElement("span");
   name.className = "analyze-dataset-list__item-name";
   name.textContent = datasetItem.name;
-  name.title = datasetItem.name;
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "analyze-dataset-list__remove-button";

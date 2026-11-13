@@ -310,7 +310,6 @@ function createProductOption(product, onClick) {
   option.className = "pc-product-picker__option";
   option.setAttribute("role", "option");
   option.textContent = product.name;
-  option.title = `Add ${product.name}`;
   option.addEventListener("click", onClick);
 
   return option;

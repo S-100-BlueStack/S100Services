@@ -324,3 +324,12 @@ The shared notice center uses Calcite notice severity `danger` for errors. The D
 last-successful-result refresh error uses the existing light/dark notice error background.
 These are visual-only changes: do not change ProductState/EncPackageStatus palettes, source
 identity, backend error classification, workflow permissions or the deferred error-only filter.
+
+## PC-UX-R05 tooltip follow-up (candidate)
+
+Product names and visible History/IC-ENC/Validation content toggles no longer
+display duplicate hover text. Checkbox accessible names remain intact; the
+Refresh icon and Remove Product actions retain help. The approved short
+Refresh tooltip is included in R05 v2. Introduction suppresses
+application-owned hover help while its highlights are shown, without changing
+Review's data loading or Product selection lifecycle.

@@ -41,7 +41,7 @@ test("Review has one icon-only Refresh before the Product counter", async () => 
   assert.match(source, /icon\.icon = "refresh";/);
   assert.doesNotMatch(source, /button\.textContent = "Refresh";/);
   assert.doesNotMatch(reviewCss, /pc-review-workspace-refresh/);
-  assert.match(source, /button\.title = "Refresh Product Review workspace data\.";/);
+  assert.match(source, /button\.title = "Refresh selected products";/);
   assert.match(
     source,
     /button\.setAttribute\("aria-label", "Refresh Product Review workspace data"\);/

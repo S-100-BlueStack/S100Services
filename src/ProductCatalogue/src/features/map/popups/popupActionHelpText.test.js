@@ -5,7 +5,7 @@ import { getPopupActionHelpText } from "./popupActionHelpText.js";
 test("simple popup action help avoids technical disabled-state explanations", () => {
   assert.equal(
     getPopupActionHelpText({ id: "freeze-feature", label: "Freeze" }),
-    "Freeze this product."
+    "Freeze product."
   );
   assert.equal(getPopupActionHelpText({ id: "tools", label: "Tools" }), "More actions.");
   assert.equal(
@@ -14,7 +14,7 @@ test("simple popup action help avoids technical disabled-state explanations", ()
       disabled: true,
       disabledReason: "Cancel Export requires an unverified candidate for the selected source.",
     }),
-    "No export is available to cancel."
+    "No export to cancel."
   );
   assert.equal(
     getPopupActionHelpText({
@@ -22,7 +22,7 @@ test("simple popup action help avoids technical disabled-state explanations", ()
       disabled: true,
       disabledReason: "Wait until the current export finishes.",
     }),
-    "Wait for the current action to finish."
+    "Wait for current action."
   );
   assert.equal(
     getPopupActionHelpText({
@@ -30,7 +30,7 @@ test("simple popup action help avoids technical disabled-state explanations", ()
       disabled: true,
       disabledReason: "Unfreeze the product before exporting.",
     }),
-    "Unfreeze the product first."
+    "Unfreeze product first."
   );
   assert.equal(
     getPopupActionHelpText({

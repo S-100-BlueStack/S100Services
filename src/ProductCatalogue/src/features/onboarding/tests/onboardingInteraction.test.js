@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { getOnboardingSteps } from "../config/onboardingSteps.js";
 import { resolveOnboardingTarget } from "../domain/onboardingInteraction.js";
 import { getOnboardingService, initOnboarding } from "../services/onboardingService.js";
+import { bindHelpTooltip } from "../../../shared/ui/tooltips/helpTooltip.js";
 
 // The tour uses application-owned light DOM. Native button activation is modeled
 // as click; no Calcite or ArcGIS implementation is loaded by these tests.
@@ -469,6 +470,27 @@ test("removing the current target skips safely during refresh", () => {
   assert.equal(document.activeElement.dataset.action, "next");
 });
 
+test("an active introduction dismisses ordinary help and restores it after Escape", () => {
+  const anchor = addTarget("#help-anchor");
+  const binding = bindHelpTooltip(anchor, "Existing control help");
+  try {
+    binding.show();
+    assert.equal(document.querySelectorAll(".pc-help-tooltip").length, 1);
+    start("main");
+    assert.equal(document.body.getAttribute("data-pc-onboarding-active"), "");
+    assert.equal(document.querySelectorAll(".pc-help-tooltip").length, 0);
+    binding.show();
+    assert.equal(document.querySelectorAll(".pc-help-tooltip").length, 0);
+    key("Escape");
+    assert.equal(document.body.getAttribute("data-pc-onboarding-active"), null);
+    // A new pointer interaction can show help again after tour dismissal.
+    anchor.dispatchEvent(new Event("pointerenter"));
+    assert.equal(document.querySelectorAll(".pc-help-tooltip").length, 1);
+  } finally {
+    binding.destroy();
+  }
+});
+
 test("Escape closes directly and respects an already handled key", () => {
   start();
   const handled = new Event("keydown", { cancelable: true });
@@ -744,7 +766,7 @@ test("Main-map guidance waits for a selected Product and returns to the map if i
   view.popup.selectedFeature = { attributes: { datasetName: "Example Product" } };
   view.popup.visible = true;
   flushRefresh();
-  assert.equal(popover().dataset.stepId, "main-shortcuts");
+  assert.equal(popover().dataset.stepId, "main-popup-actions");
   assert.equal(document.activeElement, mapTarget);
   assert.equal(popover().style.left, "388px"); // Beside the popup, not at map top-right.
   activate("back");
@@ -752,11 +774,12 @@ test("Main-map guidance waits for a selected Product and returns to the map if i
   flushRefresh();
   assert.equal(popover().dataset.stepId, "main-map"); // Back must remain usable.
   activate("next");
-  assert.equal(popover().dataset.stepId, "main-shortcuts");
-  activate("next");
   assert.equal(popover().dataset.stepId, "main-popup-actions");
-  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 1);
-  // Highlight actions precisely while keeping guidance outside the whole popup.
+  const actionHighlights = document.querySelector(".pc-onboarding-highlight-layer").children;
+  assert.equal(actionHighlights.length, 1);
+  // The action row, not the entire popup, owns the highlight bounds.
+  assert.equal(actionHighlights[0].style.left, "626px");
+  assert.equal(actionHighlights[0].style.top, "296px");
   assert.equal(actions.isConnected, true);
   assert.equal(popover().style.left, "388px");
   activate("next");
@@ -829,6 +852,89 @@ for (const route of ["analyze", "review"]) {
   });
 }
 
+test("Main-map action guidance waits for late-rendered actions without highlighting the whole popup", () => {
+  installMainMapRevealTargets();
+  for (const selector of [
+    ".header-center",
+    "[data-onboarding-target='product-search']",
+    "#main-map-locator-button",
+    "#viewDiv",
+  ])
+    addTarget(selector);
+  const content = addTarget(".popup-container");
+  const view = {
+    popup: {
+      visible: true,
+      selectedFeature: { attributes: { datasetName: "Example" } },
+      content,
+      container: content,
+    },
+  };
+  start("main", { mapView: view });
+  for (let i = 0; i < 6; i++) activate("next");
+  assert.equal(popover().dataset.stepId, "main-popup-actions");
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 0);
+  const lateActions = addTarget(".popup-action-bar", content);
+  lateActions.bounds = { left: 60, top: 160, right: 200, bottom: 200, width: 140, height: 40 };
+  flushRefresh();
+  assert.equal(popover().dataset.stepId, "main-popup-actions");
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 1);
+  assert.equal(document.querySelector(".pc-onboarding-highlight").style.left, "56px");
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-product-collection");
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 0);
+});
+
+test("Main-map action guidance finds the connected rendered row when popup.content is a function", () => {
+  installMainMapRevealTargets();
+  for (const selector of [
+    ".header-center",
+    "[data-onboarding-target='product-search']",
+    "#main-map-locator-button",
+    "#viewDiv",
+  ])
+    addTarget(selector);
+  const container = addTarget(".esri-popup");
+  const ownedContent = addTarget(".popup-container", container);
+  const actionBar = addTarget(".popup-action-bar", ownedContent);
+  actionBar.bounds = { left: 500, top: 250, right: 680, bottom: 290, width: 180, height: 40 };
+  const view = {
+    popup: {
+      visible: true,
+      selectedFeature: { attributes: { datasetName: "Example" } },
+      content: () => ownedContent,
+      container,
+    },
+  };
+  start("main", { mapView: view });
+  for (let i = 0; i < 6; i++) activate("next");
+  assert.equal(popover().dataset.stepId, "main-popup-actions");
+  const highlights = document.querySelector(".pc-onboarding-highlight-layer").children;
+  assert.equal(highlights.length, 1);
+  assert.equal(highlights[0].style.left, "496px");
+  assert.equal(highlights[0].style.top, "246px");
+});
+
+test("Main-map search guidance follows its open panel without covering results", () => {
+  installMainMapRevealTargets();
+  addTarget(".header-center");
+  const productButton = addTarget("[data-onboarding-target='product-search']");
+  productButton.bounds = { left: 740, top: 10, right: 772, bottom: 42, width: 32, height: 32 };
+  const surface = addTarget("#main-map-product-search");
+  surface.hidden = true;
+  surface.bounds = { left: 740, top: 60, right: 1092, bottom: 320, width: 352, height: 260 };
+  addTarget("#main-map-locator-button");
+  addTarget("#viewDiv");
+  start("main");
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-product-search");
+  assert.equal(popover().style.left, "528px");
+  surface.hidden = false;
+  flushRefresh();
+  assert.equal(popover().style.left, "528px");
+  assert.equal(popover().style.top, "60px");
+});
+
 test("Main-map collection guidance never outlines the entire popup when its button is unavailable", () => {
   installMainMapRevealTargets();
   for (const selector of [
@@ -849,7 +955,7 @@ test("Main-map collection guidance never outlines the entire popup when its butt
     },
   };
   start("main", { mapView: view });
-  for (let i = 0; i < 8; i++) activate("next");
+  for (let i = 0; i < 7; i++) activate("next");
   assert.equal(popover().dataset.stepId, "main-product-collection");
   assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 0);
   const collectionButton = addTarget(".popup-product-collection-btn", content);
@@ -907,5 +1013,5 @@ test("Main-map preselected Products do not skip guidance on refresh", () => {
   flushRefresh();
   assert.equal(popover().dataset.stepId, "main-map");
   activate("next");
-  assert.equal(popover().dataset.stepId, "main-shortcuts");
+  assert.equal(popover().dataset.stepId, "main-popup-actions");
 });

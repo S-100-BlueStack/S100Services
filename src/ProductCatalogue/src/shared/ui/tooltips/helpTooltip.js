@@ -17,7 +17,15 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
   const controller = { hide };
 
   function show() {
-    if (disposed || dismissed || help || !text || !anchor.isConnected) return;
+    if (
+      disposed ||
+      dismissed ||
+      help ||
+      !text ||
+      !anchor.isConnected ||
+      document.body?.getAttribute?.("data-pc-onboarding-active") != null
+    )
+      return;
     activeHelp?.hide();
     const element = document.createElement("div");
     element.id = id;
@@ -31,6 +39,7 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
     anchor.setAttribute("aria-describedby", [previousDescription, id].filter(Boolean).join(" "));
     positionHelp(anchor, element, hovered ? pointerPosition : null);
     document.addEventListener("keydown", onEscape, true);
+    document.addEventListener("pc-onboarding-start", hide);
     document.addEventListener("scroll", hide, true);
     window.addEventListener("resize", hide);
   }
@@ -46,6 +55,7 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
     else anchor.removeAttribute("aria-describedby");
     if (activeHelp === controller) activeHelp = null;
     document.removeEventListener("keydown", onEscape, true);
+    document.removeEventListener("pc-onboarding-start", hide);
     document.removeEventListener("scroll", hide, true);
     window.removeEventListener("resize", hide);
   }

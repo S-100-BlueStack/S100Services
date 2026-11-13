@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   bindDirectSelectionShortcutHint,
   DIRECT_SELECTION_SHORTCUT_TEXT,
+  getDirectSelectionShortcutText,
 } from "./directSelectionShortcutHint.js";
 
 test("shortcut hint is contextual, visible, and exposes pointer plus keyboard guidance", () => {
@@ -51,8 +52,8 @@ test("shortcut hint is contextual, visible, and exposes pointer plus keyboard gu
   assert.equal(uiCalls[0].position, "bottom-left");
   assert.equal(element.hidden, true);
   assert.equal(element.textContent, DIRECT_SELECTION_SHORTCUT_TEXT);
-  assert.match(element.textContent, /Ctrl\/Cmd-click/);
-  assert.match(element.textContent, /Ctrl\/Cmd\+Enter/);
+  assert.match(element.textContent, /Ctrl-click/);
+  assert.match(element.textContent, /Ctrl\+Enter/);
   assert.equal(element.title, DIRECT_SELECTION_SHORTCUT_TEXT);
   assert.equal(attributes.get("role"), "note");
   assert.equal(attributes.get("aria-label"), DIRECT_SELECTION_SHORTCUT_TEXT);
@@ -67,4 +68,31 @@ test("shortcut hint is contextual, visible, and exposes pointer plus keyboard gu
   assert.equal(unsubscribed, true);
   assert.equal(uiCalls.at(-1).type, "remove");
   assert.equal(uiCalls.at(-1).node, element);
+});
+
+test("shortcut hints show only the platform-appropriate modifier", () => {
+  assert.equal(
+    getDirectSelectionShortcutText("Windows"),
+    "Ctrl-click or Ctrl+Enter to open highlighted Product"
+  );
+  assert.equal(
+    getDirectSelectionShortcutText("macOS"),
+    "Cmd-click or Cmd+Enter to open highlighted Product"
+  );
+  const attributes = new Map();
+  const element = {
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+  };
+  const view = { ui: { add() {}, remove() {} } };
+  const cleanup = bindDirectSelectionShortcutHint(view, {
+    platform: "MacIntel",
+    documentRef: { createElement: () => element },
+    hoverManager: { subscribeHighlightedGraphicIdentity: () => () => {} },
+  });
+  assert.match(element.textContent, /^Cmd-click/);
+  assert.equal(element.title, element.textContent);
+  assert.equal(attributes.get("aria-label"), element.textContent);
+  cleanup();
 });

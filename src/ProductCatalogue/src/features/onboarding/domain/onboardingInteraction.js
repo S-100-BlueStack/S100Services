@@ -116,8 +116,14 @@ export function resolveOnboardingPopupTarget(step, mapView, { collectionButton =
     return isVisibleOnboardingElement(collectionButton) ? collectionButton : null;
   }
   if (step.popupAnchor === "actions") {
-    const actionBar = content?.querySelector(".popup-action-bar");
-    if (isVisibleOnboardingElement(actionBar)) return actionBar;
+    // ArcGIS may expose a content function or a detached template while the
+    // actual application-owned action row is mounted in the popup container.
+    // Search only our own rendered row, not any private ArcGIS shadow DOM.
+    const candidates = [
+      content?.querySelector(".popup-action-bar"),
+      ...(container?.querySelectorAll(".popup-action-bar") ?? []),
+    ];
+    return candidates.find((actionBar) => isVisibleOnboardingElement(actionBar)) ?? null;
   }
   if (step.popupAnchor === "popup") {
     return container ?? (isVisibleOnboardingElement(content) ? content : null);
@@ -126,6 +132,11 @@ export function resolveOnboardingPopupTarget(step, mapView, { collectionButton =
 }
 
 export function resolveOnboardingHighlights(step, fallbackTarget) {
+  // The actions step may use the popup for card positioning while the action
+  // row is not yet mounted. Never present the whole popup as an action row.
+  if (step?.popupAnchor === "actions" && !fallbackTarget.matches(".popup-action-bar")) {
+    return [];
+  }
   // Missing/unsupported collection actions must never highlight the entire popup
   // as though the user could click it to add the Product.
   if (
