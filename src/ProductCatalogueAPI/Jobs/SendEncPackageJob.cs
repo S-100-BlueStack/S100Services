@@ -20,19 +20,19 @@ public sealed class SendEncPackageJob(IValidationEmailSimulatedSend simulation, 
     public async Task RunAsync(string sourceName, Guid packageId, EncPackageSendMember[] members, CancellationToken cancellationToken, PerformContext? context = null) {
         if (!simulation.Enabled) throw new InvalidOperationException("Both delivery and email modes must be Simulation.");
         var jobId = context?.BackgroundJob.Id ?? throw new InvalidOperationException("A durable package send job is required.");
-        logger.LogInformation("Simulated ENC package send starting. JobId: {JobId}. PackageId: {PackageId}. DatasetName: {DatasetName}", jobId, packageId, sourceName);
+        logger.LogInformation("Simulated ENC package send starting. JobId: {JobId}. PackageName: {PackageName}", jobId, sourceName);
         try {
             await simulation.SendPackageAsync(sourceName, packageId, members, jobId, cancellationToken);
-            logger.LogInformation("Simulated ENC package pair committed and responses captured. JobId: {JobId}. PackageId: {PackageId}. DatasetName: {DatasetName}", jobId, packageId, sourceName);
+            logger.LogInformation("Simulated ENC package pair committed and responses captured. JobId: {JobId}. PackageName: {PackageName}", jobId, sourceName);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (EncPackageSendUnavailableException) { throw; } // An obsolete/duplicate queued request is not a new send failure.
         catch (Exception exception) {
-            logger.LogError(exception, "Simulated ENC package send failed. JobId: {JobId}. PackageId: {PackageId}. DatasetName: {DatasetName}", jobId, packageId, sourceName);
+            logger.LogError(exception, "Simulated ENC package send failed. JobId: {JobId}. PackageName: {PackageName}", jobId, sourceName);
             if (packages is not null) {
                 try { await packages.RecordSendFailureAsync(sourceName, packageId, members, jobId, CancellationToken.None); }
                 catch (Exception persistenceException) {
-                    logger.LogError(persistenceException, "ENC send failure could not be recorded. PackageId: {PackageId}. JobId: {JobId}", packageId, jobId);
+                    logger.LogError(persistenceException, "ENC send failure could not be recorded. PackageName: {PackageName}. JobId: {JobId}", sourceName, jobId);
                 }
             }
             throw;

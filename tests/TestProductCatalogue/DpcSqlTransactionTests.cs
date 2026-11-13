@@ -211,19 +211,38 @@ public sealed class DpcSqlTransactionTests
     private static EncPackage PendingPackage() => new() { Id = Guid.NewGuid(), SourceDatasetName = DpcRunFixture.Source,
         S57DatasetName = DpcRunFixture.S57, ScanFromUtc = DpcRunFixture.Utc(8), DetectedAtUtc = DpcRunFixture.Utc(10), DatasetYaml = "fixture shared snapshot", SummaryYaml = "fixture summary" };
 
-    [DpcSqlFact]
-    public async Task AcceptanceFinalizesIndependentVersionsOnlyAfterBothExactDeliveries() {
+    /// <summary>Both delivery modes complete SQL finalization and preserve Published-before-Idle history with DateTime parameters.</summary>
+    /// <param name="simulation">Whether the exact deliveries and notices have simulated provenance.</param>
+    /// <returns>Completion after verifying both tracks, ordered history, replay retention and idempotent retirement.</returns>
+    [DpcSqlTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcceptanceFinalizesIndependentVersionsOnlyAfterBothExactDeliveries(bool simulation) {
         await using var db = await DpcSqlDatabase.CreateAsync();
         var seed = await db.SeedAsync();
-        var first = await db.AcknowledgeAsync(seed, ProductSpecification.S101, IcEncDecision.Accepted);
+        if (simulation)
+            await db.ExecuteAsync("UPDATE dbo.ProductIcEncDelivery SET is_simulation = 1;");
+        // Keep notice provenance bound to each exact delivery in either workflow mode.
+        async Task<IcEncAcknowledgementResult?> AcceptAsync(ProductSpecification specification) => await db.Acknowledgements.RecordAsync(
+            new(specification == ProductSpecification.S101 ? DpcRunFixture.Source : DpcRunFixture.S57, specification,
+                specification == ProductSpecification.S101 ? 1 : 5, 0, IcEncDecision.Accepted, "fixture acceptance",
+                simulation ? IcEncAcknowledgementSource.Simulation : IcEncAcknowledgementSource.Manual,
+                SourceEventId: simulation ? "simulation-" + specification : null,
+                DeliveryId: specification == ProductSpecification.S101 ? seed.S101Delivery : seed.S57Delivery), DpcRunFixture.Utc(11), default);
+        var first = await AcceptAsync(ProductSpecification.S101);
         Assert.NotNull(first);
+        Assert.Equal(DpcRunFixture.Source, first.PackageName);
         Assert.False(first.ReadyForFinalization);
         Assert.Null(await db.Acknowledgements.GetPublicationAsync(seed.Package.Id, default));
         Assert.Empty(await db.Acknowledgements.GetPendingAsync(default));
         Assert.Null(await db.QueryAsync<int?>("SELECT COL_LENGTH('dbo.ProductExportTrack', 'error_code');"));
 
-        var second = await db.AcknowledgeAsync(seed, ProductSpecification.S57, IcEncDecision.Accepted);
+        var second = await AcceptAsync(ProductSpecification.S57);
         Assert.True(second!.ReadyForFinalization);
+        Assert.Equal(DpcRunFixture.Source, second.PackageName);
+        var pending = Assert.Single(await db.Acknowledgements.GetPendingAsync(default));
+        Assert.Equal(seed.Package.Id, pending.Id);
+        Assert.Equal(DpcRunFixture.Source, pending.SourceDatasetName);
         var publication = await db.Acknowledgements.GetPublicationAsync(seed.Package.Id, default);
         Assert.NotNull(publication);
         Assert.Equal(1, publication.S101Edition);
@@ -244,6 +263,13 @@ public sealed class DpcSqlTransactionTests
         Assert.Equal(ProductState.Idle, s101.State);
         Assert.Equal(ProductState.Idle, s57.State);
         Assert.Null(s101.CandidateEdition);
+        Assert.Null(s57.CandidateEdition);
+        Assert.Equal(2, await db.QueryAsync<int>("""
+            SELECT COUNT(*) FROM dbo.ProductStateHistory published
+            JOIN dbo.ProductStateHistory idle ON idle.product_export_track_id = published.product_export_track_id
+            WHERE published.state = 13 AND idle.state = 1 AND idle.owner = 'ENC package finalization'
+              AND idle.occurred_at_utc = DATEADD(microsecond, 1, published.occurred_at_utc);
+            """));
         Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductStateHistory WHERE state = 13;"));
         Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductIcEncDelivery WHERE status = 'Accepted';"));
         Assert.Equal(seed.Package.DetectedAtUtc, (await db.Packages.GetReplayBoundsAsync())[DpcRunFixture.Source]);

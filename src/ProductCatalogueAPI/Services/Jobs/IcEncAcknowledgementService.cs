@@ -30,7 +30,11 @@ public sealed record IcEncAcknowledgement(string DatasetName, ProductSpecificati
     string? Reason = null, Guid? DeliveryId = null);
 
 /// <summary>Returns the matched delivery and whether this acknowledgement made the package publishable.</summary>
-public sealed record IcEncAcknowledgementResult(Guid DeliveryId, Guid? PackageId, bool ReadyForFinalization, bool AlreadyRecorded);
+public sealed record IcEncAcknowledgementResult(Guid DeliveryId, Guid? PackageId, bool ReadyForFinalization, bool AlreadyRecorded)
+{
+    /// <summary>Gets the owning package's S-101 source name for diagnostics, including notices for its S-57 member.</summary>
+    public string? PackageName { get; init; }
+}
 
 /// <summary>Application boundary shared by future email ingestion and the manual recovery endpoint.</summary>
 public interface IIcEncAcknowledgementService
@@ -82,13 +86,13 @@ public sealed class IcEncAcknowledgementService(IEncPackageAcknowledgementReposi
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex) {
                     // Acceptance is durable; never erase it or retire the pair before S-128 and SQL agree.
-                    logger.LogError(ex, "Accepted package {PackageId} could not be finalized immediately; queuing worker recovery.", result.PackageId);
+                    logger.LogError(ex, "Accepted package {PackageName} could not be finalized immediately; queuing worker recovery.", result.PackageName ?? acknowledgement.DatasetName);
                 }
             }
             try { jobs.Enqueue<FinalizeEncPackageJob>(job => job.RunAsync(result.PackageId.Value, CancellationToken.None)); }
             catch (Exception ex) {
                 // The notice is committed first; the DPC scan re-queues pending publication without losing the acceptance.
-                logger.LogError(ex, "Accepted package {PackageId} could not be queued for immediate publication; DPC will retry.", result.PackageId);
+                logger.LogError(ex, "Accepted package {PackageName} could not be queued for immediate publication; DPC will retry.", result.PackageName ?? acknowledgement.DatasetName);
             }
         }
         return result;

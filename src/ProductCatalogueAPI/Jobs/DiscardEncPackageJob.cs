@@ -52,7 +52,7 @@ public sealed class DiscardEncPackageJob(
                     output.DatasetName, output.Specification);
             }
         }
-        logger.LogInformation("ENC package {PackageId} discarded. CandidateCount: {CandidateCount}.", expectedPackageId, result.Outputs.Count);
+        logger.LogInformation("ENC package {PackageName} discarded. CandidateCount: {CandidateCount}.", snapshot.SourceDatasetName, result.Outputs.Count);
     }
 
     /// <summary>Enables package actions only when explicitly configured, in any hosting environment.</summary>
