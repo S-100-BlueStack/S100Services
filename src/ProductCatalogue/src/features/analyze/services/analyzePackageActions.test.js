@@ -95,6 +95,10 @@ function harness({ active = true, permission = { pause: true, discard: true, sen
       new Promise((resolve) => {
         confirmation = resolve;
       }),
+    confirmAcknowledge: () =>
+      new Promise((resolve) => {
+        confirmation = resolve;
+      }),
     warn: (...args) => warnings.push(args),
   });
   return {
@@ -206,7 +210,9 @@ test("Send/Accept reflects backend and demo projection and never invents permiss
   h.projection.actionEligibility.accept = true;
   const action = h.action("accept");
   assert.equal(action.label, "Accept");
-  assert.equal(await action.onClick({}), true);
+  const pendingAccept = action.onClick({});
+  h.resolveConfirm(true);
+  assert.equal(await pendingAccept, true);
   assert.deepEqual(h.sessions[0].invokes, ["send", "accept"]);
   h.manager.destroy();
 });
@@ -416,3 +422,41 @@ for (const status of [3, 4, 5]) {
     }
   });
 }
+test("Analyze enables the existing Accept control only for an authorized Package", async () => {
+  const h = harness({ permission: { pause: false, discard: false, send: false, accept: true } });
+  h.projection.primaryAction = "accept";
+  h.sync();
+  assert.equal(h.manager.actionsFor(h.product).length, 3);
+  assert.equal(h.action("acknowledge"), undefined);
+  assert.equal(h.action("accept").label, "Accept");
+  assert.equal(h.action("accept").disabled, false);
+  const cancelled = h.action("accept").onClick({});
+  h.resolveConfirm(false);
+  assert.equal(await cancelled, false);
+  assert.deepEqual(h.sessions[0].invokes, []);
+  const revoked = h.action("accept").onClick({});
+  h.projection.actionEligibility.accept = false;
+  h.resolveConfirm(true);
+  assert.equal(await revoked, false);
+  assert.deepEqual(h.sessions[0].invokes, []);
+  h.projection.actionEligibility.accept = true;
+  const confirmed = h.action("accept").onClick({});
+  h.resolveConfirm(true);
+  assert.equal(await confirmed, true);
+  assert.deepEqual(h.sessions[0].invokes, ["accept"]);
+  assert.deepEqual(h.refreshes, [memberNames[0]]);
+  h.manager.destroy();
+});
+
+test("Analyze Accept confirmation does not survive a removed Package", async () => {
+  const h = harness({ permission: { accept: true } });
+  h.projection.primaryAction = "accept";
+  h.sync();
+  const pending = h.action("accept").onClick({});
+  h.setProduct(null);
+  h.manager.reconcile([], []);
+  h.resolveConfirm(true);
+  assert.equal(await pending, false);
+  assert.deepEqual(h.sessions[0].invokes, []);
+  h.manager.destroy();
+});

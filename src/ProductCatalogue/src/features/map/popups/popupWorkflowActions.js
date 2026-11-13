@@ -63,7 +63,9 @@ export function createPopupWorkflowActions({
       primaryLabel,
       primaryOperation === "accept" ? "check" : "send",
       primaryOperation === "accept"
-        ? `Accept the ${subject} results.`
+        ? isPackage
+          ? "Close the package after an IC-ENC rejection."
+          : `Accept the ${subject} results.`
         : `Send the ${subject} to IC-ENC.`
     ),
   ];

@@ -1117,3 +1117,48 @@ test("refreshing an open popup reloads CanSend even when member metadata is unch
     h.destroy();
   }
 });
+test("CanAcknowledge switches the same focused popup action between Send and Accept", async () => {
+  const h = createHarness();
+  const snapshot = {
+    packageId: "71ccb411-30f7-4b58-bb85-4af5f6c9872e",
+    sourceDatasetName: "PRIMARY",
+    paused: false,
+    canPause: false,
+    canResume: false,
+    canDiscard: false,
+    canSend: false,
+    canAcknowledge: true,
+    status: 4,
+    eligibleMembers: [],
+  };
+  h.actions(snapshot);
+  try {
+    await loadStatuses();
+    const popup = h.open();
+    await h.settle();
+    const buttons = popup.querySelectorAll(".popup-action-bar__action");
+    assert.deepEqual(
+      buttons.map((button) => button.dataset.popupActionId),
+      ["package-pause-resume", "package-discard-export", "package-send-accept", "tools"]
+    );
+    const accept = buttons[2];
+    assert.equal(accept.getAttribute("aria-disabled"), "false");
+    assert.equal(accept.getAttribute("aria-label"), "Accept");
+    const section = popup.querySelector(".popup-section");
+    accept.focus();
+    h.actions({ ...snapshot, canAcknowledge: false });
+    await refreshOpenProductPopup("PRIMARY");
+    await h.settle();
+    assert.equal(popup.querySelector(".popup-section"), section);
+    assert.equal(popup.querySelectorAll(".popup-action-bar__action")[2], accept);
+    assert.equal(accept.getAttribute("aria-disabled"), "true");
+    assert.equal(accept.getAttribute("aria-label"), "Send");
+    assert.equal(h.doc.activeElement, accept);
+    assert.equal(
+      h.requests.some((request) => request.url.endsWith("/acknowledge")),
+      false
+    );
+  } finally {
+    h.destroy();
+  }
+});

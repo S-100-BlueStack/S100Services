@@ -1,3 +1,23 @@
+## Live Package Details and startup performance boundaries (2026-11-13)
+
+This section supersedes only the long-Details disclosure behavior described in
+DC-UX-03F below: `renderInformationFields.js` renders every live Package field
+fully, including arbitrarily long sanitized descriptions. Its `<dl>`, `<dt>` and
+`<dd>` semantics and `renderPackageDescriptions.js` HTML policy remain
+unchanged. No field-level disclosure UI is introduced.
+
+Live Main Map composes independent loaders: `createPipelineVisibility.js` owns
+the shared Pipeline/Workspace catalogue read, `liveJobServiceAdapter.js` owns
+Workspace membership and Package metadata, and `mapController.js` owns the
+MapView and Workspace geometry overlay. `createApp.js` owns composition,
+startup mode selection and the existing loader shell. The mock mode retains
+`createStartupController.js`, while live mode presently releases the shell
+before these independent loads complete. Future coordination must use one
+lifecycle owner and must not move API contract normalization or ArcGIS layer
+construction into the UI. See [DC_STARTUP_LOADING_REVIEW.md](DC_STARTUP_LOADING_REVIEW.md).
+
+---
+
 ## DC-BE-FE-03 v2 — Main Map navigation and scope presentation (2026-11-13)
 
 Live Main Map opens the Packages panel by default. The former read-only

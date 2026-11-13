@@ -724,7 +724,8 @@ The shared four-slot action presentation was committed at `dbc1466400d18b92d5589
 
 The server action snapshot now exposes optional `CanSend`. When true, the existing Send control posts the exact active package ID to `electronicproducts/packages/{source}/send` and polls `electronicproducts/packages/send-jobs/{jobId}`. Both server modes must be Simulation; no development build flag is required. The distribute policy applies server-side. Current package/revision, Pause and candidate guards are repeated by the Worker and SQL reservation.
 
-The session blocks duplicate actions while polling, aborts on teardown, invalidates the old snapshot after enqueueing and requests the normal source refresh on completion or uncertainty. It does not synthesize accepted state or enable manual Accept. Generated responses update the normal backend workflow; provisional outcomes stay pending. A development demo preference cannot override server send denial.
+The session blocks duplicate actions while polling, aborts on teardown, invalidates the old snapshot after enqueueing and requests the normal source refresh on completion or uncertainty. It does not synthesize accepted state. The separate, backend-authorized Accept
+operation is described below. Generated responses update the normal backend workflow; provisional outcomes stay pending. A development demo preference cannot override server send denial.
 
 ### Delivery permission after Resume
 
@@ -739,3 +740,44 @@ The shared action session used by Main Map and Analyze requires explicit server 
 The API repeats these guards before queueing. The Worker validates both immutable exchange sets before one System DB transaction commits both permanently marked simulated deliveries, manifests, InTransit states and history. A local preflight or write failure leaves neither newly sent. Retrying the same committed Hangfire job resumes that pair without creating another send or rerolling captured responses. Generated provisional/final responses remain independent after both sends are committed.
 
 Analyze retains its page-owned sessions, source/graphic identity checks, stale-request handling and mutation refresh lifecycle. Its successful Send refreshes the affected Product through the same owner as Pause/Resume/Discard, without publishing synthetic status to Main Map.
+
+## PC-ICENC-01: Operator Accept using backend Acknowledge (November 2026)
+
+The active Package popup keeps the established four controls: Pause/Resume,
+Discard, a single **Send/Accept** slot and Tools. The backend action snapshot
+at `GET /electronicproducts/packages/{sourceName}/actions` supplies the
+`CanAcknowledge` permission. Only when that value is exactly `true` does the
+third workflow control switch from **Send** to **Accept** and become eligible.
+No additional Acknowledge button is rendered. The unchanged stable
+`package-send-accept` ID retains keyboard focus across permission refreshes.
+Ordinary Products, invalid Package identities and unverified permissions fail
+closed. `CanSend` continues to control the Send operation independently.
+
+**Accept is an operator-facing name for the existing backend Acknowledge
+command**, not a client-generated provider approval. After confirmation,
+`createPackageActionSession` dispatches
+`POST /electronicproducts/packages/{sourceName}/acknowledge` with the exact active
+backend `packageId`. In the verified `17ff8653` backend, the operation retires both
+current candidates and resets both tracks to Idle, while leaving recorded provider
+decisions and the prior published versions intact. It does **not** finalize the
+accepted sibling in a mixed Accepted/Rejected result. The UI does not promise
+publication through this endpoint or change the provider verdict.
+
+The server requires `productmanager:manage` and rechecks Package eligibility.
+Success requires the same `packageId`, `sourceDatasetName` and the backend's
+Idle status. `403`, `409`, ambiguous receipts, stale popups and superseded
+permissions cannot produce UI success. A successful operation invalidates the
+old action snapshot and triggers the existing targeted Product/source refresh
+without directly writing a new Graphic status. Analyze uses the same workflow
+contract through its independently owned Product popup session.
+
+**Updated backend eligibility (`946013f6`):** `CanAcknowledge` is now true only
+for an exact, safe S-101/S-57 pair with at least one member in `Rejected`.
+An internal SevenCs error, an outbound send failure or an Error-only pair no
+longer grants this action. The server rechecks eligibility inside its
+transaction. The frontend trusts the exact boolean and fails closed rather
+than replicating ProductState rules.
+
+The email review endpoint remains server-protected; never put the IC-ENC
+operator key in browser JavaScript, Vite configuration or network requests.
+See [IC-ENC integration gaps](../../../../docs/pc-icenc-01-backend-gaps.md).
