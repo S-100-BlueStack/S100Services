@@ -81,6 +81,7 @@
       model properties read-only and breaks document generation.
     -->
 		<PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+		<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
 		<PackageReference Include="Nanoid" Version="3.1.0" />
 		<PackageReference Include="S100Framework.Catalogues" Version="4.1.1" />
 
