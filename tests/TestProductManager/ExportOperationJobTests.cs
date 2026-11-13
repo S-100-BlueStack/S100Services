@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using Hangfire;
+using System.Reflection;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Export;
@@ -12,6 +15,53 @@ namespace TestProductCatalogueAPI;
 
 public sealed class ExportOperationJobTests
 {
+    /// <summary>The outer job owner logs findings as warnings while preserving the exception and failed job metadata.</summary>
+    [Fact]
+    public async Task Logging_StandaloneCriticalFindingsNeverEmitError() {
+        var logger = new TestLogCapture<ExportOperationJob>();
+        var operations = new RecordingOperations { Failure = ExportValidationException.Findings("101DK001", 0, 1, false) };
+        var context = new FakeExecutionContext();
+        await Assert.ThrowsAsync<ExportValidationException>(() => CreateJob(operations, logger).ExecuteAsync(Request(ExportOperationType.ExportEdition), context, default));
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level is LogLevel.Error or LogLevel.Critical);
+        Assert.NotNull(context.Get<string>(ExportJobParameterNames.ErrorCode));
+    }
+
+    /// <summary>Safe package exception mapping retains expected severity without changing the public failure code.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Logging_ManualPackageClassifiesFindingsAndOutages(bool finding) {
+        var failure = finding ? ExportValidationException.Findings("101DK001", 2, 1, false) : ExportValidationException.Unavailable("101DK001", new IOException("Unavailable"));
+        var logger = new TestLogCapture<ExportOperationJob>();
+        var operations = new RecordingOperations();
+        var job = new ExportOperationJob(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, logger, CreateHistory(operations), new FailingPackages(failure));
+        var exception = await Assert.ThrowsAsync<ExportOperationJobException>(() => job.ExecuteAsync(Request(ExportOperationType.ExportEdition) with { BuildPackage = true }, new FakeExecutionContext(), default));
+        Assert.Equal(ExportJobContract.ExportFailedCode, exception.Code);
+        Assert.Equal(finding, exception.IsValidationFindingFailure);
+        if (finding) {
+            Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning);
+            Assert.DoesNotContain(logger.Entries, entry => entry.Level is LogLevel.Error or LogLevel.Critical);
+        }
+        else Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Error);
+    }
+
+    /// <summary>The job owns terminal logging without enabling retries or converting failures into successes.</summary>
+    [Fact]
+    public void Logging_HangfireDoesNotAddAnUnclassifiedTerminalError() {
+        var retry = typeof(ExportOperationJob).GetMethod(nameof(ExportOperationJob.RunAsync))!.GetCustomAttribute<AutomaticRetryAttribute>()!;
+        Assert.Equal(0, retry.Attempts);
+        Assert.False(retry.LogEvents);
+        Assert.Equal(AttemptsExceededAction.Fail, retry.OnAttemptsExceeded);
+    }
+
+    /// <summary>Fails before any compiler or database work while exercising the real package job error mapping.</summary>
+    private sealed class FailingPackages(Exception failure) : IEncPackageDetectionService
+    {
+        public Task RunAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Guid> CreateManualAsync(string sourceName, int? expectedEdition, int? expectedUpdate, CancellationToken cancellationToken) => Task.FromException<Guid>(failure);
+    }
+
     [Fact]
     public async Task ExportUpdateUsesIndependentTargetAndSetsExecutionGuard() {
         var context = new FakeExecutionContext();
@@ -131,11 +181,12 @@ public sealed class ExportOperationJobTests
         return fixture.Producer;
     }
 
-    private static ExportOperationJob CreateJob(RecordingOperations operations) => new(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance, CreateHistory(operations));
+    private static ExportOperationJob CreateJob(RecordingOperations operations, ILogger<ExportOperationJob>? logger = null) => new(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, logger ?? NullLogger<ExportOperationJob>.Instance, CreateHistory(operations));
     private static ExportOperationJobRequest Request(ExportOperationType operationType, int edition = 4, int update = 2) => new("101DK001", operationType, "S101", edition, update, "correlation", DateTimeOffset.Parse("2026-08-10T20:00:00Z"));
 
     private sealed class RecordingOperations : IExportOperationService
     {
+        public Exception? Failure { get; init; }
         public Guid StateId { get; } = Guid.NewGuid();
         public int ExportCalls { get; private set; }
         public int DiscardCalls { get; private set; }
@@ -144,6 +195,7 @@ public sealed class ExportOperationJobTests
         public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
             beforeMutation?.Invoke();
             ExportCalls++;
+            if (Failure is not null) throw Failure;
             LastRevisionType = revisionType;
             CancelDuringExport?.Cancel();
             cancellationToken.ThrowIfCancellationRequested();

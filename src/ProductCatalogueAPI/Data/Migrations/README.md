@@ -58,3 +58,9 @@ Apply `011_AddIcEncEmailProcessing.sql` to the System database after 010 before 
 Apply `012_AddSimulationDelivery.sql` to the ProductCatalogue **System** database after `011_AddIcEncEmailProcessing.sql`, before deploying the updated API and Worker. It adds permanent delivery provenance and the Simulation acknowledgement source without changing existing live deliveries. `Create-All-Tables.sql` includes these fields for fresh databases. No script should be run against the S-101 source geodatabase or Hangfire store.
 
 Configure both `SendToIcEnc:Mode` and `ValidationEmail:Mode` to `Simulation` in API and Worker. Package Send now exercises candidate state/history and existing S-128 publication when both replies accept, while external transport and Graph polling remain unused. The standalone email simulation endpoint remains a read-only preview.
+
+## Development clearing and Hangfire metadata
+
+`Clear-All-Tables.sql` clears the existing dbo application allowlist and Hangfire job data. It preserves Hangfire's `Schema` table, including the installed version row, so the next startup does not try to reinstall existing tables as a fresh store. This metadata is configuration, not queue content. Other schemas and non-allowlisted dbo tables remain excluded. Stop API and Worker before running this destructive script.
+
+If a previous clear already removed that version row, the store needs one-time native Hangfire reinitialization or a fresh Hangfire-only development database. Preserving an empty table cannot reconstruct the lost value. Do not insert a guessed schema version or suppress real installer failures. No recovery SQL is included. See `../../docs/export-validation-logging.md` for the logging and startup diagnosis.

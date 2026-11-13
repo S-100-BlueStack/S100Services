@@ -532,7 +532,9 @@ internal sealed class DpcSqlDatabase : IAsyncDisposable
             await connection.ExecuteAsync($"CREATE DATABASE [{db._databaseName}];");
         try {
             var directory = Path.Combine(AppContext.BaseDirectory, "DpcMigrations");
-            var files = Directory.GetFiles(directory, "*.sql").OrderBy(Path.GetFileName, StringComparer.Ordinal).ToArray();
+            var files = Directory.GetFiles(directory, "*.sql")
+                .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^\d{3}_.*\.sql$", RegexOptions.CultureInvariant))
+                .OrderBy(Path.GetFileName, StringComparer.Ordinal).ToArray();
             Assert.Contains(files, path => Path.GetFileName(path) == "001_ReplaceJobTableWithProductWorkflow.sql");
             Assert.Contains(files, path => Path.GetFileName(path) == "007_AddIcEncAcknowledgements.sql");
             foreach (var file in files) {

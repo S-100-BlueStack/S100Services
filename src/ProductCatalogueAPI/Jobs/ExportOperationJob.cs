@@ -23,7 +23,9 @@ namespace ProductCatalogueAPI.Jobs
         private readonly IExportOperationService _exportOperationService = exportOperationService;
         private readonly ILogger<ExportOperationJob> _logger = logger;
 
-        [AutomaticRetry(Attempts = 0)]
+        // This job logs its own classified failures; Hangfire's generic terminal Error
+        // event would otherwise promote expected validation findings back to Error.
+        [AutomaticRetry(Attempts = 0, LogEvents = false)]
         public Task RunAsync(
             ExportOperationJobRequest request,
             PerformContext performContext,
@@ -37,11 +39,31 @@ namespace ProductCatalogueAPI.Jobs
             );
         }
 
-        public async Task ExecuteAsync(
-            ExportOperationJobRequest request,
-            IExportJobExecutionContext context,
-            CancellationToken cancellationToken
-        ) {
+        /// <summary>Executes the job while keeping expected validation findings at Warning and unexpected failures at Error.</summary>
+        /// <param name="request">Validated operation and dataset identity.</param>
+        /// <param name="context">Durable job metadata and job identifier.</param>
+        /// <param name="cancellationToken">Cooperative worker cancellation.</param>
+        /// <returns>Completion without changing existing failure, retry or history semantics.</returns>
+        public async Task ExecuteAsync(ExportOperationJobRequest request, IExportJobExecutionContext context, CancellationToken cancellationToken) {
+            try {
+                await ExecuteCoreAsync(request, context, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception) {
+                if (exception is ExportValidationException { IsFindingFailure: true } or ExportOperationJobException { IsValidationFindingFailure: true })
+                    _logger.LogWarning("Product Manager job failed validation. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}", context?.JobId, request?.DatasetName, request?.OperationType, request?.CorrelationId);
+                else
+                    _logger.LogError(exception, "Product Manager job execution failed. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}", context?.JobId, request?.DatasetName, request?.OperationType, request?.CorrelationId);
+                throw;
+            }
+        }
+
+        /// <summary>Owns the existing execution guard, history lifecycle and background export operation.</summary>
+        /// <param name="request">Queued product operation.</param>
+        /// <param name="context">Durable metadata for the exact queued job.</param>
+        /// <param name="cancellationToken">Cancels cooperative export work.</param>
+        /// <returns>Completion after the existing guarded workflow.</returns>
+        private async Task ExecuteCoreAsync(ExportOperationJobRequest request, IExportJobExecutionContext context, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
             ArgumentNullException.ThrowIfNull(context);
 
@@ -75,10 +97,13 @@ namespace ProductCatalogueAPI.Jobs
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception exception) {
-                    _logger.LogError(exception, "Manual ENC package build failed. SourceDatasetName: {SourceDatasetName}.", request.DatasetName);
+                    if (exception is ExportValidationException { IsFindingFailure: true } findings)
+                        _logger.LogWarning("Manual ENC package failed validation. SourceDatasetName: {SourceDatasetName}. ValidationMessage: {ValidationMessage}", request.DatasetName, findings.PublicMessage);
+                    else
+                        _logger.LogError(exception, "Manual ENC package build failed. SourceDatasetName: {SourceDatasetName}.", request.DatasetName);
                     var message = exception is ExportValidationException validation
                         ? PublicExportError.Message(validation.Code, validation.PublicMessage) : PublicExportError.GenericMessage;
-                    throw CreateSafeFailure(context, ExportJobContract.ExportFailedCode, message);
+                    throw CreateSafeFailure(context, ExportJobContract.ExportFailedCode, message, exception is ExportValidationException { IsFindingFailure: true });
                 }
                 return;
             }
@@ -374,14 +399,10 @@ namespace ProductCatalogueAPI.Jobs
                 context.SetJobParameter(ExportJobParameterNames.ErrorCode, code);
                 context.SetJobParameter(ExportJobParameterNames.ErrorMessage, message);
 
-                _logger.LogError(
-                    ex,
-                    "Product Manager job failed. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
-                    context.JobId,
-                    request.DatasetName,
-                    request.OperationType,
-                    request.CorrelationId
-                );
+                if (ex is ExportValidationException { IsFindingFailure: true } validation)
+                    _logger.LogWarning("Product Manager operation failed validation. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. ValidationMessage: {ValidationMessage}", context.JobId, request.DatasetName, request.OperationType, request.CorrelationId, validation.PublicMessage);
+                else
+                    _logger.LogError(ex, "Product Manager job failed. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}", context.JobId, request.DatasetName, request.OperationType, request.CorrelationId);
                 throw;
             }
         }
@@ -389,14 +410,16 @@ namespace ProductCatalogueAPI.Jobs
         private static ProductSpecification ParseProductSpecification(string? value) =>
             ExportProductResolver.ParseProductSpecification(value, "queued job");
 
-        private static ExportOperationJobException CreateSafeFailure(
-            IExportJobExecutionContext context,
-            string code,
-            string message
-        ) {
+        /// <summary>Persists safe failure metadata while retaining expected validation severity across package exception mapping.</summary>
+        /// <param name="context">Exact job whose result metadata is updated.</param>
+        /// <param name="code">Existing public failure code.</param>
+        /// <param name="message">User-safe failure message.</param>
+        /// <param name="isValidationFindingFailure">True only when a completed validation returned blocking findings.</param>
+        /// <returns>The exception still used to fail the Hangfire job.</returns>
+        private static ExportOperationJobException CreateSafeFailure(IExportJobExecutionContext context, string code, string message, bool isValidationFindingFailure = false) {
             context.SetJobParameter(ExportJobParameterNames.ErrorCode, code);
             context.SetJobParameter(ExportJobParameterNames.ErrorMessage, message);
-            return new ExportOperationJobException(code, message);
+            return new ExportOperationJobException(code, message) { IsValidationFindingFailure = isValidationFindingFailure };
         }
 
         private sealed class HangfireExportJobExecutionContext(PerformContext context)
@@ -418,6 +441,8 @@ namespace ProductCatalogueAPI.Jobs
         : Exception($"{code}: {message}")
     {
         public string Code { get; } = code;
+        /// <summary>Preserves expected validation severity when a package exception is mapped to a safe public job failure.</summary>
+        public bool IsValidationFindingFailure { get; init; }
         // Set only by the execution owner when the service rejected before its mutation hook.
         public bool IsPreExecutionRejection { get; init; }
     }
