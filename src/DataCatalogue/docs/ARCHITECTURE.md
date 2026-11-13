@@ -1,3 +1,20 @@
+## DC-PERF-02 — Main Map Package metadata read boundary (2026-11-13)
+
+`features/jobs/services/liveJobServiceAdapter.js` retains ownership of the
+Workspace membership read and contextual Job assembly. Metadata hydration is
+isolated in `features/jobs/services/loadLivePackageMetadata.js`; it may use a
+bounded, complete paginated Package summary from `shared/api/catalogueService.js`
+or the original six-concurrent targeted details. The service verifies exact
+Package IDs, retains per-Pipeline/Workspace contextual Jobs and mock statuses,
+obeys the Job store's abort signal, and does not persist or cache API state.
+
+The optimization does not change the separate Workspace geometry overlay or
+package AOI layer. Incomplete or drifting list projections cannot be used as a
+partial membership substitute. The live startup loader and Shell gate remain
+unchanged; see `docs/DC_PERF_02_VALIDATION.md` for measured acceptance limits.
+
+---
+
 ## Live Package Details and startup performance boundaries (2026-11-13)
 
 This section supersedes only the long-Details disclosure behavior described in

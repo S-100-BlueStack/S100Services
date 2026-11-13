@@ -1,3 +1,36 @@
+## DC-PERF-02 — Bounded Package metadata hydration (candidate, 2026-11-13)
+
+**Authoritative source:** `917aaef68f6c6297df78fbb1670f5b5231385579`.
+No backend, Package/Workspace contract, dependencies, UI, or startup-loader changes.
+
+- Main Map still reads **all verified Workspace memberships** to establish the
+  authoritative `(packageId, pipelineId, workspaceId)` Job identities. The
+  existing four-concurrent membership reader and scoped mock statuses are unchanged.
+- `features/jobs/services/loadLivePackageMetadata.js` opportunistically uses the
+  existing paginated `GET /v1/packages?hasPipeline=true` for metadata only. With
+  12–200 distinct membership IDs, it first requests a one-item count probe. If
+  every member fits within one list page of at most 200 entries and at most four
+  times the member count, it reads that page and verifies every ID before
+  publishing. Otherwise it uses the previous six-concurrent individual Package
+  reads. A changed count, missing member or incomplete projection triggers
+  **all-targeted** fallback; invalid contracts and request errors stay visible.
+  No cross-refresh metadata cache or saved assignment state is introduced.
+- **Request-count example (test fixture, not observed production traffic):**
+  30 unique members with 60 assigned Packages in the catalogue: metadata requests
+  fall from 30 individual reads to two list reads. For large catalogues, the
+  count probe adds one request before the original targeted path; zero/small
+  catalogues avoid that probe. These bounds prevent unbounded summary downloads.
+- Remaining startup fan-out: per-Workspace membership and individual Workspace
+  geometry reads. No verified bulk contract covers these. The current live shell
+  still becomes interactive before independent map/list enrichments finish.
+  `DC-UX-LOADER-01` is deferred until request-waterfall measurements and a
+  required-read readiness decision are available.
+- Verify with [DC_PERF_02_VALIDATION.md](DC_PERF_02_VALIDATION.md) and cold/warm
+  browser Network waterfalls. Request counts are source/test verified; elapsed
+  time, payload size, deployment and ArcGIS readiness are not.
+
+---
+
 ## DC-UX-03G / DC-PERF-01 — Full Package Details and Main Map startup review (2026-11-13)
 
 **Authoritative merge baseline:** `17ff86537bd7041cb1a025d113862898e1814046`,

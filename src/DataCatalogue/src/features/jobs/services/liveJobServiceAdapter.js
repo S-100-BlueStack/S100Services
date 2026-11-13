@@ -1,5 +1,6 @@
 import { collectPages } from "../../../shared/api/catalogueService.js";
 import { compareSeverity } from "../../../shared/domain/severity.js";
+import { loadLivePackageMetadata } from "./loadLivePackageMetadata.js";
 import { createScopedJobStatusAdapter, scopedJobId } from "../mock/scopedJobStatusAdapter.js";
 
 export function createLiveJobServiceAdapter({
@@ -69,21 +70,8 @@ export function createLiveJobServiceAdapter({
         })
       );
       signal?.throwIfAborted();
-      const packageIds = [...new Set(memberships.map(({ member }) => member.packageId))];
-      const packages = new Map();
-      let index = 0;
-      await Promise.all(
-        Array.from({ length: Math.min(6, packageIds.length) }, async () => {
-          while (index < packageIds.length) {
-            signal?.throwIfAborted();
-            const id = packageIds[index++];
-            const item = await catalogue.package(id, { signal });
-            if (item.id !== id)
-              throw new Error("Package identity does not match the Workspace member.");
-            packages.set(id, item);
-          }
-        })
-      );
+      const packageIds = memberships.map(({ member }) => member.packageId);
+      const packages = await loadLivePackageMetadata(catalogue, packageIds, { signal });
       signal?.throwIfAborted();
       const loaded = memberships.map(({ member, workspace }) => {
         const item = packages.get(member.packageId);

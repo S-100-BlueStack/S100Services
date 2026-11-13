@@ -1,3 +1,22 @@
+## DC-PERF-02 — Remaining startup read contracts (2026-11-13)
+
+The existing verified `GET /v1/packages` contract now supports a bounded
+frontend Package metadata shortcut when a complete assigned Package page
+covers all requested Workspace members. This reduces N individual reads in
+small/medium catalogues without modifying the backend. It does **not** expose
+Workspace membership; `/v1/packages/geometry` also does not establish membership.
+
+**Still open with the backend owner:** an efficient read which can supply
+Pipeline/Workspace membership plus the required Package summary data for a
+specified work scope, with stable contextual identities, bounded pagination,
+server-side authorization, explicit consistency/version semantics, and no
+per-Workspace request fan-out. The exact endpoint and schema must be agreed,
+not presumed. Workspace geometry remains an individual-detail read without a
+verified batch/revision contract. Reassess after production-like cold/warm HAR
+measurements, not from source-level request counts alone.
+
+---
+
 ## DC-BE-FE-02 — Follow-ups after Pipeline-scoped AOI correction
 
 The selected Pipeline geometry read is available in the backend and now
