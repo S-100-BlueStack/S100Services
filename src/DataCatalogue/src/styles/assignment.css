@@ -521,19 +521,6 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
 .dc-assignment-page--live .dc-information-fields > dd:nth-of-type(even) {
   background: var(--dc-surface-alt);
 }
-.dc-information-fields__disclosure > summary {
-  width: fit-content;
-  color: var(--calcite-color-brand, #007ac2);
-  cursor: pointer;
-  font-weight: 600;
-}
-.dc-information-fields__disclosure[open] > summary {
-  margin-bottom: 5px;
-}
-.dc-information-fields__description {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
 .dc-work-stream-reload:has([hidden]) {
   display: none;
 }

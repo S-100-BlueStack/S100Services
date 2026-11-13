@@ -1,3 +1,47 @@
+## DC-UX-03G / DC-PERF-01 — Full Package Details and Main Map startup review (2026-11-13)
+
+**Authoritative merge baseline:** `17ff86537bd7041cb1a025d113862898e1814046`,
+containing the user-accepted DataCatalogue commit
+`a2f2f36df08f99e4bcd12479d6e276a79b9c62fa`. The source export was
+verified using SHA-256 and Git blob hashes. No backend, authentication, SDK,
+or dependency changes belong to this correction.
+
+- **DC-UX-03G (candidate):** Live Package Assignment now always shows the
+  entire sanitized `Details` description, regardless of length. Remove the
+  `Full details` disclosure rather than adding per-field toggles; the existing
+  semantic field rows, compact bold/underlined labels, alternating backgrounds,
+  and mock Feature presentation remain unchanged. The earlier DC-UX-03F
+  disclosure design is superseded by this decision.
+- **DC-PERF-01 (review complete; performance implementation pending):** The live
+  Main Map startup combines one Pipeline catalogue read, paginated Workspace
+  catalogue reads, per-Workspace paginated membership reads, per-unique-Package
+  metadata reads, per-Workspace geometry reads, and a separate selected-Pipeline
+  Package AOI overview. Workspace-membership and metadata requests use bounded
+  concurrency but grow with catalogue size. The existing initial Pipeline
+  request and an in-flight Packages read are already joined; do not describe
+  them as unconditional duplicate HTTP calls. No wall-clock measurements or
+  live API traces were available. See
+  [DC_STARTUP_LOADING_REVIEW.md](DC_STARTUP_LOADING_REVIEW.md) for exact
+  source paths, request-count formulas, risks and proposed measurements.
+- **DC-PERF-02 (next; blocked on actual request measurements):** Record cold and
+  warm Main Map network waterfalls, identify repeated or oversized reads, and
+  compare existing paginated Package-list responses with the per-Package detail
+  path. Investigate batched Workspace-membership and bulk Package metadata
+  reads with the backend owner only if verified existing contracts are
+  insufficient. Preserve stable contextual Job identity and cancellation.
+- **DC-UX-LOADER-01 (future):** Add one live Main Map startup coordinator/loader
+  after data-read optimization. Gate entry on verified _required_ initial
+  catalogue/Jobs and map readiness, with clear progress, honest failure/retry
+  and cancellation. Do not gate on optional on-demand detailed Package geometry
+  or indefinitely on basemap tiles. Keep the existing mock startup gate intact.
+  Current live mode intentionally releases the shell before required data has
+  finished loading; reuse the established loader architecture rather than
+  creating an independent progress owner.
+
+Acceptance checks: [DC_STARTUP_DETAILS_VALIDATION.md](DC_STARTUP_DETAILS_VALIDATION.md).
+
+---
+
 ## DC-AOI-REG-01 — Package AOI overview and selected-geometry regressions (combined v4 candidate, 2026-11-13)
 
 **Controlled inputs:** uncommitted DC-BE-FE-03 v3 candidate, ZIP SHA-256

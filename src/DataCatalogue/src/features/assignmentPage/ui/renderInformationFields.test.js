@@ -95,20 +95,46 @@ test("Live Package details retain ordered definition terms and visible short val
   });
 });
 
-test("Only long live descriptions use a native disclosure without losing content", () => {
+test("Long live Package descriptions remain fully visible without a disclosure", () => {
   withDocument((container) => {
     const verbose = "Detailed position and publication metadata. ".repeat(24);
     renderInformationFields(container, [["Details", verbose]], { live: true });
 
     const [[term, description]] = pairs(container);
     assert.equal(term.textContent, "Details");
-    const disclosure = description.firstChild;
-    assert.equal(disclosure.tagName, "DETAILS");
-    assert.equal(disclosure.className, "dc-information-fields__disclosure");
-    assert.equal(disclosure.childNodes[0].tagName, "SUMMARY");
-    assert.equal(disclosure.childNodes[0].textContent, "Full details");
-    assert.equal(disclosure.childNodes[1].textContent, verbose);
-    assert.equal(description.textContent, `Full details${verbose}`);
+    assert.equal(description.textContent, verbose);
+    assert.equal(description.firstChild.tagName, "#TEXT");
+    assert.equal(description.childNodes.length, 1);
+  });
+});
+
+test("Long live Package details retain ordered neighboring fields without extra controls", () => {
+  withDocument((container) => {
+    const verbose = "Long Package description. ".repeat(50);
+    renderInformationFields(
+      container,
+      [
+        ["Title", "Harbour updates"],
+        ["Category", "NM"],
+        ["Details", verbose],
+        ["Severity", "0"],
+      ],
+      { live: true }
+    );
+
+    const fields = pairs(container);
+    assert.deepEqual(
+      fields.map(([term, value]) => [term.textContent, value.tagName]),
+      [
+        ["Title", "DD"],
+        ["Category", "DD"],
+        ["Details", "DD"],
+        ["Severity", "DD"],
+      ]
+    );
+    assert.equal(fields[2][1].textContent, verbose);
+    assert.equal(fields[2][1].firstChild.tagName, "#TEXT");
+    assert.equal(fields[3][1].textContent, "0");
   });
 });
 
