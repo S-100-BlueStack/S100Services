@@ -16,7 +16,7 @@ export function validationArtifact(index, overrides = {}) {
     RevisionId: "55555555-5555-4555-8555-555555555555",
     DatasetName: memberNames[index],
     ProductSpecification: index ? "S57" : "S101",
-    Kind: "InternalValidationReport",
+    Kind: "ValidationReport",
     FileName: index ? "Legacy report.xml" : "Primary report.xml",
     MediaType: "application/xml",
     CreatedAtUtc: "2026-10-08T06:00:00Z",

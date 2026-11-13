@@ -43,11 +43,35 @@ export function getReviewIcEncPresentation(product = {}) {
     return createPresentation(REVIEW_CONTENT_PRESENTATION_STATE.FAILED, "Failed", product.error);
   }
 
-  return createPresentation(
-    REVIEW_CONTENT_PRESENTATION_STATE.UNAVAILABLE,
-    "Unavailable",
-    "No IC-ENC reports found for this product."
+  const configuration = getProductContentConfiguration(
+    product.productContext,
+    PRODUCT_CONTENT_TYPE.IC_ENC_REPORTS
   );
+  if (!configuration.implemented || configuration.loaderId !== "electronic-artifacts") {
+    return createPresentation(
+      REVIEW_CONTENT_PRESENTATION_STATE.UNAVAILABLE,
+      "Unavailable",
+      "IC-ENC reports are not available for this Product source."
+    );
+  }
+  if (product.artifactError) {
+    return createPresentation(
+      REVIEW_CONTENT_PRESENTATION_STATE.FAILED,
+      "Failed",
+      product.artifactError
+    );
+  }
+  const count = Array.isArray(product.icEncArtifacts) ? product.icEncArtifacts.length : 0;
+  return count
+    ? createPresentation(
+        REVIEW_CONTENT_PRESENTATION_STATE.CONTENT,
+        `${count} file${count === 1 ? "" : "s"}`
+      )
+    : createPresentation(
+        REVIEW_CONTENT_PRESENTATION_STATE.EMPTY,
+        "0 files",
+        "No IC-ENC reports found for this product."
+      );
 }
 
 export function getReviewValidationPresentation(product = {}) {

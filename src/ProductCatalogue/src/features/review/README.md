@@ -7,7 +7,7 @@ It currently supports:
 - Multiple products in one Review page
 - Workspace and per-product content toggles
 - Product History cards
-- Placeholder cards for IC-ENC reports
+- Backend-classified IC-ENC report attachments for supported electronic Products
 - Public validation diagnostic downloads for supported electronic Products
 - Fixed content ordering and bounded content heights for comparison
 - Opening new Review tabs from the Product Collection tray
@@ -164,9 +164,12 @@ for other content.
 
 Each content-card header remains the state discriminator: `Unavailable`, `Failed`, an empty count, or
 an available content count. The body adds one concise message for states without content instead of a
-second heading/message pair. IC-ENC remains unavailable without inventing a report contract. Validation
-request failures retain their safe error text, and available diagnostic artifacts retain their download
-links. These presentation rules do not add a loader or refresh lifecycle.
+second heading/message pair. The earlier IC-ENC unavailable state is superseded for electronic Products whose artifact-history
+endpoint returns `Kind: IcEncReport`. Those files use the same compact report card,
+independent `Unavailable`/`Failed`/empty/content states, member identity and historical
+revision metadata as internal validation. Request failures retain their safe error text,
+and downloads retain verified artifact URLs. Both report types share the existing artifact
+loader and refresh lifecycle.
 
 Long Internal validation lists retain accessible region names by referencing their visible card headings rather than producing hover tooltips. Available artifact downloads use `calcite-link` with the existing URLs and filename hints. History scrolling is unchanged.
 
@@ -176,7 +179,10 @@ Future report cards should use the same pattern.
 
 Review reads Product History and validation artifact history independently. A failed History request
 retains resolved Product context and successful diagnostics; failed artifacts do not discard History.
-IC-ENC reports remain unavailable. Diagnostic download URLs use the configured API base.
+IC-ENC attachments and internal diagnostics are separated by the backend's explicit artifact `Kind`.
+Their download URLs come from the artifact-history normalizer and configured API base; no
+provider acceptance or rejection decision is inferred from the file. See
+[PC-ICENC-02](../../../docs/pc-icenc-02-report-integration.md).
 
 Content loaders remain capability-gated. No unsupported source may call an electronic backend route.
 
@@ -277,7 +283,8 @@ returns false to FI-022 so that its revision remains unacknowledged. Full Refres
 full-generation semantics, clearing payloads and rebuilding currently selected enabled records.
 
 History and artifacts use the existing capability-gated APIs with each member's own context. Optional
-failures remain per member and content type; IC-ENC stays Unavailable without a backend request.
+failures remain per member and content type. The historical IC-ENC unavailable state now
+applies only where the current source lacks the electronic artifact-history capability.
 The shared `products/domain/packageValidationArtifacts.js` contains the unchanged F6B ownership
 algorithm. Analyze retains its original import through a compatibility re-export. Review filters the
 normalized combined response before member publication using both exact concrete name and

@@ -16,6 +16,7 @@ import { createWorkspaceWorkUnitService } from "../../products/services/workspac
 import { reconcileAnalyzeResolutions } from "../domain/analyzeWorkUnits.js";
 import { normalizeInternalValidationReports } from "../domain/internalValidationReports.js";
 import { selectPackageValidationArtifacts } from "../domain/packageValidationArtifacts.js";
+import { partitionValidationArtifacts } from "../../products/domain/validationArtifactKinds.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
 
@@ -224,6 +225,8 @@ function normalizeAnalyzeProduct(
       ]) ?? null,
     sourceFeature: null,
     xml: readFirstDefined(product, ["xml", "Xml", "XML", "reportXml", "ReportXml"]) ?? null,
+    icEncReports: [],
+    icEncError: null,
     internalValidationReports: normalizeInternalValidationReports(
       readFirstDefined(product, [
         "internalValidationReports",
@@ -268,6 +271,8 @@ function createSourceAnalyzeProduct(productContext) {
     aoiGeometry: null,
     sourceFeature: productContext.data?.feature ?? null,
     xml: null,
+    icEncReports: [],
+    icEncError: null,
     internalValidationReports: [],
     raw: {
       attributes: { ...attributes },
@@ -300,6 +305,8 @@ function createFailedAnalyzeProduct(datasetName, resolution) {
     aoiGeometry: null,
     sourceFeature: null,
     xml: null,
+    icEncReports: [],
+    icEncError: null,
     internalValidationReports: [],
     raw: null,
     isMock: false,
@@ -446,6 +453,8 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
     }
     product.aoiGeometry = productContext.data?.geometry ?? null;
     product.internalValidationReports = [];
+    product.icEncReports = [];
+    product.icEncError = null;
     try {
       if (artifacts.status === "rejected") throw artifacts.reason;
       const history = normalizeArtifactHistory(artifacts.value);
@@ -456,7 +465,8 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
         product.loadError =
           "Some validation artifacts have ambiguous or missing Product ownership and were not displayed.";
       }
-      product.internalValidationReports = selection.artifacts.map((artifact) => ({
+      const partition = partitionValidationArtifacts(selection.artifacts);
+      const toReport = (artifact, description) => ({
         id: artifact.id,
         title: artifact.fileName,
         status: "available",
@@ -464,12 +474,28 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
         generatedAt: artifact.createdAtUtc,
         format: artifact.mediaType,
         url: artifact.url,
-        summary: `Validation diagnostic for ${artifact.datasetName}.`,
+        summary: `${description} for ${artifact.datasetName}.`,
         content: "",
         raw: artifact,
+      });
+      product.internalValidationReports = partition.internalValidation.map((artifact) =>
+        toReport(artifact, "Validation file")
+      );
+      product.icEncReports = partition.icEncReports.map((artifact) => ({
+        ...toReport(artifact, "IC-ENC response attachment"),
+        status: "Attachment",
       }));
+      if (partition.unknown.length > 0) {
+        product.loadError = [
+          product.loadError,
+          "Some artifacts have an unsupported report kind and were not displayed.",
+        ]
+          .filter(Boolean)
+          .join(" ");
+      }
     } catch (error) {
       product.loadError = error?.message ?? "Validation artifact history could not be loaded.";
+      product.icEncError = product.loadError;
     }
     return product;
   } catch (error) {

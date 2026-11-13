@@ -194,41 +194,22 @@ function createReviewContentCard(product, contentType) {
     return createHistoryReviewCard(product);
   }
   if (contentType === REVIEW_CONTENT_TYPES.IC_ENC_REPORTS) {
-    return createStateReviewCard({
+    return createArtifactReviewCard({
       product,
       contentType,
       title: "IC-ENC reports",
       presentation: getReviewIcEncPresentation(product),
+      artifacts: product.icEncArtifacts ?? [],
     });
   }
   if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS) {
-    const presentation = getReviewValidationPresentation(product);
-    const artifacts = product.validationArtifacts ?? [];
-    const card = createContentCardShell({
+    return createArtifactReviewCard({
       product,
       contentType,
       title: "Internal validation",
-      status: presentation.status,
-      state: presentation.state,
+      presentation: getReviewValidationPresentation(product),
+      artifacts: product.validationArtifacts ?? [],
     });
-    if (product.artifactWarning)
-      card.body.appendChild(createContentStateMessage(product.artifactWarning));
-    if (presentation.state !== REVIEW_CONTENT_PRESENTATION_STATE.CONTENT) {
-      card.body.appendChild(createContentStateMessage(presentation.message));
-      return card.root;
-    }
-    if (artifacts.length > 5) {
-      card.root.classList.add("pc-review-content-card--validation-bounded");
-      card.body.classList.add("pc-review-content-card__body--scrollable", "pc-scrollbar");
-      card.body.setAttribute("role", "region");
-      card.titleElement.id = `pc-review-validation-scroll-label-${++nextValidationScrollLabelId}`;
-      card.body.setAttribute("aria-labelledby", card.titleElement.id);
-      card.body.tabIndex = 0;
-    }
-    for (const artifact of artifacts) {
-      card.body.appendChild(createValidationArtifactRow(artifact));
-    }
-    return card.root;
   }
   return createStateReviewCard({
     product,
@@ -240,6 +221,35 @@ function createReviewContentCard(product, contentType) {
       message: "This review content type is not available.",
     },
   });
+}
+
+function createArtifactReviewCard({ product, contentType, title, presentation, artifacts }) {
+  const card = createContentCardShell({
+    product,
+    contentType,
+    title,
+    status: presentation.status,
+    state: presentation.state,
+  });
+  if (product.artifactWarning) {
+    card.body.appendChild(createContentStateMessage(product.artifactWarning));
+  }
+  if (presentation.state !== REVIEW_CONTENT_PRESENTATION_STATE.CONTENT) {
+    card.body.appendChild(createContentStateMessage(presentation.message));
+    return card.root;
+  }
+  if (artifacts.length > 5) {
+    card.root.classList.add("pc-review-content-card--validation-bounded");
+    card.body.classList.add("pc-review-content-card__body--scrollable", "pc-scrollbar");
+    card.body.setAttribute("role", "region");
+    card.titleElement.id = `pc-review-validation-scroll-label-${++nextValidationScrollLabelId}`;
+    card.body.setAttribute("aria-labelledby", card.titleElement.id);
+    card.body.tabIndex = 0;
+  }
+  for (const artifact of artifacts) {
+    card.body.appendChild(createValidationArtifactRow(artifact));
+  }
+  return card.root;
 }
 
 function createHistoryReviewCard(product) {
@@ -336,6 +346,12 @@ function createValidationArtifactRow(artifact) {
   link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
   link.download = artifact.fileName || "";
   row.appendChild(link);
+  if (artifact.kind === "IcEncReport" && artifact.revisionId) {
+    const revision = document.createElement("span");
+    revision.className = "pc-review-content-card__artifact-revision";
+    revision.textContent = `Revision ID: ${artifact.revisionId}`;
+    row.appendChild(revision);
+  }
   return row;
 }
 

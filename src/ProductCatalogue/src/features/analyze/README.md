@@ -72,6 +72,7 @@ The Analyze sidebar is for analysis/report content. It can show:
 - product summary
 - XML/report content
 - internal validation reports
+- IC-ENC report artifacts for supported electronic Products
 - load warnings
 - history content
 
@@ -164,7 +165,7 @@ The current frontend-ready report shape is:
 
 Supported backend aliases are normalized in `api/analyzeApi.js` and `domain/internalValidationReports.js`.
 
-Electronic validation records now come from public artifact history. Reports with `url` render diagnostic downloads; absent inline content is not fabricated.
+Electronic validation records come from public artifact history. The shared `partitionValidationArtifacts()` helper classifies backend `Kind: IcEncReport` as IC-ENC and `ValidationReport`/`ValidationDiagnostic` as internal validation. A single artifact-history response serves both sections for a Product. IC-ENC attachments are presented as downloadable files with the stored timestamp and revision ID, **not** as an Accepted/Rejected decision. Missing inline content or report verdicts are never fabricated; unknown artifact kinds are omitted with a warning.
 
 ## Backend integration
 
@@ -239,7 +240,7 @@ share a compact empty-state presentation. Their collapsed headings do not say
 renders `No IC-ENC reports found` rather than a technical backend-support message;
 no report content or download URL is fabricated. Internal validation and History retain
 their source-specific unavailable states and genuine request errors remain visible.
-This UI change does not create an IC-ENC download endpoint.
+The historical R01C limitation was superseded by PC-ICENC-02: the public artifact-history endpoint now exposes backend-classified `IcEncReport` files for electronic Products. See [report integration](../../../docs/pc-icenc-02-report-integration.md) for current contracts.
 
 ## Public route
 

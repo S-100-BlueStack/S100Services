@@ -92,3 +92,31 @@ test("unsupported availability and real History failures retain truthful explana
     )
   );
 });
+
+test("IC-ENC artifact reports display real downloads, revision IDs and storage time without claiming acceptance", () => {
+  const reports = [
+    {
+      title: "response.pdf",
+      status: "Attachment",
+      source: "S-101",
+      generatedAt: "2026-11-13T08:20:00Z",
+      url: "/electronicproducts/101DK001/artifacts/11111111-1111-4111-8111-111111111111",
+      raw: { revisionId: "22222222-2222-4222-8222-222222222222" },
+    },
+  ];
+  const block = renderers.createXmlBlock(null, { implemented: true }, reports);
+  assert.equal(block.children[0].textContent, "IC-ENC (1)");
+  assert.equal(block.open, true);
+  const link = nodes(block).find((element) => element.tagName === "calcite-link");
+  assert.equal(link.textContent, "Download IC-ENC report");
+  assert.equal(link.href, reports[0].url);
+  assert.ok(nodes(block).some((element) => element.textContent === "Revision ID"));
+  assert.ok(nodes(block).some((element) => element.textContent === "Stored"));
+  assert.ok(!nodes(block).some((element) => element.textContent === "Accepted"));
+});
+
+test("IC-ENC artifact request failure remains a failed report read, not an empty report list", () => {
+  const block = renderers.createXmlBlock(null, { implemented: true }, [], "HTTP 503");
+  assert.deepEqual(titles(block), ["IC-ENC reports could not be loaded"]);
+  assert.ok(nodes(block).some((element) => element.textContent === "HTTP 503"));
+});

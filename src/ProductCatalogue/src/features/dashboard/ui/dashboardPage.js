@@ -74,6 +74,8 @@ let dashboardFilters = createDefaultDashboardFilters();
 let dashboardRangeDraft = null;
 let dashboardRangeDraftAppliedKey = null;
 let dashboardHistoryState = createDashboardHistoryState();
+let dashboardReportPanelState = createDashboardReportPanelState();
+let dashboardReportPanelPage = null;
 let dashboardHistoryKeyboardHandlersRegistered = false;
 let dashboardHistoryLookupLoadPromise = null;
 let lastRenderArgs = null;
@@ -719,10 +721,11 @@ function captureDashboardControlFocus() {
   const sortKey = activeElement.dataset.dashboardSortKey;
   const filterKey = activeElement.dataset.dashboardFilterKey;
   const focusKey = activeElement.dataset.dashboardFocusKey;
+  const panelAction = activeElement.dataset.dashboardPanelAction;
   const rangeInputId = activeElement.id?.startsWith("dashboard-range-") ? activeElement.id : null;
   const pageSizeControl = activeElement.hasAttribute("data-dashboard-page-size");
 
-  if (!sortKey && !filterKey && !focusKey && !rangeInputId && !pageSizeControl) {
+  if (!sortKey && !filterKey && !focusKey && !panelAction && !rangeInputId && !pageSizeControl) {
     return null;
   }
 
@@ -730,6 +733,7 @@ function captureDashboardControlFocus() {
     sortKey,
     filterKey,
     focusKey,
+    panelAction,
     rangeInputId,
     pageSizeControl,
     selectionStart: activeElement instanceof HTMLInputElement ? activeElement.selectionStart : null,
@@ -750,7 +754,9 @@ function restoreDashboardControlFocus(focusState) {
         ? "[data-dashboard-page-size]"
         : focusState.focusKey
           ? `[data-dashboard-focus-key="${CSS.escape(focusState.focusKey)}"]`
-          : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
+          : focusState.panelAction
+            ? `[data-dashboard-panel-action="${CSS.escape(focusState.panelAction)}"]`
+            : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
   const nextElement = document.querySelector(selector);
 
   if (
@@ -983,24 +989,27 @@ function createDashboardGrid({
 
   const aside = document.createElement("aside");
   aside.className = "pc-dashboard-grid__aside";
-  aside.classList.toggle("has-history-panel", dashboardHistoryState.isOpen);
+  const hasDetailPanel = dashboardHistoryState.isOpen || dashboardReportPanelState.isOpen;
+  aside.classList.toggle("has-history-panel", hasDetailPanel);
   aside.append(
-    ...(dashboardHistoryState.isOpen
-      ? [createDashboardHistoryPanel()]
-      : [
-          createSummaryRows({
-            title: "Status summary",
-            rows: dashboard.statusSummary,
-            filterKey: "status",
-            filters,
-          }),
-          createSummaryRows({
-            title: "Operation summary",
-            rows: dashboard.operationSummary,
-            filterKey: "type",
-            filters,
-          }),
-        ])
+    ...(dashboardReportPanelState.isOpen
+      ? [createDashboardReportPanel()]
+      : dashboardHistoryState.isOpen
+        ? [createDashboardHistoryPanel()]
+        : [
+            createSummaryRows({
+              title: "Status summary",
+              rows: dashboard.statusSummary,
+              filterKey: "status",
+              filters,
+            }),
+            createSummaryRows({
+              title: "Operation summary",
+              rows: dashboard.operationSummary,
+              filterKey: "type",
+              filters,
+            }),
+          ])
   );
 
   grid.append(main, aside);
@@ -1344,7 +1353,10 @@ function createActivityTable(activities, timeZone, { sortBy, sortDirection }) {
 function createActivityRow(activity, timeZone) {
   const row = document.createElement("tr");
   row.className = `pc-dashboard-activity-table__row is-${activity.severity}`;
-  row.classList.toggle("is-history-selected", isDashboardHistoryActivitySelected(activity));
+  row.classList.toggle(
+    "is-history-selected",
+    isDashboardHistoryActivitySelected(activity) || isDashboardReportActivitySelected(activity)
+  );
 
   const time = document.createElement("td");
   time.className = "pc-dashboard-activity-table__time";
@@ -1427,16 +1439,8 @@ function createActivityLinks(activity) {
       url: activity.datasetName ? buildAnalyzeUrl([activity.datasetName]) : null,
     }),
     createDashboardHistoryLink(activity),
-    createReportLinkGroup({
-      label: "IC-ENC",
-      reports: activity.links.icEncReports,
-      datasetName: activity.datasetName,
-    }),
-    createReportLinkGroup({
-      label: "Validation",
-      reports: activity.links.internalValidationReports,
-      datasetName: activity.datasetName,
-    })
+    createDashboardReportButton(activity, "ic-enc"),
+    createDashboardReportButton(activity, "internal")
   );
 
   return links;
@@ -1463,6 +1467,7 @@ function createDashboardHistoryLink(activity) {
   button.className = "pc-dashboard-link-button";
   button.disabled = !activity.links.history || !activity.datasetName;
   button.textContent = "History";
+  button.dataset.dashboardPanelAction = getDashboardPanelActionKey(activity, "history");
   button.classList.toggle("is-active", isDashboardHistoryActivitySelected(activity));
   button.setAttribute(
     "aria-pressed",
@@ -1481,20 +1486,72 @@ function createDashboardHistoryLink(activity) {
   return button;
 }
 
-function isDashboardHistoryActivitySelected(activity) {
-  if (!dashboardHistoryState.isOpen || !dashboardHistoryState.activity) {
-    return false;
-  }
+function getDashboardPanelActionKey(activity, action) {
+  const identity = activity?.id
+    ? `id:${activity.id}`
+    : `activity:${activity?.datasetName ?? ""}:${activity?.timestamp ?? ""}:${activity?.title ?? ""}`;
+  return `${action}:${identity}`;
+}
 
-  if (activity.id && dashboardHistoryState.activity.id) {
-    return activity.id === dashboardHistoryState.activity.id;
-  }
-
+function isDashboardActivityMatch(activity, selectedActivity) {
+  if (!selectedActivity) return false;
+  if (activity.id && selectedActivity.id) return activity.id === selectedActivity.id;
   return (
-    activity.datasetName === dashboardHistoryState.activity.datasetName &&
-    activity.timestamp === dashboardHistoryState.activity.timestamp &&
-    activity.title === dashboardHistoryState.activity.title
+    activity.datasetName === selectedActivity.datasetName &&
+    activity.timestamp === selectedActivity.timestamp &&
+    activity.title === selectedActivity.title
   );
+}
+
+function isDashboardHistoryActivitySelected(activity) {
+  return (
+    dashboardHistoryState.isOpen &&
+    isDashboardActivityMatch(activity, dashboardHistoryState.activity)
+  );
+}
+
+function isDashboardReportActivitySelected(activity, reportType = null) {
+  return (
+    dashboardReportPanelState.isOpen &&
+    (reportType === null || dashboardReportPanelState.reportType === reportType) &&
+    isDashboardActivityMatch(activity, dashboardReportPanelState.activity)
+  );
+}
+
+function createDashboardReportButton(activity, reportType) {
+  const label = reportType === "ic-enc" ? "IC-ENC" : "Validation";
+  const reports = getDashboardActivityReports(activity, reportType);
+  const canOpen =
+    Boolean(normalizeDashboardDatasetName(activity.datasetName)) ||
+    reports.some((report) => report?.url);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pc-dashboard-link-button";
+  button.disabled = !canOpen;
+  button.textContent = reports.length > 1 ? `${label} (${reports.length})` : label;
+  button.dataset.dashboardPanelAction = getDashboardPanelActionKey(activity, reportType);
+  button.classList.toggle("is-active", isDashboardReportActivitySelected(activity, reportType));
+  button.setAttribute(
+    "aria-pressed",
+    String(isDashboardReportActivitySelected(activity, reportType))
+  );
+  button.title = canOpen
+    ? `Open ${label} reports for ${activity.datasetName || "this activity"}`
+    : `${label} reports are not available for this activity.`;
+  if (canOpen) {
+    button.addEventListener("click", () => {
+      void openDashboardReports(activity, reportType);
+    });
+  }
+  return button;
+}
+
+function getDashboardActivityReports(activity, reportType) {
+  const reports =
+    reportType === "ic-enc"
+      ? activity?.links?.icEncReports
+      : activity?.links?.internalValidationReports;
+  return Array.isArray(reports) ? reports : [];
 }
 
 function ensureDashboardHistoryKeyboardHandlers() {
@@ -1504,11 +1561,12 @@ function ensureDashboardHistoryKeyboardHandlers() {
 
   dashboardHistoryKeyboardHandlersRegistered = true;
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !dashboardHistoryState.isOpen) {
-      return;
+    if (event.key !== "Escape") return;
+    if (dashboardReportPanelState.isOpen) {
+      closeDashboardReports();
+    } else if (dashboardHistoryState.isOpen) {
+      closeDashboardHistory();
     }
-
-    closeDashboardHistory();
   });
 }
 
@@ -1563,6 +1621,7 @@ async function openDashboardHistory(activityOrDatasetName) {
       ? null
       : createDashboardHistoryActivitySnapshot(activityOrDatasetName, normalizedDatasetName);
 
+  resetDashboardReports();
   const requestId = dashboardHistoryState.requestId + 1;
   dashboardHistoryState = {
     isOpen: true,
@@ -1614,11 +1673,14 @@ async function openDashboardHistory(activityOrDatasetName) {
 }
 
 function closeDashboardHistory() {
+  const focusState = dashboardHistoryState.activity
+    ? { panelAction: getDashboardPanelActionKey(dashboardHistoryState.activity, "history") }
+    : null;
   dashboardHistoryState = {
     ...createDashboardHistoryState(),
     requestId: dashboardHistoryState.requestId + 1,
   };
-  rerenderDashboardPage();
+  rerenderDashboardPage(focusState);
 }
 
 function createDashboardHistoryPanel() {
@@ -1822,74 +1884,219 @@ function getDashboardHistoryErrorMessage(error) {
   return error instanceof Error ? error.message : "Unknown history error.";
 }
 
-function createPlaceholderLink({ label, enabled, title }) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "pc-dashboard-link-button";
-  button.disabled = !enabled;
-  button.textContent = label;
-  button.title = enabled ? title : `${label} is not available for this activity.`;
-
-  if (enabled) {
-    button.addEventListener("click", () => {
-      noticeError("Dashboard link is not available", title, {
-        dedupeKey: `dashboard-${label.toLowerCase()}-link-placeholder`,
-        storeInCenter: false,
-        countAsUnread: false,
-      });
-    });
-  }
-
-  return button;
+function createDashboardReportPanelState() {
+  return {
+    isOpen: false,
+    reportType: null,
+    datasetName: null,
+    activity: null,
+    reports: [],
+    loading: false,
+    error: null,
+    hasUnavailableLinks: false,
+    hasUnattributedArtifacts: false,
+    hasUnknownKinds: false,
+    requestId: 0,
+  };
 }
 
-function createReportLinkGroup({ label, reports, datasetName }) {
-  const normalizedReports = Array.isArray(reports) ? reports : [];
-  if (normalizedReports.length === 0) return createDisabledLink(label);
+function resetDashboardReports() {
+  // Invalidate pending Product requests when another panel takes ownership.
+  dashboardReportPanelState = {
+    ...createDashboardReportPanelState(),
+    requestId: dashboardReportPanelState.requestId + 1,
+  };
+  dashboardReportPanelPage = null;
+}
 
-  const linkedReports = normalizedReports.filter((report) => report.url);
-  const linkLabel = normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
-  if (linkedReports.length === 1 && normalizedReports.length === 1) {
-    return createDashboardReportLink(linkedReports[0], label);
+async function openDashboardReports(activity, reportType) {
+  if (reportType !== "ic-enc" && reportType !== "internal") return;
+  const datasetName = normalizeDashboardDatasetName(activity?.datasetName);
+  const candidates = getDashboardActivityReports(activity, reportType);
+  const linkedReports = candidates.filter((report) => report?.url);
+  if (!datasetName && linkedReports.length === 0) return;
+  const page = document.getElementById("product-dashboard-page");
+  if (!page?.isConnected) return;
+  if (
+    dashboardReportPanelState.loading &&
+    dashboardReportPanelPage?.isConnected &&
+    isDashboardReportActivitySelected(activity, reportType)
+  ) {
+    // A second click while this panel is loading must not duplicate the lookup.
+    return;
   }
 
-  if (linkedReports.length > 0) {
-    return createDashboardReportDisclosure(linkLabel, (content) => {
-      content.replaceChildren(
-        ...linkedReports.map((report) => createDashboardReportLink(report, report.title || label))
-      );
-      if (linkedReports.length !== normalizedReports.length) {
-        const note = document.createElement("span");
-        note.textContent = "Some report links are unavailable.";
-        content.appendChild(note);
+  dashboardHistoryState = {
+    ...createDashboardHistoryState(),
+    requestId: dashboardHistoryState.requestId + 1,
+  };
+  const requestId = dashboardReportPanelState.requestId + 1;
+  dashboardReportPanelPage = page;
+  dashboardReportPanelState = {
+    ...createDashboardReportPanelState(),
+    requestId,
+    isOpen: true,
+    datasetName,
+    reportType,
+    activity: createDashboardHistoryActivitySnapshot(activity, datasetName),
+    reports: linkedReports,
+    loading: linkedReports.length === 0,
+    hasUnavailableLinks: linkedReports.length > 0 && linkedReports.length < candidates.length,
+  };
+  rerenderDashboardPage();
+
+  // Activity-provided URLs are already authoritative download links. Preserve
+  // them and avoid an additional request; otherwise resolve Product-scoped files.
+  if (linkedReports.length > 0) return;
+  try {
+    const result = await fetchDashboardValidationReports(datasetName, { reportType });
+    if (dashboardReportPanelState.requestId !== requestId || !page.isConnected) return;
+    dashboardReportPanelState = {
+      ...dashboardReportPanelState,
+      reports: result.reports,
+      hasUnattributedArtifacts: result.hasUnattributedArtifacts,
+      hasUnknownKinds: result.hasUnknownKinds,
+      loading: false,
+      error: null,
+    };
+    rerenderDashboardPage();
+  } catch (error) {
+    if (dashboardReportPanelState.requestId !== requestId || !page.isConnected) return;
+    dashboardReportPanelState = {
+      ...dashboardReportPanelState,
+      reports: [],
+      loading: false,
+      error,
+    };
+    rerenderDashboardPage();
+  }
+}
+
+function closeDashboardReports() {
+  const focusState = dashboardReportPanelState.activity
+    ? {
+        panelAction: getDashboardPanelActionKey(
+          dashboardReportPanelState.activity,
+          dashboardReportPanelState.reportType
+        ),
       }
-    });
-  }
+    : null;
+  resetDashboardReports();
+  rerenderDashboardPage(focusState);
+}
 
-  if (label !== "Validation" || !datasetName) {
-    return createPlaceholderLink({
-      label: linkLabel,
-      enabled: true,
-      title: `${label} report metadata is available, but no report download URL was supplied.`,
-    });
-  }
+function createDashboardReportPanel() {
+  const isIcEnc = dashboardReportPanelState.reportType === "ic-enc";
+  const reportLabel = isIcEnc ? "IC-ENC reports" : "Validation reports";
+  const section = document.createElement("section");
+  section.className = "pc-dashboard-panel pc-dashboard-history-panel";
+  section.setAttribute("aria-label", reportLabel);
 
-  return createDashboardReportDisclosure(linkLabel, async (content, isCurrent) => {
-    const { reports, hasUnattributedArtifacts } =
-      await fetchDashboardValidationReports(datasetName);
-    if (!isCurrent()) return;
-    content.replaceChildren();
-    if (reports.length === 0) {
-      content.textContent = "No downloadable validation files were found for this Product.";
-    } else {
-      content.append(...reports.map((report) => createDashboardReportLink(report, report.title)));
+  const header = document.createElement("header");
+  header.className = "pc-dashboard-history-panel__header";
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "pc-dashboard-history-panel__title-wrap";
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "pc-dashboard-history-panel__eyebrow";
+  eyebrow.textContent = reportLabel;
+  const title = document.createElement("h2");
+  title.className = "pc-dashboard-history-panel__title";
+  title.textContent = dashboardReportPanelState.datasetName ?? "Selected activity";
+  const subTitle = document.createElement("div");
+  subTitle.className = "pc-dashboard-history-panel__subtitle";
+  subTitle.textContent = dashboardReportPanelState.loading
+    ? "Loading available files..."
+    : "Available files for the selected Product";
+  titleWrap.append(eyebrow, title, subTitle);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "pc-dashboard-history-panel__close";
+  closeButton.textContent = "Close";
+  closeButton.setAttribute("aria-label", `Close ${reportLabel}`);
+  closeButton.title = `Close ${reportLabel} (Esc)`;
+  closeButton.addEventListener("click", closeDashboardReports);
+  header.append(titleWrap, closeButton);
+
+  const content = document.createElement("div");
+  content.className = "pc-dashboard-history-panel__content";
+  content.appendChild(createDashboardReportPanelContent());
+  section.append(header, content);
+  return section;
+}
+
+function createDashboardReportPanelContent() {
+  const fragment = document.createDocumentFragment();
+  const state = dashboardReportPanelState;
+  if (state.activity) {
+    fragment.appendChild(createDashboardHistoryActivityContext(state.activity));
+  }
+  if (state.loading) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: "Loading reports...",
+        message: "Checking available files for the selected Product.",
+      })
+    );
+    return fragment;
+  }
+  if (state.error) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: "Reports could not be loaded",
+        message: state.error instanceof Error ? state.error.message : "Unknown report error.",
+      })
+    );
+    return fragment;
+  }
+  if (!state.reports.length) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: "No reports found",
+        message: `No ${state.reportType === "ic-enc" ? "IC-ENC" : "Validation"} reports were found for this Product.`,
+      })
+    );
+  } else {
+    for (const report of state.reports) {
+      fragment.appendChild(createDashboardReportItem(report));
     }
-    if (hasUnattributedArtifacts) {
-      const note = document.createElement("span");
-      note.textContent = "Files without verified Product ownership were excluded.";
-      content.appendChild(note);
-    }
-  });
+  }
+  if (state.hasUnavailableLinks) {
+    fragment.appendChild(
+      createProductHistoryBanner({
+        title: "Unavailable links",
+        message: "Some activity report links are unavailable.",
+      })
+    );
+  }
+  if (state.hasUnattributedArtifacts || state.hasUnknownKinds) {
+    fragment.appendChild(
+      createProductHistoryBanner({
+        title: "Excluded files",
+        message: "Files without verified ownership or report type were excluded.",
+      })
+    );
+  }
+  return fragment;
+}
+
+function createDashboardReportItem(report) {
+  const item = document.createElement("article");
+  item.className = "pc-dashboard-history-context";
+  const title = document.createElement("div");
+  title.className = "pc-dashboard-history-context__title";
+  title.textContent = report.title || "Report file";
+  item.appendChild(title);
+  if (report.generatedAt) {
+    const meta = document.createElement("div");
+    meta.className = "pc-dashboard-history-context__meta";
+    meta.textContent = formatDashboardRangeDateTime(report.generatedAt, {
+      timeZone: lastRenderArgs?.dashboard?.range?.timeZone,
+    });
+    item.appendChild(meta);
+  }
+  item.appendChild(createDashboardReportLink(report, "Download"));
+  return item;
 }
 
 function createDashboardReportLink(report, label) {
@@ -1901,37 +2108,6 @@ function createDashboardReportLink(report, label) {
   link.textContent = label;
   link.title = report.title || label;
   return link;
-}
-
-function createDashboardReportDisclosure(label, loadContent) {
-  const details = document.createElement("details");
-  details.className = "pc-dashboard-report-disclosure";
-  const summary = document.createElement("summary");
-  summary.className = "pc-dashboard-link-button";
-  summary.textContent = label;
-  const content = document.createElement("div");
-  content.className = "pc-dashboard-report-disclosure__content";
-  details.append(summary, content);
-
-  let requested = false;
-  details.addEventListener("toggle", () => {
-    if (!details.open || requested) return;
-    requested = true;
-    content.textContent = "Loading available reports...";
-    const isCurrent = () => details.isConnected && details.open;
-    void Promise.resolve()
-      .then(() => loadContent(content, isCurrent))
-      .then(() => {
-        if (!isCurrent()) requested = false;
-      })
-      .catch((error) => {
-        requested = false;
-        if (!isCurrent()) return;
-        content.textContent =
-          error instanceof Error ? error.message : "Validation reports could not be loaded.";
-      });
-  });
-  return details;
 }
 
 function createDisabledLink(label) {

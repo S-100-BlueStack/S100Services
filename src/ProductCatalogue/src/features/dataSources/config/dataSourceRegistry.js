@@ -290,9 +290,9 @@ function createElectronicSource({
       },
       icEncReports: {
         visible: true,
-        implemented: false,
-        loaderId: null,
-        availabilityReason: "The backend does not provide IC-ENC reports.",
+        implemented: true,
+        loaderId: "electronic-artifacts",
+        availabilityReason: null,
       },
       internalValidation: {
         visible: true,

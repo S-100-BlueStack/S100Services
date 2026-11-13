@@ -7,6 +7,7 @@ const context = {
   datasetName: name,
   contentConfiguration: {
     internalValidation: { implemented: true, loaderId: "electronic-artifacts" },
+    icEncReports: { implemented: true, loaderId: "electronic-artifacts" },
   },
   data: { attributes: { productSpecification: 101 } },
 };
@@ -15,6 +16,7 @@ const artifact = (id, overrides = {}) => ({
   trackId: `track-${id}`,
   datasetName: name,
   productSpecification: "S101",
+  kind: "ValidationReport",
   fileName: `${id}.xml`,
   url: `https://example.invalid/artifacts/${id}`,
   ...overrides,
@@ -74,4 +76,41 @@ test("conflicting artifact ownership never yields a download link", async () => 
   const result = await fetchDashboardValidationReports(name, h.params);
   assert.deepEqual(result.reports, []);
   assert.equal(result.hasUnattributedArtifacts, true);
+});
+
+test("Dashboard IC-ENC lookup uses explicit artifact kinds rather than filenames and does not leak internal validation", async () => {
+  const h = harness([
+    artifact("ic-enc", { kind: "IcEncReport" }),
+    artifact("validation", { fileName: "IC-ENC Accepted.pdf", kind: "ValidationReport" }),
+    artifact("unknown", { kind: null }),
+    artifact("foreign", { kind: "IcEncReport", datasetName: "Other Product" }),
+  ]);
+  const result = await fetchDashboardValidationReports(name, {
+    ...h.params,
+    reportType: "ic-enc",
+  });
+  assert.deepEqual(
+    result.reports.map((r) => r.id),
+    ["ic-enc"]
+  );
+  assert.equal(result.hasUnknownKinds, true);
+  assert.equal(result.hasUnattributedArtifacts, false);
+});
+
+test("Dashboard IC-ENC lookup rejects missing capability and does not fetch artifacts", async () => {
+  const h = harness([], {
+    resolution: {
+      status: "resolved",
+      product: {
+        ...context,
+        contentConfiguration: {
+          internalValidation: { implemented: true, loaderId: "electronic-artifacts" },
+        },
+      },
+    },
+  });
+  await assert.rejects(
+    fetchDashboardValidationReports(name, { ...h.params, reportType: "ic-enc" })
+  );
+  assert.equal(h.calls.filter(([type]) => type === "artifacts").length, 0);
 });

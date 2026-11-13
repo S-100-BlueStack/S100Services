@@ -146,7 +146,7 @@ test("board has one package column with two ordered member sections and one ordi
     assert.equal(byClass(headers[0], "pc-review-content-card").length, 0);
     assert.ok(
       byClass(section, "pc-review-content-card__status").some(
-        (node) => node.textContent === "Unavailable"
+        (node) => node.textContent === "0 files"
       )
     );
     assert.ok(
@@ -308,4 +308,33 @@ test("Review status history icons use actual ProductState results when known", (
   assert.equal(icon("Idle"), "clock");
   assert.equal(icon("Unknown backend state"), "information");
   assert.equal(icon("15"), "x-circle");
+});
+
+test("Review renders IC-ENC report downloads with exact member and revision metadata", async () => {
+  const h = createReviewPackageFixture();
+  h.records[0].Kind = "IcEncReport";
+  const products = await loadReviewHistories(packageNames, h.options);
+  const items = list.createReviewProductItems([packageNames[0]]);
+  const board = createBoard({
+    productItems: items,
+    enabledDatasetNames: [packageNames[0]],
+    products,
+  });
+  const sections = byClass(board, "pc-review-member");
+  const icEncCards = sections.map((section) =>
+    byClass(section, "pc-review-content-card").find(
+      (card) => card.dataset.reviewContentType === "ic-enc-reports"
+    )
+  );
+  assert.equal(icEncCards.length, 2);
+  assert.equal(icEncCards[0].dataset.reviewContentState, "content");
+  assert.equal(icEncCards[1].dataset.reviewContentState, "empty");
+  const links = nodes(icEncCards[0]).filter((node) => node.href);
+  assert.equal(links.length, 1);
+  assert.match(links[0].href, /artifacts/);
+  assert.equal(
+    byClass(icEncCards[0], "pc-review-content-card__artifact-revision")[0].textContent,
+    "Revision ID: current"
+  );
+  assert.equal(byClass(icEncCards[1], "pc-review-content-card__artifact-revision").length, 0);
 });

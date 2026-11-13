@@ -38,7 +38,7 @@ Implemented scope:
 - Dashboard History panel loads product state lookups before normalizing backend history so numeric status IDs render as status names.
 - Dashboard History panel uses the shared collapsed Product History event renderer.
 - Backend activity classification maps raw product states into dashboard-oriented activity type, status, severity and title values.
-- Disabled or placeholder report actions until report URLs or report detail endpoints exist.
+- Direct report URLs when supplied and on-demand artifact-history downloads for electronic Product report links.
 
 ## Backend contract
 
@@ -361,18 +361,27 @@ History panel guidance:
 
 ## R01B validation artifact links
 
-If Dashboard activities supply direct report URLs, those URLs remain the only direct download
-links. Multiple URLs are shown individually in a compact disclosure rather than silently choosing
-one. When Validation metadata is present without a URL, expanding the Validation action now loads
-artifacts on demand through the existing source-aware Product resolution and electronic artifact
-history endpoint. Results must match the resolved Product's exact dataset identity and specification;
-ambiguous or unattributed artifacts are excluded. The report list may contain more files than the
-specific activity because it represents the current Product's available validation artifacts.
-No validation reports are loaded as part of the Dashboard activity query.
+The Dashboard activity-row `IC-ENC` and `Validation` actions open the same route-local
+right-column panel layout used by `History`. Only one of History, IC-ENC reports or Validation
+reports may be open at a time. Each report panel replaces the Status and Operation summaries
+while open and restores them when closed, including via Escape. The activity row and the
+selected action remain highlighted; keyboard focus follows the existing Dashboard action
+focus-restoration behavior.
 
-IC-ENC metadata without URLs continues to show a truthful unavailable action. The frontend does
-not invent an IC-ENC report endpoint, convert IDs into URLs, or treat validation artifacts as IC-ENC
-reports. A backend-owned IC-ENC report reference/URL contract is still required.
+Reports are never expanded inline in the activity table. Direct URLs provided by the activity
+remain available as individual downloads in the panel, without an additional artifact-history
+request. Where no direct URL exists, opening the report panel resolves the Product and retrieves
+its artifact history on demand. IC-ENC uses only `Kind: IcEncReport`, while Validation uses
+`ValidationReport` and `ValidationDiagnostic`. The Product/specification ownership checks remain
+unchanged. Unknown or unattributed artifacts never produce download links.
+
+The panel displays loading, empty, error and excluded-file states without replacing a failed
+request with a successful empty result. Switching report type/activity, opening History, closing
+or pressing Escape invalidates older request results. Failed requests can be retried by opening
+the action again. No validation reports are fetched as part of a Dashboard activity query.
+
+The current activity API does not yet populate `IcEncReports`; on-demand report lists represent
+the Product's available artifact history, not files proven to belong to the clicked activity.
 
 ## Dashboard request lifecycle
 
@@ -380,15 +389,21 @@ Search changes normally use a 300 ms debounce. An immediate Refresh (toolbar or 
 
 ## Report links
 
-Report links support multiple IC-ENC and internal validation report metadata entries. Direct URLs remain usable; validation metadata without URLs can open the current Product's verified artifact downloads on demand. IC-ENC metadata without URLs remains an unavailable placeholder until the backend publishes an IC-ENC report contract.
+Both report actions open the right-side detail panel rather than an inline disclosure.
+Multiple direct URLs are shown individually. Otherwise, opening a panel performs one
+Product-scoped artifact lookup; moving to another panel or closing it prevents obsolete
+responses from publishing. Real report counts and activity-specific attribution still depend
+on the Dashboard backend projection.
 
-Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
+Dashboard should not fetch full report content as part of the activity payload. The activity
+endpoint should return only enough metadata to show summary rows and route users to a report
+detail endpoint later.
 
 ## Future scope
 
 The following work remains intentionally outside phase 1:
 
-- Add real IC-ENC report links when backend report IDs/storage contract exists.
+- Extend the Dashboard backend activity projection and report filters with real IC-ENC report metadata and verified counts (current projection still returns empty arrays).
 - Verify whether Dashboard activity report IDs should map to a specific validation artifact rather than the Product's available artifact history.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
 - Consider richer dashboard charts only if they remain compact and data-oriented.

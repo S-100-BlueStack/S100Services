@@ -61,7 +61,7 @@ test("Review IC-ENC presentation remains truthfully unavailable and preserves re
   assert.deepEqual(getReviewIcEncPresentation({ productContext: {} }), {
     state: REVIEW_CONTENT_PRESENTATION_STATE.UNAVAILABLE,
     status: "Unavailable",
-    message: "No IC-ENC reports found for this product.",
+    message: "IC-ENC reports are not available for this Product source.",
   });
   assert.deepEqual(getReviewIcEncPresentation({ error: "Product resolution failed." }), {
     state: REVIEW_CONTENT_PRESENTATION_STATE.FAILED,
@@ -111,6 +111,31 @@ test("Review Validation presentation distinguishes unavailable, failed, empty, a
     {
       state: REVIEW_CONTENT_PRESENTATION_STATE.CONTENT,
       status: "2 files",
+      message: null,
+    }
+  );
+});
+
+test("Review IC-ENC distinguishes empty, failed and downloadable report states", () => {
+  const productContext = {
+    contentConfiguration: {
+      icEncReports: { implemented: true, loaderId: "electronic-artifacts" },
+    },
+  };
+  assert.deepEqual(getReviewIcEncPresentation({ productContext, icEncArtifacts: [] }), {
+    state: "empty",
+    status: "0 files",
+    message: "No IC-ENC reports found for this product.",
+  });
+  assert.equal(
+    getReviewIcEncPresentation({ productContext, artifactError: "HTTP 503" }).state,
+    "failed"
+  );
+  assert.deepEqual(
+    getReviewIcEncPresentation({ productContext, icEncArtifacts: [{ id: "one" }] }),
+    {
+      state: "content",
+      status: "1 file",
       message: null,
     }
   );

@@ -2,8 +2,10 @@ import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeArtifactHistory } from "../normalizers/productArtifact.js";
 
 export async function fetchProductArtifacts(datasetName, { productContext, get = apiGet } = {}) {
+  const content = productContext?.contentConfiguration;
   if (
-    productContext?.contentConfiguration?.internalValidation?.loaderId !== "electronic-artifacts"
+    content?.internalValidation?.loaderId !== "electronic-artifacts" &&
+    content?.icEncReports?.loaderId !== "electronic-artifacts"
   ) {
     return [];
   }

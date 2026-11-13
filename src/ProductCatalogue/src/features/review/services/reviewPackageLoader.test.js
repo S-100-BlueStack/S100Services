@@ -75,7 +75,7 @@ for (const names of [
       assert.match(member.artifactWarning, /ambiguous or missing/);
       assert.equal(getReviewHistoryPresentation(member).state, "empty");
       assert.equal(getReviewValidationPresentation(member).state, "content");
-      assert.equal(getReviewIcEncPresentation(member).state, "unavailable");
+      assert.equal(getReviewIcEncPresentation(member).state, "empty");
     }
     assert.equal(product.members[0].validationArtifacts[1].revisionId, "historical");
   });
@@ -278,4 +278,23 @@ test("Review Edition preserves explicit zero instead of substituting an AOI vers
     review.members.map((member) => member.edition),
     [0, 7]
   );
+});
+
+test("Review associates IC-ENC attachments only with their exact member while retaining historical revisions", async () => {
+  const h = createReviewPackageFixture();
+  h.records[0].Kind = "IcEncReport";
+  h.records[2].Kind = "IcEncReport";
+  const [product] = await loadReviewHistories(packageNames, h.options);
+  assert.equal(product.loadState, "loaded");
+  assert.deepEqual(
+    product.members.map((m) => m.icEncArtifacts.length),
+    [2, 0]
+  );
+  assert.deepEqual(
+    product.members.map((m) => m.validationArtifacts.length),
+    [0, 1]
+  );
+  assert.equal(product.members[0].icEncArtifacts[1].revisionId, "historical");
+  assert.equal(getReviewIcEncPresentation(product.members[0]).state, "content");
+  assert.equal(getReviewIcEncPresentation(product.members[1]).state, "empty");
 });

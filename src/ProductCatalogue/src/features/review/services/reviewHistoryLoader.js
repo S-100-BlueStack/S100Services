@@ -4,6 +4,7 @@ import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 import { getDefaultWorkspaceProductService } from "../../products/services/workspaceProductService.js";
 import { createWorkspaceWorkUnitService } from "../../products/services/workspaceWorkUnitService.js";
 import { selectPackageValidationArtifacts } from "../../products/domain/packageValidationArtifacts.js";
+import { partitionValidationArtifacts } from "../../products/domain/validationArtifactKinds.js";
 import { resolveReviewComposition } from "./reviewWorkUnitResolver.js";
 import { getReviewWorkUnitSignature, reviewDatasetKey } from "../domain/reviewWorkUnits.js";
 
@@ -143,6 +144,7 @@ async function loadMember(
       ? (historyResult.reason?.message ?? "Product History could not be loaded.")
       : null;
   let validationArtifacts = [];
+  let icEncArtifacts = [];
   let artifactError = null;
   let artifactWarning = null;
   try {
@@ -150,16 +152,25 @@ async function loadMember(
     const selection = packageMember
       ? selectPackageValidationArtifacts(artifactResult.value, productContext)
       : { artifacts: artifactResult.value, hasUnattributedArtifacts: false };
-    validationArtifacts = selection.artifacts;
+    const partition = partitionValidationArtifacts(selection.artifacts);
+    validationArtifacts = partition.internalValidation;
+    icEncArtifacts = partition.icEncReports;
+    const warnings = [];
     if (selection.hasUnattributedArtifacts) {
-      artifactWarning =
-        "Some validation artifacts have ambiguous or missing Product ownership and were not displayed.";
+      warnings.push(
+        "Some artifacts have ambiguous or missing Product ownership and were not displayed."
+      );
     }
+    if (partition.unknown.length > 0) {
+      warnings.push("Some artifacts have an unsupported report kind and were not displayed.");
+    }
+    artifactWarning = warnings.join(" ") || null;
   } catch (failure) {
     artifactError = failure?.message ?? "Validation files could not be loaded.";
   }
   return {
     validationArtifacts,
+    icEncArtifacts,
     artifactError,
     artifactWarning,
     datasetName,

@@ -1,5 +1,6 @@
 import { fetchProductArtifacts } from "../../data/api/productArtifactApi.js";
 import { selectPackageValidationArtifacts } from "../../products/domain/packageValidationArtifacts.js";
+import { partitionValidationArtifacts } from "../../products/domain/validationArtifactKinds.js";
 import {
   PRODUCT_CONTENT_TYPE,
   getProductContentConfiguration,
@@ -11,6 +12,7 @@ export async function fetchDashboardValidationReports(
   {
     resolveProduct = (name) => getDefaultWorkspaceProductService().resolveProduct(name),
     fetchArtifacts = fetchProductArtifacts,
+    reportType = "internal",
   } = {}
 ) {
   const name = String(datasetName ?? "").trim();
@@ -24,9 +26,14 @@ export async function fetchDashboardValidationReports(
   ) {
     throw new Error("The Product could not be resolved for validation reports.");
   }
+  if (reportType !== "internal" && reportType !== "ic-enc") {
+    throw new Error("Unsupported validation report type.");
+  }
   const configuration = getProductContentConfiguration(
     productContext,
-    PRODUCT_CONTENT_TYPE.INTERNAL_VALIDATION
+    reportType === "ic-enc"
+      ? PRODUCT_CONTENT_TYPE.IC_ENC_REPORTS
+      : PRODUCT_CONTENT_TYPE.INTERNAL_VALIDATION
   );
   if (configuration?.loaderId !== "electronic-artifacts" || configuration?.implemented !== true) {
     throw new Error("Validation downloads are not available for this Product source.");
@@ -36,13 +43,16 @@ export async function fetchDashboardValidationReports(
   // Use the same exact Product/specification ownership check as package Analyze.
   // An activity's report ID is not evidence that it owns a downloadable artifact.
   const selection = selectPackageValidationArtifacts(history, productContext);
+  const partition = partitionValidationArtifacts(selection.artifacts);
+  const reports = reportType === "ic-enc" ? partition.icEncReports : partition.internalValidation;
   return {
-    reports: selection.artifacts.map((artifact) => ({
+    reports: reports.map((artifact) => ({
       id: artifact.id,
       title: artifact.fileName || "Validation file",
       url: artifact.url,
       generatedAt: artifact.createdAtUtc ?? null,
     })),
     hasUnattributedArtifacts: selection.hasUnattributedArtifacts,
+    hasUnknownKinds: partition.unknown.length > 0,
   };
 }

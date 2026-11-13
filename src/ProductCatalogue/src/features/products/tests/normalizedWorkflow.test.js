@@ -43,6 +43,7 @@ const artifactId = "d2875e6d-e17e-4cd3-b4a3-23654cc1398a";
 const artifact = {
   Id: artifactId,
   FileName: "diagnostic.vld",
+  Kind: "ValidationDiagnostic",
   Url: `/electronicproducts/PRODUCT/artifacts/${artifactId}`,
   ProductSpecification: "S101",
   DatasetName: "PRODUCT",
@@ -252,7 +253,8 @@ test("Analyze loads public metadata and validation history while retaining sourc
   assert.equal(product.edition, 3);
   assert.equal(product.status, 11);
   assert.equal(product.internalValidationReports[0].url, artifact.Url);
-  assert.equal(product.contentAvailability.icEncReports.implemented, false);
+  assert.equal(product.contentAvailability.icEncReports.implemented, true);
+  assert.deepEqual(product.icEncReports, []);
 });
 
 test("History admits electronic sources while mocks make no backend requests", async () => {
@@ -397,7 +399,7 @@ test("Review validation diagnostics survive an independent History failure", asy
     fetchHistory: async () => {
       throw new Error("History offline");
     },
-    fetchArtifacts: async () => [artifact],
+    fetchArtifacts: async () => normalizeArtifactHistory({ Data: [artifact] }),
   });
   assert.equal(product.error, "History offline");
   assert.equal(product.productContext.sourceId, "s101");

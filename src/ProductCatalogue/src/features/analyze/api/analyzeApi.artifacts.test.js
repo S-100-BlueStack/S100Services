@@ -136,3 +136,33 @@ test("artifact errors leave exact member metadata and independently loaded Histo
     [validationArtifact(1).Id]
   );
 });
+
+test("real IC-ENC reports are segregated by Kind and by exact member identity", async () => {
+  const response = {
+    Data: [
+      validationArtifact(0, { Kind: "ValidationDiagnostic" }),
+      validationArtifact(1, { Kind: "IcEncReport" }),
+      validationArtifact(0, { Id: "99999999-9999-4999-8999-999999999999", Kind: "Unknown" }),
+    ],
+  };
+  const [product] = await fetchAnalyzeProducts(memberNames, artifactHarness({ response }));
+  assert.deepEqual(
+    product.members.map((member) => member.icEncReports.length),
+    [0, 1]
+  );
+  assert.deepEqual(
+    product.members.map((member) => member.internalValidationReports.length),
+    [1, 0]
+  );
+  assert.equal(product.members[1].icEncReports[0].raw.kind, "IcEncReport");
+  assert.equal(product.members[1].icEncReports[0].raw.datasetName, memberNames[1]);
+  assert.match(product.members[0].loadError, /unsupported report kind/);
+});
+
+test("failed artifact retrieval never displays an empty IC-ENC response as a successful read", async () => {
+  const h = artifactHarness();
+  h.state.failMember = memberNames[1];
+  const [product] = await fetchAnalyzeProducts(memberNames, h);
+  assert.match(product.members[1].icEncError, /Validation artifacts unavailable/);
+  assert.equal(product.members[0].icEncError, null);
+});

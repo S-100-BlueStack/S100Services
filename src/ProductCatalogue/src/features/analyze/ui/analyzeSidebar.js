@@ -362,7 +362,14 @@ function createProductCard(product) {
   }
 
   content.appendChild(rows);
-  content.appendChild(createXmlBlock(product.xml, product.contentAvailability?.icEncReports));
+  content.appendChild(
+    createXmlBlock(
+      product.xml,
+      product.contentAvailability?.icEncReports,
+      product.icEncReports,
+      product.icEncError
+    )
+  );
   content.appendChild(
     createInternalValidationReportsBlock(
       product.internalValidationReports,
@@ -393,32 +400,50 @@ function createInfoRow(label, value) {
 
   return row;
 }
-function createXmlBlock(xml, availability = null) {
+function createXmlBlock(xml, availability = null, reports = [], error = null) {
   const details = document.createElement("details");
   details.className = "analyze-xml";
-
+  const validReports = Array.isArray(reports) ? reports : [];
   const hasXml = hasText(xml);
-  details.open = hasXml;
+  details.open = hasXml || validReports.length > 0;
 
   const summary = document.createElement("summary");
-  summary.textContent = "IC-ENC";
+  summary.textContent = validReports.length ? `IC-ENC (${validReports.length})` : "IC-ENC";
   details.appendChild(summary);
+  if (validReports.length > 0) {
+    const content = document.createElement("div");
+    content.className = "analyze-internal-validation__content";
+    if (validReports.length > 1) {
+      content.classList.add("analyze-internal-validation__content--scrollable", "pc-scrollbar");
+      content.setAttribute("role", "region");
+      summary.id = `pc-analyze-validation-scroll-label-${++nextValidationScrollLabelId}`;
+      content.setAttribute("aria-labelledby", summary.id);
+      content.tabIndex = 0;
+    }
+    for (const [index, report] of validReports.entries()) {
+      content.appendChild(
+        createInternalValidationReport(report, index, "Download IC-ENC report", true)
+      );
+    }
+    details.appendChild(content);
+    return details;
+  }
   if (!hasXml) {
     details.appendChild(
       createInternalValidationStateMessage({
         asValidation: false,
-        title: "No IC-ENC reports found",
-        message: "No IC-ENC reports were returned for this product.",
+        title: error ? "IC-ENC reports could not be loaded" : "No IC-ENC reports found",
+        message: error || "No IC-ENC reports were returned for this product.",
       })
     );
     return details;
   }
+  // Compatibility sources may still supply report XML instead of artifact links.
   const pre = document.createElement("pre");
   const code = document.createElement("code");
   code.textContent = formatXml(xml);
   pre.appendChild(code);
   details.appendChild(pre);
-
   return details;
 }
 
@@ -470,7 +495,12 @@ function createInternalValidationReportsBlock(reports = [], availability = null)
   return details;
 }
 
-function createInternalValidationReport(report, index) {
+function createInternalValidationReport(
+  report,
+  index,
+  downloadLabel = "Download validation file",
+  isIcEnc = false
+) {
   const details = document.createElement("details");
   details.className = "analyze-internal-validation__report";
   details.open = true;
@@ -489,7 +519,7 @@ function createInternalValidationReport(report, index) {
   const content = document.createElement("div");
   content.className = "analyze-internal-validation__report-content";
 
-  const metadataRows = createInternalValidationReportMetadata(report);
+  const metadataRows = createInternalValidationReportMetadata(report, isIcEnc);
 
   if (metadataRows.length > 0) {
     const metadata = document.createElement("div");
@@ -506,7 +536,7 @@ function createInternalValidationReport(report, index) {
   if (report.url) {
     const link = document.createElement("calcite-link");
     link.href = report.url;
-    link.textContent = "Download validation file";
+    link.textContent = downloadLabel;
     link.download = report.title || "";
     content.appendChild(link);
   }
@@ -528,7 +558,7 @@ function createInternalValidationReport(report, index) {
   return details;
 }
 
-function createInternalValidationReportMetadata(report) {
+function createInternalValidationReportMetadata(report, isIcEnc = false) {
   const rows = [];
 
   if (hasText(report.source)) {
@@ -536,7 +566,13 @@ function createInternalValidationReportMetadata(report) {
   }
 
   if (hasText(report.generatedAt)) {
-    rows.push(createInternalValidationMetadataItem("Generated", report.generatedAt));
+    rows.push(
+      createInternalValidationMetadataItem(isIcEnc ? "Stored" : "Generated", report.generatedAt)
+    );
+  }
+
+  if (isIcEnc && hasText(report.raw?.revisionId)) {
+    rows.push(createInternalValidationMetadataItem("Revision ID", report.raw.revisionId));
   }
 
   if (hasText(report.format)) {

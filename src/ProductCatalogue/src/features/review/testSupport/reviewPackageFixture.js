@@ -121,6 +121,7 @@ export function createReviewPackageFixture() {
     },
   ].map((record) => ({
     ...record,
+    Kind: "ValidationReport",
     FileName: `${record.Id}.txt`,
     MediaType: "text/plain",
     Url: `electronicproducts/${encodeURIComponent(record.DatasetName ?? "Unknown")}/artifacts/${record.Id}`,

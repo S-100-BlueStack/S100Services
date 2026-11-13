@@ -47,15 +47,13 @@
 
 ## Outstanding contracts, in priority order
 
-1. **Product-scoped IC-ENC report provenance:** The current
-   `GET /electronicproducts/{name}/artifacts/history` returns artifact ID,
-   track/revision, Product specification, generic `Kind`, filename and URL.
-   The IC-ENC inbound repository stores source metadata internally, but this
-   provenance is **not present** in the response. Do not classify reports by
-   filename or guess whether `ValidationReport` means internal or external.
-   Expose a server-owned report source/type and bounded per-Product/revision
-   association before showing actual IC-ENC report downloads in Analyze,
-   Review or Dashboard.
+1. **Report provenance (superseded by PC-ICENC-02):** The integrated backend now
+   exposes `Kind: IcEncReport` through
+   `GET /electronicproducts/{name}/artifacts/history` together with the owning
+   Product, specification, revision and download URL. This closes the original
+   distinction-between-internal-and-external-files gap for attachments. Analyze,
+   Review and Dashboard may display **report files**, not inferred provider
+   verdicts. See [PC-ICENC-02](pc-icenc-02-report-integration.md).
 2. **External validation status/history:** Provide an authorized,
    Product-scoped read model for matching delivered revisions to received,
    accepted, rejected or review-required notices, including processing time,

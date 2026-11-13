@@ -491,6 +491,14 @@ body.pc-review-route #last-updated {
   overflow-wrap: anywhere;
 }
 
+.pc-review-content-card__artifact-revision {
+  display: block;
+  margin-top: 2px;
+  color: var(--pc-text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
 .pc-review-history-list {
   display: grid;
   gap: 0;
