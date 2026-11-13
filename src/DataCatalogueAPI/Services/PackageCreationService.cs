@@ -39,24 +39,35 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
         if (request.ImportFromArchive) {
             try {
                 var id = Guid.Parse(new Uri(request.AbsoluteUri).Host);
-                var stored = await resources.ReadArchiveAsync(id, MarineAggregateArchive.MaximumArchiveBytes, cancellationToken);
+                var maximumBytes = request.Category == "WorkZone" ? WorkZoneArchive.MaximumArchiveBytes : MarineAggregateArchive.MaximumArchiveBytes;
+                var stored = await resources.ReadArchiveAsync(id, maximumBytes, cancellationToken);
                 if (stored is null) { throw new PackageCreationException(PackageCreationError.NotFound, "Uploaded archive not found."); }
                 using var input = new MemoryStream(stored.Value.Data, writable: false);
-                var archive = await MarineAggregateArchive.ReadAsync(input, cancellationToken);
+                PackageGeometry geometry;
+                PackageMetaData metadata;
+                PackageDescription[] descriptions;
+                if (request.Category == "WorkZone") {
+                    var submission = await WorkZoneArchive.ReadAsync(input, cancellationToken);
+                    (geometry, metadata, descriptions) = (submission.Geometry, submission.MetaData, submission.Descriptions);
+                }
+                else {
+                    var archive = await MarineAggregateArchive.ReadAsync(input, cancellationToken);
+                    (geometry, metadata, descriptions) = (archive.Site.Geometry, archive.Site.MetaData, archive.Site.Descriptions);
+                }
                 archiveFileName = stored.Value.FileName;
                 request = new CreatePackageRequest {
                     Category = request.Category,
                     AbsoluteUri = request.AbsoluteUri,
                     Severity = request.Severity,
                     DisplayScale = request.DisplayScale,
-                    EsriJSON = archive.Site.Geometry.Aoi,
-                    DetailedGeometry = archive.Site.Geometry,
-                    MetaData = archive.Site.MetaData,
-                    Descriptions = archive.Site.Descriptions,
+                    EsriJSON = geometry.Aoi,
+                    DetailedGeometry = geometry,
+                    MetaData = metadata,
+                    Descriptions = descriptions,
                 };
             }
             catch (InvalidDataException exception) {
-                throw new PackageCreationException(PackageCreationError.Validation, "Invalid MA archive.", exception.Message);
+                throw new PackageCreationException(PackageCreationError.Validation, request.Category == "WorkZone" ? "Invalid WorkZone archive." : "Invalid MA archive.", exception.Message);
             }
         }
 

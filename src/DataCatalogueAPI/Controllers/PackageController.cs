@@ -37,7 +37,7 @@ namespace DataCatalague.Api.Controllers
         private readonly ILogger<PackageController> _logger = logger;
 
 
-        /// <summary>Creates a package from explicit Esri JSON, or imports an uploaded MA ZIP when importFromArchive is true.</summary>
+        /// <summary>Creates a package from explicit Esri JSON, or imports an uploaded MA or WorkZone case submission ZIP when importFromArchive is true.</summary>
         /// <param name="request">Existing package fields, or category, upload-issued absoluteUri and importFromArchive=true.</param>
         /// <param name="cancellationToken">Cancels source reading and work before geometry commits.</param>
         /// <returns>The created package, including its stored source archive URI when imported.</returns>

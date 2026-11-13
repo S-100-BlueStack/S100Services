@@ -42,7 +42,7 @@ unchanged. To verify the IIS deployment and local configuration, see
 Package creation (`CreatePackageRequest`), severity areas (`AddSeverityAreaRequest`)
 and workspaces (`AddWorkspaceRequest`) accept **Esri JSON**, not GeoJSON. Their
 C# property is `EsriJSON`, exposed as `esriJSON` in JSON request bodies and OpenAPI.
-MA archive imports are an alternative package creation mode: the request supplies
+MA and WorkZone archive imports are an alternative package creation mode: the request supplies
 the uploaded ZIP URI and `importFromArchive=true`, and the server converts the
 archive's source GeoJSON internally as described below.
 Replace the previous request field `geoJSON` with `esriJSON` in API clients;
@@ -328,6 +328,125 @@ resolve the same singleton; listing does not scan the event store. Like the
 other subscription-backed listings, newly created pipelines appear once their
 events have been processed, including startup's ENC and Paper Chart pipelines.
 
+## WorkZone submissions
+
+`WorkZone` identifies submissions originating from **WorkZone**, the case and
+document management system. The category display name is **WorkZone**, with
+catalogue short-ID prefix `WZ`. A package represents a submission from one source
+case, optionally including registered documents, with a supplementary geographical
+AOI for DataCatalogue routing and chart assessment.
+
+This is a **DataCatalogue import ZIP contract**, not a native WorkZone export
+schema. A producer maps the organization's source case/document metadata into
+this contract and supplies the AOI. No WorkZone API, URL structure, internal ID
+format or native geometry field is assumed. There is no live integration, source
+case update or source permission synchronization. Existing DataCatalogue access
+policies apply to imported packages.
+
+Upload through `POST /api/v1/packages/repository` (multipart field `File`), then
+create through the existing `POST /api/v1/packages` JSON endpoint:
+
+```json
+{
+  "category": "WorkZone",
+  "absoluteUri": "database://UUID-RETURNED-BY-UPLOAD",
+  "importFromArchive": true
+}
+```
+
+| ZIP entry | Content |
+| --- | --- |
+| `workzone.json` | Required UTF-8 DataCatalogue metadata object for one source case |
+| `aoi.geojson` | Required supplementary WGS84 Polygon/MultiPolygon, Feature or one-feature FeatureCollection |
+| `documents/…` | Optional included case document files, each referenced by a `documents[].file` entry |
+
+Example `workzone.json` (all identifiers below are fictional):
+
+```json
+{
+  "schemaVersion": "1.0",
+  "category": "WorkZone",
+  "title": "Harbour chart information case",
+  "summary": "Registered correspondence and a decision submitted for chart assessment.",
+  "caseNumber": "SAMPLE-2026-001",
+  "caseId": "sample-case-001",
+  "language": "en",
+  "documents": [
+    {
+      "documentId": "sample-document-001",
+      "documentNumber": "SAMPLE-DOC-001",
+      "title": "Registered decision",
+      "file": "documents/decision.txt"
+    }
+  ]
+}
+```
+
+`schemaVersion`, `category`, `title`, `summary` and `caseNumber` are required and
+must be nonempty. `caseId`, `language` and `documents` are optional. Language
+defaults to `en`; source case/document IDs are opaque strings. No source creation
+timestamp is invented. Additional metadata remains in the preserved original ZIP.
+
+Document entries require a unique nonempty `documentId` and a nonempty `title`.
+`documentNumber` is optional. `file` is optional: omit it for metadata-only
+references. When supplied, it must identify a distinct existing file under
+`documents/`, with exact case-sensitive spelling. Every included document file
+must be declared. Document contents remain unchanged in the original ZIP and
+are not interpreted by the importer.
+
+| Source value | Catalogue mapping |
+| --- | --- |
+| `title` | `metaData.title` |
+| WorkZone source system | `metaData.source = "WorkZone"` |
+| `caseNumber` | `metaData.refId` and encoded description |
+| `caseId`, document IDs/numbers/titles/file references | Encoded descriptions and original manifest |
+| `summary` | HTML-encoded `descriptions` content |
+| Catalogue identifier | Generated Nanoid plus `WZ-NNN-YY` short ID |
+
+The generic response model and event schema remain unchanged. Source case
+numbers are independent of catalogue short IDs; submissions are not upserts.
+Repeated creates may produce multiple packages from the same source case.
+
+Example supplementary `aoi.geojson`:
+
+```json
+{
+  "type": "Polygon",
+  "coordinates": [[[12.60,55.68],[12.62,55.68],[12.615,55.69],[12.60,55.68]]]
+}
+```
+
+Complete polygons, including holes and separate parts, are stored as detailed
+surfaces. Their rectangular envelope, recomputed after native projection, is
+the catalogue AOI. Coordinates must be finite 2D WGS84 longitude/latitude values,
+with closed nonzero-area rings. Other CRSs and antimeridian crossings are
+rejected. Polygon topology is not repaired. This geometry is supplementary
+submission data; it is not described as a built-in WorkZone case field.
+
+Limits: 16 MiB compressed, 64 MiB cumulative expanded, 100 entries, 64 KiB
+metadata and 8 MiB GeoJSON. Declared and streamed sizes are bounded. Unsafe
+paths, symbolic links, duplicate archive paths and missing/duplicate/undeclared
+document references are rejected. No files are extracted or remote links fetched.
+Invalid archive input returns 400 before identity/geometry writes; missing uploads
+return 404. The original ZIP and filename remain stored through `absoluteUri`.
+
+Startup creates the WorkZone category and specification, then imports five
+fictional case submissions from `Samples/WorkZone` in filename order through the
+registered upload/create controllers. Each includes two clearly labeled sample
+text documents, case/document references and a supplementary Danish AOI. Topics
+include chart correction correspondence, survey documentation, a cable permit,
+facility registration and harbour information. Samples exercise holes and
+multipart polygons and participate in the existing geometry verification and
+balanced random pipeline assignment. Fixtures are copied to build/publish/test
+output. This corrected contract replaces the earlier working-area draft; no
+migration of previously seeded ephemeral sample data is required.
+
+Run on the existing Windows x64 .NET 10 / ArcGIS development environment:
+
+```powershell
+dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~WorkZone|FullyQualifiedName~InitializationAndSecurityTests"
+```
+
 ## Startup sample data
 
 `Program.Main` resolves `SampleDataInitialization` once in a startup DI scope
@@ -337,12 +456,13 @@ Its constructor receives the DI-registered `DispatcherController`,
 and logger. The sample reader creates API request models from the local fixture files;
 all packages still go through `PackageController.CreatePackage`. Production
 package types are not responsible for constructing requests to their own API. Startup creates the `NoticeToMariners`,
-`GeneralSubmission` and `MarineAggregateExtraction` categories and imports the supplied notice JSON,
-submission ZIPs and MA ZIP fixtures.
+`GeneralSubmission`, `MarineAggregateExtraction` and `WorkZone` categories and imports the supplied notice JSON,
+submission ZIPs, MA ZIP fixtures and five WorkZone ZIP fixtures.
 
 Startup also creates `ENC` and `Paper Chart` through `PipelineController.Create`.
-All sample packages remain unbound. Humans or agents explicitly select package/pipeline
-pairs through `POST /api/v1/dispatcher/bindings` using professional judgment.
+Half of the development sample packages are randomly assigned to the two pipelines,
+with balanced counts. Production assignments are selected explicitly through
+`POST /api/v1/dispatcher/bindings` using professional judgment.
 
 Bindings use typed package/pipeline stream names and persist their own ID.
 Creation returns 201 and a retrievable binding URL; missing package/pipeline IDs
@@ -481,7 +601,7 @@ and the original archive filename. Severity and display scale may still be
 supplied; geometry, metadata, descriptions and charts must be omitted because
 they are derived from the archive. Existing explicit-geometry JSON requests
 continue to work when `importFromArchive` is false or omitted; `esriJSON` remains
-required in that mode. Archive import currently supports only MA. It does not
+required in that mode. Archive import supports MA and WorkZone. It does not
 read client-supplied local paths or arbitrary HTTP URLs.
 
 Missing uploaded archives return 404. Invalid manifests, geometry, file

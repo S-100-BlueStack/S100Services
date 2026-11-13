@@ -86,6 +86,22 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 - Descriptions preserve permit dates, snapshot status, remarks and permit links; all external text is HTML-encoded.
                 - Includes expired sites. Snapshot status and dates do not establish current permit validity.
                 - No live fetch, WFS merge, scheduled synchronization or automatic chart/pipeline assignment is performed.
+                """),
+            (Id: "WorkZone", Name: "WorkZone", Prefix: "WZ", Description: "Case and document submissions originating from WorkZone, supplied with supplementary geographical AOIs.", Specification: """
+                # WorkZone submissions
+
+                - WorkZone means the WorkZone case/document management system. Each package represents a submission from one case.
+                - This is a DataCatalogue ZIP contract, not a native WorkZone export schema or live integration.
+                - Required root files: `workzone.json` and supplementary `aoi.geojson`.
+                - Metadata requires `schemaVersion: "1.0"`, `category: "WorkZone"`, `title`, `summary` and `caseNumber`.
+                - Optional `caseId` is an opaque source identifier; optional `language` defaults to `en`.
+                - Optional `documents` entries require unique `documentId` and `title`, with optional `documentNumber` and `file`.
+                - Every included document file must be referenced under `documents/`; metadata-only document entries are allowed.
+                - Package source is WorkZone; `metaData.refId` retains the case number. Internal case/document references are retained in the ZIP and encoded descriptions.
+                - Source case numbers do not replace catalogue IDs: Nanoids and allocated `WZ-NNN-YY` short IDs remain unchanged.
+                - The supplementary AOI accepts WGS84 Polygon/MultiPolygon, Feature or a one-feature FeatureCollection.
+                - Complete polygons are stored as surfaces; their envelopes become catalogue AOIs.
+                - Startup imports five fictional case submissions, each with sample document files, using the registered upload/import controllers.
                 """)
         }) {
             var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
@@ -152,6 +168,23 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             packageSamples.Add(RequireSuccess(created, $"import MA sample '{Path.GetFileName(file)}'"));
         }
         logger.LogInformation("Created marine aggregate extraction ZIP samples. CreatedPackages: {CreatedPackages}.", extractionFiles.Length);
+
+        var workZoneDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "WorkZone");
+        var workZoneFiles = Directory.GetFiles(workZoneDirectory, "*.zip").Order(StringComparer.Ordinal).Take(5).ToArray();
+        if (workZoneFiles.Length != 5) { throw new InvalidDataException($"Expected five WorkZone ZIP samples in '{workZoneDirectory}', found {workZoneFiles.Length}."); }
+        foreach (var file in workZoneFiles) {
+            await using var input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var upload = RequireSuccess(await packages.UploadFile(new UploadFileRequest {
+                File = new FormFile(input, 0, input.Length, "File", Path.GetFileName(file)),
+            }, cancellationToken).ConfigureAwait(false), $"store WorkZone sample '{Path.GetFileName(file)}'");
+            var created = await packages.CreatePackage(new CreatePackageRequest {
+                Category = "WorkZone",
+                AbsoluteUri = upload.AbsoluteUri!,
+                ImportFromArchive = true,
+            }, cancellationToken).ConfigureAwait(false);
+            packageSamples.Add(RequireSuccess(created, $"import WorkZone sample '{Path.GetFileName(file)}'"));
+        }
+        logger.LogInformation("Created WorkZone ZIP samples. CreatedPackages: {CreatedPackages}.", workZoneFiles.Length);
 
         // Verify the same read path used by clients, including event replay and
         // native row resolution. Never finish startup with unusable sample geometry.
