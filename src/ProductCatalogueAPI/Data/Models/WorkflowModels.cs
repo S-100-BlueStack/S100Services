@@ -71,7 +71,10 @@ public enum ProductArtifactKind
     ValidationReport,
 
     /// <summary>A validator-produced diagnostic file such as a SevenCs VLD log or shapefile bundle.</summary>
-    ValidationDiagnostic
+    ValidationDiagnostic,
+
+    /// <summary>An original IC-ENC response attachment from a real or simulated delivery.</summary>
+    IcEncReport
 }
 
 /// <summary>

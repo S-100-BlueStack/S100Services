@@ -43,7 +43,8 @@ public sealed class ProductWorkspaceFreshnessRepository(DbConnectionFactory conn
                 ValidationKinds = new[]
                 {
                     ProductArtifactKind.ValidationReport.ToString(),
-                    ProductArtifactKind.ValidationDiagnostic.ToString()
+                    ProductArtifactKind.ValidationDiagnostic.ToString(),
+                    ProductArtifactKind.IcEncReport.ToString()
                 }
             },
             cancellationToken: cancellationToken));
