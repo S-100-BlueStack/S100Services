@@ -161,9 +161,40 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
 
     /// <summary>Returns a workspace with its complete polygon in Esri JSON.</summary>
     public async Task<WorkspaceDetailResponse> GetWorkspaceAsync(string pipelineId, string workspaceId, CancellationToken cancellationToken) {
-        var workspace = FindWorkspace(await GetPipelineAsync(pipelineId, cancellationToken), workspaceId);
-        var json = await dispatcher.ExecuteAsync(() => coverage.GetWorkspaceGeometry(workspace.GeometryRef, cancellationToken).ToJson());
-        return new(WorkspaceResponse.FromState(workspace), json);
+        cancellationToken.ThrowIfCancellationRequested();
+        var total = Stopwatch.StartNew();
+        var eventStateMs = 0.0;
+        var batchSize = 0;
+        var batchWaitMs = 0.0;
+        var queueWaitMs = 0.0;
+        var workspaceScopeMs = 0.0;
+        var workspaceGeometryMs = 0.0;
+        var serializationMs = 0.0;
+        var outcome = "Failed";
+        try {
+            // Preserve event-state validation before an ArcGIS request is admitted.
+            var workspace = FindWorkspace(await GetPipelineAsync(pipelineId, cancellationToken), workspaceId);
+            eventStateMs = total.Elapsed.TotalMilliseconds;
+            var geometry = await readBatcher.ReadGeometryAsync(workspace.GeometryRef, cancellationToken);
+            batchSize = geometry.BatchSize;
+            batchWaitMs = geometry.BatchWaitMs;
+            queueWaitMs = geometry.ArcGisQueueWaitMs;
+            workspaceScopeMs = geometry.WorkspaceScopeMs;
+            workspaceGeometryMs = geometry.WorkspaceGeometryMs;
+            serializationMs = geometry.SerializationMs;
+            cancellationToken.ThrowIfCancellationRequested();
+            outcome = "Succeeded";
+            return new(WorkspaceResponse.FromState(workspace), geometry.EsriJson);
+        }
+        catch (OperationCanceledException) {
+            outcome = "Canceled";
+            throw;
+        }
+        finally {
+            logger.LogInformation(
+                "Workspace detail read {Outcome}. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, BatchSize: {BatchSize}, EventStateMs: {EventStateMs}, BatchWaitMs: {BatchWaitMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceScopeMs: {WorkspaceScopeMs}, WorkspaceGeometryMs: {WorkspaceGeometryMs}, SerializationMs: {SerializationMs}, TotalMs: {TotalMs}.",
+                outcome, pipelineId, workspaceId, batchSize, eventStateMs, batchWaitMs, queueWaitMs, workspaceScopeMs, workspaceGeometryMs, serializationMs, total.Elapsed.TotalMilliseconds);
+        }
     }
 
     /// <summary>Returns a page of bound packages whose current rectangular AOIs intersect this workspace.</summary>
@@ -218,6 +249,128 @@ public sealed class WorkspaceService(IEventStore eventStore, StreamNameMap strea
                 "Workspace packages read {Outcome}. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, Page: {Page}, PageSize: {PageSize}, Matches: {MatchCount}, Returned: {ReturnedCount}, BatchSize: {BatchSize}, EventStateMs: {EventStateMs}, BatchWaitMs: {BatchWaitMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceScopeMs: {WorkspaceScopeMs}, WorkspaceGeometryMs: {WorkspaceGeometryMs}, PackageScopeMs: {PackageScopeMs}, SpatialQueryMs: {SpatialQueryMs}, PackageHydrationMs: {PackageHydrationMs}, ResponseBuildMs: {ResponseBuildMs}, TotalMs: {TotalMs}.",
                 outcome, pipelineId, workspaceId, page, pageSize, matchCount, returnedCount, batchSize, eventStateMs, batchWaitMs, queueWaitMs, workspaceScopeMs, workspaceGeometryMs, packageScopeMs, spatialQueryMs, packageHydrationMs, responseBuildMs, total.Elapsed.TotalMilliseconds);
         }
+    }
+
+    /// <summary>Loads a bounded page of Workspace polygons and Pipeline-scoped Package membership in one ArcGIS action.</summary>
+    public async Task<PagedResponse<WorkspaceOverviewResponse>> GetOverviewAsync(
+        string pipelineId, int page, int pageSize, CancellationToken cancellationToken) {
+        if (page < 1 || pageSize is < 1 or > 20) {
+            throw new InvalidDataException("Page must be positive and pageSize must be from 1 to 20.");
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var total = Stopwatch.StartNew();
+        var pipeline = await this.GetPipelineAsync(pipelineId, cancellationToken);
+        var eventStateMs = total.Elapsed.TotalMilliseconds;
+        var allWorkspaces = pipeline.Workspaces;
+        var offset = ((long)page - 1) * pageSize;
+        var selected = offset >= allWorkspaces.Length
+            ? Array.Empty<Workspace>()
+            : allWorkspaces.Skip((int)offset).Take(pageSize).ToArray();
+        if (selected.Length == 0) {
+            cancellationToken.ThrowIfCancellationRequested();
+            return new PagedResponse<WorkspaceOverviewResponse> {
+                Items = [], Page = page, PageSize = pageSize, TotalCount = allWorkspaces.Length,
+            };
+        }
+
+        var queueWaitMs = 0.0;
+        var workspaceScopeMs = 0.0;
+        var packageScopeMs = 0.0;
+        var geometryFailures = 0;
+        var packageFailures = 0;
+        var queuedAt = Stopwatch.GetTimestamp();
+        var items = await dispatcher.ExecuteAsync<IReadOnlyList<WorkspaceOverviewResponse>>(() => {
+            queueWaitMs = Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds;
+            cancellationToken.ThrowIfCancellationRequested();
+            // Both datasets are opened once for this bounded page, not once per HTTP request.
+            // ArcGIS polygons and geodatabase handles must never leave the STA thread.
+            var geometryReads = selected.Select(workspace =>
+                new WorkspaceGeometryRead(workspace.GeometryRef, cancellationToken)).ToArray();
+            var geometries = coverage.ReadWorkspaceGeometryBatch(geometryReads, out workspaceScopeMs);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var queries = new List<WorkspacePackagePageQuery>();
+            var queryIndices = new int[selected.Length];
+            Array.Fill(queryIndices, -1);
+            for (var index = 0; index < selected.Length; index++) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (geometries[index].Geometry is not { } polygon || geometries[index].Error is not null) {
+                    geometryFailures++;
+                    logger.LogWarning(geometries[index].Error,
+                        "Workspace overview geometry unavailable. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}.",
+                        pipelineId, selected[index].Id);
+                    continue;
+                }
+                queryIndices[index] = queries.Count;
+                // Keep the existing membership ordering, current-AOI filter and per-Workspace pagination.
+                queries.Add(new WorkspacePackagePageQuery(pipelineId, polygon, 1, PackageRepository.MaximumPageSize, cancellationToken));
+            }
+
+            IReadOnlyList<WorkspacePackagePageReadResult> packagePages = [];
+            Exception? packageScopeError = null;
+            if (queries.Count > 0) {
+                try { packagePages = packages.ReadWorkspacePackagePages(queries, out packageScopeMs); }
+                catch (Exception exception) when (exception is not OperationCanceledException) {
+                    packageScopeError = exception;
+                    logger.LogWarning(exception, "Workspace overview Package scope unavailable. PipelineId: {PipelineId}.", pipelineId);
+                }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            var results = new WorkspaceOverviewResponse[selected.Length];
+            for (var index = 0; index < selected.Length; index++) {
+                cancellationToken.ThrowIfCancellationRequested();
+                string? json = null;
+                PagedResponse<WorkspacePackageResponse>? pageData = null;
+                var polygon = geometries[index].Geometry;
+                if (polygon is not null && geometries[index].Error is null) {
+                    try { json = polygon.ToJson(); }
+                    catch (Exception exception) {
+                        geometryFailures++;
+                        logger.LogWarning(exception,
+                            "Workspace overview serialization unavailable. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}.",
+                            pipelineId, selected[index].Id);
+                    }
+                    var queryIndex = queryIndices[index];
+                    if (queryIndex >= 0 && packageScopeError is null) {
+                        var packagePage = packagePages[queryIndex];
+                        if (packagePage.Error is null) {
+                            try {
+                                pageData = new PagedResponse<WorkspacePackageResponse> {
+                                    Items = packagePage.Items.Select(item => new WorkspacePackageResponse(
+                                        item.PackageId, item.ShortId, JsonSerializer.Deserialize<JsonElement>(item.AoiJson))).ToArray(),
+                                    Page = 1,
+                                    PageSize = PackageRepository.MaximumPageSize,
+                                    TotalCount = packagePage.TotalCount,
+                                };
+                            }
+                            catch (Exception exception) {
+                                logger.LogWarning(exception,
+                                    "Workspace overview Package serialization unavailable. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}.",
+                                    pipelineId, selected[index].Id);
+                            }
+                        }
+                        else if (packagePage.Error is not OperationCanceledException) {
+                            logger.LogWarning(packagePage.Error,
+                                "Workspace overview Package membership unavailable. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}.",
+                                pipelineId, selected[index].Id);
+                        }
+                    }
+                    if (pageData is null) { packageFailures++; }
+                }
+                results[index] = new WorkspaceOverviewResponse(WorkspaceResponse.FromState(selected[index]), json, pageData);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return results;
+        });
+
+        cancellationToken.ThrowIfCancellationRequested();
+        logger.LogInformation(
+            "Workspace overview read Succeeded. PipelineId: {PipelineId}, Page: {Page}, PageSize: {PageSize}, Workspaces: {WorkspaceCount}, GeometryFailures: {GeometryFailures}, PackageFailures: {PackageFailures}, EventStateMs: {EventStateMs}, ArcGisQueueWaitMs: {ArcGisQueueWaitMs}, WorkspaceScopeMs: {WorkspaceScopeMs}, PackageScopeMs: {PackageScopeMs}, TotalMs: {TotalMs}.",
+            pipelineId, page, pageSize, items.Count, geometryFailures, packageFailures,
+            eventStateMs, queueWaitMs, workspaceScopeMs, packageScopeMs, total.Elapsed.TotalMilliseconds);
+        return new PagedResponse<WorkspaceOverviewResponse> {
+            Items = items, Page = page, PageSize = pageSize, TotalCount = allWorkspaces.Length,
+        };
     }
 
     private static Workspace FindWorkspace(PipelineState pipeline, string workspaceId) {

@@ -2289,6 +2289,19 @@ complete Workspace geometry context only when the catalogue is reloaded. The ren
 updates existing `Graphic.visible` and symbol attributes on checkbox/status changes
 without clearing the `GraphicsLayer` or requesting geometry again.
 
+For the live Main Map, `shared/api/loadWorkspaceOverview` is the bounded read
+coordinator: it fetches the Pipeline catalogue followed by at most two concurrent
+Pipeline overview reads, with a maximum of 20 Workspaces per page. It publishes
+one complete generation to `createPipelineVisibility`. The app passes that
+snapshot to the `liveJobServiceAdapter` and the map controller; API normalization
+remains in `shared/api`. The first Jobs load consumes the embedded membership
+page, requesting only missing membership components or subsequent pages after
+200 members. Manual Jobs refreshes read current membership from the existing
+endpoint. The geometry source consumes the same generation and independently
+falls back to Workspace detail only for missing polygons or mismatched geometry
+references. Existing JobStore/map overlay generation and abort guards remain
+publication owners, and new catalogue loads replace the overview snapshot.
+
 Preferences are application-owned (`features/preferences/state` and `ui`), with
 independent localStorage permissions for theme, basemap selection, and map position.
 Map position uses separate `main` and `assignment` slots and is disabled by default.

@@ -234,6 +234,49 @@ a Package connection/feature class. `Workspace packages read` now also reports `
 summed across request records. This is a candidate pending local acceptance, not a
 verified HTTP speedup. See [DC_PERF_03_VALIDATION.md](docs/DC_PERF_03_VALIDATION.md).
 
+### Workspace detail and membership coalescing (DC-PERF-BE-01)
+
+Both `GET /api/v1/pipelines/{pipelineId}/workspaces/{workspaceId}` and the
+Workspace `packages` route use the existing singleton `WorkspacePackageReadBatcher`.
+Up to four requests arriving within six milliseconds share one bounded ArcGIS
+STA action and one Dispatcher coverage read scope. Duplicate Workspace geometry
+references in the same batch are read only once; a membership read reuses the
+same in-memory polygon as a concurrent detail read. The separate Package AOI
+geodatabase scope is opened only when membership queries are present.
+
+The Workspace detail route, its Esri JSON and error semantics remain unchanged.
+`Workspace detail read` now logs batch size, collection wait, ArcGIS queue wait,
+shared Workspace scope time, per-geometry read time and serialization time.
+Shared times are not independent per-request costs. Cancellation remains
+request-local; when two callers share a polygon read, canceling one cannot
+cancel the other's geometry. The dispatcher remains single-threaded, and no
+persistent geometry cache, new endpoint or dependency is introduced. This is
+an implementation candidate, **not** a measured startup speedup. See
+[DC_PERF_BE_01_VALIDATION.md](docs/DC_PERF_BE_01_VALIDATION.md).
+
+### Bounded Workspace overview (DC-PERF-BE-02 candidate)
+
+`GET /v1/pipelines/{pipelineId}/workspaces/overview?page=1&pageSize=20`
+returns a `PagedResponse<WorkspaceOverviewResponse>` (workspace page size 1–20).
+Each item contains the existing `workspace` metadata, `esriJSON` polygon string
+and `packages` as the **first** existing `PagedResponse<WorkspacePackageResponse>`
+with `pageSize=200`. The response preserves Pipeline ordering and the current
+bound-Package membership and AOI rules; a Workspace with no Packages has a
+non-null empty `packages` page with `totalCount=0`.
+
+The Workspace geometry and Package AOI feature classes are each opened once
+per bounded page on the existing single STA dispatcher. The request does not
+initialize a second CoreHost or persist geometry in a cache. A null `esriJSON`
+or `packages` means that component failed to load, **not** an empty geometry or
+zero matches. A client must retry the individual Workspace route; when
+`packages.totalCount > packages.items.length`, fetch additional pages with the
+existing per-Workspace `/packages` endpoint. Callers should not start using this
+new route until those fallbacks have been implemented and verified.
+
+The existing Workspace detail and membership endpoints remain supported. This
+backend-only candidate has not yet been measured with the frontend and is not
+a claim of faster UI readiness. See [DC_PERF_BE_02_VALIDATION.md](docs/DC_PERF_BE_02_VALIDATION.md).
+
 ## Package search and pagination
 
 `GET /api/v1/packages` keeps the existing response envelope and accepts:

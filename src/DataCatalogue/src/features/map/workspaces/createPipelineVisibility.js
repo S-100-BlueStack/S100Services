@@ -17,6 +17,7 @@ export function createPipelineVisibility({
   onChange,
   onWorkspacesLoaded,
   readOnly = false,
+  loadCatalogue = null,
 }) {
   const list = document.createElement("div");
   list.className = "dc-pipeline-list";
@@ -163,6 +164,15 @@ export function createPipelineVisibility({
     updateMessage();
   }
 
+  async function readCatalogue(signal) {
+    if (loadCatalogue) return loadCatalogue({ signal });
+    const [pipelines, workspaces] = await Promise.all([
+      catalogue.pipelines({ signal }),
+      collectPages(catalogue.workspaces, { signal }),
+    ]);
+    return { pipelines, workspaces, overview: null };
+  }
+
   function reload() {
     if (!alive) {
       return Promise.resolve({
@@ -178,10 +188,7 @@ export function createPipelineVisibility({
 
     const operation = (async () => {
       try {
-        const [pipelines, workspaces] = await Promise.all([
-          catalogue.pipelines({ signal }),
-          collectPages(catalogue.workspaces, { signal }),
-        ]);
+        const { pipelines, workspaces, overview } = await readCatalogue(signal);
         if (!alive || current !== generation) return { ok: false, stale: true };
         const next = groupWorkspacePipelines(workspaces, pipelines);
         enabledPipelines = new Set(preservePipelineSelection(next, groups, enabledPipelines));
@@ -191,7 +198,8 @@ export function createPipelineVisibility({
         // Packages use the complete, verified catalogue rather than map visibility.
         onWorkspacesLoaded?.(
           groups.flatMap((group) => group.workspaces),
-          groups
+          groups,
+          overview
         );
         loaded = true;
         notify({ autoFocus: false });

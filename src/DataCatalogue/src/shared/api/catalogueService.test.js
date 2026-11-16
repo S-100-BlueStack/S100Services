@@ -216,3 +216,112 @@ test("paged Package AOI uses the geometry route without detail reads or fabricat
   assert.equal(result.items[0].packageId, "p");
   assert.deepEqual(result.items[0].aoi, aoi);
 });
+
+test("Workspace overview uses bounded Pipeline pages and preserves nullable components", async () => {
+  const calls = [];
+  const abort = new AbortController();
+  const service = createCatalogueService({
+    async request(path, options) {
+      calls.push({ path, options });
+      return {
+        page: 2,
+        pageSize: 20,
+        totalCount: 21,
+        items: [
+          {
+            workspace: { id: "work space", displayName: "North", geometryRef: { globalId: "g" } },
+            esriJSON: null,
+            packages: { page: 1, pageSize: 200, totalCount: 0, items: [] },
+          },
+        ],
+      };
+    },
+  });
+  const result = await service.workspaceOverview({
+    pipelineId: "pipe/a",
+    page: 1,
+    signal: abort.signal,
+  });
+  assert.equal(calls[0].path, "/v1/pipelines/pipe%2Fa/workspaces/overview");
+  assert.deepEqual(calls[0].options.query, { page: 2, pageSize: 20 });
+  assert.equal(calls[0].options.signal, abort.signal);
+  assert.equal(result.page, 1);
+  assert.equal(result.total, 21);
+  assert.equal(result.items[0].workspace.key, JSON.stringify(["pipe/a", "work space"]));
+  assert.equal(result.items[0].workspace.geometryRef.globalId, "g");
+  assert.equal(result.items[0].esriJSON, null);
+  assert.deepEqual(result.items[0].packages, { items: [], page: 0, pageSize: 200, total: 0 });
+  await assert.rejects(service.workspaceOverview({ pipelineId: "p", pageSize: 21 }), /pageSize/);
+});
+
+test("Workspace overview rejects missing or malformed components instead of empty data", async () => {
+  let row;
+  const service = createCatalogueService({
+    async request() {
+      return { items: [row], page: 1, pageSize: 20, totalCount: 1 };
+    },
+  });
+  for (const invalid of [
+    { workspace: { id: "w" }, packages: null },
+    { workspace: { id: "w" }, esriJSON: null },
+    { workspace: { id: "w" }, esriJSON: [], packages: null },
+    {
+      workspace: { id: "w" },
+      esriJSON: null,
+      packages: { items: [], page: 2, pageSize: 200, totalCount: 0 },
+    },
+    {
+      workspace: { id: "w" },
+      esriJSON: null,
+      packages: { items: [{}], page: 1, pageSize: 200, totalCount: 1 },
+    },
+  ]) {
+    row = invalid;
+    await assert.rejects(service.workspaceOverview({ pipelineId: "p" }));
+  }
+  row = { workspace: { id: "w" }, esriJSON: null, packages: null };
+  assert.equal((await service.workspaceOverview({ pipelineId: "p" })).items[0].packages, null);
+});
+
+test("collectPages continues after the embedded membership page without rereading page one", async () => {
+  const calls = [];
+  const first = {
+    page: 0,
+    pageSize: 200,
+    total: 201,
+    items: Array.from({ length: 200 }, (_, i) => ({ packageId: `pkg-${i}` })),
+  };
+  const result = await collectPages(
+    async ({ page, pageSize }) => {
+      calls.push({ page, pageSize });
+      return { page, pageSize: 200, total: 201, items: [{ packageId: "pkg-200" }] };
+    },
+    { initialPage: first }
+  );
+  assert.equal(result.length, 201);
+  assert.deepEqual(calls, [{ page: 1, pageSize: 200 }]);
+  await assert.rejects(
+    collectPages(
+      async ({ page }) => ({
+        page,
+        pageSize: 200,
+        total: 201,
+        items: [{ packageId: "pkg-0" }],
+      }),
+      { initialPage: first }
+    ),
+    /Duplicate/
+  );
+  await assert.rejects(
+    collectPages(
+      async ({ page }) => ({
+        page,
+        pageSize: 200,
+        total: 202,
+        items: [{ packageId: "pkg-200" }],
+      }),
+      { initialPage: first }
+    ),
+    /changed/
+  );
+});

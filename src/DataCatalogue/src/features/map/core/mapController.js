@@ -58,6 +58,7 @@ export function createMapController({
   let selectedPackageId = null;
   let visibleWorkspaces = [];
   let workspaceCatalog = [];
+  let workspaceOverview = null;
   let openJobCounts = null;
   let catalogOptions = { autoFocus: false };
   let workspaceCoverageStatus = null;
@@ -133,7 +134,10 @@ export function createMapController({
           onCoverageError: onWorkspaceCoverageError,
         });
         workspaceOverlay = createWorkspaceOverlay({
-          source: createWorkspaceGeometrySource({ catalogue }),
+          source: createWorkspaceGeometrySource({
+            catalogue,
+            getOverview: () => workspaceOverview,
+          }),
           renderer: createWorkspaceGraphics({
             map: mapResult.map,
             view: mapResult.view,
@@ -300,8 +304,9 @@ export function createMapController({
     }
   }
 
-  function setWorkspaceCatalog(workspaces, options = { autoFocus: false }) {
+  function setWorkspaceCatalog(workspaces, { overview = null, ...options } = {}) {
     workspaceCatalog = [...workspaces];
+    workspaceOverview = overview;
     catalogOptions = { autoFocus: false, ...options };
     return workspaceOverlay?.setContext(
       { id: "workspace-catalog", workspaces: workspaceCatalog },

@@ -1,5 +1,6 @@
 import { createCatalogueClient } from "../shared/api/catalogueClient.js";
 import { createCatalogueService } from "../shared/api/catalogueService.js";
+import { loadWorkspaceOverview } from "../shared/api/loadWorkspaceOverview.js";
 import { createLiveJobServiceAdapter } from "../features/jobs/services/liveJobServiceAdapter.js";
 import {
   countOpenJobsByWorkspace,
@@ -312,11 +313,12 @@ export async function createApp(rootElement) {
         catalogue,
         container: workspace.pipelineContent,
         readOnly: true,
+        loadCatalogue: ({ signal }) => loadWorkspaceOverview(catalogue, { signal }),
         onChange() {
           // Work Scope owns visibility; this panel is a read-only catalogue overview.
           applyWorkScopeToMap();
         },
-        onWorkspacesLoaded(workspaces, groups) {
+        onWorkspacesLoaded(workspaces, groups, overview) {
           const previousPipelines = JSON.stringify(currentWorkScope.pipelineIds);
           scopeWorkspaces = workspaces;
           jobsPanel.setPipelineCatalogue(groups);
@@ -325,11 +327,15 @@ export async function createApp(rootElement) {
             void packageAoiOverview?.refresh();
           }
           workspaceJobColorSync.setCatalogue(workspaces);
-          void mapController.setWorkspaceCatalog(workspaces, { reload: true, autoFocus: false });
+          void mapController.setWorkspaceCatalog(workspaces, {
+            reload: true,
+            autoFocus: false,
+            overview,
+          });
           // Packages belong to every Workspace, regardless of which Pipelines are shown on the map.
           resetJobsPanelContext();
           const wasLoaded = hasLoadedJobCatalogue;
-          liveJobs.setWorkspaces(workspaces);
+          liveJobs.setWorkspaces(workspaces, { overview });
           hasLoadedJobCatalogue = true;
           // Only the first catalogue load can be joined by a pending Packages read.
           // Later catalogue reloads must supersede any read using older scopes.

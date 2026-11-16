@@ -95,3 +95,17 @@ Calcite Action Bar's floating panel host. Styling uses existing theme tokens,
 without a new widget, private shadow DOM or backend/API work. Verify light and
 dark appearances, mouse/keyboard scrolling and focus, long labels and disabled
 Pipeline children in a real desktop browser.
+
+## Combined Workspace overview (DC-PERF-FE-01)
+
+For the live Main Map, `shared/api/loadWorkspaceOverview.js` retrieves one bounded
+Workspace/polygon/Package membership snapshot from the backend per Pipeline page.
+`createPipelineVisibility` owns catalogue reload/cancellation and hands the verified
+result to the map and scoped Jobs consumers. `createWorkspaceGeometrySource`
+reuses the snapshot only for matching Workspace geometry references; a null
+polygon is retried via the existing Workspace detail endpoint. The map overlay
+continues to own stale-result rejection, SDK preparation and rendering.
+
+The Package assignment map continues using its independent per-Workspace
+geometry source and is not changed by this optimization. See
+`docs/DC_PERF_FE_01_VALIDATION.md` for failure and browser performance checks.

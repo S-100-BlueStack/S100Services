@@ -1,3 +1,50 @@
+## DC-PERF-FE-01 — Frontend consumer of combined Workspace overview (2026-11-16)
+
+The live **Main Map** now uses the DC-PERF-BE-02 endpoint described below.
+The existing `createCatalogueClient` continues to apply the configured API base
+and credentials exactly once. `createCatalogueService.workspaceOverview` normalizes
+1-based Workspace pages (1–20 per page), Pipeline-scoped Workspace identity,
+Esri JSON strings and nullable first-200 membership pages. The shared overview
+read is reused by main-map geometry hydration and the _initial_ scoped Jobs
+membership read. The Package assignment workflow still uses its existing APIs.
+
+A `null` geometry or membership component is a failed component, not empty data.
+The corresponding unchanged individual route is used as fallback; Package
+membership counts above 200 require the unchanged paged membership route starting
+at page two. Manual Packages refresh bypasses the initial overview snapshot so
+it can observe current memberships. The frontend does not cache these reads
+across catalogue reloads or change the backend authorization contract.
+
+**Deployment prerequisite:** DC-PERF-BE-02 must be installed at the configured
+API origin. A missing/unauthorized overview route is an explicit catalogue-load
+error, not an automatic legacy fallback or a mock success. Browser/SSO acceptance
+and measured end-to-end performance remain pending.
+
+---
+
+## DC-PERF-BE-02 — Bounded combined Workspace read (backend candidate, 2026-11-16)
+
+A new opt-in v1 backend route is proposed/implemented in the current **uncommitted
+backend candidate**: `GET /v1/pipelines/{pipelineId}/workspaces/overview?page=1&pageSize=20`.
+It returns a Workspace page containing `{ workspace, esriJSON, packages }` per
+Workspace. `packages` uses the existing membership page envelope with the first
+200 results. Pagination applies to Workspaces (at most 20 per page), **not** to
+Package matches across all Workspaces. Missing `esriJSON`/`packages` (`null`)
+indicates a partial read failure requiring legacy per-Workspace fallback;
+`packages.items=[]` with `totalCount=0` is authoritative empty membership.
+Packages beyond the first 200 require follow-up calls to the existing
+`GET /v1/pipelines/{pipelineId}/workspaces/{workspaceId}/packages?page=N&pageSize=200`.
+
+This route preserves the existing `datacatalogue:access` authorization policy,
+Pipeline scope and Esri JSON semantics. It is **not** a current production
+frontend dependency or verified deployed contract until this candidate is
+accepted. The API uses one existing STA ArcGIS dispatcher, one Workspace
+coverage scope and one Package AOI scope per bounded page. The old per-Workspace
+read endpoints remain available. See the backend validation document
+`src/DataCatalogueAPI/docs/DC_PERF_BE_02_VALIDATION.md`.
+
+---
+
 ## DC-BE-FE-02 — Consuming verified Pipeline geometry filters
 
 The already verified backend `GET /v1/packages/geometry` route accepts

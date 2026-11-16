@@ -227,3 +227,92 @@ test("A broken Workspace read never returns a seemingly complete all-Pipeline Jo
   assert.equal(result.ok, false);
   assert.match(result.error.message, /Workspace API unavailable/);
 });
+
+function overviewFor(workspace, packages) {
+  return new Map([
+    [
+      JSON.stringify([workspace.pipelineId, workspace.workspaceId]),
+      {
+        workspace,
+        esriJSON: null,
+        packages,
+      },
+    ],
+  ]);
+}
+
+test("initial overview membership avoids legacy reads and manual refresh observes current API membership", async () => {
+  const catalogue = fixture();
+  let reads = 0;
+  catalogue.workspacePackages = async () => {
+    reads++;
+    return memberPage([{ packageId: "fresh", shortId: "New" }]);
+  };
+  const adapter = createLiveJobServiceAdapter({ catalogue });
+  const workspace = scope();
+  adapter.setWorkspaces([workspace], {
+    overview: overviewFor(workspace, memberPage([{ packageId: "pkg", shortId: "Old" }])),
+  });
+  assert.deepEqual(
+    (await adapter.loadJobs()).jobs.map((job) => job.packageId),
+    ["pkg"]
+  );
+  assert.equal(reads, 0);
+  assert.deepEqual(
+    (await adapter.loadJobs()).jobs.map((job) => job.packageId),
+    ["fresh"]
+  );
+  assert.equal(reads, 1);
+});
+
+test("null overview membership retries only the targeted Workspace, not all Workspaces", async () => {
+  const catalogue = fixture();
+  const reads = [];
+  catalogue.workspacePackages = async (pipelineId, workspaceId) => {
+    reads.push([pipelineId, workspaceId]);
+    return memberPage([{ packageId: "fallback" }]);
+  };
+  const good = scope("enc", "w1");
+  const missing = scope("enc", "w2");
+  const overview = new Map([
+    ...overviewFor(good, memberPage([{ packageId: "pkg" }])),
+    ...overviewFor(missing, null),
+  ]);
+  const adapter = createLiveJobServiceAdapter({ catalogue });
+  adapter.setWorkspaces([good, missing], { overview });
+  const jobs = (await adapter.loadJobs()).jobs;
+  assert.equal(jobs.length, 2);
+  assert.deepEqual(reads, [["enc", "w2"]]);
+});
+
+test("overview continuation reads page two only when a Workspace has more than 200 members", async () => {
+  const catalogue = fixture();
+  const reads = [];
+  catalogue.workspacePackages = async (_pipeline, _workspace, { page, pageSize }) => {
+    reads.push([page, pageSize]);
+    return { page, pageSize: 200, total: 201, items: [{ packageId: "pkg-200" }] };
+  };
+  catalogue.package = async (id) => ({ id, severity: "1", title: id });
+  const workspace = scope();
+  const first = {
+    page: 0,
+    pageSize: 200,
+    total: 201,
+    items: Array.from({ length: 200 }, (_, index) => ({ packageId: `pkg-${index}` })),
+  };
+  const adapter = createLiveJobServiceAdapter({ catalogue });
+  adapter.setWorkspaces([workspace], { overview: overviewFor(workspace, first) });
+  assert.equal((await adapter.loadJobs()).jobs.length, 201);
+  assert.deepEqual(reads, [[1, 200]]);
+});
+
+test("inconsistent overview metadata fails instead of publishing a seemingly empty Jobs scope", async () => {
+  const catalogue = fixture();
+  const workspace = scope("enc", "w");
+  const adapter = createLiveJobServiceAdapter({ catalogue });
+  adapter.setWorkspaces([workspace], { overview: new Map() });
+  await assert.rejects(adapter.loadJobs(), /does not include/);
+  const changed = { ...workspace, geometryRef: { globalId: "new" } };
+  adapter.setWorkspaces([workspace], { overview: overviewFor(changed, memberPage([])) });
+  await assert.rejects(adapter.loadJobs(), /identity changed/);
+});

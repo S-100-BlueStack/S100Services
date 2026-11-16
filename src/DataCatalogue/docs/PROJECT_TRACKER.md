@@ -1,3 +1,92 @@
+## DC-PERF-FE-01 — Main Map combined Workspace overview consumption (frontend candidate, 2026-11-16)
+
+**Authoritative frontend baseline:** `bcd52ce9192b82f629a9fc2e1e20e1cf40a3b851`,
+using the verified 2026-11-16 working-tree source export. The pre-existing local
+edits to this tracker and `BACKEND_CONTRACTS.md` are preserved. Backend dependency:
+DC-PERF-BE-02, ZIP SHA-256
+`ED38EFC038CCC0CDFD90FE36BC8ABFECBBD8036426DC23EE61E18946F565D460`.
+
+- Live Main Map loads the Pipeline list and then bounded Workspace overview pages
+  (`pageSize=20`, up to two Pipelines in flight). The response supplies a single
+  current catalogue generation for the map polygon and the initial Pipeline/
+  Workspace-scoped Package membership read. The previously separate
+  `/v1/workspaces`, Workspace detail and membership calls are not needed on an
+  error-free initial load. Assignment-page reads are unchanged.
+- A null overview polygon uses the existing targeted detail route; a null
+  membership page uses the existing targeted membership route. Embedded Package
+  pages beyond 200 continue at page two using the existing membership endpoint.
+  Empty, non-null membership pages remain authoritative empty results. Invalid,
+  duplicate, inconsistent or incomplete pages fail visibly rather than silently
+  truncating the Jobs scope.
+- Subsequent manual Packages refreshes continue querying current Workspace
+  membership, not a cross-refresh snapshot. The existing catalogue-generation,
+  Job-store and map-overlay lifecycle guards prevent stale publication.
+- User-reported backend smoke test: 18 Paper Chart and 15 ENC Workspaces, zero
+  null geometry/membership fields; selected Workspace geometry/count/Package ID
+  match and successful backend overview logs. Frontend browser performance and
+  deployment remain unverified. See [validation](DC_PERF_FE_01_VALIDATION.md).
+
+---
+
+## DC-PERF-BE-02 — Bounded combined Workspace overview read (candidate, 2026-11-16)
+
+**Controlled input:** backend commit `bcd52ce9192b82f629a9fc2e1e20e1cf40a3b851`
+plus the verified, locally tested but not yet committed DC-PERF-BE-01 candidate
+(SHA-256 `0FE0B46ACD8E9A0F955297806492083522950545ED6E9F1E5CB3424EB246B201`).
+The three DataCatalogue Main Map HAR exports show 17.23 s cold and 14.66/14.59 s
+warm network completion, with 66 Workspace read requests per run. Backend logs
+show 53/50/49 ArcGIS dispatches, zero batches combining Details and Packages
+for the same Workspace, median Workspace scope roughly 117–121 ms, Package
+scope roughly 118–120 ms, and geometry reads around 3 ms. Queueing and repeated
+scope setup therefore dominate the read waterfall.
+
+- Candidate adds `GET /v1/pipelines/{id}/workspaces/overview`, paged by Workspace
+  (1–20). It reads the selected Workspaces and their current Pipeline-scoped
+  Package memberships in **one** dispatcher action, opening each relevant
+  geodatabase/feature-class context once per page. It retains the existing
+  authorized v1 controller, member ordering, current AOI reference checks,
+  polygon serialization and first-200 Package page semantics.
+- Per-Workspace errors produce nullable geometry/Package results for that
+  Workspace; the new contract requires explicit fallback to the existing
+  detail/membership endpoints. A returned empty Package page is distinct from
+  an unavailable Package read. Further Package pages use existing endpoints.
+- **Backend-only stage:** the frontend remains unchanged and continues using
+  DC-PERF-BE-01 routes until an up-to-date frontend baseline is available and
+  the new backend contract has passed local Windows x64/ArcGIS tests. No
+  extra ArcGIS CoreHost, persistent cache, auth changes or NuGet dependencies.
+- See `src/DataCatalogueAPI/docs/DC_PERF_BE_02_VALIDATION.md` for tests,
+  timing comparisons and regression cases. Full browser improvement is untested.
+
+---
+
+## DC-PERF-BE-01 — Shared Workspace detail and membership batching (candidate, 2026-11-16)
+
+**Authoritative backend baseline:** `bcd52ce9192b82f629a9fc2e1e20e1cf40a3b851`.
+This task follows the HAR observation of 33 Workspace detail and 33 Workspace
+membership requests, which extend the live Main Map load. The HAR data support
+the request fan-out and elapsed time, but do not prove a backend speedup.
+
+- Both existing Workspace detail and membership routes now submit reads to the
+  existing four-request/six-millisecond `WorkspacePackageReadBatcher`. Geometry
+  references are deduplicated **within a batch**; no persistent cache, independent
+  ArcGIS thread, CoreHost instance or frontend contract is added.
+- Different Pipelines and Workspaces retain independent event-state validation,
+  current membership filters, pagination and cancellation. Geometry objects stay
+  on the ArcGIS STA thread; only Esri JSON strings and page DTO data leave it.
+- `Workspace detail read` timing logs separate event-state read, batch wait,
+  ArcGIS queue wait, shared coverage-scope setup, geometry read and JSON
+  serialization. Batch scope and deduplicated polygon timings are shared, not
+  additive across HTTP requests.
+- This may reduce geodatabase openings and repeated Workspace polygon reads
+  during a mixed startup burst, but **does not reduce the 66 HTTP requests**.
+  A larger API-level bulk read is a separate contract decision and should only
+  be pursued after a controlled warm-up benchmark of this bounded change.
+- Backend test/build requires Windows x64, .NET 10, licensed ArcGIS Pro and
+  the existing fixture/template. See
+  [DataCatalogueAPI validation](../../DataCatalogueAPI/docs/DC_PERF_BE_01_VALIDATION.md).
+
+---
+
 ## DC-PERF-02 — Bounded Package metadata hydration (candidate, 2026-11-13)
 
 **Authoritative source:** `917aaef68f6c6297df78fbb1670f5b5231385579`.

@@ -60,6 +60,93 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
         Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.PostAsJsonAsync($"/v1/pipelines/{pipeline.Id}/workspaces", new { displayName = "Bad", displayScale = new { maximumDisplayScale = 1, minimumDisplayScale = 2000 }, esriJSON = "invalid" })).StatusCode);
     }
 
+    [Fact]
+    public async Task Workspace_overview_preserves_geometry_and_current_pipeline_scoped_memberships() {
+        await this.CategoryAsync();
+        var first = await this.PipelineAsync();
+        var second = await this.PipelineAsync();
+        var near = await this.WorkspaceAsync(first.Id, Geometry, "Near");
+        var far = await this.WorkspaceAsync(first.Id, DistantGeometry, "Far");
+        await this.WorkspaceAsync(second.Id, Geometry, "Other pipeline");
+        var package = await this.PackageAsync();
+        await this.App.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = first.Id });
+        var legacyPath = $"/v1/pipelines/{first.Id}/workspaces/{near.Id}/packages";
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(legacyPath))!.TotalCount == 1);
+
+        var overview = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspaceOverviewResponse>>(
+            $"/v1/pipelines/{first.Id}/workspaces/overview?pageSize=20"))!;
+        Assert.Equal(2, overview.TotalCount);
+        Assert.Equal(2, overview.Items.Count);
+        var firstItem = overview.Items.Single(item => item.Workspace.Id == near.Id);
+        var secondItem = overview.Items.Single(item => item.Workspace.Id == far.Id);
+        Assert.NotNull(firstItem.EsriJSON);
+        Assert.NotNull(secondItem.EsriJSON);
+        using (var document = JsonDocument.Parse(firstItem.EsriJSON)) {
+            Assert.True(document.RootElement.TryGetProperty("rings", out _));
+            Assert.True(document.RootElement.TryGetProperty("spatialReference", out _));
+        }
+        var legacyDetail = (await this.Client.GetFromJsonAsync<WorkspaceDetailResponse>(
+            $"/v1/pipelines/{first.Id}/workspaces/{near.Id}"))!;
+        Assert.Equal(legacyDetail.EsriJSON, firstItem.EsriJSON);
+        var legacyMembership = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(legacyPath))!;
+        Assert.Equal(legacyMembership.TotalCount, firstItem.Packages!.TotalCount);
+        Assert.Equal(200, firstItem.Packages.PageSize);
+        var member = Assert.Single(firstItem.Packages.Items);
+        Assert.Equal(package.Id, member.PackageId);
+        Assert.Equal(Assert.Single(legacyMembership.Items).Aoi.GetRawText(), member.Aoi.GetRawText());
+        Assert.Equal(0, secondItem.Packages!.TotalCount);
+        Assert.Empty(secondItem.Packages.Items);
+
+        var other = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspaceOverviewResponse>>(
+            $"/v1/pipelines/{second.Id}/workspaces/overview"))!;
+        Assert.Single(other.Items);
+        Assert.Empty(Assert.Single(other.Items).Packages!.Items);
+    }
+
+    [Fact]
+    public async Task Workspace_overview_pagination_is_bounded_and_matches_pipeline_order() {
+        var pipeline = await this.PipelineAsync();
+        var first = await this.WorkspaceAsync(pipeline.Id, Geometry, "First");
+        var second = await this.WorkspaceAsync(pipeline.Id, DistantGeometry, "Second");
+        var third = await this.WorkspaceAsync(pipeline.Id, Geometry, "Third");
+        var path = $"/v1/pipelines/{pipeline.Id}/workspaces/overview";
+        var pageOne = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspaceOverviewResponse>>(path + "?page=1&pageSize=2"))!;
+        var pageTwo = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspaceOverviewResponse>>(path + "?page=2&pageSize=2"))!;
+        var empty = (await this.Client.GetFromJsonAsync<PagedResponse<WorkspaceOverviewResponse>>(path + "?page=3&pageSize=2"))!;
+        Assert.Equal(new[] { first.Id, second.Id }, pageOne.Items.Select(item => item.Workspace.Id));
+        Assert.Equal(third.Id, Assert.Single(pageTwo.Items).Workspace.Id);
+        Assert.Equal(3, pageOne.TotalCount);
+        Assert.Equal(3, pageTwo.TotalCount);
+        Assert.Equal(2, pageOne.TotalPages);
+        Assert.Empty(empty.Items);
+        Assert.Equal(3, empty.TotalCount);
+        Assert.All(pageOne.Items.Concat(pageTwo.Items), item => {
+            Assert.NotNull(item.EsriJSON);
+            Assert.NotNull(item.Packages);
+            Assert.Empty(item.Packages.Items);
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync(path + "?pageSize=21")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await this.Client.GetAsync(path + "?page=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await this.Client.GetAsync("/v1/pipelines/missing/workspaces/overview")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancelled_workspace_overview_read_does_not_affect_a_sibling_request() {
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        using var scope = this.App.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.GetOverviewAsync(pipeline.Id, 1, 20, cancelled.Token));
+        var valid = await service.GetOverviewAsync(pipeline.Id, 1, 20, CancellationToken.None);
+        Assert.Equal(workspace.Id, Assert.Single(valid.Items).Workspace.Id);
+        Assert.NotNull(valid.Items[0].EsriJSON);
+        Assert.NotNull(valid.Items[0].Packages);
+    }
+
     // Claim a workspace, retry, let another user take over and let a third user clear it.
     // Expected: Ownership uses normalized usernames, retries keep the timestamp, clearing removes owner/time and malformed IDs return 400.
     [Fact]
@@ -408,6 +495,113 @@ public sealed class WorkspaceAndRoutingTests(CatalogueFixture runtime) : Catalog
             release.Set();
             await blocked;
         }
+    }
+
+    [Fact]
+    public async Task Concurrent_workspace_details_and_package_memberships_preserve_pipeline_scoping() {
+        await this.CategoryAsync();
+        var first = await this.PipelineAsync();
+        var second = await this.PipelineAsync();
+        var firstWorkspace = await this.WorkspaceAsync(first.Id, Geometry, "First workspace");
+        var secondWorkspace = await this.WorkspaceAsync(second.Id, DistantGeometry, "Second workspace");
+        var firstPackage = await this.PackageAsync();
+        var secondPackage = await this.PackageAsync(DistantGeometry);
+        await this.App.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = firstPackage.Id, pipelineId = first.Id });
+        await this.App.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = secondPackage.Id, pipelineId = second.Id });
+
+        var firstDetailUrl = $"/v1/pipelines/{first.Id}/workspaces/{firstWorkspace.Id}";
+        var secondDetailUrl = $"/v1/pipelines/{second.Id}/workspaces/{secondWorkspace.Id}";
+        var firstPackagesUrl = firstDetailUrl + "/packages?page=1&pageSize=1";
+        var secondPackagesUrl = secondDetailUrl + "/packages?page=1&pageSize=1";
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPackagesUrl))!.TotalCount == 1
+            && (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(secondPackagesUrl))!.TotalCount == 1);
+
+        // Start both kinds of reads together so each request retains its own
+        // Pipeline context even when geometry and membership share an STA batch.
+        var firstDetailTask = this.Client.GetFromJsonAsync<WorkspaceDetailResponse>(firstDetailUrl);
+        var firstPackagesTask = this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(firstPackagesUrl);
+        var secondDetailTask = this.Client.GetFromJsonAsync<WorkspaceDetailResponse>(secondDetailUrl);
+        var secondPackagesTask = this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(secondPackagesUrl);
+        await Task.WhenAll(firstDetailTask, firstPackagesTask, secondDetailTask, secondPackagesTask);
+
+        Assert.Equal(firstWorkspace.Id, (await firstDetailTask)!.Workspace.Id);
+        Assert.Equal(secondWorkspace.Id, (await secondDetailTask)!.Workspace.Id);
+        using (var firstJson = JsonDocument.Parse((await firstDetailTask)!.EsriJSON)) {
+            Assert.True(firstJson.RootElement.TryGetProperty("rings", out _));
+            Assert.True(firstJson.RootElement.TryGetProperty("spatialReference", out _));
+        }
+        using (var secondJson = JsonDocument.Parse((await secondDetailTask)!.EsriJSON)) {
+            Assert.True(secondJson.RootElement.TryGetProperty("rings", out _));
+            Assert.True(secondJson.RootElement.TryGetProperty("spatialReference", out _));
+        }
+        Assert.Equal(firstPackage.Id, Assert.Single((await firstPackagesTask)!.Items).PackageId);
+        Assert.Equal(secondPackage.Id, Assert.Single((await secondPackagesTask)!.Items).PackageId);
+
+        // Invalid ownership must still fail before entering the shared read batch.
+        var missing = this.Client.GetAsync($"/v1/pipelines/{first.Id}/workspaces/{secondWorkspace.Id}");
+        var valid = this.Client.GetFromJsonAsync<WorkspaceDetailResponse>(firstDetailUrl);
+        using var missingResult = await missing;
+        Assert.Equal(HttpStatusCode.NotFound, missingResult.StatusCode);
+        Assert.Equal(firstWorkspace.Id, (await valid)!.Workspace.Id);
+    }
+
+    [Fact]
+    public async Task Cancelled_workspace_detail_read_does_not_cancel_a_sibling_package_read() {
+        await this.CategoryAsync();
+        var pipeline = await this.PipelineAsync();
+        var workspace = await this.WorkspaceAsync(pipeline.Id);
+        var package = await this.PackageAsync();
+        await this.App.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        var path = $"/v1/pipelines/{pipeline.Id}/workspaces/{workspace.Id}/packages";
+        await this.App.EventuallyAsync(async () =>
+            (await this.Client.GetFromJsonAsync<PagedResponse<WorkspacePackageResponse>>(path))!.TotalCount == 1);
+
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var blocked = this.Runtime.Dispatcher.ExecuteAsync(() => {
+            entered.Set();
+            return release.Wait(TimeSpan.FromSeconds(5));
+        });
+        try {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(3)));
+            using var cancelled = new CancellationTokenSource();
+            using var scope = this.App.Services.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+            var canceledRead = service.GetWorkspaceAsync(pipeline.Id, workspace.Id, cancelled.Token);
+            var validRead = service.GetPackagesAsync(pipeline.Id, workspace.Id, 1, 1, CancellationToken.None);
+            await Task.Delay(20);
+            cancelled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledRead);
+            release.Set();
+            Assert.True(await blocked);
+            Assert.Equal(package.Id, Assert.Single((await validRead).Items).PackageId);
+        }
+        finally {
+            release.Set();
+            await blocked;
+        }
+    }
+
+    [Fact]
+    public async Task Multiple_concurrent_workspace_detail_reads_preserve_distinct_geometries() {
+        var pipeline = await this.PipelineAsync();
+        var first = await this.WorkspaceAsync(pipeline.Id, Geometry, "West");
+        var second = await this.WorkspaceAsync(pipeline.Id, DistantGeometry, "East");
+        using var scope = this.App.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<WorkspaceService>();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetWorkspaceAsync(pipeline.Id, first.Id, cancelled.Token));
+
+        var firstTask = service.GetWorkspaceAsync(pipeline.Id, first.Id, CancellationToken.None);
+        var secondTask = service.GetWorkspaceAsync(pipeline.Id, second.Id, CancellationToken.None);
+        var repeatTask = service.GetWorkspaceAsync(pipeline.Id, first.Id, CancellationToken.None);
+        await Task.WhenAll(firstTask, secondTask, repeatTask);
+        Assert.Equal(first.Id, (await firstTask).Workspace.Id);
+        Assert.Equal(second.Id, (await secondTask).Workspace.Id);
+        Assert.Equal((await firstTask).EsriJSON, (await repeatTask).EsriJSON);
+        Assert.NotEqual((await firstTask).EsriJSON, (await secondTask).EsriJSON);
     }
 
     private const string DistantDetailPoints = "{\"points\":[[7.2,55.2],[7.8,55.8]],\"spatialReference\":{\"wkid\":4326}}";

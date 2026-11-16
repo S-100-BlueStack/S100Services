@@ -101,13 +101,16 @@ function paging({ page = 0, pageSize = 25 } = {}) {
   return { page: page + 1, pageSize };
 }
 
-export async function collectPages(read, { signal } = {}) {
+export async function collectPages(read, { signal, initialPage = null } = {}) {
   const items = [];
   const ids = new Set();
   let expectedTotal;
   for (let page = 0; ; page++) {
     signal?.throwIfAborted();
-    const result = await read({ page, pageSize: 200, signal });
+    const result =
+      page === 0 && initialPage !== null
+        ? initialPage
+        : await read({ page, pageSize: 200, signal });
     if (result.page !== page || (expectedTotal !== undefined && expectedTotal !== result.total)) {
       throw new Error("Catalogue changed during paging. Reload to obtain a complete list.");
     }
@@ -198,6 +201,33 @@ export function createCatalogueService(client) {
           signal,
         }),
         (item) => normalizeWorkspace(item.workspace, item.pipelineId, item.pipelineDisplayName)
+      );
+    },
+    async workspaceOverview({ pipelineId, page, pageSize = 20, signal } = {}) {
+      if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 20)
+        throw new Error("Workspace overview pageSize must be from 1 to 20.");
+      return normalizePage(
+        await client.request(`/v1/pipelines/${segment(pipelineId)}/workspaces/overview`, {
+          query: paging({ page, pageSize }),
+          signal,
+        }),
+        (item) => {
+          const workspace = normalizeWorkspace(item?.workspace, pipelineId);
+          if (item.esriJSON !== null && typeof item.esriJSON !== "string")
+            throw new Error("API returned an invalid Workspace overview polygon.");
+          if (item.packages !== null && (!item.packages || typeof item.packages !== "object"))
+            throw new Error("API returned an invalid Workspace overview membership page.");
+          const packages =
+            item.packages === null
+              ? null
+              : normalizePage(item.packages, (member) => ({
+                  packageId: requiredId(member?.packageId),
+                  shortId: member.shortId ?? null,
+                }));
+          if (packages && (packages.page !== 0 || packages.pageSize !== 200))
+            throw new Error("API returned an invalid first Workspace membership page.");
+          return { workspace, esriJSON: item.esriJSON, packages };
+        }
       );
     },
     async workspace(pipelineId, workspaceId, { signal } = {}) {

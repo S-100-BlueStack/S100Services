@@ -126,3 +126,47 @@ test("A timed-out Workspace fails locally and queued Workspaces can still load",
   assert.match(results[0].error.message, /timed out/);
   assert.equal(results[1].error, null);
 });
+
+test("overview polygons are read without legacy details; only null polygons use targeted fallback", async () => {
+  const reads = [];
+  const a = scope("enc", "a");
+  const b = scope("enc", "b");
+  const c = scope("paper", "c");
+  const overview = new Map([
+    [JSON.stringify(["enc", "a"]), { workspace: a, esriJSON: polygon }],
+    [JSON.stringify(["enc", "b"]), { workspace: b, esriJSON: null }],
+    [JSON.stringify(["paper", "c"]), { workspace: c, esriJSON: "not-json" }],
+  ]);
+  const source = createWorkspaceGeometrySource({
+    getOverview: () => overview,
+    catalogue: {
+      async workspace(p, w) {
+        reads.push([p, w]);
+        return detail(p, w);
+      },
+    },
+  });
+  const results = await source.load([a, b, c]);
+  assert.equal(results[0].error, null);
+  assert.equal(results[1].error, null);
+  assert.match(results[2].error.message, /invalid Esri JSON/);
+  assert.deepEqual(reads, [["enc", "b"]]);
+});
+
+test("a changed Workspace reference cannot consume polygon from an older overview generation", async () => {
+  const old = { ...scope(), geometryRef: { globalId: "old" } };
+  const current = { ...scope(), geometryRef: { globalId: "new" } };
+  const reads = [];
+  const overview = new Map([[JSON.stringify(["p", "w"]), { workspace: old, esriJSON: polygon }]]);
+  const source = createWorkspaceGeometrySource({
+    getOverview: () => overview,
+    catalogue: {
+      async workspace(p, w) {
+        reads.push([p, w]);
+        return { ...detail(p, w), workspace: current };
+      },
+    },
+  });
+  assert.equal((await source.load([current]))[0].error, null);
+  assert.deepEqual(reads, [["p", "w"]]);
+});

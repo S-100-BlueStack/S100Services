@@ -3,11 +3,12 @@ using DataCatalague.Api.Repositories;
 
 namespace DataCatalague.Api.Services;
 
-/// <summary>Coalesces a bounded burst of independent Workspace reads on the single ArcGIS thread.</summary>
+/// <summary>Coalesces Workspace geometry and package reads on the existing ArcGIS thread.</summary>
 public sealed class WorkspacePackageReadBatcher(
     ArcGisDispatcher dispatcher, DispatchRepository coverage, PackageRepository packages) : IDisposable
 {
-    // Match the current map's four read workers without delaying an isolated request noticeably.
+    // Both read types use the same bounded window so Workspace details do not open
+    // a second coverage scope while package membership reads are being collected.
     private const int MaximumBatchSize = 4;
     private static readonly TimeSpan CollectionWindow = TimeSpan.FromMilliseconds(6);
 
@@ -28,24 +29,45 @@ public sealed class WorkspacePackageReadBatcher(
         double SpatialQueryMs,
         double PackageHydrationMs);
 
-    private sealed class PendingRead(string pipelineId, string geometryReference, int page, int pageSize, CancellationToken cancellationToken)
+    internal sealed record GeometryResult(
+        string EsriJson,
+        int BatchSize,
+        double BatchWaitMs,
+        double ArcGisQueueWaitMs,
+        double WorkspaceScopeMs,
+        double WorkspaceGeometryMs,
+        double SerializationMs);
+
+    private sealed class PendingRead(
+        string geometryReference, CancellationToken cancellationToken,
+        string? pipelineId = null, int page = 0, int pageSize = 0)
     {
-        internal string PipelineId { get; } = pipelineId;
         internal string GeometryReference { get; } = geometryReference;
+        internal CancellationToken CancellationToken { get; } = cancellationToken;
+        internal string? PipelineId { get; } = pipelineId;
         internal int Page { get; } = page;
         internal int PageSize { get; } = pageSize;
-        internal CancellationToken CancellationToken { get; } = cancellationToken;
+        internal bool IsGeometryOnly => this.PipelineId is null;
         internal long EnqueuedAt { get; } = Stopwatch.GetTimestamp();
-        internal TaskCompletionSource<ReadResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource<BatchOutcome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed record BatchOutcome(ReadResult? Value, Exception? Error);
+    internal sealed record BatchOutcome(ReadResult? Page, GeometryResult? Geometry, Exception? Error);
 
     internal async Task<ReadResult> ReadAsync(
         string pipelineId, string geometryReference, int page, int pageSize, CancellationToken cancellationToken) {
-        cancellationToken.ThrowIfCancellationRequested();
-        var read = new PendingRead(pipelineId, geometryReference, page, pageSize, cancellationToken);
-        using var registration = cancellationToken.Register(() => read.Completion.TrySetCanceled(cancellationToken));
+        var outcome = await this.EnqueueAsync(new PendingRead(geometryReference, cancellationToken, pipelineId, page, pageSize)).ConfigureAwait(false);
+        return outcome.Page!;
+    }
+
+    internal async Task<GeometryResult> ReadGeometryAsync(string geometryReference, CancellationToken cancellationToken) {
+        var outcome = await this.EnqueueAsync(new PendingRead(geometryReference, cancellationToken)).ConfigureAwait(false);
+        return outcome.Geometry!;
+    }
+
+    private async Task<BatchOutcome> EnqueueAsync(PendingRead read) {
+        read.CancellationToken.ThrowIfCancellationRequested();
+        using var registration = read.CancellationToken.Register(() => read.Completion.TrySetCanceled(read.CancellationToken));
         List<PendingRead>? fullBatch = null;
         long? generationToSchedule = null;
         lock (this._gate) {
@@ -93,12 +115,12 @@ public sealed class WorkspacePackageReadBatcher(
                     read.Completion.TrySetCanceled(read.CancellationToken);
                 }
                 else if (outcomes[index].Error is { } exception) { read.Completion.TrySetException(exception); }
-                else { read.Completion.TrySetResult(outcomes[index].Value!); }
+                else { read.Completion.TrySetResult(outcomes[index]); }
             }
         }
         catch (Exception exception) {
-            // Dispatcher initialization/read-scope failures fail the batch; individual
-            // geometry and page failures are isolated in ReadOnArcGisThread.
+            // A failed coverage scope affects every reader; failures opening only the
+            // package scope are isolated inside ReadOnArcGisThread.
             foreach (var read in active) {
                 if (read.CancellationToken.IsCancellationRequested) { read.Completion.TrySetCanceled(read.CancellationToken); }
                 else { read.Completion.TrySetException(exception); }
@@ -108,40 +130,88 @@ public sealed class WorkspacePackageReadBatcher(
 
     private IReadOnlyList<BatchOutcome> ReadOnArcGisThread(
         IReadOnlyList<PendingRead> reads, double queueWaitMs, long dispatchedAt) {
-        var geometryResults = coverage.ReadWorkspaceGeometryBatch(
-            reads.Select(read => new WorkspaceGeometryRead(read.GeometryReference, read.CancellationToken)).ToArray(),
-            out var workspaceScopeMs);
-
-        var queries = new List<WorkspacePackagePageQuery>();
+        // Reuse a polygon when a details request and membership request for the
+        // same Workspace reach the same batch. Never expose ArcGIS objects outside STA.
+        var referenceIndices = new Dictionary<string, int>(StringComparer.Ordinal);
+        var referenceCounts = reads.GroupBy(read => read.GeometryReference, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var geometryReads = new List<WorkspaceGeometryRead>();
+        var geometryIndices = new int[reads.Count];
         for (var index = 0; index < reads.Count; index++) {
-            if (geometryResults[index].Geometry is { } geometry && geometryResults[index].Error is null) {
-                queries.Add(new(reads[index].PipelineId, geometry, reads[index].Page, reads[index].PageSize, reads[index].CancellationToken));
+            var read = reads[index];
+            if (!referenceIndices.TryGetValue(read.GeometryReference, out var geometryIndex)) {
+                geometryIndex = geometryReads.Count;
+                referenceIndices.Add(read.GeometryReference, geometryIndex);
+                // One canceled consumer must not abort geometry needed by another.
+                // Shared reads still validate each caller's cancellation separately.
+                var token = referenceCounts[read.GeometryReference] > 1
+                    ? CancellationToken.None : read.CancellationToken;
+                geometryReads.Add(new(read.GeometryReference, token));
             }
+            geometryIndices[index] = geometryIndex;
+        }
+
+        var geometryResults = coverage.ReadWorkspaceGeometryBatch(geometryReads, out var workspaceScopeMs);
+        var queries = new List<WorkspacePackagePageQuery>();
+        var queryIndices = new int[reads.Count];
+        Array.Fill(queryIndices, -1);
+        for (var index = 0; index < reads.Count; index++) {
+            var read = reads[index];
+            var geometryResult = geometryResults[geometryIndices[index]];
+            if (read.CancellationToken.IsCancellationRequested || read.IsGeometryOnly
+                || geometryResult.Geometry is null || geometryResult.Error is not null) { continue; }
+            queryIndices[index] = queries.Count;
+            queries.Add(new(read.PipelineId!, geometryResult.Geometry, read.Page, read.PageSize, read.CancellationToken));
         }
 
         IReadOnlyList<WorkspacePackagePageReadResult> packageResults = [];
-        // Keep the connection setup time visible without charging it to every page query.
         var packageScopeMs = 0.0;
+        Exception? packageScopeError = null;
         if (queries.Count > 0) {
-            packageResults = packages.ReadWorkspacePackagePages(queries, out packageScopeMs);
+            try { packageResults = packages.ReadWorkspacePackagePages(queries, out packageScopeMs); }
+            catch (Exception exception) { packageScopeError = exception; }
         }
 
         var results = new BatchOutcome[reads.Count];
-        var queryIndex = 0;
         for (var index = 0; index < reads.Count; index++) {
-            var geometryResult = geometryResults[index];
-            if (geometryResult.Error is { } geometryError) {
-                results[index] = new(null, geometryError);
-                continue;
+            var read = reads[index];
+            var geometryResult = geometryResults[geometryIndices[index]];
+            if (read.CancellationToken.IsCancellationRequested) {
+                results[index] = new(null, null, new OperationCanceledException(read.CancellationToken));
             }
-            var pageResult = packageResults[queryIndex++];
-            results[index] = pageResult.Error is { } pageError
-                ? new(null, pageError)
-                : new(new ReadResult(
-                    pageResult.Items, pageResult.TotalCount, reads.Count,
-                    Stopwatch.GetElapsedTime(reads[index].EnqueuedAt, dispatchedAt).TotalMilliseconds,
-                    queueWaitMs, workspaceScopeMs, geometryResult.ReadMs, packageScopeMs,
-                    pageResult.SpatialQueryMs, pageResult.PackageHydrationMs), null);
+            else if (geometryResult.Error is { } geometryError) {
+                results[index] = new(null, null, geometryError);
+            }
+            else if (read.IsGeometryOnly) {
+                var serialization = Stopwatch.StartNew();
+                try {
+                    var json = geometryResult.Geometry!.ToJson();
+                    results[index] = new(null, new GeometryResult(
+                        json, reads.Count,
+                        Stopwatch.GetElapsedTime(read.EnqueuedAt, dispatchedAt).TotalMilliseconds,
+                        queueWaitMs, workspaceScopeMs, geometryResult.ReadMs, serialization.Elapsed.TotalMilliseconds), null);
+                }
+                catch (Exception exception) { results[index] = new(null, null, exception); }
+            }
+            else if (packageScopeError is not null) {
+                results[index] = new(null, null, packageScopeError);
+            }
+            else {
+                var queryIndex = queryIndices[index];
+                if (queryIndex < 0) {
+                    // A request canceled after admission cannot publish a successful page.
+                    results[index] = new(null, null, new OperationCanceledException(read.CancellationToken));
+                    continue;
+                }
+                var pageResult = packageResults[queryIndex];
+                results[index] = pageResult.Error is { } pageError
+                    ? new(null, null, pageError)
+                    : new(new ReadResult(
+                        pageResult.Items, pageResult.TotalCount, reads.Count,
+                        Stopwatch.GetElapsedTime(read.EnqueuedAt, dispatchedAt).TotalMilliseconds,
+                        queueWaitMs, workspaceScopeMs, geometryResult.ReadMs, packageScopeMs,
+                        pageResult.SpatialQueryMs, pageResult.PackageHydrationMs), null, null);
+            }
         }
         return results;
     }

@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Models;
@@ -134,6 +134,20 @@ namespace DataCatalague.Api.Controllers.V1
                 catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
                 catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
                 catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
+            }
+
+            /// <summary>Reads a bounded page of Workspace geometries with current, Pipeline-bound Package memberships.</summary>
+            [HttpGet("{id}/workspaces/overview")]
+            [ProducesResponseType<PagedResponse<WorkspaceOverviewResponse>>(StatusCodes.Status200OK)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+            public async Task<ActionResult<PagedResponse<WorkspaceOverviewResponse>>> GetWorkspaceOverview(
+                string id, CancellationToken cancellationToken,
+                [FromQuery, Range(1, int.MaxValue)] int page = 1,
+                [FromQuery, Range(1, 20)] int pageSize = DefaultPageSize) {
+                try { return this.Ok(await workspaceService.GetOverviewAsync(id, page, pageSize, cancellationToken)); }
+                catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+                catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
             }
 
             /// <summary>Gets a workspace and its Esri JSON polygon.</summary>

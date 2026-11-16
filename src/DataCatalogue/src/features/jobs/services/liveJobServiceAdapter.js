@@ -1,4 +1,5 @@
 import { collectPages } from "../../../shared/api/catalogueService.js";
+import { workspaceGeometryContextKey } from "../../../shared/api/workspaceGeometry.js";
 import { compareSeverity } from "../../../shared/domain/severity.js";
 import { loadLivePackageMetadata } from "./loadLivePackageMetadata.js";
 import { createScopedJobStatusAdapter, scopedJobId } from "../mock/scopedJobStatusAdapter.js";
@@ -11,8 +12,10 @@ export function createLiveJobServiceAdapter({
   // Null means the catalogue has not loaded; [] means a verified empty catalogue.
   let scopes = null;
   let jobs = new Map();
+  let pendingOverview = null;
+  let loadGeneration = 0;
 
-  function setWorkspaces(workspaces) {
+  function setWorkspaces(workspaces, { overview = null } = {}) {
     if (!Array.isArray(workspaces)) throw new Error("Workspaces must be an array.");
     const unique = new Map();
     for (const workspace of workspaces) {
@@ -23,7 +26,11 @@ export function createLiveJobServiceAdapter({
         structuredClone(workspace)
       );
     }
+    if (overview !== null && !(overview instanceof Map))
+      throw new Error("Workspace overview must be a scoped Map.");
     scopes = [...unique.values()];
+    pendingOverview = overview;
+    loadGeneration++;
     jobs = new Map();
   }
 
@@ -51,19 +58,36 @@ export function createLiveJobServiceAdapter({
         }
       }
       const selected = scopes;
+      const overview = pendingOverview;
+      // A snapshot is a single initial read, not a persistent membership cache. Manual
+      // refreshes must re-read the current Workspace membership from the API.
+      pendingOverview = null;
+      const currentLoad = ++loadGeneration;
       if (!selected.length) return { jobs: [] };
       const memberships = [];
       let scopeIndex = 0;
-      // The Workspace package lists are independent, but bounded to avoid an N+1 burst.
+      // Only missing/overflowing memberships need legacy reads; bound those requests.
       await Promise.all(
         Array.from({ length: Math.min(4, selected.length) }, async () => {
           while (scopeIndex < selected.length) {
             signal?.throwIfAborted();
             const workspace = selected[scopeIndex++];
+            const entry = overview?.get(
+              JSON.stringify([workspace.pipelineId, workspace.workspaceId])
+            );
+            if (overview && !entry)
+              throw new Error("Workspace overview does not include the current Workspace.");
+            if (
+              entry &&
+              workspaceGeometryContextKey(entry.workspace) !==
+                workspaceGeometryContextKey(workspace)
+            ) {
+              throw new Error("Workspace overview identity changed. Reload the catalogue.");
+            }
             const members = await collectPages(
               (options) =>
                 catalogue.workspacePackages(workspace.pipelineId, workspace.workspaceId, options),
-              { signal }
+              { signal, initialPage: entry?.packages ?? null }
             );
             for (const member of members) memberships.push({ workspace, member });
           }
@@ -100,7 +124,8 @@ export function createLiveJobServiceAdapter({
         };
       });
       loaded.sort((a, b) => compareSeverity(a.severity, b.severity) || a.id.localeCompare(b.id));
-      if (scopes === selected) jobs = new Map(loaded.map((job) => [job.id, job]));
+      if (scopes === selected && currentLoad === loadGeneration)
+        jobs = new Map(loaded.map((job) => [job.id, job]));
       return { jobs: loaded };
     },
     async updateJobStatus(id, status) {

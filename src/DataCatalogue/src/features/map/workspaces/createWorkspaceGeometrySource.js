@@ -8,6 +8,7 @@ export function createWorkspaceGeometrySource({
   catalogue,
   concurrency = 4,
   requestTimeoutMs = 20_000,
+  getOverview = null,
 }) {
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 6)
     throw new Error("Workspace geometry concurrency must be from 1 to 6.");
@@ -21,6 +22,8 @@ export function createWorkspaceGeometrySource({
         workspaces.map((workspace) => [workspaceGeometryKey(workspace), workspace])
       );
       const items = [...unique.values()];
+      // Capture one catalogue generation for this load. The overlay rejects superseded results.
+      const overview = getOverview?.() ?? null;
       const results = new Array(items.length);
       let index = 0;
       // No cross-selection cache: v1 has no geometry version/ETag or freshness guarantee.
@@ -30,6 +33,25 @@ export function createWorkspaceGeometrySource({
             signal?.throwIfAborted();
             const position = index++;
             const workspace = items[position];
+            const entry = overview?.get(workspaceGeometryKey(workspace));
+            if (
+              entry &&
+              workspaceGeometryContextKey(entry.workspace) ===
+                workspaceGeometryContextKey(workspace) &&
+              entry.esriJSON !== null
+            ) {
+              try {
+                results[position] = {
+                  workspace,
+                  polygon: normalizeWorkspacePolygon(entry.esriJSON),
+                  error: null,
+                };
+              } catch (error) {
+                results[position] = { workspace, polygon: null, error };
+              }
+              continue;
+            }
+            // Retry missing geometry independently, without repeating membership reads.
             const timeout = new AbortController();
             const timer = setTimeout(() => timeout.abort(), requestTimeoutMs);
             const readSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;

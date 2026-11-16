@@ -123,6 +123,23 @@ needed after extraction, review `npm run format` output before rerunning `npm ru
 This environment had no project dependencies; see the exact executed checks in the delivery
 report and [local verification instructions](docs/DC_API_LOCAL_VERIFICATION.md).
 
+## Main Map combined Workspace reads (DC-PERF-FE-01)
+
+Live Main Map startup uses the DC-PERF-BE-02 backend endpoint
+`GET /v1/pipelines/{pipelineId}/workspaces/overview?page=N&pageSize=20`.
+One complete paged read per Pipeline supplies both the Workspace polygons and
+initial Pipeline/Workspace-scoped Package memberships, eliminating the earlier
+individual read waterfall in the success case. The existing API base URL and
+Windows authentication configuration are unchanged. This deployment requires
+DC-PERF-BE-02 on the target API; an unavailable endpoint fails visibly.
+
+Null geometry or membership components use their corresponding existing
+per-Workspace read endpoint. Members beyond the embedded first 200 use subsequent
+legacy membership pages. Manual Packages refresh reads current membership again;
+there is no long-lived membership cache. The Package assignment page is unchanged.
+Local verification and three comparable cold/warm HAR runs are described in
+[DC-PERF-FE-01 validation](docs/DC_PERF_FE_01_VALIDATION.md).
+
 ## Branding and IIS virtual directories
 
 DataCatalogue supports the same browser-visible branding environment variables as

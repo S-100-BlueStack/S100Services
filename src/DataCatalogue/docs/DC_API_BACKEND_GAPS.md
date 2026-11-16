@@ -1,3 +1,20 @@
+## DC-PERF-FE-01 — Combined Workspace overview status (2026-11-16)
+
+DC-PERF-BE-02 now supplies a bounded, Pipeline-scoped combined Workspace
+geometry and first-200 Package membership read. The frontend candidate consumes
+this route on live Main Map startup; the earlier individual-read fan-out in
+DC-PERF-02 and DC-BE-FE-02 sections below describes the pre-integration state.
+Null geometry/membership components and membership pages above 200 still use
+individual endpoints. The separate Package assignment page is unchanged.
+
+**Still open:** no atomic multi-request snapshot/version token, no bulk Package
+_metadata_ in the Workspace overview, and no measured post-integration HAR/
+real-browser improvement. Manual Packages refresh deliberately rereads current
+membership. Verify actual SSO/deployment and concurrent backend updates before
+closing PAGE-02 or claiming live production readiness.
+
+---
+
 ## DC-PERF-02 — Remaining startup read contracts (2026-11-13)
 
 The existing verified `GET /v1/packages` contract now supports a bounded

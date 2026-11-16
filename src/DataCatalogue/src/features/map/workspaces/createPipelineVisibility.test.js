@@ -43,7 +43,12 @@ function createPaperWorkspaces(count, displayName = (number) => `Workspace ${num
   });
 }
 
-function fixture({ onWorkspacesLoaded = null, workspaces = null, readOnly = false } = {}) {
+function fixture({
+  onWorkspacesLoaded = null,
+  workspaces = null,
+  readOnly = false,
+  loadCatalogue = null,
+} = {}) {
   const original = globalThis.document;
   globalThis.document = {
     createElement: (name) => new TestElement(name),
@@ -73,9 +78,10 @@ function fixture({ onWorkspacesLoaded = null, workspaces = null, readOnly = fals
     catalogue,
     container,
     readOnly,
-    onWorkspacesLoaded(workspaces) {
+    loadCatalogue,
+    onWorkspacesLoaded(workspaces, groups, overview) {
       loaded.push(workspaces);
-      onWorkspacesLoaded?.(workspaces);
+      onWorkspacesLoaded?.(workspaces, groups, overview);
     },
     onChange(workspaces, options) {
       callbacks.push({ workspaces, options });
@@ -353,6 +359,82 @@ test("read-only Pipeline overview has no competing map visibility inputs", async
       assert.ok(group.children[1].children.every((item) => item.tagName === "div"));
     }
     assert.match(f.container.children[0].textContent, /Select Workspaces in Packages/);
+  } finally {
+    f.restore();
+  }
+});
+
+test("combined overview is handed to both consumers once without a duplicate catalogue read", async () => {
+  const rows = defaultWorkspaces.map((workspace) => ({
+    ...workspace,
+    pipelineName: workspace.pipelineId,
+  }));
+  const snapshot = new Map([
+    [
+      JSON.stringify(["enc", "east"]),
+      {
+        workspace: rows[1],
+        esriJSON: null,
+        packages: { items: [], page: 0, pageSize: 200, total: 0 },
+      },
+    ],
+  ]);
+  let reads = 0;
+  const received = [];
+  const f = fixture({
+    loadCatalogue: async () => {
+      reads++;
+      return {
+        workspaces: rows,
+        pipelines: [
+          { id: "enc", name: "ENC" },
+          { id: "paper", name: "Paper Charts" },
+        ],
+        overview: snapshot,
+      };
+    },
+    onWorkspacesLoaded(workspaces, groups, overview) {
+      received.push({ workspaces, groups, overview });
+    },
+  });
+  try {
+    await f.controller.ensureLoaded();
+    assert.equal(reads, 1);
+    assert.equal(received.length, 1);
+    assert.equal(received[0].overview, snapshot);
+    assert.equal(received[0].workspaces.length, 2);
+    assert.equal(received[0].groups.length, 2);
+    await f.controller.ensureLoaded();
+    assert.equal(reads, 1);
+  } finally {
+    f.restore();
+  }
+});
+
+test("superseded combined overview cannot replace newer Workspace membership", async () => {
+  let firstResolve;
+  const first = new Promise((resolve) => {
+    firstResolve = resolve;
+  });
+  let reads = 0;
+  const loaded = [];
+  const catalogue = (workspaceId) => ({
+    pipelines: [{ id: "enc", name: "ENC" }],
+    workspaces: [{ pipelineId: "enc", workspaceId, name: workspaceId }],
+    overview: new Map(),
+  });
+  const f = fixture({
+    loadCatalogue: async () => (++reads === 1 ? first : catalogue("current")),
+    onWorkspacesLoaded(workspaces) {
+      loaded.push(workspaces.map((w) => w.workspaceId));
+    },
+  });
+  try {
+    const newer = await f.controller.reload();
+    assert.equal(newer.ok, true);
+    firstResolve(catalogue("old"));
+    await new Promise(setImmediate);
+    assert.deepEqual(loaded, [["current"]]);
   } finally {
     f.restore();
   }
