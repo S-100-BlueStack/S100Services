@@ -117,6 +117,9 @@ public sealed record DashboardQueryOptions(
     }
 }
 
+/// <summary>Indicates whether a Product has report files created in the selected time range.</summary>
+public sealed record DashboardReportAvailability(bool IcEnc, bool InternalValidation);
+
 public sealed record DashboardQueryResult(
     IReadOnlyList<DashboardActivityResponse> FilteredActivities,
     IReadOnlyList<DashboardActivityResponse> PageActivities,
@@ -141,7 +144,8 @@ public static class DashboardQueryProcessor
 
     public static DashboardQueryResult Execute(
         IEnumerable<DashboardActivityResponse> sourceActivities,
-        DashboardQueryOptions options)
+        DashboardQueryOptions options,
+        IReadOnlyDictionary<string, DashboardReportAvailability>? reportAvailability = null)
     {
         ArgumentNullException.ThrowIfNull(sourceActivities);
         ArgumentNullException.ThrowIfNull(options);
@@ -149,7 +153,7 @@ public static class DashboardQueryProcessor
         var source = sourceActivities.ToArray();
         var filterOptions = CreateFilterOptions(source);
         var filtered = source
-            .Where(activity => Matches(activity, options))
+            .Where(activity => Matches(activity, options, reportAvailability))
             .OrderBy(activity => activity, Comparer<DashboardActivityResponse>.Create((left, right) =>
                 ComparePosition(left, GetPrimaryValue(right, options.SortBy),
                     right.Timestamp.UtcDateTime.Ticks, right.Id, options)))
@@ -234,6 +238,27 @@ public static class DashboardQueryProcessor
                         Failed = group.Count(activity => FailedStatuses.Contains(activity.Status))
                     })
             ],
+            ActivityTrend = [.. activities
+                .GroupBy(activity => activity.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                .Select(group => new DashboardActivityTrendResponse
+                {
+                    Day = group.Key,
+                    Activities = group.Count(),
+                    Failed = group.Count(activity => FailedStatuses.Contains(activity.Status)),
+                    Important = group.Count(IsImportant)
+                })],
+            ProductBreakdown = [.. activities
+                .GroupBy(activity => activity.ProductSpecification ?? "Unknown", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new DashboardProductBreakdownResponse
+                {
+                    ProductSpecification = group.Key,
+                    Activities = group.Count(),
+                    ProductsTouched = group.Select(activity => activity.DatasetName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    Failed = group.Count(activity => FailedStatuses.Contains(activity.Status))
+                })],
             Paging = result.Paging,
             FilterOptions = result.FilterOptions,
             Activities = [.. result.PageActivities]
@@ -287,7 +312,8 @@ public static class DashboardQueryProcessor
             _ => string.Empty
         };
 
-    private static bool Matches(DashboardActivityResponse activity, DashboardQueryOptions options)
+    private static bool Matches(DashboardActivityResponse activity, DashboardQueryOptions options,
+        IReadOnlyDictionary<string, DashboardReportAvailability>? reportAvailability)
     {
         if (!MatchesSearch(activity, options.Search))
         {
@@ -306,7 +332,7 @@ public static class DashboardQueryProcessor
             return false;
         }
 
-        return MatchesReports(activity, options.Reports);
+        return MatchesReports(activity, options.Reports, reportAvailability);
     }
 
     private static bool MatchesSearch(DashboardActivityResponse activity, string search)
@@ -355,10 +381,18 @@ public static class DashboardQueryProcessor
         return true;
     }
 
-    private static bool MatchesReports(DashboardActivityResponse activity, string filter)
+    private static bool MatchesReports(DashboardActivityResponse activity, string filter,
+        IReadOnlyDictionary<string, DashboardReportAvailability>? reportAvailability)
     {
-        var hasIcEncReports = activity.Links.IcEncReports.Count > 0;
-        var hasInternalValidationReports = activity.Links.InternalValidationReports.Count > 0;
+        // A report belongs to a Product revision, not uniquely to a ProductStateHistory row.
+        // Keep existing linked-report support for older clients and tests; augment availability
+        // by Product without fabricating a direct event-to-revision relationship.
+        DashboardReportAvailability? available = null;
+        if (reportAvailability is not null)
+            reportAvailability.TryGetValue(activity.DatasetName, out available);
+        var hasIcEncReports = activity.Links.IcEncReports.Count > 0 || available?.IcEnc == true;
+        var hasInternalValidationReports = activity.Links.InternalValidationReports.Count > 0
+            || available?.InternalValidation == true;
 
         return filter switch
         {

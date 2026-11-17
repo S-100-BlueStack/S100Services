@@ -4,6 +4,7 @@ using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Hosting;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Dashboard;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Jobs;
@@ -33,6 +34,7 @@ public static class BackendRegistrations
         services.AddSingleton<DbConnectionFactory>();
         services.AddScoped<ProductRepository>();
         services.AddScoped<IProductRepository>(provider => provider.GetRequiredService<ProductRepository>());
+        services.AddScoped<IDashboardReportingRepository, SqlDashboardReportingRepository>();
         services.AddScoped<IProductWorkflowRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IEncPackageRepository, EncPackageRepository>();
         services.AddScoped<IEncPackageControlRepository, EncPackageControlRepository>();

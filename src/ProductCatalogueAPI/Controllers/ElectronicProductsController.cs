@@ -26,7 +26,7 @@ namespace ProductCatalogueAPI.Controllers
     [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!, IEncPackageRepository? packageRepository = null) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!, IEncPackageRepository? packageRepository = null, IDashboardReportingRepository? dashboardReportingRepository = null) : ControllerBase
     {
         private const string AoiCacheKeyPrefix = "electronic-products-aoi";
         private static readonly TimeSpan AoiCacheLifetime = TimeSpan.FromHours(24);
@@ -36,6 +36,7 @@ namespace ProductCatalogueAPI.Controllers
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IMemoryCache _cache = cache;
         private readonly IProductRepository _repository = repository;
+        private readonly IDashboardReportingRepository? _dashboardReportingRepository = dashboardReportingRepository;
         private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
         private readonly IEncPackageRepository? _packageRepository = packageRepository;
         private readonly IProductWorkspaceFreshnessRepository? _workspaceFreshnessRepository = workspaceFreshnessRepository;
@@ -675,8 +676,24 @@ namespace ProductCatalogueAPI.Controllers
             var sourceActivities = rows.Select(ToDashboardActivity).ToArray();
             mappingStopwatch.Stop();
 
+            // Read immutable delivery decisions, current track health and file metadata independently
+            // of paged history. Dashboard list filters still operate on complete linked activities.
+            var reportingStopwatch = Stopwatch.StartNew();
+            DashboardReportingSnapshot? reporting = null;
+            if (_dashboardReportingRepository is not null)
+            {
+                var datasetFilter = queryOptions.Product == DashboardQueryOptions.AnyValue
+                    ? null : queryOptions.Product;
+                reporting = await _dashboardReportingRepository.LoadAsync(
+                    fromDatabaseTime, toDatabaseTime, datasetFilter,
+                    HttpContext?.RequestAborted ?? CancellationToken.None);
+            }
+            reportingStopwatch.Stop();
+
             var filteringStopwatch = Stopwatch.StartNew();
-            var queryResult = DashboardQueryProcessor.Execute(sourceActivities, queryOptions);
+            var availability = reporting is null ? null
+                : DashboardReportingProjector.CreateReportAvailability(reporting.Artifacts);
+            var queryResult = DashboardQueryProcessor.Execute(sourceActivities, queryOptions, availability);
             filteringStopwatch.Stop();
 
             var responseData = DashboardQueryProcessor.CreateResponse(
@@ -685,6 +702,12 @@ namespace ProductCatalogueAPI.Controllers
                 GetDashboardNow(),
                 queryResult,
                 DashboardTimeZoneId);
+            if (reporting is not null)
+                DashboardReportingProjector.Apply(responseData, reporting, queryOptions,
+                    queryResult.FilteredActivities,
+                    artifact => Url?.Action(nameof(DownloadValidationArtifact),
+                        new { name = artifact.DatasetName, artifactId = artifact.Id })
+                        ?? $"/electronicproducts/{Uri.EscapeDataString(artifact.DatasetName)}/artifacts/{artifact.Id:D}");
 
             var response = new ApiResponse<DashboardResponse>
             {
@@ -694,12 +717,13 @@ namespace ProductCatalogueAPI.Controllers
             };
 
             _logger.LogInformation(
-                "Dashboard query completed. SourceRows: {SourceRows}. FilteredRows: {FilteredRows}. ReturnedRows: {ReturnedRows}. RepositoryMs: {RepositoryMs}. MappingMs: {MappingMs}. FilteringAndPagingMs: {FilteringAndPagingMs}. TotalMs: {TotalMs}.",
+                "Dashboard query completed. SourceRows: {SourceRows}. FilteredRows: {FilteredRows}. ReturnedRows: {ReturnedRows}. RepositoryMs: {RepositoryMs}. MappingMs: {MappingMs}. ReportingMs: {ReportingMs}. FilteringAndPagingMs: {FilteringAndPagingMs}. TotalMs: {TotalMs}.",
                 rows.Length,
                 queryResult.FilteredActivities.Count,
                 queryResult.PageActivities.Count,
                 repositoryStopwatch.Elapsed.TotalMilliseconds,
                 mappingStopwatch.Elapsed.TotalMilliseconds,
+                reportingStopwatch.Elapsed.TotalMilliseconds,
                 filteringStopwatch.Elapsed.TotalMilliseconds,
                 totalStopwatch.Elapsed.TotalMilliseconds);
 
@@ -782,6 +806,7 @@ namespace ProductCatalogueAPI.Controllers
                 Timestamp = ConvertDatabaseTimeToDashboardTime(record.Date_From),
                 DatasetName = record.Name,
                 ProductName = record.Name,
+                ProductSpecification = record.ProductSpecification.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant(),
                 Type = metadata.Type,
                 Severity = metadata.Severity,
                 Title = metadata.Title,

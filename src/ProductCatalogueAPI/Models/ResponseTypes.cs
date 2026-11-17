@@ -97,6 +97,98 @@ namespace ProductCatalogueAPI.Models
             public DashboardPagingResponse Paging { get; set; } = new();
             public DashboardFilterOptionsResponse FilterOptions { get; set; } = new();
             public List<DashboardActivityResponse> Activities { get; set; } = [];
+            /// <summary>Live and simulated delivery outcomes counted from immutable revision deliveries.</summary>
+            public DashboardDistributionSummaryResponse? Distribution { get; set; }
+            /// <summary>Current track state, independent of the selected historical range.</summary>
+            public DashboardOperationalHealthResponse? OperationalHealth { get; set; }
+            /// <summary>Stored report files created within the selected UTC interval.</summary>
+            public DashboardReportSummaryResponse? ReportSummary { get; set; }
+            /// <summary>Exact Product, specification and revision ownership for available report files.</summary>
+            public List<DashboardReportArtifactResponse> ReportArtifacts { get; set; } = [];
+            /// <summary>Daily counts from the complete filtered activity set, never just the current page.</summary>
+            public List<DashboardActivityTrendResponse> ActivityTrend { get; set; } = [];
+            /// <summary>Daily live delivery outcomes, scoped to the reporting interval and product.</summary>
+            public List<DashboardDistributionTrendResponse> DistributionTrend { get; set; } = [];
+            public List<DashboardProductBreakdownResponse> ProductBreakdown { get; set; } = [];
+        }
+
+        public class DashboardDistributionSummaryResponse
+        {
+            public DashboardDistributionCountsResponse Live { get; set; } = new();
+            public DashboardDistributionCountsResponse Simulation { get; set; } = new();
+            public List<DashboardDistributionBreakdownResponse> BySpecification { get; set; } = [];
+        }
+
+        public class DashboardDistributionCountsResponse
+        {
+            public int Sent { get; set; }
+            public int Accepted { get; set; }
+            public int Rejected { get; set; }
+            /// <summary>Delivered in the reporting interval and still awaiting a decision.</summary>
+            public int Pending { get; set; }
+            public int Uncertain { get; set; }
+            public decimal? AcceptanceRatePercent { get; set; }
+        }
+
+        public class DashboardDistributionBreakdownResponse
+        {
+            public required string ProductSpecification { get; set; }
+            public bool IsSimulation { get; set; }
+            public DashboardDistributionCountsResponse Counts { get; set; } = new();
+        }
+
+        public class DashboardOperationalHealthResponse
+        {
+            public DateTimeOffset AsOfUtc { get; set; }
+            public int Tracks { get; set; }
+            public int OpenErrors { get; set; }
+            public int Processing { get; set; }
+            public int AwaitingIcEnc { get; set; }
+            public int Paused { get; set; }
+        }
+
+        public class DashboardReportSummaryResponse
+        {
+            public int Total { get; set; }
+            public int IcEnc { get; set; }
+            public int InternalValidation { get; set; }
+            public int ValidationDiagnostics { get; set; }
+        }
+
+        public class DashboardReportArtifactResponse
+        {
+            public Guid Id { get; set; }
+            public Guid? RevisionId { get; set; }
+            public required string DatasetName { get; set; }
+            public required string ProductSpecification { get; set; }
+            public required string Kind { get; set; }
+            public required string FileName { get; set; }
+            public DateTimeOffset CreatedAtUtc { get; set; }
+            public required string Url { get; set; }
+        }
+
+        public class DashboardActivityTrendResponse
+        {
+            public required string Day { get; set; }
+            public int Activities { get; set; }
+            public int Failed { get; set; }
+            public int Important { get; set; }
+        }
+
+        public class DashboardDistributionTrendResponse
+        {
+            public required string Day { get; set; }
+            public int Sent { get; set; }
+            public int Accepted { get; set; }
+            public int Rejected { get; set; }
+        }
+
+        public class DashboardProductBreakdownResponse
+        {
+            public required string ProductSpecification { get; set; }
+            public int Activities { get; set; }
+            public int ProductsTouched { get; set; }
+            public int Failed { get; set; }
         }
 
         public class DashboardPagingResponse
@@ -156,6 +248,7 @@ namespace ProductCatalogueAPI.Models
             public DateTimeOffset Timestamp { get; set; }
             public required string DatasetName { get; set; }
             public required string ProductName { get; set; }
+            public string? ProductSpecification { get; set; }
             public required string Type { get; set; }
             public required string Severity { get; set; }
             public required string Title { get; set; }
