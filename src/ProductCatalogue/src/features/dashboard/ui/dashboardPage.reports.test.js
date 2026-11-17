@@ -329,7 +329,7 @@ test("Opening History invalidates a pending report request", async () => {
   assert.equal(h.historyState().isOpen, true);
 });
 
-test("Backend errors remain visible in the panel; retry is an explicit subsequent open", async () => {
+test("Backend errors remain visible, and reopening after a toggle-close retries explicitly", async () => {
   let calls = 0;
   const h = await createHarness({
     fetchReports: async () => {
@@ -344,21 +344,51 @@ test("Backend errors remain visible in the panel; retry is an explicit subsequen
     /Artifact service unavailable/
   );
   await h.openDashboardReports(activity(), "ic-enc");
+  assert.equal(h.reportState().isOpen, false);
+  assert.equal(calls, 1);
+  await h.openDashboardReports(activity(), "ic-enc");
   assert.equal(calls, 2);
   assert.equal(h.reportState().reports[0].url, "/retry");
 });
 
-test("Repeated activation during loading does not issue duplicate requests", async () => {
+test("Clicking the active report while loading closes without duplicate requests or stale results", async () => {
   const requests = [];
   const h = await createHarness({
     fetchReports: () => new Promise((resolve) => requests.push(resolve)),
   });
-  const first = h.openDashboardReports(activity(), "ic-enc");
-  await h.openDashboardReports(activity(), "ic-enc");
+  const item = activity();
+  const first = h.openDashboardReports(item, "ic-enc");
+  assert.equal(h.reportState().isOpen, true);
+  await h.openDashboardReports(item, "ic-enc");
+  assert.equal(h.reportState().isOpen, false);
+  assert.equal(h.renderCalls.at(-1).panelAction, "ic-enc:id:activity-1");
   assert.equal(requests.length, 1);
-  requests[0]({ reports: [{ title: "Ready", url: "/ready" }] });
+  requests[0]({ reports: [{ title: "Stale", url: "/stale" }] });
   await first;
-  assert.equal(h.reportState().reports[0].url, "/ready");
+  assert.equal(h.reportState().reports.length, 0);
+  const second = h.openDashboardReports(item, "ic-enc");
+  assert.equal(requests.length, 2);
+  requests[1]({ reports: [{ title: "Current", url: "/current" }] });
+  await second;
+  assert.equal(h.reportState().reports[0].url, "/current");
+});
+
+test("Clicking the same History action toggles the panel closed and suppresses stale history", async () => {
+  const requests = [];
+  const h = await createHarness({
+    fetchHistory: () => new Promise((resolve) => requests.push(resolve)),
+  });
+  const item = activity();
+  const first = h.openDashboardHistory(item);
+  await flush();
+  assert.equal(requests.length, 1);
+  await h.openDashboardHistory(item);
+  assert.equal(h.historyState().isOpen, false);
+  assert.equal(h.renderCalls.at(-1).panelAction, "history:id:activity-1");
+  requests[0]({ events: [{ id: "old" }] });
+  await first;
+  assert.equal(h.historyState().history, null);
+  assert.equal(h.reportState().isOpen, false);
 });
 
 test("Detached Dashboard pages ignore late report completions and allow a new request", async () => {
@@ -380,4 +410,28 @@ test("Detached Dashboard pages ignore late report completions and allow a new re
   await second;
   assert.equal(newPage.isConnected, true);
   assert.equal(h.reportState().reports[0].url, "/current");
+});
+
+test("Activity rows retain complete backend metadata while presenting a single compact details line", async () => {
+  const h = await createHarness();
+  const row = h.createActivityRow(
+    activity({
+      title: "Ready for distribution",
+      description: "The candidate has completed validation.",
+      details: [
+        { label: "Source state", value: "ReadyForDistribution" },
+        { label: "Edition", value: "3" },
+        { label: "Owner", value: "SYSTEM" },
+      ],
+    }),
+    "Europe/Copenhagen"
+  );
+  const cell = row.children[2];
+  assert.equal(cell.children.length, 3);
+  assert.equal(
+    cell.children[2].textContent,
+    "Source state: ReadyForDistribution · Edition: 3 · Owner: SYSTEM"
+  );
+  assert.match(cell.title, /Ready for distribution/);
+  assert.match(cell.title, /Owner: SYSTEM/);
 });

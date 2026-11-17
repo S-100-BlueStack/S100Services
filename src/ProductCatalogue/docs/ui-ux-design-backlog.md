@@ -249,3 +249,48 @@ and the user-approved shortened tooltip copy is applied. Backend-specific
 permission/disabled reasons, Product workflows, data loading and R01-R04
 behavior remain unchanged. No new dependencies. Local browser acceptance
 is pending; do not mark R05 complete from Node tests alone.
+
+## PC-UX-R06 – Dashboard visual hierarchy (candidate)
+
+Implementation-review baseline: `f85d5a5d41d7b2b0dd61fa2279bfd6f1cc39e1fa`.
+This targeted presentation candidate compacts existing KPI cards, makes
+`Activity list` visible, gives the table more horizontal space and reduces
+filter wrapping. All existing Dashboard controls remain directly accessible;
+server filtering, sorting, cursor paging, load lifecycle, status/operation
+summary filter actions and right-hand History/IC-ENC/Validation panels remain
+unchanged. See [Dashboard](../src/features/dashboard/README.md). Browser design
+acceptance and local `npm run check` are pending; do not mark R06 complete.
+
+
+### PC-UX-R06 v2 – Operational reporting dashboard (review candidate)
+
+R06 v2 supersedes the v1 presentation proposal while retaining its accepted
+filter layout, visible activity heading and backend-independent interactions.
+It adds an operational KPI strip and dependency-free Status/Operation distribution
+bars, narrows the Activity text presentation without discarding metadata and
+allows active History/IC-ENC/Validation buttons to toggle their panels closed.
+The Dashboard endpoint does **not** provide an accepted-for-distribution total;
+the dedicated positive KPI is visibly unavailable until a verified backend
+aggregate exists. It must not be guessed from Ready-for-distribution or other
+completed activity records or from a paginated response. No server changes are
+part of this candidate. Browser review and the local `npm run check` gate remain
+pending; do not mark R06 accepted before those checks.
+
+
+### PC-UX-R06 v3 – Reporting layout and activity scanability (review candidate)
+
+R06 v3 supersedes the visual treatment of v2 while preserving its report-panel
+toggles, backend summaries, empty states, filters and safe Accepted-for-distribution
+placeholder. The six KPI cards are grouped 3 × 2 above the activity list rather
+than spanning the whole page. The right side expands into a status donut with
+clickable legend and a vertical operation bar chart, both derived exclusively
+from complete filtered backend totals. The table constrains Time/Product/Status/
+Links widths in its headers so Activity does not leave unused space. All existing
+row actions remain available, with operation-type markers and readable status
+pills for quick scanning. Failed KPI clicks toggle the existing failed-importance
+server filter and restore keyboard focus. No backend or dependency changes.
+
+This is not yet accepted. Browser validation must cover responsive layouts,
+status colors in both themes, chart interactions, keyboard/focus restoration,
+existing History/IC-ENC/Validation panel lifecycle, and report/Activity filtering.
+Distribution acceptance requires a separate verified backend aggregate.

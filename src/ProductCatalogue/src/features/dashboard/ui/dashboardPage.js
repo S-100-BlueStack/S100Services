@@ -29,33 +29,14 @@ import {
 } from "../domain/dashboardRange.js";
 import { createDashboardLoadPresentation } from "./dashboardLoadPresentation.js";
 
-const SUMMARY_CARDS = [
-  {
-    key: "totalActivities",
-    label: "Activities",
-    description: "All recorded operational events",
-  },
-  {
-    key: "productsTouched",
-    label: "Products touched",
-    description: "Unique products with activity",
-  },
-  {
-    key: "importantChanges",
-    label: "Important changes",
-    description: "Failed or important events",
-  },
-  {
-    key: "reportsAvailable",
-    label: "Reports",
-    description: "IC-ENC or validation reports",
-  },
-  {
-    key: "failedOperations",
-    label: "Failed",
-    description: "Operations needing attention",
-  },
-];
+const DASHBOARD_METRIC_DESCRIPTIONS = {
+  totalActivities: "All recorded operational events in the selected filtered range",
+  productsTouched: "Unique products with activity in the selected filtered range",
+  activeOperations: "Active activities across the full filtered result",
+  acceptedForDistribution: "Accepted distribution totals are not provided by this Dashboard API",
+  failedOperations: "Failed activities in the selected filtered range",
+  reportsAvailable: "IC-ENC or validation reports recorded by the Dashboard API",
+};
 
 const IMPORTANCE_OPTIONS = [
   { value: "all", label: "All" },
@@ -860,7 +841,6 @@ function createBody({
   dashboardFilters = normalizeDashboardFilters(dashboardFilters, filterOptions);
 
   body.append(
-    createSummaryCards(dashboard.summary),
     createDashboardGrid({
       dashboard,
       sourceActivityCount: dashboard.paging?.total ?? dashboard.activities.length,
@@ -924,28 +904,101 @@ function createStateMessage(title, description) {
   return state;
 }
 
-function createSummaryCards(summary) {
+function createSummaryCards(dashboard) {
   const cards = document.createElement("section");
   cards.className = "pc-dashboard-summary";
   cards.setAttribute("aria-label", "Dashboard summary");
+  const summary = dashboard?.summary ?? {};
+  const statusRows = dashboard?.statusSummary ?? [];
+  const hasStatusTotals = statusRows.length > 0 || Number(summary.totalActivities) === 0;
+  const activeCount = hasStatusTotals
+    ? statusRows.reduce(
+        (count, row) =>
+          count + (String(row.label).toLowerCase() === "active" ? Number(row.count) || 0 : 0),
+        0
+      )
+    : null;
 
-  for (const cardConfig of SUMMARY_CARDS) {
-    const card = document.createElement("article");
-    card.className = `pc-dashboard-summary-card pc-dashboard-summary-card--${cardConfig.key}`;
+  const metrics = [
+    {
+      key: "totalActivities",
+      label: "Activities",
+      value: summary.totalActivities ?? 0,
+      detail: `${summary.importantChanges ?? 0} important changes`,
+    },
+    {
+      key: "productsTouched",
+      label: "Products touched",
+      value: summary.productsTouched ?? 0,
+      detail: "Unique Products",
+    },
+    {
+      key: "activeOperations",
+      label: "Active",
+      value: activeCount ?? "—",
+      detail: activeCount === null ? "Status total unavailable" : "Active status events",
+      tone: "active",
+    },
+    {
+      key: "acceptedForDistribution",
+      label: "Accepted for distribution",
+      // Ready-for-distribution and completed operations do not prove IC-ENC acceptance.
+      // This KPI must remain unavailable until the backend provides a verified total.
+      value: "—",
+      detail: "Backend total not available",
+      tone: "positive",
+      unavailable: true,
+    },
+    {
+      key: "failedOperations",
+      label: "Failed",
+      value: summary.failedOperations ?? 0,
+      detail: "Failed events",
+      tone: "danger",
+      interactive: true,
+    },
+    {
+      key: "reportsAvailable",
+      label: "Reports",
+      value: summary.reportsAvailable ?? 0,
+      detail: "Linked reports",
+    },
+  ];
 
-    const value = document.createElement("div");
-    value.className = "pc-dashboard-summary-card__value";
-    value.textContent = String(summary?.[cardConfig.key] ?? 0);
+  for (const metric of metrics) {
+    const card = document.createElement(metric.interactive ? "button" : "article");
+    card.className = `pc-dashboard-summary-card pc-dashboard-summary-card--${metric.key}`;
+    if (metric.tone) card.classList.add(`is-${metric.tone}`);
+    if (metric.unavailable) card.classList.add("is-unavailable");
+    if (metric.interactive) {
+      const isFiltered = dashboardFilters.importance === "failed";
+      card.type = "button";
+      card.classList.add("is-interactive");
+      card.dataset.dashboardFocusKey = "failed-kpi";
+      card.setAttribute("aria-pressed", String(isFiltered));
+      card.title = isFiltered ? "Clear failed activity filter" : "Filter to failed activity";
+      card.addEventListener("click", () => {
+        updateDashboardFilters({ importance: isFiltered ? "all" : "failed" });
+      });
+    }
 
     const label = document.createElement("div");
     label.className = "pc-dashboard-summary-card__label";
-    label.textContent = cardConfig.label;
+    label.textContent = metric.label;
+
+    const value = document.createElement("div");
+    value.className = "pc-dashboard-summary-card__value";
+    value.textContent = String(metric.value);
+
+    const detail = document.createElement("div");
+    detail.className = "pc-dashboard-summary-card__detail";
+    detail.textContent = metric.detail;
 
     const description = document.createElement("div");
-    description.className = "pc-dashboard-summary-card__description";
-    description.textContent = cardConfig.description;
+    description.className = "pc-dashboard-visually-hidden";
+    description.textContent = DASHBOARD_METRIC_DESCRIPTIONS[metric.key];
 
-    card.append(value, label, description);
+    card.append(label, value, detail, description);
     cards.appendChild(card);
   }
 
@@ -972,7 +1025,8 @@ function createDashboardGrid({
 
   const main = document.createElement("div");
   main.className = "pc-dashboard-grid__main";
-  main.appendChild(
+  main.append(
+    createSummaryCards(dashboard),
     createActivityList(dashboard.activities, loading, timeZone, {
       filters,
       filterOptions,
@@ -1044,7 +1098,6 @@ function createActivityList(
         ? `${activities.length} / ${sourceActivityCount}`
         : activities.length,
     status: loading ? "Refreshing" : null,
-    visuallyHiddenTitle: true,
   });
 
   const tableWrapper = document.createElement("div");
@@ -1367,7 +1420,16 @@ function createActivityRow(activity, timeZone) {
   product.textContent = activity.datasetName || "-";
 
   const activityCell = document.createElement("td");
-  activityCell.className = "pc-dashboard-activity-table__activity";
+  activityCell.className = `pc-dashboard-activity-table__activity tone-${getDashboardOperationTone(activity.type)}`;
+  activityCell.title = [
+    activity.title,
+    activity.description,
+    ...(activity.details ?? []).map((item) =>
+      item.label ? `${item.label}: ${item.value}` : item.value
+    ),
+  ]
+    .filter(Boolean)
+    .join(" | ");
   activityCell.append(
     createActivityTitle(activity),
     createActivityDescription(activity),
@@ -1401,18 +1463,10 @@ function createActivityDescription(activity) {
 function createActivityDetails(activity) {
   const details = document.createElement("div");
   details.className = "pc-dashboard-activity-table__details";
-
-  if (!activity.details.length) {
-    return details;
-  }
-
-  for (const item of activity.details) {
-    const value = document.createElement("span");
-    value.className = "pc-dashboard-detail-chip";
-    value.textContent = item.label ? `${item.label}: ${item.value}` : item.value;
-    details.appendChild(value);
-  }
-
+  details.textContent = (activity.details ?? [])
+    .map((item) => (item.label ? `${item.label}: ${item.value}` : item.value))
+    .filter(Boolean)
+    .join(" · ");
   return details;
 }
 
@@ -1475,7 +1529,9 @@ function createDashboardHistoryLink(activity) {
   );
   button.title = button.disabled
     ? "History is not available for this activity."
-    : `Open History for ${activity.datasetName}`;
+    : isDashboardHistoryActivitySelected(activity)
+      ? `Close History for ${activity.datasetName}`
+      : `Open History for ${activity.datasetName}`;
 
   if (!button.disabled) {
     button.addEventListener("click", () => {
@@ -1536,7 +1592,7 @@ function createDashboardReportButton(activity, reportType) {
     String(isDashboardReportActivitySelected(activity, reportType))
   );
   button.title = canOpen
-    ? `Open ${label} reports for ${activity.datasetName || "this activity"}`
+    ? `${isDashboardReportActivitySelected(activity, reportType) ? "Close" : "Open"} ${label} reports for ${activity.datasetName || "this activity"}`
     : `${label} reports are not available for this activity.`;
   if (canOpen) {
     button.addEventListener("click", () => {
@@ -1620,6 +1676,16 @@ async function openDashboardHistory(activityOrDatasetName) {
     typeof activityOrDatasetName === "string"
       ? null
       : createDashboardHistoryActivitySnapshot(activityOrDatasetName, normalizedDatasetName);
+
+  if (
+    dashboardHistoryState.isOpen &&
+    (activity
+      ? isDashboardActivityMatch(activity, dashboardHistoryState.activity)
+      : dashboardHistoryState.datasetName === normalizedDatasetName)
+  ) {
+    closeDashboardHistory();
+    return;
+  }
 
   resetDashboardReports();
   const requestId = dashboardHistoryState.requestId + 1;
@@ -1918,11 +1984,12 @@ async function openDashboardReports(activity, reportType) {
   const page = document.getElementById("product-dashboard-page");
   if (!page?.isConnected) return;
   if (
-    dashboardReportPanelState.loading &&
-    dashboardReportPanelPage?.isConnected &&
+    dashboardReportPanelState.isOpen &&
+    dashboardReportPanelPage === page &&
     isDashboardReportActivitySelected(activity, reportType)
   ) {
-    // A second click while this panel is loading must not duplicate the lookup.
+    // Toggling the selected action closes its panel and invalidates the lookup.
+    closeDashboardReports();
     return;
   }
 
@@ -2124,6 +2191,8 @@ function createDisabledLink(label) {
 function createSummaryRows({ title, rows, filterKey, filters }) {
   const section = document.createElement("section");
   section.className = "pc-dashboard-panel pc-dashboard-breakdown";
+  const isStatus = filterKey === "status";
+  section.classList.add(isStatus ? "is-status-overview" : "is-operation-overview");
   section.appendChild(
     createPanelHeader({
       title,
@@ -2132,28 +2201,108 @@ function createSummaryRows({ title, rows, filterKey, filters }) {
   );
 
   const list = document.createElement("div");
-  list.className = "pc-dashboard-breakdown__rows";
-
+  list.className = isStatus
+    ? "pc-dashboard-breakdown__rows pc-dashboard-status-legend"
+    : "pc-dashboard-breakdown__rows pc-dashboard-operation-chart";
   if (rows.length === 0) {
     list.appendChild(createEmptyText("No summary rows available yet."));
   } else {
+    const maxCount = Math.max(1, ...rows.map((row) => Number(row.count) || 0));
     for (const row of rows) {
-      list.appendChild(createSummaryRow({ row, filterKey, filters }));
+      list.appendChild(createSummaryRow({ row, filterKey, filters, maxCount }));
     }
   }
 
-  section.appendChild(list);
+  if (isStatus && rows.some((row) => Number(row.count) > 0)) {
+    const overview = document.createElement("div");
+    overview.className = "pc-dashboard-status-overview";
+    overview.append(createDashboardStatusChart(rows), list);
+    section.appendChild(overview);
+  } else {
+    section.appendChild(list);
+  }
   return section;
 }
 
-function createSummaryRow({ row, filterKey, filters }) {
+function createDashboardStatusChart(rows) {
+  const chart = document.createElement("div");
+  chart.className = "pc-dashboard-status-chart";
+  chart.setAttribute("role", "img");
+  chart.setAttribute(
+    "aria-label",
+    `Status distribution: ${rows.map((row) => `${toTitleCase(row.label)} ${row.count}`).join(", ")}`
+  );
+
+  const total = sumSummaryRowCounts(rows);
+  let position = 0;
+  const segments = [];
+  for (const row of rows) {
+    const count = Number(row.count);
+    if (!(count > 0)) continue;
+    const end = Math.min(100, position + (count / total) * 100);
+    const color = getDashboardChartColor(row.label, "status");
+    segments.push(`${color} ${position.toFixed(3)}% ${end.toFixed(3)}%`);
+    position = end;
+  }
+  chart.style.background = `conic-gradient(${segments.join(", ")})`;
+  chart.title = rows.map((row) => `${toTitleCase(row.label)}: ${row.count}`).join(" | ");
+
+  const center = document.createElement("div");
+  center.className = "pc-dashboard-status-chart__center";
+  center.setAttribute("aria-hidden", "true");
+  const number = document.createElement("strong");
+  number.className = "pc-dashboard-status-chart__total";
+  number.textContent = String(total);
+  const label = document.createElement("span");
+  label.className = "pc-dashboard-status-chart__caption";
+  label.textContent = "Events";
+  center.append(number, label);
+  chart.appendChild(center);
+  return chart;
+}
+
+function getDashboardChartTone(value, filterKey) {
+  const normalized = String(value).trim().toLowerCase();
+  if (filterKey === "type") return getDashboardOperationTone(normalized);
+  if (filterKey !== "status") return "neutral";
+  if (["failed", "error", "rejected"].includes(normalized)) return "danger";
+  if (normalized === "active") return "active";
+  if (normalized === "completed") return "positive";
+  return "neutral";
+}
+
+function getDashboardOperationTone(value) {
+  const operation = String(value ?? "").trim().toLowerCase();
+  if (operation === "export") return "export";
+  if (operation === "validation") return "validation";
+  if (operation === "send") return "send";
+  if (operation === "change") return "change";
+  if (operation === "publication") return "publication";
+  if (operation === "error") return "danger";
+  return "neutral";
+}
+
+function getDashboardChartColor(value, filterKey) {
+  const tone = getDashboardChartTone(value, filterKey);
+  const colors = {
+    active: "var(--calcite-color-info, #007ac2)",
+    positive: "var(--calcite-color-status-success, #22804c)",
+    danger: "var(--calcite-color-status-danger, #c93232)",
+    neutral: "var(--pc-text-muted, #808080)",
+  };
+  return colors[tone] ?? colors.neutral;
+}
+
+function createSummaryRow({ row, filterKey, filters, maxCount }) {
   const isActive = isDashboardSummaryRowFilterActive(filters, {
     filterKey,
     rowValue: row.label,
   });
+  const isStatus = filterKey === "status";
+  const tone = getDashboardChartTone(row.label, filterKey);
   const item = document.createElement("button");
   item.type = "button";
-  item.className = "pc-dashboard-breakdown-row is-actionable";
+  item.className = `pc-dashboard-breakdown-row is-actionable is-${tone}`;
   item.classList.toggle("is-active", isActive);
   item.setAttribute("aria-pressed", String(isActive));
   item.title = isActive
@@ -2176,7 +2325,21 @@ function createSummaryRow({ row, filterKey, filters }) {
   values.className = "pc-dashboard-breakdown-row__value";
   values.textContent = row.failed > 0 ? `${row.count} (${row.failed} failed)` : String(row.count);
 
-  item.append(label, values);
+  if (isStatus) {
+    const swatch = document.createElement("span");
+    swatch.className = `pc-dashboard-status-legend__swatch is-${tone}`;
+    swatch.setAttribute("aria-hidden", "true");
+    item.append(swatch, label, values);
+  } else {
+    const track = document.createElement("span");
+    track.className = "pc-dashboard-breakdown-row__track";
+    track.setAttribute("aria-hidden", "true");
+    const fill = document.createElement("span");
+    fill.className = `pc-dashboard-breakdown-row__fill is-${tone}`;
+    fill.style.height = `${Math.max(0, Math.min(100, ((Number(row.count) || 0) / maxCount) * 100))}%`;
+    track.appendChild(fill);
+    item.append(values, track, label);
+  }
   return item;
 }
 

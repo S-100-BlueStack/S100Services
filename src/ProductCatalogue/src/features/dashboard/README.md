@@ -383,6 +383,37 @@ the action again. No validation reports are fetched as part of a Dashboard activ
 The current activity API does not yet populate `IcEncReports`; on-demand report lists represent
 the Product's available artifact history, not files proven to belong to the clicked activity.
 
+## PC-UX-R06 v3 – compact reporting workspace (review candidate)
+
+This candidate revises the visual layout only. The six existing KPI totals are placed
+in a compact, two-row, three-column group above the activity list, while the right
+column becomes a wider reporting area. The status breakdown is shown as a donut
+with clickable, labeled status legend items; operations use clickable vertical
+bars. Both read the **complete filtered** server summaries rather than the
+current activity page. A status-chart "Completed" segment means an operational
+status, **not** that an ENC has been accepted for distribution.
+
+The activity table remains searchable, sortable and cursor-paged, with stable
+pixel widths set on its column headers for Time, Product, Status and Links. The
+Activity column gets the remaining space. Colored status pills and an operation-
+type marker add scanability, but the labels and original details remain readable
+and accessible. The existing `Review`, `Analyze`, `History`, `IC-ENC` and
+`Validation` actions are unchanged. Horizontal table scrolling remains available
+when the viewport cannot accommodate the full minimum width.
+
+The `Failed` KPI is also a button. It toggles the existing server-side
+`importance=failed` filter; `aria-pressed` reflects that filter, and focus is
+restored through the established Dashboard focus-key mechanism. Status and
+operation charts retain their original server-filter behavior. No additional
+requests, new endpoints, library dependencies, or state owners were introduced.
+The Accepted-for-distribution KPI remains unavailable because the existing
+backend contract does not expose an authoritative, full-range acceptance count.
+
+This is a **browser-review candidate**, not a claim of acceptance. Verify light
+and dark themes, reduced motion, keyboard and focus, panel toggle/escape,
+zero-result ranges, 150% zoom, and responsive chart/table layout. The previous
+R06 v2 layout remains a historical candidate rather than the current design.
+
 ## Dashboard request lifecycle
 
 Search changes normally use a 300 ms debounce. An immediate Refresh (toolbar or controller API) and browser Back/Forward navigation cancel any pending search timer before starting their own request. The currently applied search/filter state is retained; history navigation still applies the route range and resets paging. Range auto-apply, sorting, page-size changes, and teardown retain their existing timer cleanup and request-generation guards. A cancelled timer must not schedule a second load or update the last-successful-load timestamp.
@@ -406,7 +437,7 @@ The following work remains intentionally outside phase 1:
 - Extend the Dashboard backend activity projection and report filters with real IC-ENC report metadata and verified counts (current projection still returns empty arrays).
 - Verify whether Dashboard activity report IDs should map to a specific validation artifact rather than the Product's available artifact history.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
-- Consider richer dashboard charts only if they remain compact and data-oriented.
+- Consider a time-series activity trend only when the backend provides full-range time buckets; do not extrapolate from a paginated activity slice.
 
 ## PC-UX-R05 tooltip follow-up (candidate)
 
@@ -416,3 +447,70 @@ controls without a second hover-help overlay. Screen-reader labels and helpful
 icon-only actions remain unchanged. The approved short copy for Refresh,
 History, IC-ENC and Validation help is included in R05 v2, without changing
 report capability checks or unavailable-state behavior.
+
+## PC-UX-R06 – Activity-first visual hierarchy (candidate)
+
+This focused visual candidate builds on source commit
+`f85d5a5d41d7b2b0dd61fa2279bfd6f1cc39e1fa`.
+It does not change Dashboard API calls, activity classification, source identity,
+filter/order/cursor semantics, date/time controls or the route-local History,
+IC-ENC and Validation panel ownership.
+
+- KPI cards retain their five original values and accessible supporting
+  descriptions, but show only the value and label to reduce repetitive text.
+- The Activity list heading becomes visible next to the existing count and
+  refresh status. Native sorting and activity links remain unchanged.
+- The main grid gives the activity table more horizontal space on common
+  desktop widths without hiding the right summary or detail panel.
+- Below 920 px, the search and five filters use a compact four-column
+  layout before switching to two columns at 760 px. Wide viewports keep all
+  filters on one row; labels and keyboard tab order remain unchanged.
+- KPI cards remain in a single row down to 920 px; below that, the compact
+  responsive layout uses three or two columns as width permits.
+
+This is a browser-review candidate, **not a final accepted design**. Verify at
+320, 390, 500, 650, 820, 1100, 1280 and 1440 px, including 100–150% zoom,
+light/dark themes, native range input focus, sort/filter state, cursor paging,
+long activity descriptions, summary-row filtering and the existing History/
+report panels. The backend's currently empty artifact-history response remains
+outside R06.
+
+
+## PC-UX-R06 v2 – Operational overview (review candidate)
+
+This iteration builds on the R06 v1 visual candidate from
+`f85d5a5d41d7b2b0dd61fa2279bfd6f1cc39e1fa`; it does not change
+Dashboard API contracts, filter/sort/cursor semantics, or Product route actions.
+
+- Six overview cards now distinguish activities, unique Products, active events,
+  accepted distribution, failures, and reports. The existing **Important changes**
+  count remains visible within the Activities card.
+- **Accepted for distribution** is explicitly **unavailable** (`—`) because the
+  current Dashboard response has no authoritative count of ENC Products accepted
+  for distribution. `Ready for distribution`, `Completed` and `Publication`
+  activities must not be counted as accepted/distributed ENC Products. A proper
+  KPI needs a verified backend aggregate, with a defined product/revision
+  uniqueness rule and filter-range semantics. Frontend does not infer this from
+  the paged activity rows or add a new API field.
+- The Active card reads the server-provided **StatusSummary**, not the visible
+  page. When the status breakdown is unavailable on a non-empty result it shows
+  `—` rather than an invented zero.
+- The right-side Status summary includes a stacked distribution bar. Both Status
+  and Operation summary rows display proportional bars for the full **filtered**
+  Dashboard result and retain their accessible names, counts, click-to-filter
+  semantics and active state. Colors supplement the textual labels; status
+  colors do not imply external publication or acceptance.
+- Activity cells use narrower table sizing. Title, description and all original
+  backend details remain in the DOM; the visible secondary fields are truncated
+  to one line, with full text exposed through the cell's native title tooltip.
+  Links, sort headers, filters, pagination and row-level selection remain intact.
+- Clicking the already selected **History**, **IC-ENC**, or **Validation** action
+  closes its panel. This works during loading and after load/error. Closing
+  invalidates pending lookups, restores summaries and returns keyboard focus to
+  the same action; selecting another action switches ownership as before.
+- This is a visual/browser-review candidate. Verify light/dark theme, compact
+  and wide layouts, 150% zoom, keyboard/Escape/focus, active bars versus totals,
+  zero/empty results and late report/history requests before acceptance.
+
+No chart library, new dependencies, backend changes or extra Dashboard requests
+are introduced. All visual proportions use the existing backend summary rows.

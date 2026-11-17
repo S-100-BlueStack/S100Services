@@ -4,7 +4,7 @@ import test from "node:test";
 
 const dashboardUiDirectory = new URL("./", import.meta.url);
 
-test("Dashboard chrome is visually compact while retaining one semantic page heading", async () => {
+test("Dashboard chrome keeps the page heading semantic and exposes the activity heading", async () => {
   const source = await readFile(new URL("dashboardPage.js", dashboardUiDirectory), "utf8");
 
   assert.match(source, /const title = document\.createElement\("h1"\);/);
@@ -12,7 +12,7 @@ test("Dashboard chrome is visually compact while retaining one semantic page hea
   assert.match(source, /title\.textContent = "Dashboard";/);
   assert.doesNotMatch(source, /Operational overview/);
   assert.doesNotMatch(source, /createHeaderMeta/);
-  assert.match(source, /title: "Activity list",[\s\S]*?visuallyHiddenTitle: true,/);
+  assert.match(source, /title: "Activity list"/);
 });
 
 test("Dashboard toolbar has accessible icon Refresh without visible preset shortcuts", async () => {
