@@ -1,8 +1,10 @@
 using S100BlueStack.Settings;
 using S100FC;
+using S100FC.ProductCatalogue;
 using S100FC.S100;
 using S100FC.S101.FeatureTypes;
 using S100FC.S101.InformationTypes;
+using S100FC.S128.FeatureAssociation;
 using S100FC.S128.FeatureTypes;
 using Xunit;
 
@@ -58,6 +60,78 @@ public sealed class AttributeBindingCompatibilityTests
             first => Assert.Equal("First notice", first?.text),
             second => Assert.Equal("Second notice", second?.text));
     }
+
+    /// <summary>Checks that a ProductMapping link resolves in both directions when stored alongside a different association.</summary>
+    [Fact]
+    public void FlattenedProductMappingResolvesBothDirections() {
+        const string s101Id = "{43D0AC2E-17CD-4957-B82B-F900154E1EC1}";
+        const string s57Id = "{E80F24FB-0903-411F-82E8-31A86A25AC33}";
+        const string correlatedId = "{854FA3F4-48EB-4C6A-B1F1-1A7B289F6428}";
+        var s101 = CreateProduct("101DK005TELKS", "S-101");
+        var s57 = CreateProduct("DK5TELKS", "S-57");
+        var correlated = CreateProduct("101DK005TEST1", "S-101");
+        featureBinding[] bindings = [
+            new featureBinding<ProductMapping> {
+                association = new ProductMapping { categoryOfProductMapping = 1 },
+                roleType = "association",
+                role = "theReference",
+                featureType = nameof(ElectronicProduct),
+                featureId = s101Id,
+                Primitive = Primitives.surface
+            },
+            new featureBinding<Correlated> {
+                roleType = "association",
+                role = "thePanel",
+                featureType = nameof(ElectronicProduct),
+                featureId = correlatedId,
+                Primitive = Primitives.surface
+            }
+        ];
+
+        var index = ElectronicProductMappingIndex.Create([
+            new(s57Id, s57, bindings.Flatten()),
+            new(s101Id, s101, "{}"),
+            new(correlatedId, correlated, null)
+        ]);
+
+        Assert.Same(s57, Assert.Single(index.GetMapped(s101.datasetName!, "S57")));
+        Assert.Same(s101, Assert.Single(index.GetMapped(s57.datasetName!, "S101")));
+        Assert.Empty(index.GetMapped(correlated.datasetName!, "S57"));
+    }
+
+    /// <summary>Checks that unrelated associations and a missing target cannot produce a false ENC pair.</summary>
+    [Fact]
+    public void FlattenedBindingsRequireAProductMappingToAnExistingElectronicProduct() {
+        var s101 = CreateProduct("101DK005TELKS", "S-101");
+        var s57 = CreateProduct("DK5TELKS", "S-57");
+        const string bindings = """
+            {
+              "featureBinding[0].association.code": "Correlated",
+              "featureBinding[0].featureType": "ElectronicProduct",
+              "featureBinding[0].featureId": "F101",
+              "featureBinding[1].association.code": "ProductMapping",
+              "featureBinding[1].featureType": "ElectronicProduct",
+              "featureBinding[1].featureId": "MISSING",
+              "featureBinding[2].association.code": "ProductMapping",
+              "featureBinding[2].featureType": "PaperChart",
+              "featureBinding[2].featureId": "F101"
+            }
+            """;
+
+        var index = ElectronicProductMappingIndex.Create([new("F057", s57, bindings), new("F101", s101, null)]);
+
+        Assert.Empty(index.GetMapped(s101.datasetName!, "S57"));
+        Assert.Empty(index.GetMapped(s57.datasetName!, "S101"));
+    }
+
+    /// <summary>Creates an S-128 product with the identity fields required by the mapping index.</summary>
+    /// <param name="datasetName">The S-128 dataset name.</param>
+    /// <param name="specification">The name of the product specification.</param>
+    /// <returns>A product suitable for indexing without a geodatabase.</returns>
+    private static ElectronicProduct CreateProduct(string datasetName, string specification) => new() {
+        datasetName = datasetName,
+        productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = specification }
+    };
 
     /// <summary>Checks that existing attachment metadata retains its filename, format, and date.</summary>
     [Fact]

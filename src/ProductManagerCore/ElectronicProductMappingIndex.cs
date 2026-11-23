@@ -1,3 +1,4 @@
+using S100FC.S128.FeatureAssociation;
 using S100FC.S128.FeatureTypes;
 using System.Text.Json;
 
@@ -29,16 +30,14 @@ internal sealed class ElectronicProductMappingIndex
     /// <param name="datasetName">The dataset name stored in the S-128 ElectronicProduct attributes.</param>
     /// <returns>The unique product with that dataset name, or <see langword="null"/> when no product exists.</returns>
     /// <exception cref="ProductMappingIntegrityException">Thrown when the same dataset name is used by multiple product specifications.</exception>
-    public ElectronicProduct? ResolveByDatasetName(string datasetName)
-    {
+    public ElectronicProduct? ResolveByDatasetName(string datasetName) {
         var normalizedName = NormalizeDatasetName(datasetName);
         var matches = _productsByIdentity
             .Where(pair => pair.Key.DatasetName == normalizedName)
             .Select(pair => pair.Value)
             .ToArray();
 
-        return matches.Length switch
-        {
+        return matches.Length switch {
             0 => null,
             1 => matches[0],
             _ => throw new ProductMappingIntegrityException($"Dataset '{datasetName}' is used by multiple S-128 ElectronicProducts with different product specifications.")
@@ -111,55 +110,34 @@ internal sealed class ElectronicProductMappingIndex
         return results.OrderBy(pair => pair.Key.DatasetName, StringComparer.OrdinalIgnoreCase).Select(pair => pair.Value).ToArray();
     }
 
+    /// <summary>Reads ProductMapping target IDs from flattened S-128 feature bindings.</summary>
+    /// <param name="featureBindings">The stored featurebindings JSON for one ElectronicProduct row.</param>
+    /// <returns>Normalized target IDs for ProductMapping associations to ElectronicProducts.</returns>
     private static IReadOnlyList<string> ReadProductMappingTargets(string? featureBindings) {
         if (string.IsNullOrWhiteSpace(featureBindings))
             return [];
 
         try {
-            using var document = JsonDocument.Parse(featureBindings);
-            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            var properties = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(featureBindings);
+            if (properties is null)
                 return [];
 
-            var targets = new List<string>();
-            foreach (var binding in document.RootElement.EnumerateArray()) {
-                if (binding.ValueKind != JsonValueKind.Object ||
-                    !TryGetString(binding, "featureType", out var featureType) ||
-                    !string.Equals(featureType, nameof(ElectronicProduct), StringComparison.OrdinalIgnoreCase) ||
-                    !TryGetProperty(binding, "association", out var association) ||
-                    association.ValueKind != JsonValueKind.Object ||
-                    !TryGetString(association, "code", out var associationCode) ||
-                    !string.Equals(associationCode, "ProductMapping", StringComparison.OrdinalIgnoreCase) ||
-                    !TryGetString(binding, "featureId", out var featureId) ||
-                    string.IsNullOrWhiteSpace(featureId)) {
-                    continue;
-                }
-
-                targets.Add(NormalizeFeatureId(featureId));
-            }
-            return targets;
+            // The index reads association codes. Association attributes require one concrete type for the entire array.
+            var metadata = properties
+                .Where(property => !property.Key.Contains("].association.attributes", StringComparison.Ordinal))
+                .ToDictionary();
+            var unflattenedFeatureBindings = AttributeFlattenExtensions.UnflattenFeatureBindings(JsonSerializer.Serialize(metadata));
+            return unflattenedFeatureBindings
+                .Where(binding => binding?.association is { } association &&
+                    string.Equals(binding.featureType, nameof(ElectronicProduct), StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(association.S100FC_code, nameof(ProductMapping), StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(binding.featureId))
+                .Select(binding => NormalizeFeatureId(binding.featureId))
+                .ToArray();
         }
-        catch (JsonException) {
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or OverflowException) {
             return [];
         }
-    }
-
-    private static bool TryGetString(JsonElement element, string propertyName, out string value) {
-        value = string.Empty;
-        if (!TryGetProperty(element, propertyName, out var property) || property.ValueKind != JsonValueKind.String)
-            return false;
-        value = property.GetString() ?? string.Empty;
-        return true;
-    }
-
-    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value) {
-        foreach (var property in element.EnumerateObject()) {
-            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase)) {
-                value = property.Value;
-                return true;
-            }
-        }
-        value = default;
-        return false;
     }
 
     private static void AddRelationship(Dictionary<ProductIdentity, HashSet<ProductIdentity>> relationships, ProductIdentity source, ProductIdentity target) {
