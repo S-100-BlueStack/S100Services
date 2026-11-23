@@ -197,7 +197,7 @@ namespace DataCatalague.Api.Repositories
 
             Exception? flattenError = null;
             try {
-                var coverage = AttributeFlattenExtensions.Unflatten<PackageCoverage>(bindings, typeof(PackageCoverage));
+                var coverage = AttributeFlattenExtensions.UnflattenFeatureType<PackageCoverage>(bindings);
                 if (!string.IsNullOrWhiteSpace(coverage.packageId)) {
                     return coverage.packageId;
                 }

@@ -163,7 +163,7 @@ namespace S100FC.ProductCatalogue
                         if (code.Equals(nameof(S100FC.S128.FeatureTypes.ElectronicProduct))) {
                             var json = c["attributebindings"];
 
-                            var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(json.ToString(), typeof(ElectronicProduct));
+                            var electronicProduct = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(json.ToString());
 
                             AddElectronicProduct(electronicProduct);
                             catalogueEntries.Add(new ElectronicProductCatalogueEntry(
@@ -652,7 +652,7 @@ namespace S100FC.ProductCatalogue
                     var row = cursor.Current;
                     if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                         continue;
-                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                     var name = NormalizeDatasetName(product.datasetName);
                     if (NormalizeProductSpecification(product.productSpecification?.name) != "S101" || !products.ContainsKey(name))
                         continue;
@@ -1243,10 +1243,7 @@ namespace S100FC.ProductCatalogue
                         continue;
                     }
 
-                    var candidate = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
-                        attributes,
-                        typeof(ElectronicProduct)
-                    );
+                    var candidate = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(attributes);
                     if (!string.IsNullOrWhiteSpace(productSpecification) &&
                         !string.Equals(NormalizeProductSpecification(candidate.productSpecification?.name), NormalizeProductSpecification(productSpecification), StringComparison.Ordinal))
                         continue;
@@ -1332,7 +1329,7 @@ namespace S100FC.ProductCatalogue
                     if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                         continue;
 
-                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                     if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(name) ||
                         NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification("S-101"))
                         continue;
@@ -1485,7 +1482,7 @@ namespace S100FC.ProductCatalogue
                             string.Empty;
 
                         var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "InformationTypes")}.{code}", true)!;
-                        var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.InformationType>(flatten, type);
+                        var instance = S100FC.AttributeFlattenExtensions.UnflattenInformationType(flatten, type);
 
                         var information = new YAML.Information {
                             Name = code,
@@ -1532,7 +1529,7 @@ namespace S100FC.ProductCatalogue
                            string.Empty;
                         var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true)!;
 
-                        var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+                        var instance = S100FC.AttributeFlattenExtensions.UnflattenFeatureType(flatten, type);
 
                         var foid = $"110:{name}:1";       // Geodatastyrelsen: 110
 
@@ -1658,7 +1655,7 @@ namespace S100FC.ProductCatalogue
                                         ? current["attributebindings"].ToString()
                                         : string.Empty;
 
-                                    var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+                                    var instance = S100FC.AttributeFlattenExtensions.UnflattenFeatureType(flatten, type);
 
                                     var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
@@ -1968,7 +1965,7 @@ namespace S100FC.ProductCatalogue
 
                     //                var json = Convert.ToString(current["attributebindings"])!;
 
-                    //                var instance = string.IsNullOrEmpty(json) ? null : S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(json, type);
+                    //                var instance = string.IsNullOrEmpty(json) ? null : S100FC.AttributeFlattenExtensions.UnflattenFeatureType(json, type);
 
                     //                var filenames = S100FC.YAML.Extensions.GetFileNames(json);
 
@@ -2350,7 +2347,7 @@ namespace S100FC.ProductCatalogue
                     while (cursor.MoveNext()) {
                         var row = cursor.Current;
                         if (row.IsNull("attributebindings")) continue;
-                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                         var specification = NormalizeProductSpecification(product.productSpecification?.name);
                         var wanted = specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase) ||
                                      specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase);
@@ -2378,7 +2375,7 @@ namespace S100FC.ProductCatalogue
                     while (cursor.MoveNext()) {
                         using var row = cursor.Current;
                         if (row.IsNull("attributebindings")) continue;
-                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                         var specification = NormalizeProductSpecification(product.productSpecification?.name);
                         if (specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase)) {
                             product.editionNumber = publication.S57Edition;
@@ -2513,7 +2510,7 @@ namespace S100FC.ProductCatalogue
                 var row = cursor.Current;
                 if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                     continue;
-                var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                 if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(productName) ||
                     NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification(productSpecification))
                     continue;
@@ -2576,11 +2573,7 @@ namespace S100FC.ProductCatalogue
 
             usedUnflattenFallback = true;
 
-            var electronicProduct =
-                S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
-                    attrBindings,
-                    typeof(ElectronicProduct)
-                );
+            var electronicProduct = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(attrBindings);
 
             return electronicProduct.datasetName;
         }
@@ -2873,7 +2866,7 @@ namespace S100FC.ProductCatalogue
         private static ElectronicProductKey CreateElectronicProductKey(string? productSpecification, string? datasetName) => new(NormalizeProductSpecification(productSpecification), datasetName?.Trim().ToUpperInvariant() ?? string.Empty);
 
         private static bool MatchesProductSpecification(string attrBindings, string requestedProductSpecification) {
-            var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings, typeof(ElectronicProduct));
+            var electronicProduct = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(attrBindings);
             return string.Equals(NormalizeProductSpecification(electronicProduct.productSpecification?.name), NormalizeProductSpecification(requestedProductSpecification), StringComparison.Ordinal);
         }
 

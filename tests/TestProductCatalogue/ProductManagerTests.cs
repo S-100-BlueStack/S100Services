@@ -823,7 +823,7 @@ namespace TestProductCatalogueAPI
         //                        ?? throw new InvalidOperationException("Flatten field is null");
 
         //                    var wreck = S100FC.AttributeFlattenExtensions
-        //                        .Unflatten<FeatureType>(
+        //                        .UnflattenFeatureType(
         //                            flattened,
         //                            typeof(S100FC.S101.FeatureTypes.Wreck)) as Wreck
         //                        ?? throw new InvalidOperationException("Unflatten failed");
