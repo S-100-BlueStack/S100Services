@@ -77,7 +77,7 @@ public sealed class ArchiveBindingOwnerResolverTests
     public void UnrelatedAndOutsideEndpointOwnersDoNotMatchGeometry() {
         var index = new ArchiveBindingIndex([Information], new(Utc(8), Utc(12)));
         var owners = new[] {
-            new ArchiveBindingOwner(new(Utc(6), null), "[]", null, () => throw new Exception("Unreferenced geometry"), "unreferenced"),
+            new ArchiveBindingOwner(new(Utc(6), null), "{}", null, () => throw new Exception("Unreferenced geometry"), "unreferenced"),
             new ArchiveBindingOwner(new(Utc(9), Utc(10)), "not JSON", null, () => throw new Exception("Intermediate geometry"), "outside exact endpoints")
         };
         Assert.Equal(0, ArchiveBindingOwnerResolver.Resolve(index, owners, default));
@@ -123,7 +123,6 @@ public sealed class ArchiveBindingOwnerResolverTests
     /// <summary>Uses stable UTC instants for all owner lifetimes and scan boundaries.</summary>
     private static DateTime Utc(int hour) => new(2026, 11, 9, hour, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>Produces representative incoming bindings for either supported target namespace.</summary>
-    private static string Json(ArchiveBindingTarget target) =>
-        $"[{{\"{(target.Kind == ArchiveBindingKind.Information ? "informationId" : "featureId")}\":\"{target.Id:B}\",\"roleType\":\"aggregation\"}}]";
+    /// <summary>Produces flattened incoming bindings for either supported target namespace.</summary>
+    private static string Json(ArchiveBindingTarget target) => ArchiveBindingIndexTests.Json(target);
 }

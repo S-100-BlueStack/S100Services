@@ -1,3 +1,4 @@
+using S100FC;
 using S100FC.ProductCatalogue;
 
 namespace TestProductCatalogueAPI;
@@ -14,8 +15,7 @@ public sealed class ArchiveBindingIndexTests
         var feature = Target(ArchiveBindingKind.Feature);
         var index = new ArchiveBindingIndex([target, feature], new(Utc(8), Utc(10)));
         var calls = 0;
-        const string json = "[{\"association\":{\"code\":\"QualityOfBathymetricDataComposition\",\"attributes\":[]},\"roleType\":\"association\",\"role\":\"theQualityInformation\",\"informationType\":\"SpatialQuality\",\"informationId\":\"{ab9b3e89-d57c-47c2-a105-68ebb574db10}\"}]";
-        index.AddOwner(new(Utc(6), null), json, "[{\"featureId\":\"AB9B3E89-D57C-47C2-A105-68EBB574DB10\",\"roleType\":\"aggregation\"}]", () => { calls++; return ["101DK001", "101DK002"]; });
+        index.AddOwner(new(Utc(6), null), Json(target), Json(feature), () => { calls++; return ["101DK001", "101DK002"]; });
 
         Assert.Equal(1, calls);
         Assert.Equal(2, index.Affected.Count);
@@ -29,7 +29,7 @@ public sealed class ArchiveBindingIndexTests
         var target = Target();
         var index = new ArchiveBindingIndex([target], new(Utc(8), Utc(10)));
         index.AddOwner(new(Utc(6), Utc(9)), Json(target), null, () => ["OLD"]);
-        index.AddOwner(new(Utc(9), null), "[]", null, () => throw new Exception("No matching target"));
+        index.AddOwner(new(Utc(9), null), "{}", null, () => throw new Exception("No matching target"));
 
         Assert.Equal(target, Assert.Single(index.Affected["OLD"]));
         Assert.False(index.IsCurrent("OLD", target));
@@ -72,10 +72,10 @@ public sealed class ArchiveBindingIndexTests
     }
 
     [Fact]
-    public void UnrelatedBindingsAndEmptyArraysNeverFetchGeometry() {
+    public void UnrelatedBindingsAndEmptyCollectionsNeverFetchGeometry() {
         var index = new ArchiveBindingIndex([Target()], new(Utc(8), Utc(10)));
-        index.AddOwner(new(Utc(6), null), "[]", "[]", () => throw new Exception("No target"));
-        index.AddOwner(new(Utc(6), null), "[{\"informationId\":\"00000000-0000-0000-0000-000000000001\"}]", null, () => throw new Exception("Unrelated"));
+        index.AddOwner(new(Utc(6), null), "{}", "{}", () => throw new Exception("No target"));
+        index.AddOwner(new(Utc(6), null), Json(new(ArchiveBindingKind.Information, Guid.Parse("00000000-0000-0000-0000-000000000001"))), null, () => throw new Exception("Unrelated"));
         Assert.Empty(index.Affected);
     }
 
@@ -83,15 +83,14 @@ public sealed class ArchiveBindingIndexTests
     public void FeatureAssociationRoleIsSuppressedExactlyAsInTheExportPipeline() {
         var target = Target(ArchiveBindingKind.Feature);
         var index = new ArchiveBindingIndex([target], new(Utc(8), Utc(10)));
-        index.AddOwner(new(Utc(6), null), Json(Target()), $"[{{\"featureId\":\"{TargetId:B}\",\"roleType\":\"association\"}}]", () => throw new Exception("Not exported"));
+        index.AddOwner(new(Utc(6), null), Json(Target()), new featureBinding[] { new() { featureId = TargetId.ToString("B"), roleType = "association" } }.Flatten(), () => throw new Exception("Not exported"));
         Assert.Empty(index.Affected);
     }
 
     [Theory]
     [InlineData("not JSON")]
-    [InlineData("{}")]
-    [InlineData("[null]")]
-    [InlineData("[{\"informationId\":\"invalid\"}]")]
+    [InlineData("{\"informationBinding[0]\":null}")]
+    [InlineData("{\"informationBinding[0].informationId\":\"invalid\"}")]
     public void IncompleteBindingClassificationFailsClosed(string json) {
         var index = new ArchiveBindingIndex([Target()], new(Utc(8), Utc(10)));
         var error = Assert.Throws<InvalidOperationException>(() => index.AddOwner(new(Utc(6), null), json, null, () => []));
@@ -109,6 +108,15 @@ public sealed class ArchiveBindingIndexTests
         Assert.False(index.IsCurrent("BEFORE", target));
     }
 
+    /// <summary>Produces flattened incoming bindings with the catalogue writer for DPC tests.</summary>
+    /// <param name="target">The association kind and target ID to include.</param>
+    /// <returns>The serialized flattened binding collection.</returns>
     internal static string Json(ArchiveBindingTarget target) =>
-        $"[{{\"{(target.Kind == ArchiveBindingKind.Information ? "informationId" : "featureId")}\":\"{target.Id:B}\",\"roleType\":\"aggregation\"}}]";
+        target.Kind == ArchiveBindingKind.Information
+            ? new informationBinding[] { new informationBinding<S100FC.S101.InformationAssociation.QualityOfBathymetricDataComposition> {
+                informationId = target.Id.ToString("B"), informationType = "SpatialQuality", roleType = "association", role = "theQualityInformation"
+            } }.Flatten()
+            : new featureBinding[] { new featureBinding<S100FC.S101.FeatureAssociation.FairwayAggregation> {
+                featureId = target.Id.ToString("D").ToUpperInvariant(), featureType = "Fairway", roleType = "aggregation", role = "theComponent", Primitive = Primitives.surface
+            } }.Flatten();
 }

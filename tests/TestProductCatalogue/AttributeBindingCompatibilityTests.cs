@@ -61,6 +61,30 @@ public sealed class AttributeBindingCompatibilityTests
             second => Assert.Equal("Second notice", second?.text));
     }
 
+    /// <summary>Verifies the information association properties the S-101 YAML exporter reads.</summary>
+    [Fact]
+    public void FlattenedS101InformationBindingRetainsTheAssociationCodeAndTarget() {
+        var target = new ArchiveBindingTarget(ArchiveBindingKind.Information, Guid.Parse("AB9B3E89-D57C-47C2-A105-68EBB574DB10"));
+        var binding = Assert.Single(AttributeFlattenExtensions.UnflattenInformationBindings(ArchiveBindingIndexTests.Json(target)));
+
+        Assert.True(binding.Validate());
+        Assert.Equal("QualityOfBathymetricDataComposition", binding.association?.S100FC_code);
+        Assert.Equal("theQualityInformation", binding.role);
+        Assert.Equal(target.Id, Guid.Parse(binding.informationId));
+    }
+
+    /// <summary>Verifies the feature association properties the S-101 YAML exporter reads.</summary>
+    [Fact]
+    public void FlattenedS101FeatureBindingRetainsTheAssociationCodeAndTarget() {
+        var target = new ArchiveBindingTarget(ArchiveBindingKind.Feature, Guid.Parse("AB9B3E89-D57C-47C2-A105-68EBB574DB10"));
+        var binding = Assert.Single(AttributeFlattenExtensions.UnflattenFeatureBindings(ArchiveBindingIndexTests.Json(target)));
+
+        Assert.True(binding.Validate());
+        Assert.Equal("FairwayAggregation", binding.association?.S100FC_code);
+        Assert.Equal("theComponent", binding.role);
+        Assert.Equal(target.Id, Guid.Parse(binding.featureId));
+    }
+
     /// <summary>Checks that a ProductMapping link resolves in both directions when stored alongside a different association.</summary>
     [Fact]
     public void FlattenedProductMappingResolvesBothDirections() {

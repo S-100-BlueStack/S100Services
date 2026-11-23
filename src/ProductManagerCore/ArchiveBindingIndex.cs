@@ -82,33 +82,32 @@ internal sealed class ArchiveBindingIndex
         }
     }
 
-    private static IReadOnlyCollection<ArchiveBindingTarget> ReadTargets(string? json, ArchiveBindingKind kind) {
-        if (string.IsNullOrWhiteSpace(json))
-            return [];
+    /// <summary>Reads referenced S-101 target IDs using the catalogue binding format.</summary>
+    /// <param name="bindings">The flattened bindings stored on the source or archive row.</param>
+    /// <param name="kind">The target namespace to resolve.</param>
+    /// <returns>Distinct target IDs in the specified namespace.</returns>
+    /// <exception cref="InvalidOperationException">The bindings cannot be read reliably, so the DPC watermark must stay in place.</exception>
+    private static IReadOnlyCollection<ArchiveBindingTarget> ReadTargets(string? bindings, ArchiveBindingKind kind) {
         try {
-            using var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind == JsonValueKind.Null)
-                return [];
-            if (document.RootElement.ValueKind != JsonValueKind.Array)
-                throw new JsonException("Expected a binding array.");
+            // A feature binding with roleType association is omitted by the S-101 exporter.
+            IEnumerable<string?> ids = kind == ArchiveBindingKind.Information
+                ? AttributeFlattenExtensions.UnflattenInformationBindings(bindings)
+                    .Select(binding => binding is null ? throw new JsonException("Expected an information binding.") : binding.informationId)
+                : AttributeFlattenExtensions.UnflattenFeatureBindings(bindings)
+                    .Where(binding => binding is null || binding.roleType != "association")
+                    .Select(binding => binding is null ? throw new JsonException("Expected a feature binding.") : binding.featureId);
+
             var result = new HashSet<ArchiveBindingTarget>();
-            var property = kind == ArchiveBindingKind.Information ? "informationId" : "featureId";
-            foreach (var binding in document.RootElement.EnumerateArray()) {
-                if (binding.ValueKind != JsonValueKind.Object)
-                    throw new JsonException("Expected a binding object.");
-                // The actual S101 exporter omits this feature roleType as well.
-                if (kind == ArchiveBindingKind.Feature && binding.TryGetProperty("roleType", out var roleType) &&
-                    roleType.ValueKind == JsonValueKind.String && roleType.GetString() == "association")
+            foreach (var target in ids) {
+                if (target is null)
                     continue;
-                if (!binding.TryGetProperty(property, out var target) || target.ValueKind == JsonValueKind.Null)
-                    continue;
-                if (target.ValueKind != JsonValueKind.String || !Guid.TryParse(target.GetString(), out var id) || id == Guid.Empty)
-                    throw new JsonException($"Invalid {property}.");
+                if (!Guid.TryParse(target, out var id) || id == Guid.Empty)
+                    throw new JsonException("Expected a nonempty binding target GUID.");
                 result.Add(new(kind, id));
             }
             return result;
         }
-        catch (JsonException exception) {
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or OverflowException or NotSupportedException or System.Reflection.TargetInvocationException) {
             throw new InvalidOperationException($"DPC cannot resolve incoming {kind} bindings: invalid binding JSON. The watermark and candidates were preserved.", exception);
         }
     }

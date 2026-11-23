@@ -425,27 +425,6 @@ namespace TestProductCatalogueAPI
             );
         }
 
-        [Theory]
-        [InlineData("{\"datasetName\":\"101DK0000001E\"}", "101DK0000001E")]
-        [InlineData("{\"attributes\":{\"DatasetName\":\"101DK0000002E\"}}", "101DK0000002E")]
-        [InlineData("[{\"ignored\":true},{\"datasetName\":\"101DK0000003E\"}]", "101DK0000003E")]
-        public void DatasetNameFastPathReadsDirectAndNestedJson(
-            string attrBindings,
-            string expectedDatasetName
-        ) {
-            var method = typeof(ProductManagerGDB).GetMethod(
-                "TryReadDatasetNameFromJson",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
-            Assert.NotNull(method);
-
-            object?[] arguments = [attrBindings, null];
-            var success = Assert.IsType<bool>(method.Invoke(null, arguments));
-
-            Assert.True(success);
-            Assert.Equal(expectedDatasetName, Assert.IsType<string>(arguments[1]));
-        }
-
         [Fact]
         public void DatasetAoiQueryFilterRestrictsRowsAndHydratedFields() {
             var method = typeof(ProductManagerGDB).GetMethod(
@@ -468,12 +447,13 @@ namespace TestProductCatalogueAPI
         [InlineData("S-57", "S57", true)]
         [InlineData("S-57", "S101", false)]
         [InlineData("S-128", "S101", false)]
-        public void DatasetAoiSpecificationIsReadFromTheRowsAttributeBindings(string actualProductSpecification, string requestedProductSpecification, bool expectedMatch) {
+        public void DatasetAoiUsesTheSpecificationOfTheUnflattenedProduct(string actualProductSpecification, string requestedProductSpecification, bool expectedMatch) {
             var attrBindings = CreateElectronicProduct("TEST", 90_000, 3, actualProductSpecification).Flatten();
             var method = typeof(ProductManagerGDB).GetMethod("MatchesProductSpecification", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.NotNull(method);
 
-            var matches = Assert.IsType<bool>(method.Invoke(null, [attrBindings, requestedProductSpecification]));
+            var product = AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(attrBindings);
+            var matches = Assert.IsType<bool>(method.Invoke(null, [product, requestedProductSpecification]));
 
             Assert.Equal(expectedMatch, matches);
         }
