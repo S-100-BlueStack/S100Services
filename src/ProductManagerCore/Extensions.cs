@@ -71,7 +71,7 @@ namespace S100FC.ProductCatalogue
             var json = Convert.ToString(cursor.Current["json"]);
             var blob = cursor.Current["data"] as MemoryStream;
 
-            var instance = AttributeFlattenExtensions.Unflatten<S100BlueStack.Settings.SupportFile>(json, typeof(S100BlueStack.Settings.SupportFile));
+            var instance = AttributeFlattenExtensions.UnflattenRaw<S100BlueStack.Settings.SupportFile>(json);
 
             return (instance!, blob!);
         }

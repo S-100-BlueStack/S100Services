@@ -51,8 +51,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
     <!-- Hangfire accepts older Json.NET releases; pin the patched transitive dependency. -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="S100Framework.Catalogues" Version="4.1.1" />
-    <PackageReference Include="S100Framework.YAML" Version="3.7.1901.12" />
+    <PackageReference Include="S100Framework.Catalogues" Version="5.0.0" />
+    <PackageReference Include="S100Framework.YAML" Version="3.7.1901.50" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />

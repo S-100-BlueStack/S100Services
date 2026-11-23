@@ -163,7 +163,7 @@ namespace S100FC.ProductCatalogue
                         if (code.Equals(nameof(S100FC.S128.FeatureTypes.ElectronicProduct))) {
                             var json = c["attributebindings"];
 
-                            var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(json.ToString(), typeof(ElectronicProduct));
+                            var electronicProduct = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(json.ToString());
 
                             AddElectronicProduct(electronicProduct);
                             catalogueEntries.Add(new ElectronicProductCatalogueEntry(
@@ -280,7 +280,7 @@ namespace S100FC.ProductCatalogue
                         //        }
                         //    ];
 
-                        //    buffer["featurebindings"] = bindings;
+                        //    buffer["featurebindings"] = bindings.Flatten();
 
                         //}
 
@@ -652,7 +652,7 @@ namespace S100FC.ProductCatalogue
                     var row = cursor.Current;
                     if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                         continue;
-                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                     var name = NormalizeDatasetName(product.datasetName);
                     if (NormalizeProductSpecification(product.productSpecification?.name) != "S101" || !products.ContainsKey(name))
                         continue;
@@ -711,14 +711,10 @@ namespace S100FC.ProductCatalogue
 
         /// <summary>Uses the DataCoverage attribute, not the compilation scale of another feature.</summary>
         internal static long ReadCoverageScale(string attributeBindings) {
-            using var json = JsonDocument.Parse(attributeBindings);
-            if (json.RootElement.ValueKind != JsonValueKind.Object)
-                throw new InvalidOperationException("S-101 DataCoverage attributeBindings is not an object.");
-            foreach (var property in json.RootElement.EnumerateObject()) {
-                if (property.Name.Equals("optimumDisplayScale", StringComparison.OrdinalIgnoreCase) &&
-                    TryReadScale(property.Value.ToString(), out var scale))
-                    return scale;
-            }
+            var coverage = AttributeFlattenExtensions.UnflattenFeatureType<S100FC.S101.FeatureTypes.DataCoverage>(attributeBindings);
+            if (coverage.optimumDisplayScale is int scale && scale > 0)
+                return scale;
+
             throw new InvalidOperationException("S-101 DataCoverage has no valid optimumDisplayScale; DPC preserved its watermark.");
         }
 
@@ -1231,24 +1227,10 @@ namespace S100FC.ProductCatalogue
                     if (string.IsNullOrWhiteSpace(attributes))
                         continue;
 
-                    var candidateDatasetName = ReadDatasetName(
-                        attributes,
-                        out _
-                    );
-                    if (!string.Equals(
-                        NormalizeDatasetName(candidateDatasetName),
-                        normalizedDatasetName,
-                        StringComparison.OrdinalIgnoreCase
-                    )) {
+                    var candidate = AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(attributes);
+                    if (!string.Equals(NormalizeDatasetName(candidate.datasetName), normalizedDatasetName, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    }
-
-                    var candidate = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
-                        attributes,
-                        typeof(ElectronicProduct)
-                    );
-                    if (!string.IsNullOrWhiteSpace(productSpecification) &&
-                        !string.Equals(NormalizeProductSpecification(candidate.productSpecification?.name), NormalizeProductSpecification(productSpecification), StringComparison.Ordinal))
+                    if (!string.IsNullOrWhiteSpace(productSpecification) && !MatchesProductSpecification(candidate, productSpecification))
                         continue;
 
                     candidates.Add(candidate);
@@ -1332,7 +1314,7 @@ namespace S100FC.ProductCatalogue
                     if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                         continue;
 
-                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                     if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(name) ||
                         NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification("S-101"))
                         continue;
@@ -1485,7 +1467,7 @@ namespace S100FC.ProductCatalogue
                             string.Empty;
 
                         var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "InformationTypes")}.{code}", true)!;
-                        var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.InformationType>(flatten, type);
+                        var instance = S100FC.AttributeFlattenExtensions.UnflattenInformationType(flatten, type);
 
                         var information = new YAML.Information {
                             Name = code,
@@ -1532,7 +1514,7 @@ namespace S100FC.ProductCatalogue
                            string.Empty;
                         var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true)!;
 
-                        var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+                        var instance = S100FC.AttributeFlattenExtensions.UnflattenFeatureType(flatten, type);
 
                         var foid = $"110:{name}:1";       // Geodatastyrelsen: 110
 
@@ -1658,7 +1640,7 @@ namespace S100FC.ProductCatalogue
                                         ? current["attributebindings"].ToString()
                                         : string.Empty;
 
-                                    var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+                                    var instance = S100FC.AttributeFlattenExtensions.UnflattenFeatureType(flatten, type);
 
                                     var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
@@ -1682,14 +1664,12 @@ namespace S100FC.ProductCatalogue
                                     // Information Associations
                                     if (!current.IsNull("informationbindings")) {
                                         try {
-                                            var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!);
+                                            var informationBindings = AttributeFlattenExtensions.UnflattenInformationBindings(Convert.ToString(current["informationbindings"]));
 
-                                            if (informationBindings != default && informationBindings.Length != 0) {
+                                            if (informationBindings.Length != 0) {
                                                 foreach (var binding in informationBindings) {
 
-                                                    var isValid = binding.Validate();
-
-                                                    if (!isValid)
+                                                    if (binding is null || !binding.Validate())
                                                         continue;
 
                                                     // The association code identifies the catalogue relationship, not its target information type.
@@ -1779,22 +1759,19 @@ namespace S100FC.ProductCatalogue
                                             throw;
                                         }
                                         catch (Exception ex) {
-                                            Logger.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
+                                            Logger.Warning(ex, "Error unflattening informationbindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
                                     // Feature Associations
                                     if (!current.IsNull("featurebindings")) {
                                         try {
-                                            var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!);
+                                            var featureBindings = AttributeFlattenExtensions.UnflattenFeatureBindings(Convert.ToString(current["featurebindings"]));
 
-                                            if (featureBindings != default && featureBindings.Length != 0) {
+                                            if (featureBindings.Length != 0) {
                                                 foreach (var binding in featureBindings) {
 
-                                                    // check if valid
-                                                    var isValid = binding.Validate();
-
-                                                    if (!isValid)
+                                                    if (binding is null || !binding.Validate())
                                                         continue;
 
                                                     var roleType = binding.roleType;
@@ -1848,7 +1825,7 @@ namespace S100FC.ProductCatalogue
                                             throw;
                                         }
                                         catch (Exception ex) {
-                                            Logger.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
+                                            Logger.Warning(ex, "Error unflattening featurebindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
@@ -1968,7 +1945,7 @@ namespace S100FC.ProductCatalogue
 
                     //                var json = Convert.ToString(current["attributebindings"])!;
 
-                    //                var instance = string.IsNullOrEmpty(json) ? null : S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(json, type);
+                    //                var instance = string.IsNullOrEmpty(json) ? null : S100FC.AttributeFlattenExtensions.UnflattenFeatureType(json, type);
 
                     //                var filenames = S100FC.YAML.Extensions.GetFileNames(json);
 
@@ -1997,7 +1974,7 @@ namespace S100FC.ProductCatalogue
 
                     //                // Information Associations
                     //                if (!current.IsNull("informationbindings")) {
-                    //                    var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!); // jsonSerializerOptionsS101
+                    //                    var informationBindings = AttributeFlattenExtensions.UnflattenInformationBindings(Convert.ToString(current["informationbindings"]));
 
                     //                    if (informationBindings != default && informationBindings.Any()) {
                     //                        foreach (var binding in informationBindings) {
@@ -2040,7 +2017,7 @@ namespace S100FC.ProductCatalogue
                     //                // Feature Associations
                     //                if (!current.IsNull("featurebindings")) {
                     //                    var featureBindingsJson = Convert.ToString(current["featurebindings"])!;
-                    //                    var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(featureBindingsJson); // jsonSerializerOptionsS101
+                    //                    var featureBindings = AttributeFlattenExtensions.UnflattenFeatureBindings(featureBindingsJson);
 
                     //                    if (featureBindings != default && featureBindings.Any()) {
                     //                        foreach (var binding in featureBindings) {
@@ -2350,7 +2327,7 @@ namespace S100FC.ProductCatalogue
                     while (cursor.MoveNext()) {
                         var row = cursor.Current;
                         if (row.IsNull("attributebindings")) continue;
-                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                         var specification = NormalizeProductSpecification(product.productSpecification?.name);
                         var wanted = specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase) ||
                                      specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase);
@@ -2378,7 +2355,7 @@ namespace S100FC.ProductCatalogue
                     while (cursor.MoveNext()) {
                         using var row = cursor.Current;
                         if (row.IsNull("attributebindings")) continue;
-                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                         var specification = NormalizeProductSpecification(product.productSpecification?.name);
                         if (specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase)) {
                             product.editionNumber = publication.S57Edition;
@@ -2513,7 +2490,7 @@ namespace S100FC.ProductCatalogue
                 var row = cursor.Current;
                 if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                     continue;
-                var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                var product = S100FC.AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
                 if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(productName) ||
                     NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification(productSpecification))
                     continue;
@@ -2565,87 +2542,6 @@ namespace S100FC.ProductCatalogue
             };
         }
 
-        private static string? ReadDatasetName(
-            string attrBindings,
-            out bool usedUnflattenFallback
-        ) {
-            usedUnflattenFallback = false;
-
-            if (TryReadDatasetNameFromJson(attrBindings, out var datasetName))
-                return datasetName;
-
-            usedUnflattenFallback = true;
-
-            var electronicProduct =
-                S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
-                    attrBindings,
-                    typeof(ElectronicProduct)
-                );
-
-            return electronicProduct.datasetName;
-        }
-
-        private static bool TryReadDatasetNameFromJson(
-            string attrBindings,
-            out string? datasetName
-        ) {
-            datasetName = null;
-
-            try {
-                using var document = JsonDocument.Parse(attrBindings);
-                return TryReadDatasetNameFromJsonElement(
-                    document.RootElement,
-                    out datasetName
-                );
-            }
-            catch (JsonException) {
-                return false;
-            }
-        }
-
-        private static bool TryReadDatasetNameFromJsonElement(
-            JsonElement element,
-            out string? datasetName
-        ) {
-            datasetName = null;
-
-            if (element.ValueKind == JsonValueKind.Object) {
-                foreach (var property in element.EnumerateObject()) {
-                    if (
-                        property.Name.Equals(
-                            "datasetName",
-                            StringComparison.OrdinalIgnoreCase
-                        ) &&
-                        property.Value.ValueKind == JsonValueKind.String
-                    ) {
-                        var value = property.Value.GetString();
-
-                        if (!string.IsNullOrWhiteSpace(value)) {
-                            datasetName = value;
-                            return true;
-                        }
-                    }
-
-                    if (
-                        TryReadDatasetNameFromJsonElement(
-                            property.Value,
-                            out datasetName
-                        )
-                    ) {
-                        return true;
-                    }
-                }
-            }
-            else if (element.ValueKind == JsonValueKind.Array) {
-                foreach (var item in element.EnumerateArray()) {
-                    if (TryReadDatasetNameFromJsonElement(item, out datasetName))
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
         private static double StopwatchTicksToMilliseconds(long stopwatchTicks) {
             return stopwatchTicks * 1000d / Stopwatch.Frequency;
         }
@@ -2665,12 +2561,10 @@ namespace S100FC.ProductCatalogue
             var rowsSkippedMissingDatasetName = 0;
             var rowsFailed = 0;
             var geometryCount = 0;
-            var datasetNameFastPathCount = 0;
-            var datasetNameUnflattenFallbackCount = 0;
             var openAndSearchStopwatchTicks = 0L;
             var cursorMoveNextStopwatchTicks = 0L;
             var attributeReadStopwatchTicks = 0L;
-            var datasetNameReadStopwatchTicks = 0L;
+            var productReadStopwatchTicks = 0L;
             var geometryReadStopwatchTicks = 0L;
             var rectangleSerializationStopwatchTicks = 0L;
             var succeeded = false;
@@ -2719,19 +2613,10 @@ namespace S100FC.ProductCatalogue
                             }
 
                             try {
-                                var datasetNameReadStartedAt = Stopwatch.GetTimestamp();
-                                var datasetName = ReadDatasetName(
-                                    attrBindings,
-                                    out var usedUnflattenFallback
-                                );
-                                datasetNameReadStopwatchTicks +=
-                                    Stopwatch.GetTimestamp() -
-                                    datasetNameReadStartedAt;
-
-                                if (usedUnflattenFallback)
-                                    datasetNameUnflattenFallbackCount++;
-                                else
-                                    datasetNameFastPathCount++;
+                                var productReadStartedAt = Stopwatch.GetTimestamp();
+                                var electronicProduct = AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(attrBindings);
+                                productReadStopwatchTicks += Stopwatch.GetTimestamp() - productReadStartedAt;
+                                var datasetName = electronicProduct.datasetName;
 
                                 if (string.IsNullOrWhiteSpace(datasetName)) {
                                     rowsSkippedMissingDatasetName++;
@@ -2740,7 +2625,7 @@ namespace S100FC.ProductCatalogue
 
                                 // The same dataset name can exist for multiple specifications, so the current row is authoritative.
                                 if (!string.IsNullOrWhiteSpace(productSpecification)
-                                    && !MatchesProductSpecification(attrBindings, productSpecification))
+                                    && !MatchesProductSpecification(electronicProduct, productSpecification))
                                     continue;
 
                                 var geometryReadStartedAt = Stopwatch.GetTimestamp();
@@ -2805,7 +2690,7 @@ namespace S100FC.ProductCatalogue
                 ).TotalMilliseconds;
 
                 Logger.Verbose(
-                    "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
+                    "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisProductReadMs: {ArcGisProductReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
                     this._executionLane,
                     "GetDatasetAOIs",
                     correlationId,
@@ -2816,13 +2701,11 @@ namespace S100FC.ProductCatalogue
                     StopwatchTicksToMilliseconds(openAndSearchStopwatchTicks),
                     StopwatchTicksToMilliseconds(cursorMoveNextStopwatchTicks),
                     StopwatchTicksToMilliseconds(attributeReadStopwatchTicks),
-                    StopwatchTicksToMilliseconds(datasetNameReadStopwatchTicks),
+                    StopwatchTicksToMilliseconds(productReadStopwatchTicks),
                     StopwatchTicksToMilliseconds(geometryReadStopwatchTicks),
                     StopwatchTicksToMilliseconds(
                         rectangleSerializationStopwatchTicks
                     ),
-                    datasetNameFastPathCount,
-                    datasetNameUnflattenFallbackCount,
                     rowsScanned,
                     rowsAccepted,
                     rowsSkippedMissingAttributes,
@@ -2872,10 +2755,8 @@ namespace S100FC.ProductCatalogue
 
         private static ElectronicProductKey CreateElectronicProductKey(string? productSpecification, string? datasetName) => new(NormalizeProductSpecification(productSpecification), datasetName?.Trim().ToUpperInvariant() ?? string.Empty);
 
-        private static bool MatchesProductSpecification(string attrBindings, string requestedProductSpecification) {
-            var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings, typeof(ElectronicProduct));
-            return string.Equals(NormalizeProductSpecification(electronicProduct.productSpecification?.name), NormalizeProductSpecification(requestedProductSpecification), StringComparison.Ordinal);
-        }
+        private static bool MatchesProductSpecification(ElectronicProduct product, string requestedProductSpecification) =>
+            string.Equals(NormalizeProductSpecification(product.productSpecification?.name), NormalizeProductSpecification(requestedProductSpecification), StringComparison.Ordinal);
 
         private static string NormalizeProductSpecification(string? value) => value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
     }

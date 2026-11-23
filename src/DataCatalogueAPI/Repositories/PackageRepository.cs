@@ -195,37 +195,16 @@ namespace DataCatalague.Api.Repositories
                 throw new InvalidOperationException($"Package coverage '{globalId:B}' has no attribute bindings.");
             }
 
-            Exception? flattenError = null;
             try {
-                var coverage = AttributeFlattenExtensions.Unflatten<PackageCoverage>(bindings, typeof(PackageCoverage));
-                if (!string.IsNullOrWhiteSpace(coverage.packageId)) {
+                var coverage = AttributeFlattenExtensions.UnflattenFeatureType<PackageCoverage>(bindings);
+                if (!string.IsNullOrWhiteSpace(coverage.packageId))
                     return coverage.packageId;
-                }
             }
             catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or FormatException or NotSupportedException or System.Reflection.TargetInvocationException) {
-                flattenError = exception;
+                throw new InvalidOperationException($"Package coverage '{globalId:B}' has invalid or missing packageId attribute bindings.", exception);
             }
 
-            // Rows created before S-840 flattening may also contain an "attr" array.
-            // The legacy typed reader ignores that array without relying on dynamic JSON.
-            try {
-                var legacy = JsonSerializer.Deserialize<LegacyPackageCoverage>(bindings, jsonSerializerOptions);
-                if (!string.IsNullOrWhiteSpace(legacy?.packageId)) {
-                    return legacy.packageId;
-                }
-            }
-            catch (JsonException exception) {
-                flattenError ??= exception;
-            }
-
-            throw new InvalidOperationException($"Package coverage '{globalId:B}' has invalid or missing packageId attribute bindings.", flattenError);
-        }
-
-        private sealed class LegacyPackageCoverage
-        {
-            public LegacyPackageCoverage() { }
-
-            public string? packageId { get; set; }
+            throw new InvalidOperationException($"Package coverage '{globalId:B}' has invalid or missing packageId attribute bindings.");
         }
 
         private static Geometry ParseQueryGeometry(string json) {
