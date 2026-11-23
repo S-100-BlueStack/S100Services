@@ -593,7 +593,7 @@ test("Live details show ordered fields and only saved Pipeline and Workspace bin
   }
 });
 
-test("Package assignment exposes auto-selected Workspace previews and blocks unsupported Save", async () => {
+test("Package assignment shows saved automatic Workspace matches without manual controls or extra reads", async () => {
   const dom = fakeDom();
   const savedWorkspaces = [{ id: "ws1", name: "Kattegat" }];
   const mapContexts = [];
@@ -617,16 +617,9 @@ test("Package assignment exposes auto-selected Workspace previews and blocks uns
       list: async () => ({ items: [{ id: "ENC", name: "ENC Production" }], total: 1 }),
     },
     workspaces: {
-      list: async ({ pipelineId }) => {
+      list: async () => {
         workspaceReads++;
-        assert.equal(pipelineId, "ENC");
-        return {
-          items: [
-            { id: "ws1", name: "Kattegat" },
-            { id: "ws2", name: "Baltic" },
-          ],
-          total: 2,
-        };
+        throw new Error("Full Workspace catalogue must not be read for automatic matches.");
       },
     },
   };
@@ -646,31 +639,34 @@ test("Package assignment exposes auto-selected Workspace previews and blocks uns
     assert.equal(await page.selectPackage("A"), true);
     await flush();
     const row = dom.get("work-streams").children[0];
-    const workspaceToggle = row.children[0].children[1];
-    workspaceToggle.click();
-    await flush();
-    assert.equal(workspaceReads, 1);
-    const workspaceList = row.children[3].children[1];
-    const byName = (name) =>
-      workspaceList.children.find((item) => item.children[1].textContent === name).children[0];
-    const first = byName("Kattegat");
-    const second = byName("Baltic");
-    assert.equal(first.checked, true);
-    assert.equal(second.checked, false);
+    const pipelineCheckbox = row.children[0].children[0].children[0];
+    const workspaceSection = row.children[2];
+    const workspaceList = workspaceSection.children[1];
+    assert.equal(workspaceSection.hidden, false);
+    assert.equal(workspaceList.tagName, "UL");
+    assert.deepEqual(
+      workspaceList.children.map((item) => item.textContent),
+      ["Kattegat"]
+    );
+    assert.ok(workspaceList.children.every((item) => item.tagName === "LI"));
+    assert.equal(workspaceReads, 0);
+    assert.equal(dom.get("save").disabled, true);
     const savedSummary = dom.get("saved-bindings").children[0].children[1].textContent;
 
-    second.checked = true;
-    second.listeners.get("change")();
-    assert.equal(dom.get("save").disabled, true);
-    assert.match(dom.get("save-error").textContent, /preview-only/);
+    pipelineCheckbox.checked = false;
+    pipelineCheckbox.listeners.get("change")();
+    assert.equal(workspaceSection.hidden, true);
+    assert.equal(dom.get("save").disabled, false);
     assert.equal(dom.get("saved-bindings").children[0].children[1].textContent, savedSummary);
     assert.equal(mapContexts.at(-1).workspaces.length, 1);
     assert.equal(writes, 0);
 
-    second.checked = false;
-    second.listeners.get("change")();
-    assert.equal(dom.get("save-error").textContent, "");
-    assert.equal(second.checked, false);
+    pipelineCheckbox.checked = true;
+    pipelineCheckbox.listeners.get("change")();
+    assert.equal(workspaceSection.hidden, false);
+    assert.equal(dom.get("save").disabled, true);
+    assert.equal(workspaceList.children.length, 1);
+    assert.equal(workspaceReads, 0);
   } finally {
     page?.destroy();
     dom.restore();

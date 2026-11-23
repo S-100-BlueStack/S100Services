@@ -1,9 +1,5 @@
 import { collectPages } from "../../../shared/api/catalogueService.js";
 import {
-  workspacePreviewChangeCount,
-  WORKSPACE_PREVIEW_UNSAVED_MESSAGE,
-} from "../domain/workspacePreview.js";
-import {
   BindingRequestTimeoutError,
   withBindingRequestDeadline,
 } from "./withBindingRequestDeadline.js";
@@ -72,8 +68,12 @@ export function createLiveAssignmentServices(
       return bindingRecord(await readBindings(id));
     },
     save(id, draft) {
-      if (workspacePreviewChangeCount(draft))
-        return Promise.reject(new Error(WORKSPACE_PREVIEW_UNSAVED_MESSAGE));
+      // Reject old/foreign Workspace edit payloads before any binding reads or writes.
+      // The only supported mutation changes Package-Pipeline bindings.
+      if (Object.hasOwn(draft, "workspaceOverrides"))
+        return Promise.reject(
+          new Error("Manual Workspace assignments are not supported by this API.")
+        );
       if (pending.has(id)) return pending.get(id);
       const desired = [...new Set(draft.activeIds)];
       const operation = saveBindings(id, desired, draft.comments).finally(() => pending.delete(id));

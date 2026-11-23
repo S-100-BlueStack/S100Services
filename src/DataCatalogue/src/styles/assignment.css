@@ -667,48 +667,36 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
   }
 }
 
-/* Workspace rows mirror the main-map Pipeline hierarchy without an extra toggle. */
+/* Saved Workspace matches are semantic text, never draft selection controls. */
 .dc-pipeline-binding-row {
   position: relative;
   padding-block: 3px;
 }
-.dc-workspace-preview__summary {
-  margin: 1px 0 0 23px !important;
-}
-.dc-workspace-preview {
-  margin: 0 0 3px 19px;
-  padding: 0 0 0 5px;
+.dc-auto-workspaces {
+  margin: 1px 0 3px 19px;
+  padding: 0 0 0 7px;
   border-left: 1px solid var(--dc-border);
 }
-.dc-workspace-preview[hidden] {
+.dc-auto-workspaces[hidden] {
   display: none;
 }
-.dc-workspace-preview__status {
-  margin: 1px 0 !important;
+.dc-auto-workspaces__status {
+  margin: 0 0 2px !important;
 }
-.dc-workspace-preview__list {
+.dc-auto-workspaces__list {
   max-height: 13rem;
+  margin: 0;
+  padding: 0 0 0 17px;
   overflow: auto;
+  font-size: inherit;
 }
-.dc-workspace-preview__row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0 2px 6px;
-  min-height: 23px;
-  cursor: pointer;
+.dc-auto-workspaces__item {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
 }
-.dc-workspace-preview__row input,
 .dc-work-stream-row__selection input {
   margin: 0;
   accent-color: var(--calcite-color-brand, #007ac2);
-}
-.dc-workspace-preview__name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.dc-workspace-preview__row.is-preview-change {
-  box-shadow: inset 2px 0 var(--calcite-color-brand, #007ac2);
 }
 .dc-assignment-page button.dc-pipeline-comment__trigger {
   display: grid;

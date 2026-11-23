@@ -294,13 +294,14 @@ test("A synchronous catalogue exception leaves the prior selection intact", asyn
   assert.match(session.snapshot().selectionError, /Invalid catalogue response/);
 });
 
-test("Live Workspace preview is reversible, blocks Save, and never sends an unsupported mutation", async () => {
+test("Live assignment drafts never expose Workspace edit operations", async () => {
   let saves = 0;
+  const savedWorkspaces = [{ id: "w1", name: "Kattegat" }];
   const service = {
     source: "live",
     features: { get: async (id) => ({ id }) },
     assignments: {
-      load: async () => ({ relations: { p: { active: true, workspaces: [{ id: "w1" }] } } }),
+      load: async () => ({ relations: { p: { active: true, workspaces: savedWorkspaces } } }),
       save: async () => {
         saves++;
         return { relations: {} };
@@ -309,16 +310,18 @@ test("Live Workspace preview is reversible, blocks Save, and never sends an unsu
   };
   const session = createAssignmentSession({ services: service });
   await session.select("item");
-  assert.equal(session.setWorkspacePreview("p", "w1", false), true);
-  assert.equal(session.setWorkspacePreview("p", "w2", true), true);
-  assert.equal(session.snapshot().dirty, true);
-  assert.match(session.snapshot().validationError, /preview-only/);
-  assert.equal(await session.save(), false);
-  assert.equal(saves, 0);
-  session.resetWorkspacePreview("p");
-  assert.deepEqual(session.snapshot().draft.workspaceOverrides, {});
+  assert.deepEqual(session.snapshot().draft, { activeIds: ["p"], comments: [] });
+  assert.equal(Object.hasOwn(session, "setWorkspacePreview"), false);
+  assert.equal(Object.hasOwn(session, "resetWorkspacePreview"), false);
   assert.equal(session.snapshot().dirty, false);
-  assert.equal(session.snapshot().validationError, "");
-  assert.equal(session.setWorkspacePreview("not-selected", "w1", false), false);
+  assert.deepEqual(session.snapshot().record.relations.p.workspaces, savedWorkspaces);
+
+  session.setAssigned("p", false);
+  assert.equal(session.snapshot().dirty, true);
+  assert.deepEqual(session.snapshot().record.relations.p.workspaces, savedWorkspaces);
+  session.setAssigned("p", true);
+  assert.equal(session.snapshot().dirty, false);
+  assert.equal(await session.save(), true);
+  assert.equal(saves, 0);
   session.destroy();
 });

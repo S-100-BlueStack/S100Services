@@ -285,7 +285,7 @@ test("an explicit local abandonment unlocks navigation without claiming server r
   held.resolve();
 });
 
-test("Workspace preview mutations are rejected before any network writes", async () => {
+test("Unsupported manual Workspace payloads are rejected before any network writes", async () => {
   const { services, calls } = fixture();
   await assert.rejects(
     services.assignments.save("p", {
@@ -293,12 +293,20 @@ test("Workspace preview mutations are rejected before any network writes", async
       comments: [],
       workspaceOverrides: { a: { "not-automatched": true } },
     }),
-    /preview-only/
+    /Manual Workspace assignments are not supported/
+  );
+  await assert.rejects(
+    services.assignments.save("p", {
+      activeIds: ["a"],
+      comments: [],
+      workspaceOverrides: {},
+    }),
+    /Manual Workspace assignments are not supported/
   );
   assert.deepEqual(calls, []);
 });
 
-test("Workspace selection catalogue collects every page for the requested Pipeline", async () => {
+test("Workspace catalogue reader collects every page for the requested Pipeline", async () => {
   const requests = [];
   const services = createLiveAssignmentServices({
     workspaces: async (query) => {
@@ -327,7 +335,7 @@ test("Workspace selection catalogue collects every page for the requested Pipeli
   );
 });
 
-test("Workspace selection catalogue rejects cross-Pipeline entries", async () => {
+test("Workspace catalogue reader rejects cross-Pipeline entries", async () => {
   const services = createLiveAssignmentServices({
     workspaces: async () => ({
       page: 0,

@@ -1,3 +1,28 @@
+## DC-ASSIGN-AUTOMATCH — Binding-owned automatic Workspace display (2026-11-17)
+
+The live `createPipelineRow` renders Workspace names exclusively from
+`createAssignmentSession().snapshot().record.relations[pipelineId].workspaces`,
+which is normalized from the verified Package binding read. Only Pipeline
+selection and local comment drafts are editable. Newly added Pipeline bindings
+have no derived membership until Save completes and authoritative bindings
+are reloaded. Empty saved membership is a genuine zero-match state.
+
+The UI no longer loads the complete Pipeline Workspace catalogue for every
+selected Package, and has no local Workspace include/exclude preview controls.
+`assignmentDraft.js` and `createAssignmentSession.js` own only Pipeline and comment
+edits; `liveAssignmentServices` refuses any unsupported manual Workspace edit
+payload before network operations. The saved-binding map and Jobs lifecycle are
+independent of assignment drafts. Removing the preview eliminates its own
+asynchronous generation/cancellation boundary; selection publication remains
+owned by the existing session and page lifecycle.
+
+The older DC-UX-01 v2/v3 Workspace preview descriptions below are retained as
+historical implementation evidence and are superseded for active behavior.
+Native semantic `<ul>`/`<li>` text avoids pretending Workspace rows are
+selectable controls.
+
+---
+
 ## DC-PERF-02 — Main Map Package metadata read boundary (2026-11-13)
 
 `features/jobs/services/liveJobServiceAdapter.js` retains ownership of the

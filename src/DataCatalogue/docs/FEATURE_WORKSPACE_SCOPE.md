@@ -6,7 +6,8 @@ renders the **selected** Package from the verified read-only geometry route,
 while existing Workspace overlays continue to show the backend's effective
 saved Pipeline bindings/intersections. `detailedGeometry: null` means no
 additional detailed geometry, not missing Package identity or failed bindings.
-Manual Workspace overrides remain a separate backend dependency.
+Manual Workspace overrides were considered in an earlier prototype but are not
+part of the current 2026-11-12 auto-match-only requirement.
 
 ---
 
@@ -25,8 +26,10 @@ A **Package** is an assignment unit with a generalized AOI reference and detaile
 geographic **Features**. A Package may be bound to several **Pipelines**. A
 **Workspace** is a Pipeline-scoped geographic work area. The backend computes
 Package membership from saved Package/Pipeline bindings and generalized AOI
-intersection. Manual Workspace include/exclude is an agreed requirement but has no
-verified v1 persistence contract yet; it must not be faked in the frontend.
+intersection. The current Package Assignment requirement allows **only automatic
+Workspace matches**, read-only from the saved Pipeline binding. The earlier
+manual include/exclude concept is not active scope and must not be prototyped
+without a new explicit decision and verified backend contract.
 
 A **Job** is a Package within one `(packageId, pipelineId, workspaceId)` context.
 That complete tuple is its internal identity. Package Severity is shared across
@@ -101,7 +104,9 @@ slots are independent. Disabling an option clears its persisted values.
 
 - `GEO-01` / `GEO-04`: authorized generalized Package and detailed Feature AOI
   coordinates (including spatial reference) are not verified as browser reads.
-- `OVERRIDE-01`: backend durable manual Workspace membership overrides are pending.
+- `OVERRIDE-01`: historical manual Workspace override proposal, no longer in active
+  assignment scope after the 2026-11-12 auto-match-only decision. Reopen only by
+  explicit new decision with a verified backend read/write contract.
 - Persistent Job status, deadlines, follow-ups, Package name search, operation
   idempotency/version semantics and remaining API gaps are separately documented.
 - [FEATURE_WORK_STREAM_SCOPE.md](FEATURE_WORK_STREAM_SCOPE.md) describes the earlier

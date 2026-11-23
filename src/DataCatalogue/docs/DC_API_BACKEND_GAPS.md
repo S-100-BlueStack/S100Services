@@ -1,3 +1,15 @@
+## DC-ASSIGN-AUTOMATCH — Active scope supersedes manual override proposal (2026-11-17)
+
+The latest Package Assignment requirement is **automatic geographic Workspace
+membership only**. Live rows now display only the saved Pipeline binding's
+backend-derived Workspace list, without local include/exclude drafts. No new
+Workspace write API is requested or assumed. The historical OVERRIDE-01
+contract proposal below documents an earlier design direction and must not be
+treated as active scope unless explicitly re-approved. Backend ownership of
+membership intersection and readback is unchanged.
+
+---
+
 ## DC-PERF-FE-01 — Combined Workspace overview status (2026-11-16)
 
 DC-PERF-BE-02 now supplies a bounded, Pipeline-scoped combined Workspace

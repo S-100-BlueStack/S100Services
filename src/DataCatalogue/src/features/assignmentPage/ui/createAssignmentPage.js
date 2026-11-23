@@ -438,11 +438,7 @@ export function createAssignmentPage({
         if (!workStreamRows.has(workStream.id)) {
           workStreamRows.set(
             workStream.id,
-            live
-              ? createPipelineRow(workStream, session, {
-                  listWorkspaces: services.workspaces?.list,
-                })
-              : createWorkStreamRow(workStream, session)
+            live ? createPipelineRow(workStream, session) : createWorkStreamRow(workStream, session)
           );
         }
         return workStreamRows.get(workStream.id);

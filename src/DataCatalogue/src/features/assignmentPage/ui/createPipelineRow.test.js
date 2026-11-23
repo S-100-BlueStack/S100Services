@@ -3,19 +3,11 @@ import assert from "node:assert/strict";
 import { createPipelineRow } from "./createPipelineRow.js";
 import { createAssignmentSession } from "../../assignments/state/createAssignmentSession.js";
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((ok) => {
-    resolve = ok;
-  });
-  return { promise, resolve };
-}
-
 function fakeDom() {
   const original = globalThis.document;
   class Node {
     constructor(tag) {
-      this.tagName = tag;
+      this.tagName = tag.toUpperCase();
       this.children = [];
       this.listeners = new Map();
       this.attributes = new Map();
@@ -41,8 +33,8 @@ function fakeDom() {
     addEventListener(event, handler) {
       this.listeners.set(event, handler);
     }
-    dispatch(event) {
-      this.listeners.get(event)?.({ target: this });
+    dispatch(event, details = {}) {
+      this.listeners.get(event)?.({ target: this, preventDefault() {}, ...details });
     }
   }
   globalThis.document = { createElement: (tag) => new Node(tag) };
@@ -53,27 +45,48 @@ function fakeDom() {
 
 function createFixture() {
   const data = {
-    A: { relations: { p: { active: true, workspaces: [{ id: "w1", name: "One" }] } } },
-    B: { relations: { p: { active: true, workspaces: [{ id: "w2", name: "Two" }] } } },
+    A: {
+      relations: {
+        p: {
+          active: true,
+          workspaces: [
+            { id: "w2", name: "Zulu" },
+            { id: "w1", name: "Alpha" },
+          ],
+        },
+      },
+    },
+    B: { relations: { p: { active: true, workspaces: [{ id: "w3", name: "Kattegat" }] } } },
+    C: { relations: { p: { active: true, workspaces: [] } } },
+    D: { relations: {} },
   };
   const services = {
     source: "live",
     features: { get: async (id) => ({ id }) },
-    assignments: { load: async (id) => structuredClone(data[id]) },
+    assignments: {
+      load: async (id) => structuredClone(data[id]),
+      save: async (id) => {
+        assert.equal(id, "D");
+        return {
+          relations: {
+            p: { active: true, workspaces: [{ id: "w4", name: "New match" }] },
+          },
+        };
+      },
+    },
   };
   const session = createAssignmentSession({ services });
   return { session };
 }
 
 function nodes(row) {
-  const [heading, commentEditor, derived, editor] = row.element.children;
+  const [heading, commentEditor, matches] = row.element.children;
   const [primary, comment] = heading.children;
   const [pipelineCheckbox] = primary.children;
-  const [status, list, retry] = editor.children;
+  const [status, list] = matches.children;
   const [commentInput, closeComment] = commentEditor.children;
   return {
-    derived,
-    editor,
+    matches,
     pipelineCheckbox,
     comment,
     commentEditor,
@@ -81,116 +94,104 @@ function nodes(row) {
     closeComment,
     status,
     list,
-    retry,
   };
 }
 
-function checkboxAt(list, index) {
-  return list.children[index].children[0];
-}
-
-const workspaceCatalogue = {
-  items: [
-    { id: "w1", name: "One", pipelineId: "p" },
-    { id: "w2", name: "Two", pipelineId: "p" },
-  ],
-};
-
-async function flush() {
-  await new Promise((resolve) => setImmediate(resolve));
-}
-
-test("Pipeline Workspace checkboxes appear inline, auto-match and preview reversible choices", async () => {
+test("Pipeline shows only saved automatic Workspace names as a read-only list", async () => {
   const restore = fakeDom();
   const { session } = createFixture();
   let row;
   try {
     await session.select("A");
-    row = createPipelineRow({ id: "p", name: "Pipeline" }, session, {
-      listWorkspaces: async () => workspaceCatalogue,
-    });
-    const { editor, list, derived, closeComment } = nodes(row);
-    assert.equal(closeComment.textContent, "OK");
-    const unsubscribe = session.subscribe(row.update);
-    await flush();
-    assert.equal(editor.hidden, false);
-    assert.equal(list.children.length, 2);
-    assert.equal(checkboxAt(list, 0).checked, true);
-    assert.equal(checkboxAt(list, 1).checked, false);
-    assert.equal(derived.textContent, "1 auto-matched workspaces");
-
-    checkboxAt(list, 0).checked = false;
-    checkboxAt(list, 0).dispatch("change");
-    checkboxAt(list, 1).checked = true;
-    checkboxAt(list, 1).dispatch("change");
-    assert.deepEqual(session.snapshot().draft.workspaceOverrides, { p: { w1: false, w2: true } });
-    assert.equal(await session.save(), false);
-
-    checkboxAt(list, 0).checked = true;
-    checkboxAt(list, 0).dispatch("change");
-    checkboxAt(list, 1).checked = false;
-    checkboxAt(list, 1).dispatch("change");
-    assert.deepEqual(session.snapshot().draft.workspaceOverrides, {});
-    unsubscribe();
-  } finally {
-    row?.destroy();
-    session.destroy();
-    restore();
-  }
-});
-
-test("Stale Pipeline Workspace list cannot appear for the next selected Package", async () => {
-  const restore = fakeDom();
-  const { session } = createFixture();
-  const old = deferred();
-  const newer = deferred();
-  let reads = 0;
-  let row;
-  try {
-    await session.select("A");
-    row = createPipelineRow({ id: "p", name: "Pipeline" }, session, {
-      listWorkspaces: async () => (++reads === 1 ? old.promise : newer.promise),
-    });
-    const { list, editor } = nodes(row);
-    const unsubscribe = session.subscribe(row.update);
-    await session.select("B");
-    old.resolve(workspaceCatalogue);
-    await flush();
-    assert.equal(list.children.length, 0);
-    assert.equal(editor.hidden, false);
-    newer.resolve(workspaceCatalogue);
-    await flush();
-    assert.equal(list.children.length, 2);
-    unsubscribe();
-  } finally {
-    row?.destroy();
-    session.destroy();
-    restore();
-  }
-});
-
-test("Workspace list failures offer retry without changing a saved binding", async () => {
-  const restore = fakeDom();
-  const { session } = createFixture();
-  let attempts = 0;
-  let row;
-  try {
-    await session.select("A");
-    row = createPipelineRow({ id: "p", name: "Pipeline" }, session, {
-      listWorkspaces: async () => {
-        if (++attempts === 1) throw new Error("Catalogue unavailable");
-        return workspaceCatalogue;
-      },
-    });
-    const { status, retry, list } = nodes(row);
+    row = createPipelineRow({ id: "p", name: "Pipeline" }, session);
     session.subscribe(row.update);
-    await flush();
-    assert.match(status.textContent, /Catalogue unavailable/);
-    assert.equal(retry.hidden, false);
-    retry.dispatch("click");
-    await flush();
-    assert.equal(retry.hidden, true);
+    const { matches, pipelineCheckbox, list, status, closeComment } = nodes(row);
+    assert.equal(matches.hidden, false);
+    assert.equal(
+      matches.getAttribute("aria-label"),
+      "Automatically matched Workspaces for Pipeline"
+    );
+    assert.equal(list.tagName, "UL");
+    assert.deepEqual(
+      list.children.map((item) => item.textContent),
+      ["Alpha", "Zulu"]
+    );
+    assert.ok(list.children.every((item) => item.tagName === "LI"));
+    assert.equal(
+      list.children.some((item) => item.children.length),
+      false
+    );
+    assert.equal(status.textContent, "2 auto-matched Workspaces");
+    assert.equal(pipelineCheckbox.checked, true);
+    assert.equal(closeComment.textContent, "OK");
+    assert.equal(session.snapshot().dirty, false);
+    assert.deepEqual(Object.keys(session.snapshot().draft).sort(), ["activeIds", "comments"]);
+  } finally {
+    row?.destroy();
+    session.destroy();
+    restore();
+  }
+});
+
+test("Package switch replaces saved Workspace matches without another read", async () => {
+  const restore = fakeDom();
+  const { session } = createFixture();
+  let row;
+  try {
+    await session.select("A");
+    row = createPipelineRow({ id: "p", name: "Pipeline" }, session);
+    session.subscribe(row.update);
+    const { matches, list, status } = nodes(row);
     assert.equal(list.children.length, 2);
+    assert.equal(await session.select("B"), true);
+    assert.equal(matches.hidden, false);
+    assert.deepEqual(
+      list.children.map((item) => item.textContent),
+      ["Kattegat"]
+    );
+    assert.equal(status.textContent, "1 auto-matched Workspace");
+    assert.equal(await session.select("C"), true);
+    assert.deepEqual(list.children, []);
+    assert.equal(status.textContent, "No auto-matched Workspaces.");
+    assert.equal(await session.select("D"), true);
+    assert.equal(matches.hidden, true);
+    assert.deepEqual(list.children, []);
+  } finally {
+    row?.destroy();
+    session.destroy();
+    restore();
+  }
+});
+
+test("New Pipeline draft does not invent Workspace matches", async () => {
+  const restore = fakeDom();
+  const { session } = createFixture();
+  let row;
+  try {
+    await session.select("D");
+    row = createPipelineRow({ id: "p", name: "Pipeline" }, session);
+    session.subscribe(row.update);
+    const { pipelineCheckbox, matches, list, status } = nodes(row);
+    assert.equal(matches.hidden, true);
+    pipelineCheckbox.checked = true;
+    pipelineCheckbox.dispatch("change");
+    assert.equal(matches.hidden, false);
+    assert.equal(status.textContent, "Workspace matches are calculated after Save.");
+    assert.equal(list.children.length, 0);
+    assert.equal(session.snapshot().dirty, true);
+    assert.deepEqual(session.snapshot().record.relations, {});
+    pipelineCheckbox.checked = false;
+    pipelineCheckbox.dispatch("change");
+    assert.equal(matches.hidden, true);
+    assert.equal(session.snapshot().dirty, false);
+    pipelineCheckbox.checked = true;
+    pipelineCheckbox.dispatch("change");
+    assert.equal(await session.save(), true);
+    assert.equal(status.textContent, "1 auto-matched Workspace");
+    assert.deepEqual(
+      list.children.map((item) => item.textContent),
+      ["New match"]
+    );
     assert.equal(session.snapshot().dirty, false);
   } finally {
     row?.destroy();
@@ -199,29 +200,28 @@ test("Workspace list failures offer retry without changing a saved binding", asy
   }
 });
 
-test("Hidden inline Workspace rows retain draft choices until reselected", async () => {
+test("Removing a Pipeline draft never edits saved Workspace membership", async () => {
   const restore = fakeDom();
   const { session } = createFixture();
   let row;
   try {
     await session.select("A");
-    row = createPipelineRow({ id: "p", name: "Pipeline" }, session, {
-      listWorkspaces: async () => workspaceCatalogue,
-    });
+    row = createPipelineRow({ id: "p", name: "Pipeline" }, session);
     session.subscribe(row.update);
-    const { pipelineCheckbox, editor, list } = nodes(row);
-    await flush();
-    const original = checkboxAt(list, 0);
-    original.checked = false;
-    original.dispatch("change");
+    const { pipelineCheckbox, matches, list } = nodes(row);
     pipelineCheckbox.checked = false;
     pipelineCheckbox.dispatch("change");
-    assert.equal(editor.hidden, true);
-    assert.deepEqual(session.snapshot().draft.workspaceOverrides, { p: { w1: false } });
+    assert.equal(matches.hidden, true);
+    assert.equal(session.snapshot().dirty, true);
+    assert.equal(session.snapshot().record.relations.p.workspaces.length, 2);
     pipelineCheckbox.checked = true;
     pipelineCheckbox.dispatch("change");
-    assert.equal(editor.hidden, false);
-    assert.equal(original.checked, false);
+    assert.equal(matches.hidden, false);
+    assert.deepEqual(
+      list.children.map((item) => item.textContent),
+      ["Alpha", "Zulu"]
+    );
+    assert.equal(session.snapshot().dirty, false);
   } finally {
     row?.destroy();
     session.destroy();
@@ -229,17 +229,15 @@ test("Hidden inline Workspace rows retain draft choices until reselected", async
   }
 });
 
-test("Pipeline speech-bubble editor keeps a local comment and does not authorize live Save", async () => {
+test("Pipeline comment editor preserves local draft and blocks unsupported live Save", async () => {
   const restore = fakeDom();
   const { session } = createFixture();
   let row;
   try {
     await session.select("A");
-    row = createPipelineRow({ id: "p", name: "Pipeline" }, session, {
-      listWorkspaces: async () => workspaceCatalogue,
-    });
+    row = createPipelineRow({ id: "p", name: "Pipeline" }, session);
     session.subscribe(row.update);
-    const { comment, commentInput, commentEditor, closeComment } = nodes(row);
+    const { comment, commentInput, commentEditor, closeComment, list } = nodes(row);
     assert.equal(comment.children[0].icon, "speech-bubble");
     comment.dispatch("click");
     assert.equal(commentEditor.hidden, false);
@@ -255,6 +253,7 @@ test("Pipeline speech-bubble editor keeps a local comment and does not authorize
     commentInput.dispatch("input");
     assert.deepEqual(session.snapshot().draft.comments, []);
     assert.equal(session.snapshot().validationError, "");
+    assert.equal(list.children.length, 2);
   } finally {
     row?.destroy();
     session.destroy();

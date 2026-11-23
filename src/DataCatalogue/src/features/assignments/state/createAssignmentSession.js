@@ -1,5 +1,4 @@
 import { assignmentDraftError, createDraft, isDirty } from "../domain/assignmentDraft.js";
-import { withWorkspacePreviewSelection } from "../domain/workspacePreview.js";
 
 export function createAssignmentSession({ services }) {
   const listeners = new Set();
@@ -202,26 +201,6 @@ export function createAssignmentSession({ services }) {
       state.draft.activeIds = state.draft.activeIds.filter((value) => value !== id);
       if (active) state.draft.activeIds.push(id);
       emit();
-    },
-    setWorkspacePreview(pipelineId, workspaceId, selected) {
-      if (!editable() || services.source !== "live") return false;
-      if (!state.draft.activeIds.includes(pipelineId)) return false;
-      state.draft.workspaceOverrides = withWorkspacePreviewSelection(
-        state.record,
-        state.draft,
-        pipelineId,
-        workspaceId,
-        Boolean(selected)
-      );
-      emit();
-      return true;
-    },
-    resetWorkspacePreview(pipelineId) {
-      if (!editable() || services.source !== "live") return false;
-      if (!state.draft.workspaceOverrides?.[pipelineId]) return false;
-      delete state.draft.workspaceOverrides[pipelineId];
-      emit();
-      return true;
     },
     addComment(workStreamId) {
       if (!editable() || !state.draft.activeIds.includes(workStreamId)) return false;

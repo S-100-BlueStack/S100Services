@@ -1,8 +1,6 @@
-import { workspacePreviewSelection } from "../../assignments/domain/workspacePreview.js";
-
-// Only saved Package-Pipeline bindings are authoritative. Workspace selections and
-// binding comments stay in the session draft until the API exposes write contracts.
-export function createPipelineRow(pipeline, session, { listWorkspaces } = {}) {
+// Saved Package-Pipeline bindings own automatic Workspace membership. Only the
+// Pipeline checkbox and local comment are editable; Workspace matches are read-only.
+export function createPipelineRow(pipeline, session) {
   const element = document.createElement("article");
   element.className = "dc-work-stream-row dc-pipeline-binding-row";
   const heading = document.createElement("div");
@@ -42,31 +40,20 @@ export function createPipelineRow(pipeline, session, { listWorkspaces } = {}) {
   closeComment.textContent = "OK";
   commentEditor.append(commentInput, closeComment);
 
-  const derived = document.createElement("p");
-  derived.className = "dc-assignment-muted dc-workspace-preview__summary";
-  const editor = document.createElement("section");
-  editor.className = "dc-workspace-preview";
-  editor.hidden = true;
-  editor.setAttribute("aria-label", `Workspaces for ${pipeline.name}`);
-  const status = document.createElement("p");
-  status.className = "dc-assignment-muted dc-workspace-preview__status";
-  status.setAttribute("role", "status");
-  const list = document.createElement("div");
-  list.className = "dc-workspace-preview__list";
-  const retry = document.createElement("button");
-  retry.type = "button";
-  retry.textContent = "Retry Workspaces";
-  retry.hidden = true;
-  editor.append(status, list, retry);
-  element.append(heading, commentEditor, derived, editor);
+  const matches = document.createElement("section");
+  matches.className = "dc-auto-workspaces";
+  matches.hidden = true;
+  matches.setAttribute("aria-label", `Automatically matched Workspaces for ${pipeline.name}`);
+  const matchStatus = document.createElement("p");
+  matchStatus.className = "dc-assignment-muted dc-auto-workspaces__status";
+  matchStatus.setAttribute("role", "status");
+  const matchList = document.createElement("ul");
+  matchList.className = "dc-auto-workspaces__list";
+  matches.append(matchStatus, matchList);
+  element.append(heading, commentEditor, matches);
 
-  let currentPackageId = null;
   let currentState = null;
-  let workspaces = null;
-  let workspaceRows = [];
-  let generation = 0;
-  let controller = null;
-  let requestPending = false;
+  let renderedMatchesKey = null;
   let destroyed = false;
   const commentListeners = new AbortController();
 
@@ -86,10 +73,48 @@ export function createPipelineRow(pipeline, session, { listWorkspaces } = {}) {
     if (restoreFocus) comment.focus?.({ preventScroll: true });
   }
 
-  function updateControls() {
+  function renderMatches() {
     const active = isActive();
-    const automatic = currentState?.record?.relations?.[pipeline.id]?.workspaces?.length ?? 0;
-    checkbox.checked = active;
+    const saved = currentState?.record?.relations?.[pipeline.id];
+    const savedWorkspaces = saved?.active ? saved.workspaces : null;
+    const key = JSON.stringify([
+      currentState?.feature?.id,
+      active,
+      saved?.active ?? false,
+      Array.isArray(savedWorkspaces)
+        ? savedWorkspaces.map((workspace) => [workspace.id, workspace.name])
+        : null,
+    ]);
+    if (key === renderedMatchesKey) return;
+    renderedMatchesKey = key;
+    matches.hidden = !active;
+    matchList.replaceChildren();
+    if (!active) {
+      matchStatus.textContent = "";
+    } else if (!saved?.active) {
+      // A new Pipeline draft has no authoritative Workspace membership until Save reconciles.
+      matchStatus.textContent = "Workspace matches are calculated after Save.";
+    } else if (!Array.isArray(savedWorkspaces)) {
+      matchStatus.textContent = "Saved Workspace matches are unavailable.";
+    } else {
+      const count = savedWorkspaces.length;
+      matchStatus.textContent = count
+        ? `${count} auto-matched ${count === 1 ? "Workspace" : "Workspaces"}`
+        : "No auto-matched Workspaces.";
+      const rows = [...savedWorkspaces]
+        .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
+        .map((workspace) => {
+          const row = document.createElement("li");
+          row.className = "dc-auto-workspaces__item";
+          row.textContent = workspace.name ?? workspace.id;
+          return row;
+        });
+      matchList.replaceChildren(...rows);
+    }
+  }
+
+  function updateControls() {
+    checkbox.checked = isActive();
     checkbox.disabled = !currentState?.feature || currentState.loading || currentState.saving;
     comment.disabled = !canEdit();
     comment.classList.toggle("has-comment", Boolean(draftComment()?.text.trim()));
@@ -97,85 +122,7 @@ export function createPipelineRow(pipeline, session, { listWorkspaces } = {}) {
     const currentComment = draftComment()?.text ?? "";
     if (document.activeElement !== commentInput) commentInput.value = currentComment;
     commentInput.disabled = !canEdit();
-    derived.textContent =
-      active && currentState?.record?.relations?.[pipeline.id]
-        ? `${automatic} auto-matched workspaces`
-        : "";
-    editor.hidden = !active;
-    for (const row of workspaceRows) {
-      const choice = workspacePreviewSelection(
-        currentState?.record,
-        currentState?.draft,
-        pipeline.id,
-        row.id
-      );
-      row.checkbox.checked = choice.selected;
-      row.checkbox.disabled = !canEdit();
-      row.element.classList.toggle("is-preview-change", choice.selected !== choice.automatic);
-    }
-  }
-
-  function invalidate() {
-    generation++;
-    controller?.abort();
-    controller = null;
-    requestPending = false;
-  }
-
-  function renderWorkspaces() {
-    workspaceRows = workspaces.map((workspace) => {
-      const row = document.createElement("label");
-      row.className = "dc-workspace-preview__row";
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      const text = document.createElement("span");
-      text.className = "dc-workspace-preview__name";
-      text.textContent = workspace.name;
-      input.addEventListener("change", () => {
-        session.setWorkspacePreview(pipeline.id, workspace.id, input.checked);
-      });
-      row.append(input, text);
-      return { id: workspace.id, element: row, checkbox: input };
-    });
-    list.replaceChildren(...workspaceRows.map((row) => row.element));
-    status.textContent = "";
-    updateControls();
-  }
-
-  async function loadWorkspaces() {
-    if (destroyed || !currentPackageId || !isActive() || requestPending) return;
-    invalidate();
-    const current = generation;
-    const packageId = currentPackageId;
-    controller = new AbortController();
-    const signal = controller.signal;
-    requestPending = true;
-    retry.hidden = true;
-    status.textContent = "Loading Workspaces…";
-    const isCurrent = () =>
-      !destroyed &&
-      !signal.aborted &&
-      current === generation &&
-      isActive() &&
-      currentPackageId === packageId &&
-      session.snapshot().feature?.id === packageId;
-
-    try {
-      if (typeof listWorkspaces !== "function")
-        throw new Error("Workspace catalogue is unavailable.");
-      const result = await listWorkspaces({ pipelineId: pipeline.id, signal });
-      if (!isCurrent()) return;
-      if (!Array.isArray(result?.items))
-        throw new Error("Workspace catalogue returned an invalid result.");
-      workspaces = [...result.items].sort((a, b) => a.name.localeCompare(b.name));
-      renderWorkspaces();
-    } catch (error) {
-      if (!isCurrent()) return;
-      status.textContent = error.message;
-      retry.hidden = false;
-    } finally {
-      if (current === generation) requestPending = false;
-    }
+    renderMatches();
   }
 
   checkbox.addEventListener("change", () => session.setAssigned(pipeline.id, checkbox.checked));
@@ -219,37 +166,16 @@ export function createPipelineRow(pipeline, session, { listWorkspaces } = {}) {
     },
     { signal: commentListeners.signal }
   );
-  retry.addEventListener("click", () => void loadWorkspaces());
 
   return {
     element,
     update(state) {
       if (destroyed) return;
-      const nextPackageId = state.feature?.id ?? null;
-      if (nextPackageId !== currentPackageId) {
-        invalidate();
-        currentPackageId = nextPackageId;
-        workspaces = null;
-        workspaceRows = [];
-        list.replaceChildren();
-        retry.hidden = true;
-        status.textContent = "";
-        closePopup();
-      }
       currentState = state;
       updateControls();
-      if (!isActive()) {
-        if (requestPending) invalidate();
-        retry.hidden = true;
-        status.textContent = "";
-      }
-      if (isActive() && workspaces === null && !requestPending && retry.hidden) {
-        void loadWorkspaces();
-      }
     },
     destroy() {
       destroyed = true;
-      invalidate();
       commentListeners.abort();
       closePopup();
     },

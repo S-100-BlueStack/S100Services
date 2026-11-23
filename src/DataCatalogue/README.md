@@ -1,3 +1,13 @@
+## Package Assignment: automatic Workspace matches (2026-11-17)
+
+Live Pipeline bindings remain editable and saved through the existing API.
+Workspace names beneath each selected Pipeline are read-only matches from the
+last saved binding response; new Pipeline assignments calculate matches on Save.
+No manual Workspace include/exclude draft, extra Workspace catalogue read or
+Workspace mutation is offered. Mock Feature/Work stream assignment is unchanged.
+The implementation is a candidate pending full local `npm run check` and browser
+validation. See `docs/PROJECT_TRACKER.md` for DC-ASSIGN-AUTOMATCH.
+
 # DataCatalogue frontend
 
 DataCatalogue is an ArcGIS/Vite frontend in `S100Services/src/DataCatalogue`.

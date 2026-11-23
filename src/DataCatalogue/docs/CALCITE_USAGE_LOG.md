@@ -1,3 +1,14 @@
+## DC-ASSIGN-AUTOMATCH — Native read-only Workspace names (2026-11-17)
+
+Package Assignment continues to use a native Pipeline checkbox and the public
+`calcite-icon` for the existing binding-comment action. Backend-derived matched
+Workspaces are displayed as a native semantic `<ul>` with `<li>` text, not
+Calcite checkbox, list selection or private shadow-DOM controls: they are
+read-only data, not a user-selectable state. Compact spacing uses existing
+application theme tokens; no Calcite API or component contract changes.
+
+---
+
 ## DC-UX-03F — Native metadata and long-description disclosure (2026-11-12)
 
 The live Package Assignment Details panel deliberately retains semantic native

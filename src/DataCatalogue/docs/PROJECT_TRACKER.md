@@ -1,3 +1,33 @@
+## DC-ASSIGN-AUTOMATCH — Read-only automatic Workspace matches (frontend candidate, 2026-11-17)
+
+**Authoritative baseline:** `48e8fa39664d8dcbfc36e3866c1c4b82e50c1343`
+(commit follows the accepted DataCatalogue performance implementation, and was created
+in ProductCatalogue). This implementation supersedes the manual Workspace preview
+editor described in the dated DC-UX-01 v2/v3 sections below.
+
+- In live Package Assignment, the Pipeline checkbox remains the only binding
+  selector. An active Pipeline displays only the auto-matched Workspaces supplied
+  by the **saved** Package-Pipeline binding response. The list is semantic,
+  non-interactive text; neither unassigned Workspaces nor manual add/remove
+  controls appear. Zero matches are displayed explicitly.
+- Newly checked, unsaved Pipelines show that matches are calculated after Save;
+  they do not fabricate a preview of Workspace membership. Unchecking a saved
+  Pipeline changes only the Pipeline draft until successful authoritative
+  reconciliation. Saved bindings, map geometry and contextual Jobs are unchanged.
+- Remove the retired Workspace preview draft state, its session mutation methods,
+  extra Pipeline-scoped Workspace-catalogue fetches and preview tests. Preserve
+  the live API adapter's rejection of unsupported manual Workspace mutations,
+  independent Pipeline writes, partial failures, comments, selection lifecycle,
+  mock mode and map behavior.
+- Frontend-only change. No backend contract, dependencies or authentication
+  changes. Source-level focused tests have been added/updated; full local
+  `npm run check` and browser validation are required before acceptance.
+  The 2026-11-12 DC-ASSIGN-AUTOMATCH requirement is addressed by this candidate;
+  older OVERRIDE-01 proposals are historical, not an active instruction to
+  reintroduce manual Workspace selection.
+
+---
+
 ## DC-PERF-FE-01 — Main Map combined Workspace overview consumption (frontend candidate, 2026-11-16)
 
 **Authoritative frontend baseline:** `bcd52ce9192b82f629a9fc2e1e20e1cf40a3b851`,
