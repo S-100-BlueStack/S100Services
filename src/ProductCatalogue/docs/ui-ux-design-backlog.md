@@ -261,7 +261,6 @@ summary filter actions and right-hand History/IC-ENC/Validation panels remain
 unchanged. See [Dashboard](../src/features/dashboard/README.md). Browser design
 acceptance and local `npm run check` are pending; do not mark R06 complete.
 
-
 ### PC-UX-R06 v2 – Operational reporting dashboard (review candidate)
 
 R06 v2 supersedes the v1 presentation proposal while retaining its accepted
@@ -275,7 +274,6 @@ aggregate exists. It must not be guessed from Ready-for-distribution or other
 completed activity records or from a paginated response. No server changes are
 part of this candidate. Browser review and the local `npm run check` gate remain
 pending; do not mark R06 accepted before those checks.
-
 
 ### PC-UX-R06 v3 – Reporting layout and activity scanability (review candidate)
 

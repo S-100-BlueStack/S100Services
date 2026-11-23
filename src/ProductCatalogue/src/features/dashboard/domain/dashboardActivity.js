@@ -1,5 +1,6 @@
 import { createDashboardRangeDisplayLabel, DASHBOARD_TIME_ZONE } from "./dashboardRange.js";
 import { createDashboardSummary } from "./dashboardSummary.js";
+import { normalizeDashboardReporting } from "./dashboardReporting.js";
 
 const DEFAULT_SEVERITY = "normal";
 const DEFAULT_TYPE = "activity";
@@ -50,6 +51,7 @@ export function normalizeDashboardPayload(
       summary: data.summary ?? data.Summary,
       activities,
     }),
+    ...normalizeDashboardReporting(data),
     statusSummary: normalizeSummaryRows(data.statusSummary ?? data.StatusSummary, "status"),
     operationSummary: normalizeSummaryRows(data.operationSummary ?? data.OperationSummary, "type"),
     paging: normalizeDashboardPaging(data.paging ?? data.Paging, activities),
@@ -99,6 +101,9 @@ function normalizeActivity(value, index) {
     type,
     severity,
     status,
+    productSpecification: normalizeText(
+      readFirstDefined(source, ["productSpecification", "ProductSpecification"])
+    ),
     title: normalizeText(readFirstDefined(source, ["title", "Title"])) || createFallbackTitle(type),
     description: normalizeText(
       readFirstDefined(source, ["description", "Description", "message", "Message"])

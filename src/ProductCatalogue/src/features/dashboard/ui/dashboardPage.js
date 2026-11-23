@@ -32,10 +32,13 @@ import { createDashboardLoadPresentation } from "./dashboardLoadPresentation.js"
 const DASHBOARD_METRIC_DESCRIPTIONS = {
   totalActivities: "All recorded operational events in the selected filtered range",
   productsTouched: "Unique products with activity in the selected filtered range",
-  activeOperations: "Active activities across the full filtered result",
-  acceptedForDistribution: "Accepted distribution totals are not provided by this Dashboard API",
-  failedOperations: "Failed activities in the selected filtered range",
-  reportsAvailable: "IC-ENC or validation reports recorded by the Dashboard API",
+  openErrors:
+    "Product workflow tracks currently in Error or Rejected state, independent of the historical range",
+  acceptedForDistribution:
+    "Recorded IC-ENC distribution decisions for revision deliveries in the selected range",
+  failedOperations:
+    "Historical failed activity events in the selected filtered range; click to filter the activity list",
+  reportsAvailable: "Stored report files available for matching Products in the selected range",
 };
 
 const IMPORTANCE_OPTIONS = [
@@ -59,6 +62,7 @@ let dashboardReportPanelState = createDashboardReportPanelState();
 let dashboardReportPanelPage = null;
 let dashboardHistoryKeyboardHandlersRegistered = false;
 let dashboardHistoryLookupLoadPromise = null;
+let dashboardTrendsExpanded = false;
 let lastRenderArgs = null;
 
 export function renderDashboardPage({
@@ -904,65 +908,48 @@ function createStateMessage(title, description) {
   return state;
 }
 
+// These values describe recorded workflow outcomes, not a claim about external
+// transport. Keep the backend's live/simulation split untouched for other consumers.
+function getRecordedDistributionCount(distribution, key) {
+  const values = [distribution?.live?.[key], distribution?.simulation?.[key]].filter(
+    (value) => typeof value === "number" && Number.isFinite(value)
+  );
+  return values.length ? values.reduce((total, value) => total + value, 0) : null;
+}
+
 function createSummaryCards(dashboard) {
   const cards = document.createElement("section");
   cards.className = "pc-dashboard-summary";
   cards.setAttribute("aria-label", "Dashboard summary");
   const summary = dashboard?.summary ?? {};
-  const statusRows = dashboard?.statusSummary ?? [];
-  const hasStatusTotals = statusRows.length > 0 || Number(summary.totalActivities) === 0;
-  const activeCount = hasStatusTotals
-    ? statusRows.reduce(
-        (count, row) =>
-          count + (String(row.label).toLowerCase() === "active" ? Number(row.count) || 0 : 0),
-        0
-      )
-    : null;
+  const health = dashboard?.operationalHealth;
+  const accepted = getRecordedDistributionCount(dashboard?.distribution, "accepted");
 
   const metrics = [
+    { key: "totalActivities", label: "Activities", value: summary.totalActivities ?? 0 },
+    { key: "productsTouched", label: "Products touched", value: summary.productsTouched ?? 0 },
     {
-      key: "totalActivities",
-      label: "Activities",
-      value: summary.totalActivities ?? 0,
-      detail: `${summary.importantChanges ?? 0} important changes`,
-    },
-    {
-      key: "productsTouched",
-      label: "Products touched",
-      value: summary.productsTouched ?? 0,
-      detail: "Unique Products",
-    },
-    {
-      key: "activeOperations",
-      label: "Active",
-      value: activeCount ?? "—",
-      detail: activeCount === null ? "Status total unavailable" : "Active status events",
-      tone: "active",
+      key: "openErrors",
+      label: "Open errors",
+      value: health?.openErrors ?? "—",
+      tone: "danger",
+      unavailable: health?.openErrors === null || health?.openErrors === undefined,
     },
     {
       key: "acceptedForDistribution",
-      label: "Accepted for distribution",
-      // Ready-for-distribution and completed operations do not prove IC-ENC acceptance.
-      // This KPI must remain unavailable until the backend provides a verified total.
-      value: "—",
-      detail: "Backend total not available",
+      label: "Distributed",
+      value: accepted ?? "—",
       tone: "positive",
-      unavailable: true,
+      unavailable: accepted === null,
     },
     {
       key: "failedOperations",
-      label: "Failed",
+      label: "Failed events",
       value: summary.failedOperations ?? 0,
-      detail: "Failed events",
       tone: "danger",
       interactive: true,
     },
-    {
-      key: "reportsAvailable",
-      label: "Reports",
-      value: summary.reportsAvailable ?? 0,
-      detail: "Linked reports",
-    },
+    { key: "reportsAvailable", label: "Reports", value: summary.reportsAvailable ?? 0 },
   ];
 
   for (const metric of metrics) {
@@ -976,7 +963,10 @@ function createSummaryCards(dashboard) {
       card.classList.add("is-interactive");
       card.dataset.dashboardFocusKey = "failed-kpi";
       card.setAttribute("aria-pressed", String(isFiltered));
-      card.title = isFiltered ? "Clear failed activity filter" : "Filter to failed activity";
+      card.setAttribute(
+        "aria-label",
+        `${metric.value} failed events. ${isFiltered ? "Clear failed activity filter" : "Filter to failed activity"}`
+      );
       card.addEventListener("click", () => {
         updateDashboardFilters({ importance: isFiltered ? "all" : "failed" });
       });
@@ -990,15 +980,13 @@ function createSummaryCards(dashboard) {
     value.className = "pc-dashboard-summary-card__value";
     value.textContent = String(metric.value);
 
-    const detail = document.createElement("div");
-    detail.className = "pc-dashboard-summary-card__detail";
-    detail.textContent = metric.detail;
-
+    // The compact cards carry semantic descriptions for assistive technology;
+    // duplicate visible subtitles and native hover tooltips add no useful detail.
     const description = document.createElement("div");
     description.className = "pc-dashboard-visually-hidden";
     description.textContent = DASHBOARD_METRIC_DESCRIPTIONS[metric.key];
 
-    card.append(label, value, detail, description);
+    card.append(label, value, description);
     cards.appendChild(card);
   }
 
@@ -1045,26 +1033,41 @@ function createDashboardGrid({
   aside.className = "pc-dashboard-grid__aside";
   const hasDetailPanel = dashboardHistoryState.isOpen || dashboardReportPanelState.isOpen;
   aside.classList.toggle("has-history-panel", hasDetailPanel);
-  aside.append(
-    ...(dashboardReportPanelState.isOpen
-      ? [createDashboardReportPanel()]
-      : dashboardHistoryState.isOpen
-        ? [createDashboardHistoryPanel()]
-        : [
-            createSummaryRows({
-              title: "Status summary",
-              rows: dashboard.statusSummary,
-              filterKey: "status",
-              filters,
-            }),
-            createSummaryRows({
-              title: "Operation summary",
-              rows: dashboard.operationSummary,
-              filterKey: "type",
-              filters,
-            }),
-          ])
-  );
+
+  if (dashboardReportPanelState.isOpen) {
+    aside.appendChild(createDashboardReportPanel());
+  } else if (dashboardHistoryState.isOpen) {
+    aside.appendChild(createDashboardHistoryPanel());
+  } else {
+    const summaries = document.createElement("div");
+    summaries.className = "pc-dashboard-overview-row";
+    summaries.append(
+      createSummaryRows({
+        title: "Status summary",
+        rows: dashboard.statusSummary,
+        filterKey: "status",
+        filters,
+      }),
+      createSummaryRows({
+        title: "Operation summary",
+        rows: dashboard.operationSummary,
+        filterKey: "type",
+        filters,
+      })
+    );
+    aside.appendChild(summaries);
+    if (dashboard.distribution) {
+      aside.appendChild(createDistributionOverview(dashboard.distribution));
+    }
+    if (dashboard.activityTrend !== null && dashboard.activityTrend !== undefined) {
+      aside.appendChild(
+        createActivityTrendPanel(dashboard.activityTrend, dashboard.distributionTrend)
+      );
+    }
+    if (hasAdditionalDashboardInsights(dashboard)) {
+      aside.appendChild(createAdditionalInsightsOverview(dashboard));
+    }
+  }
 
   grid.append(main, aside);
   return grid;
@@ -1349,11 +1352,11 @@ function createActivityTable(activities, timeZone, { sortBy, sortDirection }) {
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
 
-  for (const label of ["Time", "Product", "Activity", "Status", "Links"]) {
+  for (const label of ["Time", "Product", "Activity", "Status", "Actions"]) {
     const th = document.createElement("th");
     th.scope = "col";
     const sortKey = label.toLowerCase();
-    if (label === "Links") {
+    if (label === "Actions") {
       th.className = "pc-dashboard-activity-table__links-heading";
       th.textContent = label;
     } else {
@@ -1478,67 +1481,89 @@ function createStatusPill(status, severity) {
 }
 
 function createActivityLinks(activity) {
-  const links = document.createElement("div");
-  links.className = "pc-dashboard-activity-links";
+  const actions = document.createElement("div");
+  // Preserve the onboarding tour anchor while keeping the updated action layout.
+  actions.className = "pc-dashboard-activity-actions pc-dashboard-activity-links";
+  actions.append(
+    createDashboardHistoryButton(activity),
+    createDashboardReportButton(activity, "ic-enc"),
+    createDashboardReportButton(activity, "internal"),
+    createDashboardNavigationDropdown(activity)
+  );
+  return actions;
+}
 
-  links.append(
-    createProductLink({
+function createDashboardNavigationDropdown(activity) {
+  const dropdown = document.createElement("calcite-dropdown");
+  dropdown.className = "pc-dashboard-navigation-dropdown";
+  dropdown.setAttribute("placement", "bottom-end");
+  dropdown.setAttribute("overlay-positioning", "fixed");
+  dropdown.setAttribute("scale", "s");
+  dropdown.setAttribute("width", "s");
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.slot = "trigger";
+  trigger.className = "pc-dashboard-link-button pc-dashboard-action-trigger";
+  trigger.textContent = "Links";
+  trigger.dataset.dashboardFocusKey = `links:${getDashboardPanelActionKey(activity, "menu")}`;
+  trigger.setAttribute(
+    "aria-label",
+    `Open Review or Analyze for ${activity.datasetName || "this activity"}`
+  );
+
+  const group = document.createElement("calcite-dropdown-group");
+  group.setAttribute("selection-mode", "none");
+  group.append(
+    createProductActionMenuItem({
       label: "Review",
       enabled: activity.links.review && activity.datasetName,
       url: activity.datasetName ? buildReviewUrl([activity.datasetName]) : null,
     }),
-    createProductLink({
+    createProductActionMenuItem({
       label: "Analyze",
       enabled: activity.links.analyze && activity.datasetName,
       url: activity.datasetName ? buildAnalyzeUrl([activity.datasetName]) : null,
-    }),
-    createDashboardHistoryLink(activity),
-    createDashboardReportButton(activity, "ic-enc"),
-    createDashboardReportButton(activity, "internal")
+    })
   );
-
-  return links;
+  // Avoid opening a menu that has no permitted destinations.
+  trigger.disabled = Array.from(group.children).every((item) => item.disabled);
+  dropdown.append(trigger, group);
+  return dropdown;
 }
 
-function createProductLink({ label, enabled, url }) {
-  if (!enabled || !url) {
-    return createDisabledLink(label);
+function createProductActionMenuItem({ label, enabled, url }) {
+  const item = document.createElement("calcite-dropdown-item");
+  item.textContent = label;
+  item.setAttribute("label", label);
+  item.disabled = !enabled || !url;
+  if (!item.disabled) {
+    item.href = url;
+    item.target = "_blank";
+    item.rel = "noopener noreferrer";
   }
-
-  const link = document.createElement("a");
-  link.className = "pc-dashboard-link-button";
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.textContent = label;
-
-  return link;
+  return item;
 }
 
-function createDashboardHistoryLink(activity) {
+function createDashboardHistoryButton(activity) {
+  const active = isDashboardHistoryActivitySelected(activity);
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pc-dashboard-link-button";
-  button.disabled = !activity.links.history || !activity.datasetName;
   button.textContent = "History";
+  button.disabled = !activity.links.history || !normalizeDashboardDatasetName(activity.datasetName);
   button.dataset.dashboardPanelAction = getDashboardPanelActionKey(activity, "history");
-  button.classList.toggle("is-active", isDashboardHistoryActivitySelected(activity));
+  button.classList.toggle("is-active", active);
+  button.setAttribute("aria-pressed", String(active));
   button.setAttribute(
-    "aria-pressed",
-    isDashboardHistoryActivitySelected(activity) ? "true" : "false"
+    "aria-label",
+    `${active ? "Close" : "Open"} History for ${activity.datasetName || "this activity"}`
   );
-  button.title = button.disabled
-    ? "History is not available for this activity."
-    : isDashboardHistoryActivitySelected(activity)
-      ? `Close History for ${activity.datasetName}`
-      : `Open History for ${activity.datasetName}`;
-
   if (!button.disabled) {
     button.addEventListener("click", () => {
-      openDashboardHistory(activity);
+      void openDashboardHistory(activity);
     });
   }
-
   return button;
 }
 
@@ -1591,9 +1616,12 @@ function createDashboardReportButton(activity, reportType) {
     "aria-pressed",
     String(isDashboardReportActivitySelected(activity, reportType))
   );
-  button.title = canOpen
-    ? `${isDashboardReportActivitySelected(activity, reportType) ? "Close" : "Open"} ${label} reports for ${activity.datasetName || "this activity"}`
-    : `${label} reports are not available for this activity.`;
+  button.setAttribute(
+    "aria-label",
+    canOpen
+      ? `${isDashboardReportActivitySelected(activity, reportType) ? "Close" : "Open"} ${label} reports for ${activity.datasetName || "this activity"}`
+      : `${label} reports are not available for this activity`
+  );
   if (canOpen) {
     button.addEventListener("click", () => {
       void openDashboardReports(activity, reportType);
@@ -1618,6 +1646,12 @@ function ensureDashboardHistoryKeyboardHandlers() {
   dashboardHistoryKeyboardHandlersRegistered = true;
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    // The open dropdown owns Escape before the Dashboard detail panel does.
+    if (
+      event.composedPath?.().some((node) => node?.tagName?.toLowerCase() === "calcite-dropdown")
+    ) {
+      return;
+    }
     if (dashboardReportPanelState.isOpen) {
       closeDashboardReports();
     } else if (dashboardHistoryState.isOpen) {
@@ -2188,6 +2222,296 @@ function createDisabledLink(label) {
   return button;
 }
 
+// This reporting section has its own date/Product scope; activity-only filters
+// intentionally do not change immutable IC-ENC decisions.
+function createDistributionOverview(distribution) {
+  const accepted = getRecordedDistributionCount(distribution, "accepted");
+  const rejected = getRecordedDistributionCount(distribution, "rejected");
+  const decisions = accepted === null || rejected === null ? null : accepted + rejected;
+  const rate =
+    decisions > 0 ? `${Math.round(((accepted ?? 0) / decisions) * 100)}% distributed` : "";
+  const panel = createReportingPanel("IC-ENC distribution", rate);
+  const totals = document.createElement("div");
+  totals.className = "pc-dashboard-reporting-totals";
+  for (const [label, value, tone] of [
+    ["Sent", getRecordedDistributionCount(distribution, "sent"), "info"],
+    ["Distributed", accepted, "positive"],
+    ["Rejected", rejected, "danger"],
+    ["Pending", getRecordedDistributionCount(distribution, "pending"), "neutral"],
+  ]) {
+    totals.appendChild(createReportingCounter(label, value, tone));
+  }
+  panel.appendChild(totals);
+  return panel;
+}
+
+function createReportingPanel(title, detail) {
+  const panel = document.createElement("section");
+  panel.className = "pc-dashboard-panel pc-dashboard-reporting-panel";
+  panel.appendChild(createPanelHeader({ title, count: detail }));
+  return panel;
+}
+
+// The default reporting workspace keeps only three primary charts. Secondary
+// aggregates share one bounded panel so they cannot crowd the status/operation charts.
+function hasAdditionalDashboardInsights(dashboard) {
+  return Boolean(
+    dashboard.productBreakdown || dashboard.operationalHealth || dashboard.reportSummary
+  );
+}
+
+function createReportingInsightGroup(title, count) {
+  const insight = document.createElement("section");
+  insight.className = "pc-dashboard-insight";
+  insight.appendChild(createPanelHeader({ title, count, headingLevel: "h3" }));
+  return insight;
+}
+
+function createAdditionalInsightsOverview(dashboard) {
+  const panel = createReportingPanel("Additional insights", "");
+  panel.classList.add("pc-dashboard-insights-panel");
+  const insights = document.createElement("div");
+  insights.className = "pc-dashboard-insights";
+  if (dashboard.productBreakdown) {
+    insights.appendChild(
+      createSpecificationBreakdown(dashboard.productBreakdown, { compact: true })
+    );
+  }
+  if (dashboard.operationalHealth) {
+    insights.appendChild(
+      createOperationalHealthOverview(dashboard.operationalHealth, { compact: true })
+    );
+  }
+  if (dashboard.reportSummary) {
+    insights.appendChild(createReportSummaryOverview(dashboard.reportSummary, { compact: true }));
+  }
+  panel.appendChild(insights);
+  return panel;
+}
+
+function createReportingCounter(label, value, tone = "neutral") {
+  const counter = document.createElement("div");
+  counter.className = `pc-dashboard-reporting-counter is-${tone}`;
+  const caption = document.createElement("span");
+  caption.className = "pc-dashboard-reporting-counter__label";
+  caption.textContent = label;
+  const amount = document.createElement("strong");
+  amount.className = "pc-dashboard-reporting-counter__value";
+  amount.textContent = value === null || value === undefined ? "—" : String(value);
+  counter.append(caption, amount);
+  return counter;
+}
+
+function createActivityTrendPanel(rows, distributionTrend = []) {
+  const total = rows.reduce((count, row) => count + row.activities, 0);
+  const panel = createReportingPanel("Activity over time", `${total} events`);
+  panel.appendChild(
+    createDailyBarChart(rows, [
+      { key: "activities", label: "Activities", tone: "info" },
+      { key: "failed", label: "Failed events", tone: "danger" },
+    ])
+  );
+
+  // The main activity timeline stays visible. The additional distribution
+  // timeline remains available without adding a competing top-level panel.
+  if (distributionTrend?.length) {
+    const details = document.createElement("details");
+    details.className = "pc-dashboard-insights__trend-disclosure";
+    details.open = dashboardTrendsExpanded;
+    details.addEventListener("toggle", () => {
+      if (details.isConnected) dashboardTrendsExpanded = details.open;
+    });
+    const summary = document.createElement("summary");
+    summary.textContent = "Distribution over time";
+    details.append(summary, createDistributionTrendPanel(distributionTrend));
+    panel.appendChild(details);
+  }
+  return panel;
+}
+
+function createDistributionTrendPanel(rows) {
+  const panel = createReportingPanel("Live distribution over time", "Daily outcomes");
+  panel.appendChild(
+    createDailyBarChart(rows, [
+      { key: "sent", label: "Sent", tone: "info" },
+      { key: "accepted", label: "Distributed", tone: "positive" },
+      { key: "rejected", label: "Rejected", tone: "danger" },
+    ])
+  );
+  return panel;
+}
+
+function formatDashboardTrendDay(value, includeYear = false) {
+  const day = String(value ?? "");
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return day;
+  const [, year, month, date] = match;
+  const utc = new Date(Date.UTC(Number(year), Number(month) - 1, Number(date)));
+  if (
+    utc.getUTCFullYear() !== Number(year) ||
+    utc.getUTCMonth() + 1 !== Number(month) ||
+    utc.getUTCDate() !== Number(date)
+  ) {
+    return day;
+  }
+  return `${date}/${month}${includeYear ? `-${year}` : ""}`;
+}
+
+function createDailyBarChart(rows, series) {
+  const chart = document.createElement("div");
+  chart.className = "pc-dashboard-daily-chart";
+  const visible = rows.slice(-14);
+  chart.classList.toggle("is-sparse", visible.length > 0 && visible.length <= 3);
+  if (!visible.length) {
+    chart.appendChild(createEmptyText("No activity for the selected range."));
+    return chart;
+  }
+  const maximum = Math.max(1, ...visible.flatMap((row) => series.map(({ key }) => row[key] ?? 0)));
+  const plot = document.createElement("div");
+  plot.className = "pc-dashboard-daily-chart__plot";
+  plot.setAttribute("role", "img");
+  plot.setAttribute(
+    "aria-label",
+    visible
+      .map(
+        (row) =>
+          `${formatDashboardTrendDay(row.day, true)}: ${series.map(({ key, label }) => `${label} ${row[key] ?? "unavailable"}`).join(", ")}`
+      )
+      .join("; ")
+  );
+
+  for (const row of visible) {
+    const day = document.createElement("div");
+    day.className = "pc-dashboard-daily-chart__day";
+    day.title = `${formatDashboardTrendDay(row.day, true)}: ${series.map(({ key, label }) => `${label} ${row[key] ?? "—"}`).join(", ")}`;
+    const bars = document.createElement("div");
+    bars.className = "pc-dashboard-daily-chart__bars";
+    bars.setAttribute("aria-hidden", "true");
+    for (const { key, tone } of series) {
+      const bar = document.createElement("span");
+      bar.className = `pc-dashboard-daily-chart__bar is-${tone}`;
+      const value = row[key] ?? 0;
+      bar.style.height = value > 0 ? `${Math.max(3, (value / maximum) * 100)}%` : "0";
+      if (visible.length <= 3 && value > 0) {
+        bar.setAttribute("data-value", String(value));
+      }
+      bars.appendChild(bar);
+    }
+    const label = document.createElement("span");
+    label.className = "pc-dashboard-daily-chart__day-label";
+    label.textContent = formatDashboardTrendDay(row.day);
+    day.append(bars, label);
+    plot.appendChild(day);
+  }
+  chart.appendChild(plot);
+
+  const legend = document.createElement("div");
+  legend.className = "pc-dashboard-daily-chart__legend";
+  for (const { label, tone } of series) {
+    const item = document.createElement("span");
+    item.className = `pc-dashboard-daily-chart__legend-item is-${tone}`;
+    item.textContent = label;
+    legend.appendChild(item);
+  }
+  chart.appendChild(legend);
+  if (rows.length > visible.length) {
+    chart.appendChild(
+      createReportingNote(`Showing the latest ${visible.length} days with recorded events.`)
+    );
+  }
+  return chart;
+}
+
+function formatDashboardSpecification(value) {
+  const specification = String(value ?? "");
+  const match = /^S(\d{2,3})$/i.exec(specification);
+  return match ? `S-${match[1]}` : specification;
+}
+
+function createSpecificationBreakdown(rows, { compact = false } = {}) {
+  const total = rows.reduce((count, row) => count + row.activities, 0);
+  const panel = compact
+    ? createReportingInsightGroup("Activity by specification", `${total} events`)
+    : createReportingPanel("Activity by specification", `${total} events`);
+  const list = document.createElement("div");
+  list.className = "pc-dashboard-specification-list";
+  for (const [index, row] of rows.entries()) {
+    const item = document.createElement("div");
+    item.className = "pc-dashboard-specification-row";
+    const header = document.createElement("div");
+    header.className = "pc-dashboard-specification-row__header";
+    const name = document.createElement("span");
+    name.textContent = formatDashboardSpecification(row.specification);
+    const count = document.createElement("strong");
+    count.textContent = `${row.activities} events`;
+    header.append(name, count);
+    const track = document.createElement("div");
+    track.className = "pc-dashboard-specification-row__track";
+    track.setAttribute("aria-hidden", "true");
+    const fill = document.createElement("span");
+    fill.className = `is-series-${index % 5}`;
+    fill.style.width = `${total > 0 ? Math.min(100, (row.activities / total) * 100) : 0}%`;
+    track.appendChild(fill);
+    const details = document.createElement("span");
+    details.className = "pc-dashboard-reporting-note";
+    details.textContent = `${row.productsTouched ?? "—"} Products · ${row.failed ?? "—"} failed events`;
+    item.append(header, track, details);
+    list.appendChild(item);
+  }
+  if (!rows.length) {
+    list.appendChild(createEmptyText("No activity breakdown available."));
+  }
+  panel.appendChild(list);
+  return panel;
+}
+
+function createOperationalHealthOverview(health, { compact = false } = {}) {
+  const panel = compact
+    ? createReportingInsightGroup("Current workflow state", `${health.tracks ?? "—"} tracks`)
+    : createReportingPanel("Current workflow state", `${health.tracks ?? "—"} tracks`);
+  const totals = document.createElement("div");
+  totals.className = "pc-dashboard-reporting-totals is-three";
+  for (const [label, count, tone] of [
+    ["Export / validate", health.processing, "info"],
+    ["At IC-ENC", health.awaitingIcEnc, "neutral"],
+    ["Paused", health.paused, "neutral"],
+  ]) {
+    totals.appendChild(createReportingCounter(label, count, tone));
+  }
+  panel.appendChild(totals);
+  return panel;
+}
+
+function createReportSummaryOverview(summary, { compact = false } = {}) {
+  const panel = compact
+    ? createReportingInsightGroup("Stored report files", `${summary.total ?? "—"} files`)
+    : createReportingPanel("Stored report files", `${summary.total ?? "—"} files`);
+  const totals = document.createElement("div");
+  totals.className = "pc-dashboard-reporting-totals is-two";
+  // Both kinds are validation-related files, not necessarily distinct validation runs.
+  const validationKinds = [summary.internalValidation, summary.validationDiagnostics].filter(
+    (value) => typeof value === "number" && Number.isFinite(value)
+  );
+  const validationFiles = validationKinds.length
+    ? validationKinds.reduce((sum, value) => sum + value, 0)
+    : null;
+  for (const [label, count] of [
+    ["IC-ENC", summary.icEnc],
+    ["Validation files", validationFiles],
+  ]) {
+    totals.appendChild(createReportingCounter(label, count));
+  }
+  panel.appendChild(totals);
+  return panel;
+}
+
+function createReportingNote(message) {
+  const note = document.createElement("p");
+  note.className = "pc-dashboard-reporting-note";
+  note.textContent = message;
+  return note;
+}
+
 function createSummaryRows({ title, rows, filterKey, filters }) {
   const section = document.createElement("section");
   section.className = "pc-dashboard-panel pc-dashboard-breakdown";
@@ -2245,7 +2569,6 @@ function createDashboardStatusChart(rows) {
     position = end;
   }
   chart.style.background = `conic-gradient(${segments.join(", ")})`;
-  chart.title = rows.map((row) => `${toTitleCase(row.label)}: ${row.count}`).join(" | ");
 
   const center = document.createElement("div");
   center.className = "pc-dashboard-status-chart__center";
@@ -2272,7 +2595,9 @@ function getDashboardChartTone(value, filterKey) {
 }
 
 function getDashboardOperationTone(value) {
-  const operation = String(value ?? "").trim().toLowerCase();
+  const operation = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (operation === "export") return "export";
   if (operation === "validation") return "validation";
   if (operation === "send") return "send";
@@ -2336,9 +2661,9 @@ function createSummaryRow({ row, filterKey, filters, maxCount }) {
     track.setAttribute("aria-hidden", "true");
     const fill = document.createElement("span");
     fill.className = `pc-dashboard-breakdown-row__fill is-${tone}`;
-    fill.style.height = `${Math.max(0, Math.min(100, ((Number(row.count) || 0) / maxCount) * 100))}%`;
+    fill.style.width = `${Math.max(0, Math.min(100, ((Number(row.count) || 0) / maxCount) * 100))}%`;
     track.appendChild(fill);
-    item.append(values, track, label);
+    item.append(label, track, values);
   }
   return item;
 }
@@ -2347,11 +2672,17 @@ function sumSummaryRowCounts(rows) {
   return rows.reduce((total, row) => total + (Number(row.count) || 0), 0);
 }
 
-function createPanelHeader({ title, count, status = null, visuallyHiddenTitle = false }) {
+function createPanelHeader({
+  title,
+  count,
+  status = null,
+  visuallyHiddenTitle = false,
+  headingLevel = "h2",
+}) {
   const header = document.createElement("header");
   header.className = "pc-dashboard-panel__header";
 
-  const heading = document.createElement("h2");
+  const heading = document.createElement(headingLevel);
   heading.className = "pc-dashboard-panel__title";
   heading.classList.toggle("pc-dashboard-visually-hidden", visuallyHiddenTitle);
   heading.textContent = title;

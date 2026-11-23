@@ -414,6 +414,50 @@ and dark themes, reduced motion, keyboard and focus, panel toggle/escape,
 zero-result ranges, 150% zoom, and responsive chart/table layout. The previous
 R06 v2 layout remains a historical candidate rather than the current design.
 
+## PC-UX-R06 v4 – Backend reporting integration
+
+The committed R06 v3 reporting layout is preserved. The new read-only aggregates from
+`GET electronicproducts/dashboard` (PC-BE-R06, committed by the developer at
+`dca718363ec901add42985e4da1755fecf409a31`) are normalized in
+`domain/dashboardReporting.js`; existing APIs, activity filters, cursor pagination,
+sorting, request generations and History/IC-ENC/Validation panel flows are unchanged.
+No chart dependency or additional request is introduced.
+
+- The **Accepted for distribution** KPI uses **`Distribution.Live.Accepted`**, the
+  number of persisted live IC-ENC acceptance decisions in the selected interval.
+  Simulated acceptances are reported separately in supporting text and in the
+  distribution overview; neither ReadyForDistribution nor Completed is treated
+  as acceptance. Counts refer to immutable revision deliveries, not packages.
+- **Open errors** uses `OperationalHealth.OpenErrors`, the current count of Error
+  or Rejected Product tracks. This is independent of the historical date range.
+  The existing **Failed events** KPI continues to filter historical activity
+  with `importance=failed`. The status donut retains historical Active events.
+- The right column adds live send/decision counters, a daily Activity trend,
+  Product-specification event totals, current workflow state, stored-report-file
+  categories and a live distribution trend when there are actual live outcome
+  buckets. Existing status and operation charts remain clickable activity filters.
+- The daily chart is based on all backend-filtered activity events before
+  pagination; it displays up to the latest 14 **days with activity**. A wider
+  date range is not silently represented as only those 14 days: total counts
+  still describe the full query and a visible note explains the chart limit.
+- Distribution, report files and current track state obey their own documented
+  backend scopes. Search/type/status/importance/report activity filters do not
+  change unrelated live delivery decisions or current track health. File counts
+  represent files, including individual diagnostic attachments, not validation
+  runs. `ReportArtifacts` does not create speculative activity-specific links;
+  the existing Product-scoped artifact-history report panel remains unchanged.
+- Optional new API fields are not mandatory for historical/demo responses.
+  Missing/invalid reporting counters display **unavailable** rather than a
+  falsely successful zero, while an explicit authoritative zero remains zero.
+  No mock live success is generated for demonstration.
+
+Manual acceptance must cover live 0 / simulated 2 from the known runtime sample,
+current open error 1 versus historical Failed 2, all UI and filter scopes,
+keyboard/focus, panel toggle/rapid switching, mobile layout, reduced motion,
+light/dark themes, ranges with 0 or 1 day of activity, and a range with genuine
+live IC-ENC decisions. Real artifact downloads and future backend writes are
+outside this frontend integration.
+
 ## Dashboard request lifecycle
 
 Search changes normally use a 300 ms debounce. An immediate Refresh (toolbar or controller API) and browser Back/Forward navigation cancel any pending search timer before starting their own request. The currently applied search/filter state is retained; history navigation still applies the route range and resets paging. Range auto-apply, sorting, page-size changes, and teardown retain their existing timer cleanup and request-generation guards. A cancelled timer must not schedule a second load or update the last-successful-load timestamp.
@@ -434,10 +478,10 @@ detail endpoint later.
 
 The following work remains intentionally outside phase 1:
 
-- Extend the Dashboard backend activity projection and report filters with real IC-ENC report metadata and verified counts (current projection still returns empty arrays).
+- Activity-specific report links remain unavailable because ProductStateHistory does not carry revision-specific artifact ownership; Product-scoped reports and server-side report filters already use persisted artifact metadata.
 - Verify whether Dashboard activity report IDs should map to a specific validation artifact rather than the Product's available artifact history.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
-- Consider a time-series activity trend only when the backend provides full-range time buckets; do not extrapolate from a paginated activity slice.
+- Consider explicit daily zero buckets and a longer-term trend zoom if reporting ranges become substantially longer; the current chart uses backend-owned event-day buckets.
 
 ## PC-UX-R05 tooltip follow-up (candidate)
 
@@ -474,7 +518,6 @@ light/dark themes, native range input focus, sort/filter state, cursor paging,
 long activity descriptions, summary-row filtering and the existing History/
 report panels. The backend's currently empty artifact-history response remains
 outside R06.
-
 
 ## PC-UX-R06 v2 – Operational overview (review candidate)
 
@@ -514,3 +557,177 @@ Dashboard API contracts, filter/sort/cursor semantics, or Product route actions.
 
 No chart library, new dependencies, backend changes or extra Dashboard requests
 are introduced. All visual proportions use the existing backend summary rows.
+
+## PC-UX-R06 – Reporting layout correction v2 (browser acceptance pending)
+
+This correction supersedes the **right-column presentation** introduced by the
+R06 reporting frontend v1 candidate. Backend data contracts and the accepted
+v3 six-KPI/activity-list layout are unchanged.
+
+- The default right column contains four sections in a stable order:
+  **IC-ENC distribution**, **Status summary**, **Operation summary**, and
+  **Additional insights**. The existing status donut and actionable operation
+  bars retain their server-side activity filters.
+- The Additional insights section groups **Activity by specification**,
+  **Current workflow state**, and **Stored report files** into compact cards.
+  Their source-defined scopes and complete counts remain unchanged. Headings
+  use nested heading levels rather than repeated top-level panels.
+- A single day of recorded activity does not result in a mostly empty
+  Activity over time chart. When multiple event days or a live distribution
+  trend exist, **Daily trends** exposes the original charts in a keyboard-
+  accessible disclosure; the disclosure is closed by default. At most the
+  latest 14 recorded days are charted, with the existing cutoff note.
+- The right-side CSS grid now sizes summary/report cards from their content
+  rather than allowing a `minmax(0, 1fr)` row to collapse. Charts cannot
+  paint over following sections; the aside scrolls when content legitimately
+  exceeds viewport height. The History/IC-ENC/Validation detail-panel layout
+  and its independent lifecycle remain unchanged.
+- No new endpoints, API requests, data transformations, permissions,
+  dependencies, or chart libraries are introduced.
+
+Browser acceptance should confirm no overlapping cards at desktop, 125/150%
+zoom and narrower widths; inspect both themes, the status/operation filters,
+Daily trends keyboard disclosure, History/report-panel toggle, sorting,
+selection, and cursor pagination. Local `npm run format` and `npm run check`
+remain authoritative prior to committing.
+
+## PC-UX-R06 – Reporting presentation correction v3 (review candidate)
+
+This candidate supersedes only the right-column and KPI presentation from the
+R06 reporting frontend v2 candidate. The committed backend contract, the
+source-aware Product identity model, and the existing Dashboard activity
+controller are unchanged.
+
+- **Status summary** and **Operation summary** form the first reporting row.
+  They appear side by side when each chart has enough width and stack at
+  narrower viewports. Status retains its accessible donut/legend. Operations
+  use a single set of horizontal bars on a shared maximum-value scale rather
+  than independent vertical tiles. Status and type rows preserve their existing
+  server-side click-to-filter/toggle behavior.
+- **IC-ENC distribution** follows the summaries, with only four counters and
+  the acceptance percentage when the underlying decided counts are available.
+  The UI shows the total number of **recorded** decisions from both backend
+  sources, without provenance or demonstration text. This is a presentation of
+  persisted workflow outcomes, **not evidence of actual external transmission
+  or acknowledgement**. The backend's live/simulation provenance is preserved
+  unchanged, and reporting exports or audits requiring real distribution must
+  still select the live subset. Acceptance is never inferred from
+  `ReadyForDistribution`, `Completed` or other activity titles.
+- **Activity over time** follows distribution and is always visible when the
+  response includes trend data, including a single-day bucket. The trend uses
+  backend totals, not visible paginated activity rows. The most recent 14 days
+  with recorded events are shown and longer results retain the explicit
+  cutoff note. An optional distribution-decision timeline remains available
+  in a keyboard-accessible nested disclosure when live trend data exists.
+- **Additional insights** remains last, with compact Product-specification,
+  current-workflow and stored-report-file breakdowns. Their different scopes
+  and the meaning of file counts have not changed.
+- KPI cards now present label and count only. Repeated subtitles and native
+  browser title tooltips were removed, while concise screen-reader descriptions
+  remain. The clickable Failed events KPI retains an accessible filter action
+  and `aria-pressed` state.
+- History/IC-ENC/Validation action toggles, Escape, request cancellation and
+  generation ownership, filtering, sorting, paging, API fallback, and
+  theme/responsive behavior remain unchanged. No new dependency or backend
+  request is introduced.
+
+Browser acceptance should confirm the requested sidebar order, chart readability
+and focus at desktop/tablet/mobile widths and browser zoom, both themes, zero/
+one/many trend buckets, unavailable reporting fields, and the difference between
+historical Failed events and the current Open errors counter.
+
+## PC-UX-R06 – Reporting presentation correction v4 (review candidate)
+
+This candidate modifies **only** the accepted reporting frontend v3 presentation.
+Its authority is the developer-reported backend commit
+`dca718363ec901add42985e4da1755fecf409a31` plus the verified
+`PC-R06-Reporting-Frontend-Candidate-dca71836-v3.zip` files. No backend,
+request, paging, mutation, persistence or dependency change is introduced.
+
+- The visible IC-ENC labels use **Distributed** rather than **Accepted**:
+  the KPI, distribution counter, decided-outcome percentage and optional
+  distribution trend legend. Their wire keys stay `accepted` and
+  `acceptanceRatePercent`, and the existing recorded live/simulation counts
+  remain untouched. The visible total represents **persisted workflow
+  decisions**, not proof that a simulated record reached the real IC-ENC
+  service. `ReadyForDistribution` and `Completed` never count as distributed.
+  The recorded rate is distributed decisions / (accepted + rejected
+  decisions) within the backend's scoped outcome set.
+- The activity trend displays server day buckets as `dd/MM` on the axis and
+  `dd/MM-yyyy` in native hover titles and the chart accessible description.
+  For one to three event days, bars are grouped and include numeric labels
+  rather than being spread across a wide empty chart. No unreported dates
+  are invented as zero-count buckets; the 14-bucket cap remains unchanged.
+- Activity by specification remains specification-scoped because the backend
+  supplies per-specification activity aggregates, **not** stable
+  Package-aggregate event totals. It formats S-code labels (for example
+  `S101` as `S-101`) and renders any number of returned rows, including five.
+  Counts are not silently combined into a Package based on a name prefix.
+- Current workflow state is a snapshot of **current Product tracks**, not
+  date-filtered activity. `Export / validate` counts `Exporting` and
+  `Validating` tracks; it does **not** include `ChangesDetected`.
+  `At IC-ENC` counts `InTransit`; `Paused` counts manually frozen or
+  `Frozen` tracks. No backend state mapping is changed.
+- The supplemental report panel groups `ValidationReport` and
+  `ValidationDiagnostic` into **Validation files**, alongside IC-ENC files.
+  They are file counts, not numbers of validation jobs or validations passed.
+  The backend retains individual kinds, and the existing report filters and
+  downloadable history links remain unchanged.
+- The activity table now has an **Actions** column containing one **More
+  actions** Calcite Dropdown per row. The dropdown uses the public
+  component's fixed-position overlay to escape scroll clipping. Review and
+  Analyze remain new-tab links; History, IC-ENC and Validation remain
+  toggleable detail panels with stale-request protection and focus restored
+  to the corresponding native menu trigger. Disabled/unsupported actions
+  remain disabled, and Escape within the dropdown is owned by Calcite rather
+  than unexpectedly closing an open detail panel.
+
+Browser verification must include light/dark, sorting, filtering, page-size
+and cursor changes, report-panel toggles during pending requests, keyboard
+navigation (Tab, Enter, Escape), focus restoration, scroll-clipped rows,
+small screens, sparse versus dense time series, five specifications and
+missing-reporting-data fallbacks. `npm run format` and `npm run check` remain
+required on the developer's full local checkout before committing.
+
+## PC-UX-R06 – Direct activity panel toggles (reporting frontend v5)
+
+This focused correction supersedes only the activity-row **More actions** interaction
+introduced in reporting frontend v4. The verified starting point is the v4 candidate
+on the developer-accepted backend commit `dca718363ec901add42985e4da1755fecf409a31`.
+The reporting layout, backend aggregates, filters, paging and data semantics are unchanged.
+
+- The **Actions** column shows three direct buttons in order: **History**,
+  **IC-ENC**, **Validation**. Each opens its existing shared detail panel and
+  closes that same panel on a second click, including during an outstanding request.
+  Active actions retain visible selection and `aria-pressed`. Closing returns
+  keyboard focus to that row's corresponding direct action button, rather than
+  an unrelated dropdown trigger. The existing generation guards prevent stale
+  History/validation responses from reopening a closed panel.
+- **Links**, placed last, is the only dropdown and contains just **Review** and
+  **Analyze** navigation. Both preserve the original capability flags and
+  `target="_blank"` / `rel="noopener noreferrer"`. Disabled destinations remain
+  disabled, and the trigger is disabled if neither destination is available.
+  Its fixed-position Calcite overlay avoids clipping in the scrollable table.
+- The Actions column is widened only enough for the compact single-row controls;
+  Activity receives the remaining width. No new dependencies, endpoints,
+  API requests, routes or source-specific branching are introduced.
+
+Local acceptance: check the direct buttons at the beginning and end of the
+scrollable activity table, including report loading/error, quick panel switching,
+Escape, focus return, unsupported navigation, responsive widths, 150% zoom and
+light/dark mode. Run `npm run format` and `npm run check` in `src/ProductCatalogue`
+before committing.
+
+## PC-UX-R06 – Compact Links dropdown (reporting frontend v5.2)
+
+The Dashboard row's **Links** menu keeps Review and Analyze as navigation-only
+items while History, IC-ENC and Validation remain direct panel toggles. The
+Calcite dropdown uses the documented `--calcite-dropdown-width` property for a
+compact menu and keeps fixed overlay positioning to escape the scrollable
+Activity table. While that menu is open, the application-owned hover tooltip is
+hidden so it cannot remain partly visible beneath the menu. This is scoped to
+the Dashboard route and does not change tooltip behavior elsewhere.
+
+This correction builds on reporting frontend v5.1 and preserves the stable
+`.pc-dashboard-activity-links` onboarding selector. No API, backend, workflow or
+package dependency change is involved.

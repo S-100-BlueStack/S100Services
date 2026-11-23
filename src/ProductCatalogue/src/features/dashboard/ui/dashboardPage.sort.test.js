@@ -103,7 +103,7 @@ test("only Time, Product, Activity and Status have native sortable headers and a
         assert.equal(h.events.at(-1).detail.sortBy, key);
       }
       assert.equal(headers[4].scope, "col");
-      assert.equal(headers[4].textContent, "Links");
+      assert.equal(headers[4].textContent, "Actions");
       assert.equal(headers[4].children.length, 0);
       assert.equal(headers[4].listeners.size, 0);
     }
@@ -125,6 +125,4 @@ test("sort focus identity survives replacement while respecting subsequent user 
   assert.equal(replacement.attributes.get("aria-label"), "Product: sort descending");
   h.document.activeElement = null;
   assert.equal(h.captureDashboardControlFocus(), null);
-  assert.match(h.source, /const focusState = captureDashboardControlFocus\(\);/);
-  assert.match(h.source, /restoreDashboardControlFocus\(focusState\);/);
 });

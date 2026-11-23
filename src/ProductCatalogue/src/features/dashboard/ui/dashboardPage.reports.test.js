@@ -143,7 +143,12 @@ function activity(overrides = {}) {
 }
 
 function reportButton(links, label) {
-  return links.children.find((element) => element.textContent.startsWith(label));
+  return visit(
+    links,
+    (element) =>
+      element.tagName === "button" &&
+      (element.textContent === label || element.textContent.startsWith(`${label} (`))
+  )[0];
 }
 
 function visit(node, predicate, results = []) {
@@ -169,13 +174,19 @@ test("Dashboard report actions open the shared right-hand panel, never inline di
   const icEnc = reportButton(buttons, "IC-ENC");
   const validation = reportButton(buttons, "Validation");
 
+  assert.equal(buttons.tagName, "div");
+  assert.deepEqual(
+    Array.from(buttons.children, (child) => child.textContent || child.tagName),
+    ["History", "IC-ENC", "Validation", "calcite-dropdown"]
+  );
   assert.equal(icEnc.tagName, "button");
+  assert.equal(icEnc.getAttribute("aria-pressed"), "false");
   assert.equal(validation.tagName, "button");
   assert.equal(calls.length, 0);
   icEnc.trigger("click");
   assert.equal(h.reportState().isOpen, true);
   assert.equal(h.reportState().loading, true);
-  assert.equal(icEnc.getAttribute("aria-pressed"), "false");
+  assert.equal(icEnc.textContent, "IC-ENC");
   assert.equal(h.historyState().isOpen, false);
   await flush();
   assert.deepEqual(calls, [["Product A", "ic-enc"]]);
@@ -183,10 +194,14 @@ test("Dashboard report actions open the shared right-hand panel, never inline di
   assert.equal(panel.getAttribute("aria-label"), "IC-ENC reports");
   assert.equal(panel.className, "pc-dashboard-panel pc-dashboard-history-panel");
   assert.match(visit(panel, (node) => node.tagName === "state")[0].textContent, /No reports found/);
-  assert.equal(
-    reportButton(h.createActivityLinks(item), "IC-ENC").getAttribute("aria-pressed"),
-    "true"
-  );
+  const active = reportButton(h.createActivityLinks(item), "IC-ENC");
+  assert.equal(active.textContent, "IC-ENC");
+  assert.equal(active.getAttribute("aria-pressed"), "true");
+  assert.match(active.getAttribute("aria-label"), /Close IC-ENC reports/);
+  active.trigger("click");
+  assert.equal(h.reportState().isOpen, false);
+  assert.equal(h.renderCalls.at(-1).panelAction, "ic-enc:id:activity-1");
+  assert.equal(calls.length, 1);
 });
 
 test("The right column swaps summary panels for the selected report type and restores them on close", async () => {
@@ -197,7 +212,9 @@ test("The right column swaps summary panels for the selected report type and res
     filters: {},
   };
   const initialAside = h.createDashboardGrid(gridArgs).children[1];
-  assert.equal(initialAside.children.length, 2);
+  assert.equal(initialAside.children.length, 1);
+  assert.equal(initialAside.children[0].className, "pc-dashboard-overview-row");
+  assert.equal(initialAside.children[0].children.length, 2);
   assert.equal(initialAside.classList.contains("has-history-panel"), false);
 
   await h.openDashboardReports(item, "internal");
@@ -207,7 +224,9 @@ test("The right column swaps summary panels for the selected report type and res
   assert.equal(reportAside.classList.contains("has-history-panel"), true);
   h.closeDashboardReports();
   const restoredAside = h.createDashboardGrid(gridArgs).children[1];
-  assert.equal(restoredAside.children.length, 2);
+  assert.equal(restoredAside.children.length, 1);
+  assert.equal(restoredAside.children[0].className, "pc-dashboard-overview-row");
+  assert.equal(restoredAside.children[0].children.length, 2);
   assert.equal(restoredAside.classList.contains("has-history-panel"), false);
   assert.equal(h.renderCalls.at(-1).panelAction, "internal:id:activity-1");
 });
@@ -434,4 +453,123 @@ test("Activity rows retain complete backend metadata while presenting a single c
   );
   assert.match(cell.title, /Ready for distribution/);
   assert.match(cell.title, /Owner: SYSTEM/);
+});
+
+test("Direct panel toggles retain one-click close while Links contains only navigation", async () => {
+  const h = await createHarness();
+  const item = activity();
+  const actions = h.createActivityLinks(item);
+  assert.match(actions.className, /(?:^|\s)pc-dashboard-activity-actions(?:\s|$)/);
+  assert.match(actions.className, /(?:^|\s)pc-dashboard-activity-links(?:\s|$)/);
+  const [history, icEnc, validation, dropdown] = actions.children;
+  assert.deepEqual(
+    [history.textContent, icEnc.textContent, validation.textContent],
+    ["History", "IC-ENC", "Validation"]
+  );
+  assert.deepEqual(
+    [
+      history.getAttribute("aria-pressed"),
+      icEnc.getAttribute("aria-pressed"),
+      validation.getAttribute("aria-pressed"),
+    ],
+    ["false", "false", "false"]
+  );
+  assert.equal(dropdown.tagName, "calcite-dropdown");
+  assert.equal(dropdown.getAttribute("overlay-positioning"), "fixed");
+  assert.equal(dropdown.getAttribute("width"), "s");
+  assert.equal(dropdown.children[0].textContent, "Links");
+  assert.equal(dropdown.children[0].dataset.dashboardFocusKey, "links:menu:id:activity-1");
+  const group = dropdown.children[1];
+  assert.equal(group.getAttribute("selection-mode"), "none");
+  const entries = group.children;
+  assert.deepEqual(
+    Array.from(entries, (entry) => entry.textContent),
+    ["Review", "Analyze"]
+  );
+  assert.equal(entries[0].href, "/review");
+  assert.equal(entries[1].href, "/analyze");
+  assert.ok(
+    entries.every((entry) => entry.target === "_blank" && entry.rel === "noopener noreferrer")
+  );
+
+  history.trigger("click");
+  await flush();
+  assert.equal(h.historyState().isOpen, true);
+  const activeActions = h.createActivityLinks(item);
+  assert.equal(activeActions.children[0].getAttribute("aria-pressed"), "true");
+  assert.match(activeActions.children[0].getAttribute("aria-label"), /Close History/);
+  activeActions.children[0].trigger("click");
+  assert.equal(h.historyState().isOpen, false);
+  assert.equal(h.renderCalls.at(-1).panelAction, "history:id:activity-1");
+
+  const unavailable = h.createActivityLinks(
+    activity({
+      datasetName: null,
+      links: {
+        review: false,
+        analyze: false,
+        history: false,
+        icEncReports: [],
+        internalValidationReports: [],
+      },
+    })
+  );
+  assert.ok(unavailable.children.slice(0, 3).every((button) => button.disabled));
+  assert.ok(unavailable.children[3].children[1].children.every((entry) => entry.disabled));
+  assert.equal(unavailable.children[3].children[0].disabled, true);
+
+  const analyzeOnly = h.createActivityLinks(
+    activity({
+      links: {
+        review: false,
+        analyze: true,
+        history: true,
+        icEncReports: [],
+        internalValidationReports: [],
+      },
+    })
+  );
+  assert.equal(analyzeOnly.children[3].children[0].disabled, false);
+  assert.equal(analyzeOnly.children[3].children[1].children[0].disabled, true);
+  assert.equal(analyzeOnly.children[3].children[1].children[1].disabled, false);
+});
+
+test("Direct Validation toggle switches panel ownership and discards a late report response", async () => {
+  const requests = [];
+  const h = await createHarness({
+    fetchReports: () => new Promise((resolve) => requests.push(resolve)),
+  });
+  const item = activity();
+  h.createActivityLinks(item).children[0].trigger("click");
+  await flush();
+  assert.equal(h.historyState().isOpen, true);
+
+  h.createActivityLinks(item).children[2].trigger("click");
+  assert.equal(h.historyState().isOpen, false);
+  assert.equal(h.reportState().isOpen, true);
+  assert.equal(h.reportState().reportType, "internal");
+  assert.equal(requests.length, 1);
+  const active = h.createActivityLinks(item).children[2];
+  assert.equal(active.getAttribute("aria-pressed"), "true");
+  active.trigger("click");
+  assert.equal(h.reportState().isOpen, false);
+  assert.equal(h.renderCalls.at(-1).panelAction, "internal:id:activity-1");
+
+  requests[0]({ reports: [{ url: "/obsolete" }] });
+  await flush();
+  assert.equal(h.reportState().isOpen, false);
+  assert.equal(h.reportState().reports.length, 0);
+});
+
+test("Escape inside an open action dropdown does not unexpectedly close a report panel", async () => {
+  const h = await createHarness();
+  await h.openDashboardReports(activity(), "ic-enc");
+  h.ensureDashboardHistoryKeyboardHandlers();
+  h.keyboard.get("keydown")({
+    key: "Escape",
+    composedPath: () => [{ tagName: "calcite-dropdown" }],
+  });
+  assert.equal(h.reportState().isOpen, true);
+  h.keyboard.get("keydown")({ key: "Escape", composedPath: () => [] });
+  assert.equal(h.reportState().isOpen, false);
 });

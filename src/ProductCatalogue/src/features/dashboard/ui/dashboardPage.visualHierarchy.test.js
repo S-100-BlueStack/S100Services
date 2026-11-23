@@ -54,7 +54,9 @@ async function createHarness() {
     dispatchEvent: (event) => events.push(event),
   };
   return runInNewContext(
-    source.replace(/^import[\s\S]*?from "[^"]+";\r?\n/gm, "").replace("export function", "function") +
+    source
+      .replace(/^import[\s\S]*?from "[^"]+";\r?\n/gm, "")
+      .replace("export function", "function") +
       `\ncreateActivityFilterBar = () => document.createElement("form");
       createActivityTable = () => document.createElement("table");
       createActivityPagination = () => document.createElement("footer");
@@ -71,11 +73,12 @@ async function createHarness() {
       createDefaultDashboardFilters: () => ({}),
       normalizeDashboardFilters: (filters) => filters,
       hasActiveDashboardFilters: () => false,
+      isDashboardSummaryRowFilterActive: () => false,
     }
   );
 }
 
-test("Dashboard KPI cards distinguish backend totals from the unavailable distribution acceptance metric", async () => {
+test("Dashboard KPI cards retain semantic labels without redundant tooltip subtitles", async () => {
   const { createSummaryCards } = await createHarness();
   const section = createSummaryCards({
     summary: {
@@ -92,20 +95,22 @@ test("Dashboard KPI cards distinguish backend totals from the unavailable distri
   assert.equal(section.children.length, 6);
   assert.deepEqual(
     Array.from(section.children, (card) => card.children[0].textContent),
-    ["Activities", "Products touched", "Active", "Accepted for distribution", "Failed", "Reports"]
+    ["Activities", "Products touched", "Open errors", "Distributed", "Failed events", "Reports"]
   );
   assert.deepEqual(
     Array.from(section.children, (card) => card.children[1].textContent),
-    ["42", "18", "12", "—", "2", "9"]
+    ["42", "18", "—", "—", "2", "9"]
   );
-  assert.equal(section.children[0].children[2].textContent, "6 important changes");
-  assert.equal(section.children[3].children[2].textContent, "Backend total not available");
   assert.equal(section.children[3].classList.contains("is-unavailable"), true);
-  assert.ok(section.children.every((card) => card.children[3].className === "pc-dashboard-visually-hidden"));
-  assert.ok(section.children.every((card) => card.children[3].textContent.length > 0));
+  assert.ok(section.children.every((card) => card.children.length === 3));
+  assert.ok(
+    section.children.every((card) => card.children[2].className === "pc-dashboard-visually-hidden")
+  );
+  assert.ok(section.children.every((card) => card.children[2].textContent.length > 0));
+  assert.ok(section.children.every((card) => card.title === undefined));
 });
 
-test("Ready for distribution is never misreported as an Accepted for distribution KPI", async () => {
+test("Ready for distribution is never misreported as a Distributed KPI", async () => {
   const { createSummaryCards } = await createHarness();
   const section = createSummaryCards({
     summary: { totalActivities: 80, failedOperations: 2 },
@@ -115,8 +120,27 @@ test("Ready for distribution is never misreported as an Accepted for distributio
       { label: "ready for distribution", count: 12 },
     ],
   });
-  assert.equal(section.children[2].children[1].textContent, "44");
+  assert.equal(section.children[2].children[1].textContent, "—");
   assert.equal(section.children[3].children[1].textContent, "—");
+});
+
+test("Dashboard KPI counts recorded accepted revisions without changing backend provenance", async () => {
+  const { createSummaryCards } = await createHarness();
+  const cards = createSummaryCards({
+    summary: { totalActivities: 80, failedOperations: 2, reportsAvailable: 16 },
+    distribution: {
+      live: { sent: 0, accepted: 0, rejected: 0, pending: 0, acceptanceRatePercent: null },
+      simulation: { sent: 2, accepted: 2, rejected: 0, pending: 0, acceptanceRatePercent: 100 },
+    },
+    operationalHealth: { openErrors: 1, tracks: 12 },
+    reportSummary: { total: 16, icEnc: 2, validationDiagnostics: 14 },
+  });
+  assert.equal(cards.children[2].children[1].textContent, "1");
+  assert.equal(cards.children[3].children[1].textContent, "2");
+  assert.equal(cards.children[3].children[2].className, "pc-dashboard-visually-hidden");
+  assert.equal(cards.children[3].classList.contains("is-unavailable"), false);
+  assert.equal(cards.children[4].children[1].textContent, "2");
+  assert.equal(cards.children[5].children[2].className, "pc-dashboard-visually-hidden");
 });
 
 test("Activity list exposes its heading and retains the count and filter/table/footer structure", async () => {
@@ -144,7 +168,6 @@ test("Activity list exposes its heading and retains the count and filter/table/f
   assert.equal(section.children[3].tagName, "footer");
 });
 
-
 test("Failed KPI is an accessible toggle for the existing server-side failed filter", async () => {
   const { createSummaryCards, events } = await createHarness();
   const section = createSummaryCards({ summary: { failedOperations: 3 } });
@@ -153,6 +176,8 @@ test("Failed KPI is an accessible toggle for the existing server-side failed fil
   assert.equal(failed.type, "button");
   assert.equal(failed.dataset.dashboardFocusKey, "failed-kpi");
   assert.equal(failed.attributes.get("aria-pressed"), "false");
+  assert.match(failed.attributes.get("aria-label"), /Filter to failed activity/);
+  assert.equal(failed.title, undefined);
   failed.click();
   assert.equal(events.length, 1);
   assert.equal(events[0].type, "pc-dashboard-filter-change");
@@ -191,7 +216,59 @@ test("Dashboard places compact KPIs with activity in the main column, leaving th
   assert.equal(grid.children.length, 2);
   assert.equal(grid.children[0].children[0].attributes.get("aria-label"), "Dashboard summary");
   assert.equal(grid.children[0].children[1].className, "pc-dashboard-panel pc-dashboard-activity");
-  assert.equal(grid.children[1].children.length, 2);
-  assert.equal(grid.children[1].children[0].children[0].children[0].textContent, "Status summary");
-  assert.equal(grid.children[1].children[1].children[0].children[0].textContent, "Operation summary");
+  assert.equal(grid.children[1].children.length, 1);
+  const summaryRow = grid.children[1].children[0];
+  assert.equal(summaryRow.className, "pc-dashboard-overview-row");
+  assert.equal(summaryRow.children[0].children[0].children[0].textContent, "Status summary");
+  assert.equal(summaryRow.children[1].children[0].children[0].textContent, "Operation summary");
+});
+
+test("Dashboard reporting has requested chart hierarchy and an always-visible one-day timeline", async () => {
+  const { createDashboardGrid } = await createHarness();
+  const grid = createDashboardGrid({
+    dashboard: {
+      activities: [],
+      summary: { totalActivities: 100 },
+      distribution: {
+        live: { sent: 0, accepted: 0, rejected: 0, pending: 0, acceptanceRatePercent: null },
+        simulation: { sent: 2, accepted: 2 },
+      },
+      activityTrend: [{ day: "2026-11-17", activities: 100, failed: 2 }],
+      productBreakdown: [
+        { specification: "S101", activities: 50, productsTouched: 6, failed: 2 },
+        { specification: "S57", activities: 50, productsTouched: 6, failed: 0 },
+      ],
+      operationalHealth: { tracks: 12, processing: 0, awaitingIcEnc: 0, paused: 0 },
+      reportSummary: { total: 16, icEnc: 2, internalValidation: 0, validationDiagnostics: 14 },
+      statusSummary: [{ label: "completed", count: 20 }],
+      operationSummary: [{ label: "export", count: 20, failed: 0 }],
+      filterOptions: { types: [], statuses: [], products: [] },
+      range: {},
+      paging: {},
+    },
+    sourceActivityCount: 100,
+    loading: false,
+    filters: {},
+    filterOptions: { types: [], statuses: [], products: [] },
+    pageSize: 50,
+    pageNumber: 1,
+    canGoPrevious: false,
+    sortBy: "time",
+    sortDirection: "desc",
+    pagingMatchesPageSize: true,
+  });
+  const aside = grid.children[1];
+  assert.equal(aside.children.length, 4);
+  assert.equal(aside.children[0].className, "pc-dashboard-overview-row");
+  assert.deepEqual(
+    Array.from(aside.children[0].children, (panel) => panel.children[0].children[0].textContent),
+    ["Status summary", "Operation summary"]
+  );
+  assert.deepEqual(
+    Array.from(aside.children.slice(1), (panel) => panel.children[0].children[0].textContent),
+    ["IC-ENC distribution", "Activity over time", "Additional insights"]
+  );
+  assert.equal(aside.children[2].children[1].children[0].children.length, 1);
+  assert.equal(aside.children[3].children[1].children.length, 3);
+  assert.equal(aside.children[3].children.length, 2);
 });

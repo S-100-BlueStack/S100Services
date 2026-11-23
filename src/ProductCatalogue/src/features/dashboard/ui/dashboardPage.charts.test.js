@@ -49,7 +49,9 @@ async function createHarness() {
   const source = await readFile(new URL("dashboardPage.js", import.meta.url), "utf8");
   const events = [];
   const ui = runInNewContext(
-    source.replace(/^import[\s\S]*?from "[^"]+";\r?\n/gm, "").replace("export function", "function") +
+    source
+      .replace(/^import[\s\S]*?from "[^"]+";\r?\n/gm, "")
+      .replace("export function", "function") +
       `\n({ createSummaryRows, createDashboardStatusChart, getDashboardChartTone });`,
     {
       document: {
@@ -81,7 +83,12 @@ test("status distribution chart uses full backend totals rather than the visible
     { label: "failed", count: 2, failed: 2 },
     { label: "idle", count: 16, failed: 0 },
   ];
-  const panel = h.createSummaryRows({ title: "Status summary", rows, filterKey: "status", filters: {} });
+  const panel = h.createSummaryRows({
+    title: "Status summary",
+    rows,
+    filterKey: "status",
+    filters: {},
+  });
   assert.equal(panel.children.length, 2);
   assert.equal(panel.children[0].children[1].textContent, "80");
   const overview = panel.children[1];
@@ -116,13 +123,12 @@ test("operation bars show relative server counts and retain click-to-filter beha
   });
   assert.equal(panel.children.length, 2);
   const rows = panel.children[1].children;
-  assert.deepEqual(Array.from(rows, (row) => row.children[1].children[0].style.height), [
-    "100%",
-    "50%",
-    "0%",
-  ]);
-  assert.equal(rows[1].children[0].textContent, "13 (2 failed)");
-  assert.equal(rows[1].children[2].textContent, "Validation");
+  assert.deepEqual(
+    Array.from(rows, (row) => row.children[1].children[0].style.width),
+    ["100%", "50%", "0%"]
+  );
+  assert.equal(rows[1].children[0].textContent, "Validation");
+  assert.equal(rows[1].children[2].textContent, "13 (2 failed)");
   rows[1].click();
   assert.equal(h.events[0].detail.filters.type, "validation");
 });
