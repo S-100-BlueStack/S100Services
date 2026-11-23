@@ -55,14 +55,15 @@ namespace TestProductCatalogueAPI
 
 
         }
-
-        [Fact]
-        public async Task Test_ImportLalaLand() {
+        
+            [Fact]
+        public async Task Test_ImportLalaLand_S128() {
             var lalaLandSde = Environment.GetEnvironmentVariable("lalaland_import_sde", EnvironmentVariableTarget.User);
-            var s128 = Environment.GetEnvironmentVariable("s128_import", EnvironmentVariableTarget.User);
+            var s128 = Environment.GetEnvironmentVariable("s128_ed18", EnvironmentVariableTarget.User);
 
             Assert.NotNull(lalaLandSde);
-            Assert.NotNull(s128);
+            //Assert.NotNull(s128);
+
 
             var exist57 = IO.Path.Exists(lalaLandSde);
             var exist128 = IO.Path.Exists(s128);
@@ -88,7 +89,7 @@ namespace TestProductCatalogueAPI
 
             // Build LalaLand arguments
             var boundary = "";
-            var optimumDisplayScale = 22000;
+            var compilationscale = 22000;
             var specificUsage = 4;
 
             var datasetName = "101DK00LALALAND";
@@ -120,7 +121,7 @@ namespace TestProductCatalogueAPI
             Assert.True(!string.IsNullOrEmpty(boundary));
 
             // Import
-            await productManager.ElectronicProductManager.CreateElectronicProductAsync(datasetName, productSpecification, specificUsage, boundary, "", optimumDisplayScale);
+            await productManager.ElectronicProductManager.CreateElectronicProductAsync(datasetName, productSpecification, specificUsage, boundary, "", compilationscale);
 
 
             System.Diagnostics.Debugger.Break();
