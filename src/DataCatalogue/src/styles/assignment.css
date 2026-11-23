@@ -271,55 +271,81 @@
   pointer-events: none;
 }
 .dc-assignment-legend {
+  flex: 0 0 auto;
+  margin: 4px 7px 6px;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface-alt);
+  color: var(--dc-text);
+}
+.dc-assignment-legend__summary {
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.dc-assignment-legend__summary:hover {
+  background: var(--dc-button-secondary-bg-hover);
+}
+.dc-assignment-legend__summary:focus-visible {
+  outline: 2px solid var(--dc-focus-ring);
+  outline-offset: -2px;
+}
+.dc-assignment-legend__items {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
-  padding: 3px 7px 4px;
-  font-size: 0.72rem;
+  gap: 7px 15px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--dc-border);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 .dc-assignment-legend__item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
 }
 .dc-assignment-legend__feature {
   position: relative;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 .dc-assignment-legend__feature::before,
 .dc-assignment-legend__feature::after {
   content: "";
   position: absolute;
-  left: 5px;
+  left: 6px;
   top: 0;
   width: 2px;
-  height: 12px;
+  height: 14px;
   background: var(--calcite-color-brand, #007ac2);
 }
 .dc-assignment-legend__feature::after {
   transform: rotate(90deg);
 }
 .dc-assignment-legend__line {
-  width: 18px;
+  flex: 0 0 24px;
+  width: 24px;
   height: 0;
-  border-top: 2px solid var(--dc-text-muted);
-}
-.dc-assignment-legend__line.is-assigned {
-  border-top-style: solid;
-  border-top-width: 3px;
+  border-top: 3px solid var(--dc-text-muted);
 }
 .dc-assignment-legend__line.is-package-aoi {
-  border-top: 3px dashed rgb(176, 60, 214);
+  border-top-color: rgb(176, 60, 214);
+  border-top-style: dashed;
 }
-
 .dc-assignment-legend__line.is-package-detail {
-  border-top: 3px solid rgb(0, 135, 200);
+  border-top-color: rgb(0, 135, 200);
+  border-top-style: solid;
 }
-
 .dc-assignment-legend__line.is-context {
   border-top-style: dashed;
+}
+.dc-assignment-legend__line.is-context.is-saved-match {
+  /* Keep a visible saved-match swatch even when inline ArcGIS color is unavailable. */
+  --dc-assignment-workspace-color: rgb(245, 141, 35);
+  border-top-color: var(--dc-assignment-workspace-color);
+  border-top-style: solid;
 }
 
 .dc-assignment-dialog {

@@ -1,5 +1,4 @@
 import { collectPages } from "../../../shared/api/catalogueService.js";
-import { WORKSPACE_JOB_COLOR_LEVELS } from "./workspaceJobColors.js";
 import {
   groupWorkspacePipelines,
   preservePipelineSelection,
@@ -29,18 +28,7 @@ export function createPipelineVisibility({
   const message = document.createElement("p");
   message.className = "dc-pipeline-message";
   message.setAttribute("role", "status");
-  const legend = document.createElement("div");
-  legend.className = "dc-workspace-status-legend";
-  legend.setAttribute("aria-label", "Workspace open Package counts");
-  for (const item of WORKSPACE_JOB_COLOR_LEVELS) {
-    const entry = document.createElement("span");
-    const swatch = document.createElement("i");
-    swatch.style.backgroundColor = item.css;
-    swatch.setAttribute("aria-hidden", "true");
-    entry.append(swatch, document.createTextNode(item.label));
-    legend.append(entry);
-  }
-  container.append(message, list, legend);
+  container.append(message, list);
 
   let groups = [];
   let enabledPipelines = new Set();

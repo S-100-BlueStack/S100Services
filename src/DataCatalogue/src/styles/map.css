@@ -496,26 +496,57 @@ html[data-theme="dark"] .data-catalogue-map {
   color: var(--dc-text-muted);
   font-size: 0.72rem;
 }
-.dc-workspace-status-legend {
-  margin: 0.7rem 0 0;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--dc-border);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.6rem;
+/* A passive legend belongs to the visible map, not the retired Pipelines panel. */
+.dc-workspace-color-legend {
+  position: absolute;
+  z-index: 4;
+  right: 0.75rem;
+  bottom: 2.2rem;
+  width: min(14.75rem, calc(100% - 1.5rem));
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-overlay);
+  color: var(--dc-text);
+  box-shadow: 0 1px 5px rgb(0 0 0 / 14%);
+  pointer-events: none;
+}
+.dc-workspace-color-legend__title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.dc-workspace-color-legend__description {
+  margin: 0.1rem 0 0.35rem;
   color: var(--dc-text-muted);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
 }
-.dc-workspace-status-legend span {
-  display: inline-flex;
+.dc-workspace-color-legend__levels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dc-workspace-color-legend__levels li {
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.72rem;
+  line-height: 1.2;
 }
-.dc-workspace-status-legend i {
+.dc-workspace-color-legend__swatch {
   display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
+  flex: 0 0 0.8rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid rgb(0 0 0 / 25%);
 }
+
 .dc-basemap-control {
   /* MapView.ui owns positioning and spacing with the native Zoom control. */
   --dc-map-tool-shadow: 0 1px 2px rgb(0 0 0 / 30%);

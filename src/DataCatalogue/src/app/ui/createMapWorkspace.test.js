@@ -8,6 +8,7 @@ class Element {
     this.tagName = tag;
     this.children = [];
     this.attributes = new Map();
+    this.style = {};
     this.hidden = false;
   }
   append(...children) {
@@ -27,6 +28,8 @@ test("Action Bar reserves map width while Pipelines and Jobs overlay the same ma
     assert.equal(shell.tagName, "div");
     assert.deepEqual(shell.children, [ui.actionBar, shell.children[1], ui.panelHost]);
     assert.equal(shell.children[1].children[1], ui.mapViewElement);
+    assert.equal(shell.children[1].children[4].className, "dc-workspace-color-legend");
+    assert.equal(shell.children[1].children[4].children[0].textContent, "Workspace colors");
     assert.equal(ui.panelHost.hidden, false);
     assert.equal(ui.pipelineAction.active, true);
     assert.equal(ui.actionBar.expandToggleDisabled, true);
@@ -76,4 +79,27 @@ test("Action Bar uses neutral Calcite surfaces for light and dark themes", () =>
   assert.match(actionBarRule, /--calcite-action-text-color:\s*var\(--calcite-color-text-2\)/);
   assert.match(actionBarRule, /--calcite-action-text-color-press:\s*var\(--calcite-color-text-1\)/);
   assert.doesNotMatch(actionBarRule, /--dc-surface/);
+});
+
+test("Only the live Main Map mounts the count legend outside the hidden Pipeline panel", () => {
+  const original = globalThis.document;
+  globalThis.document = { createElement: (tag) => new Element(tag), activeElement: null };
+  try {
+    const liveMap = createMapWorkspace({ live: true });
+    const mainMap = liveMap.element.children[0].children[1];
+    assert.equal(
+      mainMap.children.filter((node) => node.className === "dc-workspace-color-legend").length,
+      1
+    );
+    assert.equal(liveMap.pipelineContent.children.length, 0);
+
+    const mockMap = createMapWorkspace();
+    const mockMapElement = mockMap.element.children[0].children[1];
+    assert.equal(
+      mockMapElement.children.some((node) => node.className === "dc-workspace-color-legend"),
+      false
+    );
+  } finally {
+    globalThis.document = original;
+  }
 });
