@@ -1,3 +1,26 @@
+## DC-FIRST-LOOK-01 — Backend-dependent demo requests (recorded 2026-11-23; not implemented)
+
+- **`DC-ASSIGN-MATCH-PREVIEW-01`:** Preview prospective automatic Workspace
+  intersections for an **unsaved** Package/Pipeline binding, without a write.
+  Saved bindings currently provide authoritative post-Save matches; they do not
+  establish a verified pre-Save prediction read. Check existing authorized API
+  operations before proposing a new contract. A preview must be clearly
+  distinguished from saved membership, including gray/dashed map treatment;
+  stale requests must not publish. This is **not** the retired `OVERRIDE-01`
+  manual Workspace include/exclude proposal.
+- **`DC-PACKAGE-HISTORY-01`:** The Package list and temporary contextual Job
+  statuses do not by themselves establish historical/archived Package
+  discovery. Define what counts as historical; verify server-side search,
+  pagination, ordering, stable identity, authorization, retention and read-only
+  detail access. This complements but does not silently close `JOB-01`
+  persistent Job status/history or `PAGE-01` global Package search.
+
+No backend endpoint, schema, persistence or authorization change is implied by
+this planning note. UI-only legend and symbology follow-ups are tracked in
+[DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md).
+
+---
+
 ## DC-ASSIGN-AUTOMATCH — Active scope supersedes manual override proposal (2026-11-17)
 
 The latest Package Assignment requirement is **automatic geographic Workspace

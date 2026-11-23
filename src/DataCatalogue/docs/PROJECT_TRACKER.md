@@ -1,3 +1,25 @@
+## DC-FIRST-LOOK-01 — Internal demo follow-ups (recorded 2026-11-23; open)
+
+**User-reported accepted frontend baseline:** `50b12afaee6d26e7fd0b58b06d31687cbaad6c8d`.
+DC-ASSIGN-AUTOMATCH was locally accepted and committed; DC-PERF-03 is closed.
+The items below are new **planning entries**, not implemented changes.
+
+| Order | Task | Status / dependency |
+| --- | --- | --- |
+| 1 | `DC-ASSIGN-MAP-SYMBOLS-01` — distinguish detailed Package AOI/Features from Workspace coverage and correct legend wording | Open; frontend |
+| 2 | `DC-MAP-LEGEND-01` — restore the Main Map Workspace-color legend without the removed Pipelines panel | Open; frontend |
+| 3 | `DC-ASSIGN-LEGEND-01` — increase assignment-map legend readability and provide collapse/expand | Open; frontend |
+| 4 | `DC-ASSIGN-MATCH-PREVIEW-01` — preview auto-matched Workspace geography for unsaved Pipeline additions | Open; verify read-only backend preview contract first |
+| 5 | `DC-PACKAGE-HISTORY-01` — discover older Packages through a low-prominence entry point | Open; define history and verify backend search/paging first |
+
+Existing `DC-MAP-POPUP` and `DC-MAP-LABEL` remain separate, previously recorded
+map follow-ups. See [DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md) for
+requirements, acceptance criteria, domain boundaries, backend dependencies and
+the consolidated remaining-work shortlist. Do not restore manual Workspace
+assignment or claim preview/history data can be derived from the active list.
+
+---
+
 ## DC-ASSIGN-AUTOMATCH — Read-only automatic Workspace matches (frontend candidate, 2026-11-17)
 
 **Authoritative baseline:** `48e8fa39664d8dcbfc36e3866c1c4b82e50c1343`
