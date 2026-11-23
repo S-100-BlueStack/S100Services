@@ -219,6 +219,19 @@ verification of light/dark and keyboard behavior remains required.
 
 ---
 
+## DC-MAP-POLISH-01 — Native map legends (candidate, 2026-11-23)
+
+Main Map's passive Workspace color legend uses application-owned semantic
+`section`/`ul` markup, because no additional interactive Calcite map control is
+needed. Package Assignment uses native `<details open>` and `<summary>` for a
+compact, keyboard-accessible legend disclosure. The browser owns expand/collapse,
+focus and disclosure state; no private Calcite shadow DOM, extra persistence key
+or replacement component is introduced. The existing public ArcGIS layers and
+MapView lifecycle are retained. Check light/dark contrast and native summary
+keyboard behavior in the browser.
+
+---
+
 ## DC-API-06 Package geometry visualization (2026-11-05)
 
 The assignment-map geometry legend uses the existing application-owned,

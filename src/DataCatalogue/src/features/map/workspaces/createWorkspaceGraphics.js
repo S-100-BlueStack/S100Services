@@ -6,6 +6,7 @@ import * as projectOperator from "@arcgis/core/geometry/operators/projectOperato
 import { normalizeWorkspacePolygon } from "../../../shared/api/workspaceGeometry.js";
 import { workspaceSelectionKey } from "./pipelineVisibility.js";
 import { workspaceColorForOpenJobs } from "./workspaceJobColors.js";
+import { createAssignmentWorkspaceSymbol } from "./workspaceCoverageSymbol.js";
 
 let projectionReady;
 function loadProjection() {
@@ -33,18 +34,20 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
 
   function colorFor(workspace) {
     const count = counts?.get(workspaceSelectionKey(workspace));
-    return colorByOpenJobs
-      ? workspaceColorForOpenJobs(count ?? (counts ? 0 : null))
-      : [0, 150, 220];
+    return workspaceColorForOpenJobs(count ?? (counts ? 0 : null));
   }
 
   function applySymbol(graphic, workspace) {
-    const color = colorFor(workspace);
-    graphic.symbol = {
-      type: "simple-fill",
-      color: [...color, 0.12],
-      outline: { color: [...color, 0.95], width: 2.3 },
-    };
+    if (colorByOpenJobs) {
+      const color = colorFor(workspace);
+      graphic.symbol = {
+        type: "simple-fill",
+        color: [...color, 0.12],
+        outline: { color: [...color, 0.95], width: 2.3 },
+      };
+    } else {
+      graphic.symbol = createAssignmentWorkspaceSymbol();
+    }
     const count = counts?.get(workspaceSelectionKey(workspace));
     if (colorByOpenJobs) graphic.attributes.openJobs = counts ? (count ?? 0) : null;
   }

@@ -109,3 +109,22 @@ continues to own stale-result rejection, SDK preparation and rendering.
 The Package assignment map continues using its independent per-Workspace
 geometry source and is not changed by this optimization. See
 `docs/DC_PERF_FE_01_VALIDATION.md` for failure and browser performance checks.
+
+## DC-MAP-POLISH-01 — Map color and coverage legends (candidate, 2026-11-23)
+
+The live Main Map's passive legend is attached directly to the map surface,
+not the hidden Pipelines overview. `createWorkspaceColorLegend.js` uses the exact
+levels and unknown color from `workspaceJobColors.js`; `createWorkspaceGraphics.js`
+uses those values for count-colored main-map polygons. `Show empty Workspaces`
+still belongs to the independent Work Scope controls. No additional API reads
+or change to Job status persistence occurs.
+
+The Package Assignment map renders **saved auto-matched** Workspace polygons
+with a solid orange outline from `workspaceCoverageSymbol.js`, separate from
+the main-map count palette and the Package AOI/detail geometry. Gray dashed
+outlines are reserved for **prospective unsaved** Workspace matches, which are
+not calculated or displayed by the current backend contract. Its native
+disclosure legend uses the same orange saved-match color and a visible
+`Map legend` summary, initially expanded and non-persistent. The Package AOI/detail symbol factories were not included
+in this export and remain unchanged; verify their visual parity in the browser
+before accepting the complete symbols task.

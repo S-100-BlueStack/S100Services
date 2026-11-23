@@ -1,16 +1,56 @@
+## DC-MAP-POLISH-01 — Main Map and Package Assignment legends (frontend candidate, 2026-11-23)
+
+**Baseline:** `6c8a5db695f990f014108360010689170be611b8` (Git-archive
+context, 279 verified source files; DataCatalogue working tree clean at export).
+**Status:** v3 correction candidate; user has accepted the Assignment legend layout
+and considers the Main Map legend usable for now. Full `npm run check` after v3
+and visual approval of saved-match color remain pending.
+
+- `DC-MAP-LEGEND-01`: Main Map now hosts a compact, passive Workspace legend outside
+  the removed Pipelines panel, using the exact `WORKSPACE_JOB_COLOR_LEVELS` and
+  unknown-color value used by the main Workspace renderer. Counts refer to open
+  contextual Packages, not persisted backend status. It adds no filters or API reads.
+- `DC-ASSIGN-LEGEND-01`: Package Assignment uses a larger native
+  `<details open>` / `<summary>` disclosure below the map, initially expanded and
+  collapsible without a persistence key, extra event owner or focus replacement.
+- `DC-ASSIGN-MAP-SYMBOLS-01`: v3 uses a **solid orange polygon outline** for
+  Workspaces returned by confirmed saved Package-Pipeline bindings, rather than
+  the v2 neutral dotted outline. The Assignment legend names these
+  `Current auto-matched Workspaces`, separately from Package AOI and detailed Features.
+  Gray **dashed** outlines are reserved for newly predicted automatic matches
+  **before Save** under `DC-ASSIGN-MATCH-PREVIEW-01`; no speculative preview is
+  drawn until a verified read-only backend preview is available. The main map's
+  count-based Workspace renderer is unchanged.
+- **Verification boundary:** This export did not contain
+  `src/features/map/packages/**`. The existing Package AOI and detailed Feature
+  renderers are intentionally untouched; their live symbol colors/geometry types
+  could not be checked against this exact commit. Browser verification and a
+  targeted source read are needed before accepting full symbol/legend parity.
+  Unsaved match preview (`DC-ASSIGN-MATCH-PREVIEW-01`) and historical Packages
+  (`DC-PACKAGE-HISTORY-01`) remain separate, open items.
+- **First-look browser feedback (2026-11-23):** Assignment legend size and
+  placement accepted; Main Map legend is somewhat large but acceptable for now.
+  Corrected the misunderstanding that the gray dotted treatment applied to
+  saved matches rather than prospective matches. v2's saved gray dotted symbols
+  are superseded by the orange solid v3 symbols; this is not acceptance of the
+  future gray dashed preview, which remains blocked on backend verification.
+- No new dependencies, backend endpoints, ArcGIS/Calcite private APIs or auth changes.
+
+---
+
 ## DC-FIRST-LOOK-01 — Internal demo follow-ups (recorded 2026-11-23; open)
 
 **User-reported accepted frontend baseline:** `50b12afaee6d26e7fd0b58b06d31687cbaad6c8d`.
 DC-ASSIGN-AUTOMATCH was locally accepted and committed; DC-PERF-03 is closed.
 The items below are new **planning entries**, not implemented changes.
 
-| Order | Task | Status / dependency |
-| --- | --- | --- |
-| 1 | `DC-ASSIGN-MAP-SYMBOLS-01` — distinguish detailed Package AOI/Features from Workspace coverage and correct legend wording | Open; frontend |
-| 2 | `DC-MAP-LEGEND-01` — restore the Main Map Workspace-color legend without the removed Pipelines panel | Open; frontend |
-| 3 | `DC-ASSIGN-LEGEND-01` — increase assignment-map legend readability and provide collapse/expand | Open; frontend |
-| 4 | `DC-ASSIGN-MATCH-PREVIEW-01` — preview auto-matched Workspace geography for unsaved Pipeline additions | Open; verify read-only backend preview contract first |
-| 5 | `DC-PACKAGE-HISTORY-01` — discover older Packages through a low-prominence entry point | Open; define history and verify backend search/paging first |
+| Order | Task                                                                                                                      | Status / dependency                                                         |
+| ----- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1     | `DC-ASSIGN-MAP-SYMBOLS-01` — distinguish detailed Package AOI/Features from Workspace coverage and correct legend wording | Candidate; Package layer source verification and browser acceptance pending |
+| 2     | `DC-MAP-LEGEND-01` — restore the Main Map Workspace-color legend without the removed Pipelines panel                      | Implemented candidate; browser acceptance pending                           |
+| 3     | `DC-ASSIGN-LEGEND-01` — increase assignment-map legend readability and provide collapse/expand                            | Implemented candidate; browser acceptance pending                           |
+| 4     | `DC-ASSIGN-MATCH-PREVIEW-01` — preview auto-matched Workspace geography for unsaved Pipeline additions                    | Open; verify read-only backend preview contract first                       |
+| 5     | `DC-PACKAGE-HISTORY-01` — discover older Packages through a low-prominence entry point                                    | Open; define history and verify backend search/paging first                 |
 
 Existing `DC-MAP-POPUP` and `DC-MAP-LABEL` remain separate, previously recorded
 map follow-ups. See [DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md) for

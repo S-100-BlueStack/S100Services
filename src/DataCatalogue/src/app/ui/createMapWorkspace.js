@@ -1,3 +1,5 @@
+import { createWorkspaceColorLegend } from "../../features/map/workspaces/createWorkspaceColorLegend.js";
+
 export function createMapWorkspace({ live = false } = {}) {
   const workspaceElement = document.createElement("main");
   workspaceElement.className = "data-catalogue-workspace";
@@ -54,6 +56,7 @@ export function createMapWorkspace({ live = false } = {}) {
   const basemapHost = document.createElement("div");
   basemapHost.className = "dc-basemap-control dc-basemap-control--main";
   mapElement.append(titleElement, mapViewElement, mapStatusElement, basemapHost);
+  if (live) mapElement.append(createWorkspaceColorLegend());
 
   shell.append(actionBar, mapElement, panelHost);
   workspaceElement.append(shell);

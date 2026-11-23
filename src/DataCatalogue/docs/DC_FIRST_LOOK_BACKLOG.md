@@ -2,7 +2,9 @@
 
 **Recorded:** 2026-11-23 (date of feedback capture; the internal demo date is not confirmed)  
 **Accepted frontend baseline reported by user:** `50b12afaee6d26e7fd0b58b06d31687cbaad6c8d`  
-**Status:** Planning backlog only. None of the five first-look follow-ups is implemented by this documentation delivery.  
+**Status:** Planning source; `DC-MAP-POLISH-01` v3 adjusts saved Workspace
+symbols after browser feedback. The Assignment legend layout is accepted and
+Main Map legend is usable for now. Preview and history remain open.  
 **Application:** `src/DataCatalogue`
 
 ## Scope and confirmed decisions
@@ -28,16 +30,31 @@ accepted behavior or defining an undocumented backend API.
 ## First-look follow-ups
 
 Priority is a **recommended implementation order**, not a severity claim.
-All entries are **Open / not implemented** unless explicitly reclassified by a
-later source-verified task.
+Status is **Open / not implemented** unless a later, source-verified candidate is
+identified below. Candidate is not the same as browser acceptance.
 
-| Order | ID | User need | Dependency | Suggested scope |
-| --- | --- | --- | --- | --- |
-| 1 | `DC-ASSIGN-MAP-SYMBOLS-01` | Separate detailed Package AOI/Features visually from Workspace coverage; correct misleading `Saved Workspaces` legend text | Frontend map renderer and verified geometry semantics | Focused frontend correction |
-| 2 | `DC-MAP-LEGEND-01` | Restore the Workspace-color legend lost when the Pipelines panel was removed | Existing Main Map count-to-color rules and Work Scope | Focused frontend correction |
-| 3 | `DC-ASSIGN-LEGEND-01` | Make the Package Assignment map legend easier to notice/read, while allowing it to collapse as users gain familiarity | Existing legend layout, accessibility and presentation state | Focused frontend correction |
-| 4 | `DC-ASSIGN-MATCH-PREVIEW-01` | Show prospective automatic Workspace matches, including on the map, when adding an unsaved Pipeline binding | Verify an authorized, read-only backend preview calculation/contract | API analysis first; frontend after contract confirmation |
-| 5 | `DC-PACKAGE-HISTORY-01` | Provide a low-prominence way to find older/historical Packages | Define historical lifecycle and verify server-side search, paging and authorization | API/product decision first; frontend after contract confirmation |
+| Order | ID                           | User need                                                                                                                  | Dependency                                                                                 | Suggested scope                                                  |
+| ----- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| 1     | `DC-ASSIGN-MAP-SYMBOLS-01`   | Separate detailed Package AOI/Features visually from Workspace coverage; correct misleading `Saved Workspaces` legend text | Candidate updates Workspace style; exact Package renderer source and browser check pending | `DC-MAP-POLISH-01` candidate                                     |
+| 2     | `DC-MAP-LEGEND-01`           | Restore the Workspace-color legend lost when the Pipelines panel was removed                                               | Existing Main Map count-to-color rules and Work Scope                                      | `DC-MAP-POLISH-01` candidate; browser check pending              |
+| 3     | `DC-ASSIGN-LEGEND-01`        | Make the Package Assignment map legend easier to notice/read, while allowing it to collapse as users gain familiarity      | Existing legend layout, accessibility and presentation state                               | `DC-MAP-POLISH-01` candidate; browser check pending              |
+| 4     | `DC-ASSIGN-MATCH-PREVIEW-01` | Show prospective automatic Workspace matches, including on the map, when adding an unsaved Pipeline binding                | Verify an authorized, read-only backend preview calculation/contract                       | API analysis first; frontend after contract confirmation         |
+| 5     | `DC-PACKAGE-HISTORY-01`      | Provide a low-prominence way to find older/historical Packages                                                             | Define historical lifecycle and verify server-side search, paging and authorization        | API/product decision first; frontend after contract confirmation |
+
+### Candidate update — DC-MAP-POLISH-01 (2026-11-23)
+
+The first three items have a focused **frontend candidate**. The Assignment
+legend's expanded/collapsible layout is accepted after local browser testing.
+The Main Map legend is usable, but its size/placement may warrant a later
+minor adjustment. v3 corrects the assignment-map symbol semantics: **saved**
+auto-matched Workspace polygons use **solid orange** outlines; **new predicted**
+matches _before Save_ should use **gray dashed** outlines only when an
+authoritative read-only preview is available. v2 incorrectly applied a neutral
+dotted symbol to saved matches. There is no active preview implementation or
+verified preview API; `DC-ASSIGN-MATCH-PREVIEW-01` remains open. The exported
+baseline omitted `src/features/map/packages/**`, so Package AOI/detail renderers
+remain unchanged and require source-level parity verification. Package history
+remains open as a separate backend-dependent task.
 
 ### DC-ASSIGN-MAP-SYMBOLS-01 — Map semantics and distinct symbology
 
@@ -53,8 +70,10 @@ explain the displayed data.
    surface as applicable), and Workspace polygons using more than color alone
    (e.g. stroke pattern, outline/fill treatment or marker shape).
 3. Use accurate, concise English legend labels for the **geography actually
-   drawn**. Describe Workspace coverage as derived from saved automatic
-   bindings, not as a manually saved Workspace object or a detailed AOI.
+   drawn**. Current auto-matched Workspaces come from saved Package-Pipeline
+   bindings and use a solid orange outline; prospective matches before Save
+   should use gray dashed outlines only when the backend supplies a verified
+   read-only preview. Never imply that a Workspace itself is manually saved.
 4. Preserve selected Package focus, background Workspace coverage, light/dark
    contrast, projection handling, and MapView/layer lifecycle.
 5. Test with overlapping AOI/Workspace geometries and different detail geometry
@@ -167,18 +186,18 @@ backend-gap register. They must be revalidated against the source of the next
 implementation baseline before work begins; older candidate text is not an
 up-to-date implementation status claim.
 
-| ID / topic | Next action | Current planning classification |
-| --- | --- | --- |
-| `DC-MAP-POPUP` | Design and implement useful Workspace popup context using existing public ArcGIS APIs and verified fields | Frontend investigation, then implementation |
-| `DC-MAP-LABEL` | Choose Workspace and Package label fields, scale rules and collision behavior | Frontend investigation, then implementation |
-| `PAGE-01` global Package search | Confirm server-side title/ID/details filtering across paginated results | Backend contract gap |
-| `JOB-01` durable status/history | Define persistence for contextual Job status and completion history; do not reuse temporary demo state | Backend design gap |
-| `COMMENT-01` binding comments | Agree authorized persistence/readback contract for Pipeline binding comments | Backend contract gap |
-| `BIND-02` assignment concurrency | Define version/precondition or idempotent desired-set semantics for concurrent assignment updates | Backend contract gap |
-| `OWNER-01` Workspace ownership/locking | Design ownership and authorization separately from Package workflow status | Deferred cross-stack work |
-| `DC-CREATOR-EDITOR` | Separate Package creation/editing and AOI drawing workflow after verified mutation contracts | Larger future phase |
-| `DC-INTEGRATIONS` | Define identifiers, authorization and target actions for Notice to Mariners and WorkZone | Larger future phase |
-| `DC-UX-LOADER-01` | Reassess startup-loader value after accepted performance work and real deployment measurements | Low-priority reassessment; do not reopen performance work by default |
+| ID / topic                             | Next action                                                                                               | Current planning classification                                      |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `DC-MAP-POPUP`                         | Design and implement useful Workspace popup context using existing public ArcGIS APIs and verified fields | Frontend investigation, then implementation                          |
+| `DC-MAP-LABEL`                         | Choose Workspace and Package label fields, scale rules and collision behavior                             | Frontend investigation, then implementation                          |
+| `PAGE-01` global Package search        | Confirm server-side title/ID/details filtering across paginated results                                   | Backend contract gap                                                 |
+| `JOB-01` durable status/history        | Define persistence for contextual Job status and completion history; do not reuse temporary demo state    | Backend design gap                                                   |
+| `COMMENT-01` binding comments          | Agree authorized persistence/readback contract for Pipeline binding comments                              | Backend contract gap                                                 |
+| `BIND-02` assignment concurrency       | Define version/precondition or idempotent desired-set semantics for concurrent assignment updates         | Backend contract gap                                                 |
+| `OWNER-01` Workspace ownership/locking | Design ownership and authorization separately from Package workflow status                                | Deferred cross-stack work                                            |
+| `DC-CREATOR-EDITOR`                    | Separate Package creation/editing and AOI drawing workflow after verified mutation contracts              | Larger future phase                                                  |
+| `DC-INTEGRATIONS`                      | Define identifiers, authorization and target actions for Notice to Mariners and WorkZone                  | Larger future phase                                                  |
+| `DC-UX-LOADER-01`                      | Reassess startup-loader value after accepted performance work and real deployment measurements            | Low-priority reassessment; do not reopen performance work by default |
 
 ## Suggested execution sequence
 

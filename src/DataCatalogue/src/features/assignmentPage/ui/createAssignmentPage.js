@@ -1,3 +1,4 @@
+import { assignmentMapLegendMarkup } from "./assignmentMapLegend.js";
 import { formatLastRefreshedTime } from "./formatLastRefreshedTime.js";
 import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
 import { renderInformationFields } from "./renderInformationFields.js";
@@ -85,11 +86,7 @@ export function createAssignmentPage({
           </button>
         </div>
         <p data-map-status role="status"></p>
-        <div class="dc-assignment-legend" aria-label="Assignment map legend">
-          <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__feature" aria-hidden="true"></span>Selected Feature</span>
-          <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-assigned" aria-hidden="true"></span>Assigned Work stream</span>
-          <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-context" aria-hidden="true"></span>Unassigned context</span>
-        </div>
+        ${assignmentMapLegendMarkup(live)}
       </section>
     </div>
     <footer class="dc-prototype-toolbar dc-assignment-toolbar"><span>Mock data · Prototype user · Saved comments are immutable</span><button type="button" data-fail-load>Fail next load</button><button type="button" data-fail-save>Fail next save</button><button type="button" data-reset>Reset mock data</button><span data-test-status role="status"></span></footer>`;
@@ -113,11 +110,6 @@ export function createAssignmentPage({
     get("type").replaceChildren(new Option("All categories", ""));
     get("map-empty").textContent = "Select a Package to view geography.";
     get("work-stream-mode").hidden = true;
-    element.querySelector(".dc-assignment-legend").innerHTML = `
-      <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-package-aoi" aria-hidden="true"></span>Package AOI</span>
-      <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-package-detail" aria-hidden="true"></span>Detailed Features</span>
-      <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-context" aria-hidden="true"></span>Saved Workspaces</span>
-    `;
     for (const name of ["fail-load", "fail-save", "reset"]) get(name).hidden = true;
   }
   const basemapSelector = basemapSettings
