@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.SevenCs;
+using S100FC;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
@@ -55,76 +56,131 @@ namespace TestProductCatalogueAPI
 
 
         }
-        
-            [Fact]
+
+
+        /// <summary>
+        /// Creates S-101 and S-57 ElectronicProducts for LalaLand and establishes
+        /// an S-128 ProductMapping association from the S-101 product to the S-57 product.
+        /// </summary>
+        /// <remarks>
+        /// This integration test writes persistent data to the configured S-128 geodatabase.
+        /// It is intended to run once against a dedicated test database.
+        /// </remarks>
+        [Fact(Skip = "Manual integration test. Creates persistent S-128 LaLaLand product.")]
         public async Task Test_ImportLalaLand_S128() {
             var lalaLandSde = Environment.GetEnvironmentVariable("lalaland_import_sde", EnvironmentVariableTarget.User);
             var s128 = Environment.GetEnvironmentVariable("s128_ed18", EnvironmentVariableTarget.User);
 
-            Assert.NotNull(lalaLandSde);
-            //Assert.NotNull(s128);
+            Assert.False(string.IsNullOrWhiteSpace(lalaLandSde));
+            Assert.False(string.IsNullOrWhiteSpace(s128));
+            Assert.True(System.IO.Path.Exists(lalaLandSde));
+            Assert.True(System.IO.Path.Exists(s128));
 
+            const string s101DatasetName = "101DK00LALALAND";
+            const string s57DatasetName = "DK00LALA";
+            const int compilationScale = 22000;
+            const int specificUsage = 4;
+            const int sourceIdentifier = 9160;
 
-            var exist57 = IO.Path.Exists(lalaLandSde);
-            var exist128 = IO.Path.Exists(s128);
+            var editionDate = new DateOnly(2024, 10, 16);
 
-            Assert.True(exist57 && exist128);
+            Geodatabase OpenS128Geodatabase() {
+                var path = System.IO.Path.GetFullPath(s128);
 
-            // S128 ProductManager
-            var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
-                if (".sde".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
-                    var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(s128)));
-
-                    return new Geodatabase(connectionFile);
-                }
-                else if (".gdb".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
-                    var connectionFile = new FileGeodatabaseConnectionPath(new Uri(Path.GetFullPath(s128)));
-
-                    return new Geodatabase(connectionFile);
-                }
-                else {
-                    throw new InvalidOperationException("Connectionfile path for S128-Database is neither .gdb nor .sde");
-                }
-            });
-
-            // Build LalaLand arguments
-            var boundary = "";
-            var compilationscale = 22000;
-            var specificUsage = 4;
-
-            var datasetName = "101DK00LALALAND";
-         
-            var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification {
-                editionDate = new DateOnly(2024, 10, 16),
-                name = "S-101",
-                version = "2.0.0",
-            };
-
-
-            var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(lalaLandSde)));
-            var lalaGdb = new Geodatabase(connectionFile);
-
-            // fully qualified name usually required for enterprise GDB
-            using var table = lalaGdb.OpenDataset<FeatureClass>("S100.Surface");
-
-            using var cursor = table.Search(new QueryFilter() {
-                WhereClause = "flatten LIKE '%LALA%'",    // 101DK00LALALAND
-            }, false);
-
-            while (cursor.MoveNext()) {
-                using var row = cursor.Current as ArcGIS.Core.Data.Feature;
-
-                var geometry = row.GetShape() as Polygon;
-                boundary = geometry.ToJson();
+                return System.IO.Path.GetExtension(path).ToLowerInvariant() switch {
+                    ".sde" => new Geodatabase(new DatabaseConnectionFile(new Uri(path))),
+                    ".gdb" => new Geodatabase(new FileGeodatabaseConnectionPath(new Uri(path))),
+                    _ => throw new InvalidOperationException("S-128 path must be an .sde or .gdb.")
+                };
             }
 
-            Assert.True(!string.IsNullOrEmpty(boundary));
+            var productManager = (S100FC.ProductCatalogue.ProductManagerGDB)
+                await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(OpenS128Geodatabase);
 
-            // Import
-            await productManager.ElectronicProductManager.CreateElectronicProductAsync(datasetName, productSpecification, specificUsage, boundary, "", compilationscale);
+            using (productManager) {
+                // Read the existing LalaLand AOI from the source geodatabase.
+                var boundary = await productManager.Dispatch(() => {
+                    using var lalaGdb = new Geodatabase(
+                        new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(lalaLandSde))));
 
+                    using var surface = lalaGdb.OpenDataset<FeatureClass>("S100.Surface");
+                    using var cursor = surface.Search(new QueryFilter {
+                        WhereClause = "flatten LIKE '%LALA%'"
+                    }, false);
 
-            System.Diagnostics.Debugger.Break();
+                    string? result = null;
+
+                    while (cursor.MoveNext()) {
+                        using var row = (ArcGIS.Core.Data.Feature)cursor.Current;
+
+                        if (row.GetShape() is not Polygon polygon)
+                            continue;
+
+                        Assert.Null(result); // The test must not silently choose between multiple AOIs.
+                        result = polygon.ToJson();
+                    }
+
+                    return result;
+                });
+
+                Assert.False(string.IsNullOrWhiteSpace(boundary));
+
+                var s101Specification = new S100FC.S128.ComplexAttributes.productSpecification {
+                    editionDate = editionDate,
+                    name = "S-101",
+                    version = "2.0.0"
+                };
+
+                var s57Specification = new S100FC.S128.ComplexAttributes.productSpecification {
+                    editionDate = editionDate,
+                    name = "S-57",
+                    version = "3.1"
+                };
+
+                // The target must already exist when the S-101 product is created.
+                var electronicProducts = productManager.ElectronicProductManager;
+                await electronicProducts.CreateElectronicProductAsync(s57DatasetName, s57Specification, specificUsage, boundary!, null, compilationScale, sourceIdentifier);
+                Assert.NotNull(electronicProducts.ResolveExportProduct(s57DatasetName));
+                Assert.Empty(electronicProducts.GetMappedElectronicProducts(s57DatasetName, "S-101"));
+
+                await electronicProducts.CreateElectronicProductAsync(s101DatasetName, s101Specification, specificUsage, boundary!, s57DatasetName, compilationScale, sourceIdentifier);
+                Assert.Equal(s57DatasetName, Assert.Single(electronicProducts.GetMappedElectronicProducts(s101DatasetName, "S-57")).datasetName);
+                Assert.Equal(s101DatasetName, Assert.Single(electronicProducts.GetMappedElectronicProducts(s57DatasetName, "S-101")).datasetName);
+            }
+
+            // Reload from the geodatabase to verify the association survived disposal.
+            using var reloaded = (ProductManagerGDB)await ProductManagerGDB.CreateInstanceAsync(OpenS128Geodatabase);
+            Assert.Equal(s57DatasetName, Assert.Single(reloaded.ElectronicProductManager.GetMappedElectronicProducts(s101DatasetName, "S-57")).datasetName);
+            Assert.Equal(s101DatasetName, Assert.Single(reloaded.ElectronicProductManager.GetMappedElectronicProducts(s57DatasetName, "S-101")).datasetName);
+
+            await reloaded.Dispatch(() => {
+                using var gdb = OpenS128Geodatabase();
+                var definitions = gdb.GetDefinitions<FeatureClassDefinition>();
+                try {
+                    var surfaceDefinition = Assert.Single(definitions, definition => {
+                        var tableName = definition.GetName();
+                        return tableName.Equals("surface", StringComparison.OrdinalIgnoreCase) || tableName.EndsWith(".surface", StringComparison.OrdinalIgnoreCase);
+                    });
+                    using var surface = gdb.OpenDataset<FeatureClass>(surfaceDefinition.GetName());
+                    using var cursor = surface.Search(new QueryFilter { WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'" }, false);
+                    var verifiedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (cursor.MoveNext()) {
+                        using var row = cursor.Current;
+                        var product = AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
+                        if (product.datasetName != s101DatasetName && product.datasetName != s57DatasetName)
+                            continue;
+
+                        Assert.False(row.IsNull("sourceIdentifier"));
+                        Assert.Equal(sourceIdentifier, Convert.ToInt32(row["sourceIdentifier"]));
+                        Assert.True(verifiedNames.Add(product.datasetName!));
+                    }
+                    Assert.Equal(2, verifiedNames.Count);
+                }
+                finally {
+                    foreach (var definition in definitions)
+                        definition.Dispose();
+                }
+            });
         }
 
 

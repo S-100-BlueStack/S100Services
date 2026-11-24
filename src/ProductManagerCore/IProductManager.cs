@@ -37,7 +37,30 @@ namespace S100FC.ProductCatalogue
 
     public interface IElectronicProductManager : IEnumerable<string>
     {
+        /// <summary>Creates an S-128 ElectronicProduct with an optional ProductMapping to an existing ElectronicProduct.</summary>
+        /// <param name="name">Unique dataset name of the new product.</param>
+        /// <param name="productSpecification">Specification of the new product.</param>
+        /// <param name="specificUsage">Optional specific usage value.</param>
+        /// <param name="boundary">Product boundary in Esri JSON format.</param>
+        /// <param name="ProductMapping">Existing target dataset name, or null or whitespace for no association.</param>
+        /// <param name="optimumDisplayScale">Optional optimum display scale.</param>
+        /// <returns>A task that completes when product creation has finished.</returns>
+        /// <exception cref="ProductMappingIntegrityException">The requested target is missing, ambiguous or cannot be resolved.</exception>
         Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null);
+
+        /// <summary>Creates an ElectronicProduct with an explicit source identifier on its geodatabase row.</summary>
+        /// <param name="name">Unique dataset name of the new product.</param>
+        /// <param name="productSpecification">Specification of the new product.</param>
+        /// <param name="specificUsage">Optional specific usage value.</param>
+        /// <param name="boundary">Product boundary in Esri JSON format.</param>
+        /// <param name="ProductMapping">Existing target dataset name, or null or whitespace for no association.</param>
+        /// <param name="optimumDisplayScale">Optional optimum display scale.</param>
+        /// <param name="sourceIdentifier">Integer identifier stored in the S-100 surface sourceIdentifier column.</param>
+        /// <returns>A task that completes when product creation has finished.</returns>
+        /// <exception cref="NotSupportedException">The manager does not support explicit source identifiers.</exception>
+        /// <exception cref="ProductMappingIntegrityException">The requested mapping target cannot be resolved.</exception>
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale, int sourceIdentifier) =>
+            throw new NotSupportedException("This product manager does not support explicit source identifiers.");
 
         Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile);
 
