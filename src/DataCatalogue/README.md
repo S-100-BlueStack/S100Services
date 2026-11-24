@@ -57,8 +57,15 @@ the unchanged map and keep their shadows. Narrow windows use a lower-right overl
 so the upper map controls remain accessible. List Refresh and error-only Retry
 use the existing Packages read; the information panel adds no metadata requests. The existing selected-Package geometry read is unchanged.
 Assignment-specific editing and saved-binding inspection remain in Package
-Assignment. See `docs/PROJECT_TRACKER.md` for DC-PACKAGE-DETAILS-PANEL-01 and
-its pending local browser acceptance.
+Assignment. The user accepted this panel in commit `6342966632af3774d336b6f7e7d4e85ac0a51cf9`.
+Future individual Package history belongs in the left Packages detail view,
+not the right metadata overlay; its backend contract remains open.
+
+The live Main Map label candidate displays Workspace names at 1:3,000,000 or
+closer and Package Short IDs at 1:250,000 or closer. Labels reuse existing
+visible geometry and metadata and use native SDK collision handling. No
+additional catalogue read is required; see `docs/PROJECT_TRACKER.md` for
+DC-MAP-LABEL and pending browser acceptance.
 
 See [DC-UX-03D validation](docs/DC_UX_03D_VALIDATION.md) for browser acceptance.
 

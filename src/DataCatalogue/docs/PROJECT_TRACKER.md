@@ -1,3 +1,44 @@
+## DC-MAP-LABEL - Main Map Workspace and Package labels (2026-11-24)
+
+**Authoritative baseline:** `76c268f042dd4b35988c82071bc5e5d2fec2729c` (merge;
+312 committed source files verified, including the previously ignored
+`src/features/map/packages` modules). **Status:** frontend candidate; local
+browser acceptance and full npm check pending.
+
+- Live Main Map labels use the existing normalized Workspace display name and
+  the `shortId` from the existing paged Package AOI response. Blank/missing
+  Package short IDs produce no label; no description, synthetic identifier or
+  extra detail read is substituted. The existing Workspace display-name
+  normalization (including its existing ID fallback) is unchanged.
+- Initial scale limits: Workspace names from 1:5,000,000 and closer; Package
+  short IDs from 1:3,000,000 and closer. Compact dark text with a white halo
+  remains legible independently of the chosen basemap/theme. ArcGIS native
+  label deconfliction can suppress crowded labels rather than drawing every
+  label; tune thresholds and check cross-layer collisions in the browser.
+- Existing GraphicsLayers remain the sole coverage/AOI/popup owners. Local
+  label-only FeatureLayers have transparent geometry symbols and disabled
+  popups, with native polygon label placement for Workspaces and point labels
+  anchored at Package AOI extent centers. Package IDs are deduplicated by the
+  existing Pipeline union, not by label text. No catalogue request, new
+  dependency, backend change, or Package Assignment/mock label change.
+- Label publication follows the same generation and visibility snapshots as
+  the source graphics. Clear labels immediately on a changed scope, retain
+  them on failed same-scope Package refresh, and dispose them on view teardown.
+  Status-only recoloring does not recreate Workspace labels. Keep native
+  Workspace popups, geometry styling, selection, map controls, information
+  overlay and Work Scope behavior unchanged.
+- The former missing Package map modules were confirmed excluded by a broad
+  NuGet Packages ignore rule and are now present in the authoritative merge
+  baseline; this candidate makes no further Git-ignore changes.
+
+**Accepted detail-panel work:** The user approved v2 and reported commit
+`6342966632af3774d336b6f7e7d4e85ac0a51cf9`. The earlier candidate-only and
+pending-acceptance statements below are historical. The right panel remains
+metadata-only; future individual Package history belongs in the **left
+Packages detail view**. History itself is not implemented.
+
+---
+
 ## DC-MEETING-02 - Package details, history and QC follow-ups (2026-11-24)
 
 **User-reported accepted baseline:** `a7bd819d46da1e22fcd5dd7036bfc80631a20a91`.
@@ -11,8 +52,8 @@
 
 | Suggested order | Task                                                                                                            | Status / dependency                                                                               |
 | --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Candidate; frontend implemented, local acceptance pending                                         |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Open; frontend design and geometry/scale verification                                             |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                                   |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Candidate; frontend implemented, local acceptance pending                                         |
 | 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Open; UI design can proceed separately, functional filtering depends on backend workflow contract |
 | 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Open; backend history contract needed for real data                                               |
 | Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                                  |
@@ -41,11 +82,11 @@ This is a proposed next-work shortlist, not a complete audit of all historical t
 
 ### DC-PACKAGE-TIMELINE-01 - History of an individual Package
 
-**Observed:** Users want to inspect what has happened to a Package. There is no confirmed backend history feed yet. The existing Main Map Package Details view is the proposed initial location; consider a secondary history entry in Package Assignment, but exact placement there remains undecided.
+**Observed:** Users want to inspect what has happened to a Package. There is no confirmed backend history feed yet. The user accepted the new Main Map Package information overlay but found that long metadata descriptions can fill it. The confirmed initial location for history is the **left Packages detail view**, beneath the contextual actions and facts. Keep the right information overlay reserved for Package metadata. A secondary history entry in Package Assignment may be considered later; placement there remains undecided.
 
 **Requirements / acceptance criteria:**
 
-- Provide a compact, read-only history section or secondary view reachable from the selected Package's Details. If also exposed in Package Assignment, reuse the same history presentation/service rather than building a second independent history model. Keep normal metadata and assignment controls accessible and uncluttered.
+- Provide a compact, independently scrollable read-only history section in the left Packages detail view, beneath contextual actions and facts. Keep the status controls accessible and the right information panel dedicated to metadata. If also exposed in Package Assignment, reuse the same history presentation/service rather than building a second independent history model. Keep normal metadata and assignment controls accessible and uncluttered.
 - Define actual history semantics with the product and backend owners: which events are recorded, event time and ordering, actors, transitions, Package identity/version, and whether Pipeline/Workspace context is present. These are contract questions, not promised fields or event types.
 - Render only authorized backend history once a contract is verified. Do not synthesize events from temporary `Done` / `No update` state, current assignments, or browser storage. If a UI shell is explicitly selected before integration, label history as unavailable rather than claiming an empty history. Support loading, valid empty, failure, retry and bounded paging if required by the eventual contract.
 - Keep `DC-PACKAGE-HISTORY-01` (finding older or archived Packages in the catalogue), `JOB-01` (durable contextual Job status/history), and this individual Package timeline distinct. They may share backend capabilities after agreement but none implies the others are complete.

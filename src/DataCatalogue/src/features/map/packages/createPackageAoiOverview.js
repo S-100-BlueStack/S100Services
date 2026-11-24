@@ -1,15 +1,21 @@
 import { loadPackageAois } from "./loadPackageAois.js";
+import { createMapLabelLayers } from "../labels/createMapLabelLayers.js";
 
 const LAYER_TITLE = "Assigned Package AOIs";
 
 async function loadArcGisModules() {
-  const [{ default: GraphicsLayer }, { default: Graphic }, { default: Polygon }] =
-    await Promise.all([
-      import("@arcgis/core/layers/GraphicsLayer.js"),
-      import("@arcgis/core/Graphic.js"),
-      import("@arcgis/core/geometry/Polygon.js"),
-    ]);
-  return { GraphicsLayer, Graphic, Polygon };
+  const [
+    { default: GraphicsLayer },
+    { default: Graphic },
+    { default: Polygon },
+    { default: FeatureLayer },
+  ] = await Promise.all([
+    import("@arcgis/core/layers/GraphicsLayer.js"),
+    import("@arcgis/core/Graphic.js"),
+    import("@arcgis/core/geometry/Polygon.js"),
+    import("@arcgis/core/layers/FeatureLayer.js"),
+  ]);
+  return { GraphicsLayer, Graphic, Polygon, FeatureLayer };
 }
 
 // The Pipeline union comes from Work Scope. A Workspace filter only narrows
@@ -22,6 +28,7 @@ export function createPackageAoiOverview({
   let alive = true;
   let view = null;
   let layer = null;
+  let labels = null;
   let allGraphics = [];
   let pipelineIds = [];
   let pipelineKey = "";
@@ -37,6 +44,8 @@ export function createPackageAoiOverview({
   }
 
   function removeLayer() {
+    labels?.destroy();
+    labels = null;
     if (view && layer) view.map?.remove?.(layer);
     layer?.destroy?.();
     layer = null;
@@ -46,15 +55,22 @@ export function createPackageAoiOverview({
 
   function displayCurrentGraphics() {
     if (!layer || loadedPipelineKey !== pipelineKey) return;
-    layer.removeAll();
-    layer.addMany(
+    const visibleGraphics =
       visiblePackageIds === null
         ? allGraphics
         : allGraphics.filter((graphic) =>
             visiblePackageIds.has(graphic.attributes.overviewPackageId)
-          )
-    );
+          );
+    layer.removeAll();
+    layer.addMany(visibleGraphics);
     layer.visible = true;
+    labels?.replace(
+      visibleGraphics.map(({ attributes, geometry }) => ({
+        id: attributes.overviewPackageId,
+        text: attributes.shortId,
+        geometry,
+      }))
+    );
   }
 
   async function refresh() {
@@ -74,7 +90,7 @@ export function createPackageAoiOverview({
       !controller.signal.aborted;
 
     try {
-      const { GraphicsLayer, Graphic, Polygon } = await loadSdk();
+      const { GraphicsLayer, Graphic, Polygon, FeatureLayer } = await loadSdk();
       if (!isCurrent()) return;
       const items = await loadPackageAois(catalogue, {
         pipelineIds: targetPipelines,
@@ -85,7 +101,7 @@ export function createPackageAoiOverview({
         (item) =>
           new Graphic({
             geometry: Polygon.fromJSON(item.aoi),
-            attributes: { overviewPackageId: item.packageId },
+            attributes: { overviewPackageId: item.packageId, shortId: item.shortId },
             symbol: {
               type: "simple-fill",
               color: [28, 155, 218, 0.075],
@@ -98,6 +114,12 @@ export function createPackageAoiOverview({
         layer = new GraphicsLayer({ title: LAYER_TITLE, listMode: "hide" });
         // Keep background AOIs below selected Package and Workspace overlays.
         targetView.map.add(layer, 0);
+        labels = createMapLabelLayers({
+          map: targetView.map,
+          FeatureLayer,
+          Graphic,
+          kind: "package",
+        });
       }
       allGraphics = graphics;
       loadedPipelineKey = targetKey;
@@ -120,6 +142,7 @@ export function createPackageAoiOverview({
     const nextKey = JSON.stringify(selected);
     if (nextKey === pipelineKey) return;
     abortPending();
+    labels?.clear();
     pipelineIds = selected;
     pipelineKey = nextKey;
     if (layer) layer.visible = loadedPipelineKey === nextKey && selected.length > 0;

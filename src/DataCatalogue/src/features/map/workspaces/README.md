@@ -145,3 +145,27 @@ read from the backend or mocked. A displayed `unlock` and `None` are placeholder
 Closing/hiding or removing Workspace geometry does not close unrelated popup
 types. Assignment Map popups remain disabled. Verify the native chrome and theme
 in a real browser; Source-level tests do not establish SDK 5.2.1 rendering.
+
+## DC-MAP-LABEL - Main Map labels (candidate, 2026-11-24)
+
+Workspace display names are labeled at 1:5,000,000 or closer on the live Main
+Map. `createWorkspaceGraphics` feeds its current visible prepared polygons to
+`../labels/createMapLabelLayers.js`. Package AOI Short IDs are labeled at
+1:3,000,000 or closer; `../packages/createPackageAoiOverview.js` supplies the
+existing deduplicated, filtered geometry-page snapshot and uses the AOI extent
+center as a label anchor. Label-only client-side FeatureLayers use public SDK
+label placement and static deconfliction, transparent symbols, disabled popups
+and no service URL. Dark label text with a white halo works against both light
+and dark basemaps. No label is synthesized for a missing Package short ID.
+
+The source renderer owns replacement, filtering, and disposal; no separate
+metadata or geometry request is needed. Identical visible snapshots and
+Workspace count-only updates do not rebuild labels. Label preparation or
+construction errors are logged separately and must not invalidate valid
+source geometry. ArcGIS may suppress labels that cannot fit. Validate actual
+placement, font access, scale transitions, overlapping labels, and click
+behavior with the installed SDK. Package Assignment and mock map are unchanged.
+
+Public SDK references: [FeatureLayer](https://developers.arcgis.com/javascript/latest/references/core/layers/FeatureLayer/),
+[LabelClass](https://developers.arcgis.com/javascript/latest/references/core/layers/support/LabelClass/),
+[Labeling guide](https://developers.arcgis.com/javascript/latest/labeling/).
