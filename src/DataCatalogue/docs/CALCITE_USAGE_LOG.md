@@ -1,3 +1,19 @@
+## DC-PACKAGE-DETAILS-PANEL-01 - Shared metadata and native scroll region (2026-11-24)
+
+The Main Map information panel uses an application-owned semantic `aside`, a
+native heading and a scroll region with the same `dl` / `dt` / `dd` renderer and
+sanitized description content as live Package Assignment. Public `calcite-action`
+controls provide information disclosure and Close; `calcite-button` provides
+Retry. This intentionally avoids a second Calcite shell or panel lifecycle and
+keeps read-only data separate from interactive assignment controls. Following
+v1 browser feedback, v2 positions the native aside over the unchanged map and
+preserves the existing left-panel shadow. The public icon-based header Refresh
+remains mounted but is hidden in Details; error-only Retry remains available.
+Existing application theme tokens style the shared fields and both shadows. No private component DOM,
+additional component registration, or SDK dependency change is required.
+
+---
+
 ## DC-MAP-POPUP-05 - Native header compatibility exception (2026-11-24)
 
 The rebuilt Workspace popup uses the native ArcGIS `PopupTemplate` title and

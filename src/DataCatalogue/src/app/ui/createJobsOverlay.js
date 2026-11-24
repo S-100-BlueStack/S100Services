@@ -1,4 +1,5 @@
 import { createJobList } from "../../features/jobs/ui/jobList.js";
+import { createPackageInformationPanel } from "../../features/jobs/ui/createPackageInformationPanel.js";
 import { createPackageScopeControls } from "../../features/jobs/ui/createPackageScopeControls.js";
 import { JOB_STORE_CHANGE_TYPE } from "../../features/jobs/state/jobStore.js";
 
@@ -54,9 +55,10 @@ export function createJobsOverlay({
   closeButton.text = "Close Packages panel";
   closeButton.title = "Close Packages panel";
 
-  // The header action remains mounted across list/detail rerenders for stable keyboard focus.
+  // Keep the list-only action mounted so normal list rerenders preserve keyboard focus.
   const refreshButton = document.createElement("button");
   refreshButton.type = "button";
+  refreshButton.hidden = false;
   refreshButton.className = "job-list__refresh-button";
   refreshButton.title = "Refresh Packages";
   refreshButton.setAttribute("aria-label", "Refresh Packages");
@@ -65,8 +67,40 @@ export function createJobsOverlay({
   icon.scale = "s";
   icon.setAttribute("aria-hidden", "true");
   refreshButton.append(icon);
-  refreshButton.addEventListener("click", () => void jobList.refreshJobs({ manual: true }));
+  refreshButton.addEventListener("click", () => {
+    if (!refreshButton.hidden) void jobList.refreshJobs({ manual: true });
+  });
   headerActionsElement.append(refreshButton);
+  const informationButton = sourceMode === "live" ? document.createElement("calcite-action") : null;
+  const packageInformation = informationButton
+    ? createPackageInformationPanel({
+        onRetry: () => void jobList.refreshJobs({ manual: true }),
+        onVisibilityChange({ available, open }) {
+          if (!available && document.activeElement === informationButton) {
+            jobList.element.focus({ preventScroll: true });
+          }
+          informationButton.hidden = !available;
+          informationButton.active = open;
+          informationButton.text = open ? "Hide Package information" : "Show Package information";
+          informationButton.title = informationButton.text;
+          informationButton.setAttribute("aria-expanded", String(open));
+        },
+        restoreFocus({ available }) {
+          (available ? informationButton : jobList.element).focus({ preventScroll: true });
+        },
+      })
+    : null;
+  if (informationButton) {
+    informationButton.className = "data-catalogue-overlay-panel__information";
+    informationButton.icon = "information";
+    informationButton.hidden = true;
+    informationButton.text = "Show Package information";
+    informationButton.title = informationButton.text;
+    informationButton.setAttribute("aria-controls", packageInformation.element.id);
+    informationButton.setAttribute("aria-expanded", "false");
+    informationButton.addEventListener("click", () => packageInformation.toggle());
+    headerActionsElement.append(informationButton);
+  }
   headerActionsElement.append(backButton, closeButton);
   headerElement.append(titleGroupElement, headerActionsElement);
   const scopeControls =
@@ -116,13 +150,26 @@ export function createJobsOverlay({
       scopeControls.element.hidden = isDetailsMode;
       scopeControls.element.inert = isDetailsMode;
     }
+    if (isDetailsMode && document.activeElement === refreshButton) {
+      jobList.element.focus({ preventScroll: true });
+    }
+    refreshButton.hidden = isDetailsMode;
+    if (packageInformation && !isDetailsMode && document.activeElement === backButton) {
+      jobList.element.focus({ preventScroll: true });
+    }
     backButton.hidden = !isDetailsMode;
     backButton.setAttribute("aria-hidden", String(!isDetailsMode));
+    packageInformation?.update({
+      selectedJobId: isDetailsMode ? event.detail.selectedJobId : null,
+      openInformation: event.detail?.openInformation,
+      snapshot: jobStore?.getSnapshot?.(),
+    });
     updateStickyHeaderHeight(panelElement, headerElement);
   });
 
   return {
     element: panelElement,
+    packageInformationElement: packageInformation?.element ?? null,
     closeButton,
     refreshButton,
     setPipelineCatalogue(groups) {
@@ -169,6 +216,7 @@ export function createJobsOverlay({
       headerResizeObserver?.disconnect();
       unsubscribeLoading?.();
       scopeControls?.destroy();
+      packageInformation?.destroy();
       jobList.destroy();
     },
   };

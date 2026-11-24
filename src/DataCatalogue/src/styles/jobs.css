@@ -98,6 +98,10 @@
   cursor: pointer;
 }
 
+.job-list__refresh-button[hidden] {
+  display: none;
+}
+
 .job-list__refresh-button:hover:not(:disabled) {
   color: var(--calcite-color-brand, #007ac2);
   background: transparent;

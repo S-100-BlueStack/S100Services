@@ -463,10 +463,10 @@ html[data-theme="dark"] .data-catalogue-map {
   box-shadow: none;
 }
 
-/* The Action Bar alone takes layout width. Its panel overlays the map and
-   never changes MapView's container dimensions when toggled. */
+/* Only the Action Bar takes layout width; both side panels overlay the map. */
 .dc-map-shell {
   --dc-map-action-bar-width: 48px;
+  --dc-package-information-width: clamp(19rem, 28vw, 26rem);
   position: absolute;
   inset: 0;
   display: grid;
@@ -709,4 +709,103 @@ html[data-theme="dark"] .data-catalogue-map {
 .dc-map-shell .esri-ui-top-right .esri-zoom,
 .dc-assignment-map-stage .esri-ui-top-right .esri-zoom {
   margin: 0 0 10px;
+}
+
+/* Keep map chrome reachable without resizing or adding padding to MapView itself. */
+.dc-map-shell:has(> .dc-package-information-panel:not([hidden])) .esri-ui-top-right {
+  margin-inline-end: var(--dc-package-information-width);
+}
+.dc-map-shell:has(> .dc-package-information-panel:not([hidden])) .dc-workspace-color-legend {
+  right: calc(0.75rem + var(--dc-package-information-width));
+}
+
+.dc-package-information-panel {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--dc-package-information-width);
+  max-width: calc(100% - var(--dc-map-action-bar-width));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  box-shadow: var(--dc-shadow);
+  font-size: 0.82rem;
+}
+.dc-package-information-panel[hidden] {
+  display: none;
+}
+.dc-package-information-panel__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-surface-alt);
+}
+.dc-package-information-panel__title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.dc-package-information-panel__scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.dc-package-information-panel__status {
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  color: var(--dc-text-muted);
+  overflow-wrap: anywhere;
+}
+.dc-package-information-panel__status:empty {
+  display: none;
+}
+.dc-package-information-panel__retry {
+  margin: 0 0.65rem 0.45rem;
+}
+.dc-package-information-panel__retry[hidden] {
+  display: none;
+}
+.dc-package-information-panel :focus-visible {
+  outline: 2px solid var(--dc-focus-ring);
+  outline-offset: -2px;
+}
+
+@media (max-width: 60rem) {
+  .dc-map-shell {
+    --dc-package-information-width: min(19rem, 36vw);
+  }
+}
+
+/* On narrow windows, keep the upper map controls and Back reachable above the overlay. */
+@media (max-width: 48rem) {
+  .dc-map-shell {
+    --dc-package-information-width: min(26rem, calc(100vw - var(--dc-map-action-bar-width)));
+  }
+  .dc-package-information-panel {
+    top: auto;
+    height: 50%;
+    border-top: 1px solid var(--dc-border);
+  }
+  .dc-map-shell:has(> .dc-package-information-panel:not([hidden])) .esri-ui-top-right {
+    margin-inline-end: 0;
+  }
+  .dc-map-shell:has(> .dc-package-information-panel:not([hidden])) .dc-workspace-color-legend {
+    right: 0.75rem;
+    bottom: calc(50% + 2.2rem);
+  }
 }

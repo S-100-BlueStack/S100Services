@@ -1,10 +1,13 @@
 import { assignmentMapLegendMarkup } from "./assignmentMapLegend.js";
 import { formatLastRefreshedTime } from "./formatLastRefreshedTime.js";
 import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
-import { renderInformationFields } from "./renderInformationFields.js";
+import {
+  getLivePackageInformation,
+  renderInformationFields,
+  renderLivePackageInformation,
+} from "./renderInformationFields.js";
 import { createPipelineRow } from "./createPipelineRow.js";
 import { matchesLoadedPackage } from "../state/matchesLoadedPackage.js";
-import { severityLabel } from "../../../shared/domain/severity.js";
 import { createQueryLifecycle } from "../state/createQueryLifecycle.js";
 import {
   WORK_STREAM_LIST_MODE,
@@ -540,27 +543,19 @@ export function createAssignmentPage({
       return;
     }
 
-    const fields = live
-      ? [
-          ["Title", feature.title],
-          ["Category", feature.category],
-          ["Severity", severityLabel(feature.severity)],
-          ["Details", feature.details],
-          ["Nautical charts", feature.nauticalCharts],
-          ["Publication", feature.publication],
-        ]
-      : [
-          ["ID", feature.sourceId],
-          ["Title", feature.title],
-          ["References", feature.references],
-          ["Details", feature.details],
-          ["Nautical charts", feature.nauticalCharts],
-          ["Publication", feature.publication],
-        ];
-    renderInformationFields(get("information"), fields, {
-      live,
-      descriptionEntries: feature.descriptionEntries,
-    });
+    if (live) {
+      renderLivePackageInformation(get("information"), getLivePackageInformation(feature));
+      return;
+    }
+
+    renderInformationFields(get("information"), [
+      ["ID", feature.sourceId],
+      ["Title", feature.title],
+      ["References", feature.references],
+      ["Details", feature.details],
+      ["Nautical charts", feature.nauticalCharts],
+      ["Publication", feature.publication],
+    ]);
   }
 
   const unsubscribe = session.subscribe((state) => {

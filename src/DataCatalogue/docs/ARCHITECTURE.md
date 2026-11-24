@@ -1,3 +1,38 @@
+## DC-PACKAGE-DETAILS-PANEL-01 - Shared read-only Package metadata (2026-11-24)
+
+The existing live contextual selection in `features/jobs/ui/jobList.js` is the
+only selection owner. Its existing details-mode event also distinguishes an
+explicit Details intent from a store-driven rerender. `app/ui/createJobsOverlay.js`
+uses that event to pass the current Jobs snapshot to
+`features/jobs/ui/createPackageInformationPanel.js`. The latter owns only
+visibility, read-only presentation and focus recovery. It does not call a
+catalogue service or keep an independent asynchronous selection/cache.
+
+`loadLivePackageMetadata.js` and the Jobs store retain existing read and
+cancellation ownership. Both metadata read paths use the same Package normalizer.
+The panel selects by the exact contextual Job ID and renders canonical Package
+metadata, using `packageTitle` instead of the contextual display title.
+`assignmentPage/ui/renderInformationFields.js` exposes the common ordered live
+metadata projection and renderer, including the unchanged description sanitizer.
+Assignment-specific binding summaries remain owned by Package Assignment.
+The normalizer, API requests, status identities and Work Scope are unchanged.
+
+`createMapWorkspace.js` mounts the live information panel as a sibling of the
+existing MapView and left panel. CSS positions both side panels as overlays;
+opening or closing information leaves the MapView grid, dimensions and existing
+left-panel shadow unchanged. Only the right-side map controls and legend move
+clear of the overlay. Narrow windows use a lower-right overlay rather than
+resizing the map.
+The right panel's Close/Escape and left-header information action affect only
+its disclosure state. Back and selection clearing invalidate the view. A store
+refresh preserves the selected metadata only while that same context is present;
+missing selections show an unavailable state and Retry uses the existing refresh.
+The stable header Refresh button is hidden in Details and restored on Back;
+error-only Retry remains available. Status-only changes retain the metadata DOM and its scroll/focus. No timeline or
+history service is introduced by this candidate.
+
+---
+
 ## DC-MAP-POPUP-05 - Main Map Workspace popup ownership (candidate, 2026-11-24)
 
 `features/map/workspaces/createWorkspaceGraphics.js` owns the Main Map-only
@@ -301,7 +336,8 @@ Package/Pipeline/Workspace. `jobStatus.js` owns the only two selectable
 terminal actions, Done and No update; both map to the same completed
 visibility/render class while their exact statuses remain distinct. The UI
 maps older input statuses to Open. The overlay header owns a stable native
-Refresh button so list and detail re-renders do not destroy it.
+Refresh button so list and detail re-renders do not destroy it. Since
+DC-PACKAGE-DETAILS-PANEL-01 v2 it is visible only in list mode.
 
 `assignmentPage/state/matchesLoadedPackage.js` implements pure, local
 matching for the fetched Package page. The verified live API adapter does not
@@ -1071,7 +1107,8 @@ Current behavior:
 - Details mode keeps selected Job context sticky below the panel header.
 - Details content uses one main details surface with section dividers instead of nested card boxes.
 - Status mutation controls are placed near the top of details mode.
-- Details refresh currently uses the shared all-Jobs refresh flow.
+- Details recovery uses the shared all-Jobs refresh flow through error-only Retry.
+  DC-PACKAGE-DETAILS-PANEL-01 v2 supersedes the earlier always-visible header Refresh.
 
 Rules:
 

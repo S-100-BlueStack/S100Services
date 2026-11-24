@@ -44,8 +44,21 @@ treating every value as a heading. Status actions (`Done` and `No update`) are
 presented together on each row and in Package Details. Details use compact
 label/value rows with alternating neutral surfaces in light and dark modes.
 This changes presentation only: contextual identity, temporary status mutations,
-keyboard focus recovery, Refresh and map behavior remain unchanged. Mock Packages
-retain their existing distinct presentation.
+keyboard focus recovery and map behavior remain unchanged. Mock Packages retain
+their existing distinct presentation. The header Refresh action is available only
+in list mode; error-only Retry remains available in Details.
+
+When live Package Details is opened, the right-hand `Package information` panel
+shows the same read-only metadata fields and sanitized descriptions as Package
+Assignment, using the already loaded contextual Jobs snapshot. The information
+panel can be closed independently and reopened using the information action in
+the Packages header. Back clears the details selection. Both side panels overlay
+the unchanged map and keep their shadows. Narrow windows use a lower-right overlay
+so the upper map controls remain accessible. List Refresh and error-only Retry
+use the existing Packages read; the information panel adds no metadata requests. The existing selected-Package geometry read is unchanged.
+Assignment-specific editing and saved-binding inspection remain in Package
+Assignment. See `docs/PROJECT_TRACKER.md` for DC-PACKAGE-DETAILS-PANEL-01 and
+its pending local browser acceptance.
 
 See [DC-UX-03D validation](docs/DC_UX_03D_VALIDATION.md) for browser acceptance.
 

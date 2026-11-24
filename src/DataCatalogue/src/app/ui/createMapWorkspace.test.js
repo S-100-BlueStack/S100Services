@@ -103,3 +103,45 @@ test("Only the live Main Map mounts the count legend outside the hidden Pipeline
     globalThis.document = original;
   }
 });
+
+test("Live Package information is a sibling of the existing map and left panel", () => {
+  const original = globalThis.document;
+  globalThis.document = { createElement: (tag) => new Element(tag), activeElement: null };
+  try {
+    const information = new Element("aside");
+    information.hidden = true;
+    const ui = createMapWorkspace({ live: true, packageInformationElement: information });
+    const shell = ui.element.children[0];
+    assert.equal(shell.children[3], information);
+    assert.equal(shell.children[1].children[1], ui.mapViewElement);
+    ui.setJobsVisible(true);
+    information.hidden = false;
+    assert.equal(shell.children[3], information);
+    assert.equal(shell.children[1].children[1], ui.mapViewElement);
+    assert.equal(ui.panelHost.hidden, false);
+  } finally {
+    globalThis.document = original;
+  }
+});
+
+test("Package information overlays the unchanged map grid and retains both panel shadows", () => {
+  const css = readFileSync(new URL("../../styles/map.css", import.meta.url), "utf8");
+  const leftPanel = css.match(/\.dc-map-side-panel\s*\{([^}]*)\}/)?.[1];
+  const rightPanel = css.match(/\.dc-package-information-panel\s*\{([^}]*)\}/)?.[1];
+  assert.ok(leftPanel && rightPanel);
+  for (const rule of [leftPanel, rightPanel]) {
+    assert.match(rule, /position:\s*absolute/);
+    assert.match(rule, /box-shadow:\s*var\(--dc-shadow\)/);
+  }
+  assert.match(rightPanel, /right:\s*0;/);
+  assert.match(rightPanel, /top:\s*0;/);
+  assert.match(rightPanel, /bottom:\s*0;/);
+  assert.doesNotMatch(rightPanel, /grid-(column|row):/);
+  for (const [, selector, declarations] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (selector.includes(":has(> .dc-package-information-panel:not([hidden]))")) {
+      assert.doesNotMatch(declarations, /grid-(template|column|row)|box-shadow\s*:/);
+    }
+  }
+  const jobsCss = readFileSync(new URL("../../styles/jobs.css", import.meta.url), "utf8");
+  assert.match(jobsCss, /\.job-list__refresh-button\[hidden\]\s*\{[^}]*display:\s*none/);
+});
