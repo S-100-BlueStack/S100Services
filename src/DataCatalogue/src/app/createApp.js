@@ -118,7 +118,10 @@ export async function createApp(rootElement) {
       applyWorkScopeToMap();
     },
   });
-  const workspace = createMapWorkspace({ live });
+  const workspace = createMapWorkspace({
+    live,
+    packageInformationElement: jobsPanel.packageInformationElement,
+  });
   if (live) {
     // The catalogue still loads Pipelines and Workspaces; only the redundant panel is hidden.
     workspace.pipelineAction.hidden = true;

@@ -519,10 +519,10 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
 .dc-assignment-page--live .dc-information-panel [data-information] {
   padding-inline: 0;
 }
-.dc-assignment-page--live .dc-information-fields {
+.dc-information-fields {
   margin: 0;
 }
-.dc-assignment-page--live .dc-information-fields > dt {
+.dc-information-fields > dt {
   margin: 0;
   padding: 6px 9px 0;
   border-top: 1px solid var(--dc-border);
@@ -535,7 +535,7 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
   text-decoration-thickness: 1px;
   text-underline-offset: 0.18em;
 }
-.dc-assignment-page--live .dc-information-fields > dd {
+.dc-information-fields > dd {
   margin: 0;
   padding: 2px 9px 7px;
   color: var(--dc-text);
@@ -543,8 +543,8 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
   font-size: 0.82rem;
   line-height: 1.4;
 }
-.dc-assignment-page--live .dc-information-fields > dt:nth-of-type(even),
-.dc-assignment-page--live .dc-information-fields > dd:nth-of-type(even) {
+.dc-information-fields > dt:nth-of-type(even),
+.dc-information-fields > dd:nth-of-type(even) {
   background: var(--dc-surface-alt);
 }
 .dc-work-stream-reload:has([hidden]) {

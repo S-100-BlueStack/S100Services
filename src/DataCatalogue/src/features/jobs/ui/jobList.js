@@ -56,6 +56,7 @@ export function createJobList({
   let selectedJobId = "";
   let viewMode = JOB_LIST_VIEW_MODE.LIST;
   let shouldNotifySelectionClearedOnBack = false;
+  let openInformationOnRender = false;
   const expandedJobIds = new Set();
   const visibleCompletedJobIds = new Set();
   const pendingMutationJobIds = new Set();
@@ -155,6 +156,7 @@ export function createJobList({
 
     selectedJobId = normalizedJobId;
     viewMode = JOB_LIST_VIEW_MODE.DETAILS;
+    openInformationOnRender = true;
     shouldNotifySelectionClearedOnBack = false;
     makeSelectedCompletedJobVisible(visibleCompletedJobIds, currentState.jobs, selectedJobId);
     render();
@@ -191,10 +193,13 @@ export function createJobList({
     });
 
     focusRecovery.restore(focusTarget);
+    const openInformation = openInformationOnRender;
+    openInformationOnRender = false;
     rootElement.dispatchEvent(
       createJobDetailsModeChangedEvent({
         isDetailsMode: viewMode === JOB_LIST_VIEW_MODE.DETAILS,
         selectedJobId,
+        openInformation,
       })
     );
   };
@@ -273,6 +278,7 @@ export function createJobList({
 
       selectedJobId = normalizedSelectedJob.jobId;
       viewMode = JOB_LIST_VIEW_MODE.DETAILS;
+      openInformationOnRender = true;
       shouldNotifySelectionClearedOnBack = true;
       aoiFilter = null;
       expandedJobIds.add(selectedJobId);
@@ -1662,12 +1668,13 @@ function normalizeRelatedAoiIdsForEvent(value) {
   return [...new Set(value.map(normalizeOptionalString).filter(Boolean))];
 }
 
-function createJobDetailsModeChangedEvent({ isDetailsMode, selectedJobId } = {}) {
+function createJobDetailsModeChangedEvent({ isDetailsMode, selectedJobId, openInformation } = {}) {
   return new CustomEvent("data-catalogue:job-details-mode-changed", {
     bubbles: true,
     detail: {
       isDetailsMode: Boolean(isDetailsMode),
       selectedJobId: normalizeOptionalString(selectedJobId),
+      openInformation: Boolean(openInformation),
     },
   });
 }

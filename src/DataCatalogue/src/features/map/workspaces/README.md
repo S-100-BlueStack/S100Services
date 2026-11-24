@@ -128,3 +128,20 @@ disclosure legend uses the same orange saved-match color and a visible
 `Map legend` summary, initially expanded and non-persistent. The Package AOI/detail symbol factories were not included
 in this export and remain unchanged; verify their visual parity in the browser
 before accepting the complete symbols task.
+
+## DC-MAP-POPUP-05 - Workspace popup from the committed baseline
+
+The live Main Map-only Workspace GraphicsLayer has a native ArcGIS PopupTemplate.
+Its title and close button stay owned by the SDK. App-owned content consists of
+one flush, disabled lock action/status row and read-only Pipeline/Open packages
+facts, with no nested panel or additional header. The count-based header color
+uses the same configured Workspace palette as the map legend. The foreground
+for its native title and Close action is chosen from the background contrast,
+not the current theme. The color adapter follows ProductCatalogue, with a
+documented internal Calcite header dependency and reversible, header-only
+Calcite action tokens.
+Missing/invalid Package counts are not converted to zero, and lock state is not
+read from the backend or mocked. A displayed `unlock` and `None` are placeholders.
+Closing/hiding or removing Workspace geometry does not close unrelated popup
+types. Assignment Map popups remain disabled. Verify the native chrome and theme
+in a real browser; Source-level tests do not establish SDK 5.2.1 rendering.

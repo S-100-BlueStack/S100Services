@@ -1,11 +1,10 @@
 import { createWorkspaceColorLegend } from "../../features/map/workspaces/createWorkspaceColorLegend.js";
 
-export function createMapWorkspace({ live = false } = {}) {
+export function createMapWorkspace({ live = false, packageInformationElement = null } = {}) {
   const workspaceElement = document.createElement("main");
   workspaceElement.className = "data-catalogue-workspace";
 
-  // The Action Bar owns a layout column; the mutually exclusive content panel
-  // is absolutely positioned over the map. Neither panel changes MapView size.
+  // Both side panels float over the same MapView. Only the Action Bar takes layout width.
   const shell = document.createElement("div");
   shell.className = "dc-map-shell";
 
@@ -59,6 +58,7 @@ export function createMapWorkspace({ live = false } = {}) {
   if (live) mapElement.append(createWorkspaceColorLegend());
 
   shell.append(actionBar, mapElement, panelHost);
+  if (live && packageInformationElement) shell.append(packageInformationElement);
   workspaceElement.append(shell);
   let pipelinesOpen = live;
   let jobsVisible = false;

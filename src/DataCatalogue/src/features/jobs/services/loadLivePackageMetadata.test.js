@@ -269,3 +269,43 @@ test("summary hydration preserves separate Jobs for a Package shared across Work
   assert.equal(catalogue.calls.filter((call) => call.kind === "list").length, 2);
   assert.equal(catalogue.calls.filter((call) => call.kind === "detail").length, 0);
 });
+
+test("Bulk and targeted metadata preserve the fields required by Package information", async () => {
+  const selected = ids(12);
+  const records = selected.map((id) => ({
+    id,
+    metaData: { shortId: id, title: `Title ${id}`, source: "Publication" },
+    category: "NM",
+    severity: "9007199254740993",
+    descriptions: [{ language: "en", description: "<p>Full description</p>" }],
+    charts: [{ chartNumber: "123", internationalNumber: "456" }],
+  }));
+  const requests = [];
+  const catalogue = createCatalogueService({
+    async request(path, { query }) {
+      requests.push(path);
+      if (path === "/v1/packages") {
+        return {
+          items: records.slice(0, query.pageSize),
+          totalCount: records.length,
+          page: query.page,
+          pageSize: query.pageSize,
+        };
+      }
+      return records.find((item) => path === `/v1/packages/${item.id}`);
+    },
+  });
+  const fromList = await loadLivePackageMetadata(catalogue, selected);
+  const fromDetails = await loadLivePackageMetadata(catalogue, [selected[0]]);
+  const item = fromList.get(selected[0]);
+  assert.deepEqual(item, fromDetails.get(selected[0]));
+  assert.equal(item.title, `Title ${selected[0]}`);
+  assert.equal(item.category, "NM");
+  assert.equal(item.severity, "9007199254740993");
+  assert.deepEqual(item.descriptionEntries, [
+    { language: "en", description: "<p>Full description</p>" },
+  ]);
+  assert.equal(item.nauticalCharts, "123 / 456");
+  assert.equal(item.publication, "Publication");
+  assert.deepEqual(requests, ["/v1/packages", "/v1/packages", `/v1/packages/${selected[0]}`]);
+});

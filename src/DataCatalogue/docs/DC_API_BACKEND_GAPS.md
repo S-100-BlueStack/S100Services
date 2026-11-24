@@ -1,3 +1,15 @@
+## DC-MEETING-02 - Package history and quality control (2026-11-24; open)
+
+Recorded from the 2026-11-23 internal meeting. The user reports that the history and QC backend capabilities are not yet available. This is a requirements/gap entry, not independent verification of the latest backend implementation or a proposed executable API contract. See [PROJECT_TRACKER.md](PROJECT_TRACKER.md) for UI requirements and priorities.
+
+- **`DC-PACKAGE-TIMELINE-01` - individual Package history:** Agree authorized, read-only history retrieval using the canonical Package identity, including event identity, time and ordering, actor visibility, event semantics, optional contextual scope, version/retention, bounded paging or continuation, consistency, and absent/error states as applicable. Decide which events must actually be recorded and persisted before the frontend can display them. Distinguish a valid empty history from unsupported or unavailable history. Do not infer an audit trail from temporary frontend status or current bindings. Related but distinct: `DC-PACKAGE-HISTORY-01` historical Package discovery, `JOB-01` persistent contextual Job status/history and `PAGE-01` global Package search.
+- **`DC-PACKAGE-QC-01` - Compilation/QC workflow:** Define whether working/QC state belongs to the Package or a Pipeline/Workspace-specific work item; authoritative state values, eligibility, permitted transitions, ownership/authorization, persistence, concurrent transition protection, and how the state is returned and filtered for list/map queries. Agree how mode filtering affects Workspace counts and Package visibility, including unknown state and context-specific duplicates. `OWNER-01` Workspace locking and existing Severity or `Done` / `No update` statuses do not establish this lifecycle. A UI-only toggle is permitted for design testing but cannot claim real QC filtering or perform mutations until the contract is verified.
+- **`DC-PACKAGE-DETAILS-PANEL-01`:** Frontend-only reuse of the existing authorized Package details read and normalized metadata is the intended scope. Verify that read on the implementation baseline; do not request a new endpoint merely to reproduce existing Package Assignment information. History and QC integration remain independent.
+
+`DC-ASSIGN-MATCH-PREVIEW-01` also remains deferred: an authorized, read-only pre-Save intersection calculation must be verified or agreed with the backend owner. Current saved matches are not preview results. No backend changes or invented routes are included in this documentation update.
+
+---
+
 ## DC-FIRST-LOOK-01 — Backend-dependent demo requests (recorded 2026-11-23; not implemented)
 
 - **`DC-ASSIGN-MATCH-PREVIEW-01`:** Preview prospective automatic Workspace

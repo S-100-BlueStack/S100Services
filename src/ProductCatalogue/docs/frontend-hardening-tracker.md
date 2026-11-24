@@ -1,7 +1,7 @@
 # Frontend hardening tracker
 
 **Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
-**Current documentation-audit snapshot:** `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10).
+**Current documentation-audit snapshot:** `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` (2026-11-24; documentation export and developer-reported acceptance).
 **Purpose:** Current frontend status, outstanding decisions and links to the authoritative feature contracts. This is a planning record, **not** evidence that the current build or demo environment passed a new smoke test.
 
 This compact tracker replaces the accumulated implementation diary. For historical status descriptions and commit-by-commit acceptance notes, consult the Git history of this file before this consolidation. A completed task is not reopened merely because its earlier implementation report was removed from the active branch.
@@ -37,6 +37,35 @@ concrete real-usage findings and demo regressions as new frontend work.
 
 **No new full-system demo smoke pass is asserted by this documentation update.** Record exact commit, test environment, supported Products, pass/fail/skipped items, and backend caveats in [the demo plan](demo-readiness-plan.md).
 
+### Post-R06 reconciliation (2026-11-24)
+
+The developer accepted and committed the R06 visual baseline at `48e8fa39`,
+Dashboard reporting backend at `dca718363ec901add42985e4da1755fecf409a31`, and
+final reporting frontend (including v5.1 onboarding and v5.2 Links corrections)
+at `c382d760f2f137974eaade673e5029112b288cc4`; the frontend is merged at
+`c45a1255ea9a7138cc5045de0bc8ec90d39d48dd`. R06 is complete; its earlier
+candidate entries are historical, not pending tasks.
+
+- The developer reported a successful API build and targeted Dashboard .NET tests.
+  The November 17 API samples returned 80 unfiltered activities, 18 activities after
+  the IC-ENC report filter, two simulated accepted revision deliveries, zero live
+  accepted deliveries and 16 stored report files. These samples validate the observed
+  aggregate relationships, not full SQL or live IC-ENC integration.
+- PC-ICENC-02 artifact presentation was accepted at `655b0c428d28b85fd9770693897e9585d8fdec62`.
+  The earlier [integration report](pc-icenc-02-report-integration.md) predates R06:
+  Dashboard report counts and Product-level availability filtering are now implemented.
+  The Product/revision artifact metadata is not a unique event-to-report association.
+  On-demand artifact-history retrieval and authorized downloads still need real-data
+  verification; the previously observed successful but empty history response is a
+  separate backend/runtime issue, not a reason to reimplement the frontend panels.
+- The accepted Dashboard shows recorded `Distributed` decisions, including demo records.
+  Keep live/simulation provenance in the backend; do not treat the combined number as
+  verified external delivery. Current workflow health counts tracks as of now; historical
+  Activity counts follow the selected filters. Stored report counts describe files.
+- The final UI is developer-accepted and merged. This documentation snapshot contains
+  no application source or test run from the merged commit. Full post-merge smoke,
+  deployment behavior and production-scale performance remain unverified here.
+
 ## Current open, blocked and deferred work
 
 | ID                   | Status                                                                              | Next action or blocker                                                                                                                                                                                                                                                                                      |
@@ -51,7 +80,7 @@ concrete real-usage findings and demo regressions as new frontend work.
 | **FI-020**           | Blocked by backend relationship contract                                            | Show only explicit backend-defined related Products with identity, relation type and display metadata. Do not infer source pairs.                                                                                                                                                                           |
 | **FI-023**           | Blocked by backend mutation-capability projection                                   | Do not infer candidate presence or dispatch permission from a different source or status track.                                                                                                                                                                                                             |
 | **FI-030**           | Loader hold accepted; Main-map and Analyze readiness committed                      | Main-map readiness (`d400be0`) and Analyze direct-route loading (`1065291`) are implementation records. The 300 ms hold remains; full browser acceptance is not documented here. Backend phase/chunk progress remains deferred. [FI-030B](fi-030b-initial-map-readiness.md).                                |
-| **BE-003 / BE-005**  | Blocked by backend                                                                  | Global map timeline and actual IC-ENC/internal validation report links require explicit backend/event/report storage and identity contracts. Preserve truthful unavailable UI.                                                                                                                              |
+| **BE-003 / BE-005** | Global timeline deferred; report UI and aggregates integrated | Verify artifact-history retrieval/downloads with actual available files and live IC-ENC processing. Exact report-to-event attribution and historical map reconstruction remain separate backend contracts. |
 | **BE-006**           | Historical plan; current approval must be re-established                            | Atomic job claims and ownership/recovery were previously discussed, but that experimental track was set aside. Do not treat the older tracker label as authorization to implement it.                                                                                                                       |
 | **BE-008 / BE-108A** | Batch 2 manual Export/recovery reported accepted at `0cab4e4f`; later smoke unknown | The 2026-10-15 backend acceptance does not verify current Product History UI, package/Discard event coverage or cross-system demo behavior. Check the current backend owner before any new implementation.                                                                                                  |
 
@@ -59,13 +88,28 @@ concrete real-usage findings and demo regressions as new frontend work.
 
 Developer-reported commits after FI-043: DSA-01/02 `914c57a9`, DSA-03 `20cb5c60`, DSA-04 `69b0d329`, DSA-05/06 `12a6e084`, DSA-07 v2 `bfcb5ecc`, and DSA-08 `2d8c1637`. These focused API, search, status, onboarding, Dashboard, Collection and workspace-loading corrections are accepted, but **the complete browser/deployment demo smoke and freeze decision remain outstanding**. DSA-09/10 is a separate test/documentation cleanup task, not evidence of a runtime smoke pass.
 
+### Next technical verification
+
+No further general UI redesign is scheduled by this snapshot. After the R06 merge, the next independent technical investigation is
+Main-map startup performance in a built/deployed frontend. The previous read-only
+November investigation measured 1,878 requests in Vite development mode, including
+1,652 Vite module/dependency requests; the observed electronic-products API request
+was approximately 123 ms. Those historical measurements do not establish production
+startup time or identify a production bottleneck. The production-style capture remains
+outstanding. Use sanitized timing CSVs and real first-basemap, first-Product-geometry
+and first-successful-interaction milestones before proposing an optimization.
+
+Run a representative post-merge browser/deployment smoke in parallel with normal demo
+use, and keep the outstanding artifact retrieval check separate until suitable data is
+available. See [demo readiness](demo-readiness-plan.md) for the verification procedure.
+
 ## Accepted feature index
 
 This index records _status_, not a complete specification or new acceptance. Detailed design and regression requirements belong to current feature README/docs and tests. The original long acceptance descriptions and full commit history remain accessible with `git show` at the earlier accepted commits.
 
 | ID(s)           | Accepted outcome / boundary                                                                                                                                                                                          |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FI-001–FI-008   | Dashboard, Review MVP, Analyze diagnostics foundation, structured Product selection, Collection, Product picker/search and route onboarding. Real report producers remain backend-dependent.                         |
+| FI-001–FI-008   | Dashboard, Review MVP, Analyze diagnostics foundation, structured Product selection, Collection, Product picker/search and route onboarding. Live report ingestion/download verification remains backend-dependent.                         |
 | FI-009          | Dashboard page-size preference: `25/50/100/200`, default `50`, storage/reset and cursor invalidation; accepted at `e4caa4d29c46083605beac10400876af6bf38d1c`.                                                        |
 | FI-010          | Server-side Dashboard sorting implemented; **recorded manual verification still pending**.                                                                                                                           |
 | FI-011A–D       | Generic source registry/capabilities, source-aware filters/search, central Product context, Collection and Analyze/Review integration; integration transport accepted at `aaf635571503c780517cfc3a76a4fa5e4894f447`. |

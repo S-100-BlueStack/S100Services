@@ -107,7 +107,7 @@ function elementText(root) {
   return [root.textContent, ...root.children.map(elementText)].join(" ");
 }
 
-function assertRefreshIconButton(root, { disabled = false } = {}) {
+function assertRefreshIconButton(root, { disabled = false, hidden = false } = {}) {
   const buttons = findByClass(root, "job-list__refresh-button");
   assert.equal(buttons.length, 1);
   assert.equal(buttons[0].tagName, "button");
@@ -118,6 +118,7 @@ function assertRefreshIconButton(root, { disabled = false } = {}) {
   );
   assert.equal(buttons[0].title, disabled ? "Refreshing Packages" : "Refresh Packages");
   assert.equal(buttons[0].disabled, disabled);
+  assert.equal(buttons[0].hidden, hidden);
   assert.equal(buttons[0].textContent, "");
   assert.equal(findByTag(buttons[0], "calcite-icon")[0].icon, "refresh");
   assert.equal(findByTag(buttons[0], "calcite-icon")[0].attributes.get("aria-hidden"), "true");
@@ -354,15 +355,20 @@ test("Live Job Details show unique context and editable status without duplicate
   });
 });
 
-test("Packages header Refresh is icon-only and remains mounted across detail navigation", () => {
+test("Packages header Refresh is list-only and retains its identity after Back", () => {
   withDocument(() => {
     for (const source of ["live", "mock"]) {
       const { store, job } = fixture(source);
       const overlay = createJobsOverlay({ jobStore: store, sourceMode: source });
       const original = assertRefreshIconButton(overlay.element);
-      overlay.showJobDetails({ jobId: job.id });
+      original.focus();
+      void overlay.showJobDetails({ jobId: job.id });
+      assert.equal(assertRefreshIconButton(overlay.element, { hidden: true }), original);
+      assert.notEqual(globalThis.document.activeElement, original);
+      findByClass(overlay.element, "data-catalogue-overlay-panel__back")[0].dispatchEvent({
+        type: "click",
+      });
       assert.equal(assertRefreshIconButton(overlay.element), original);
-      assert.equal(findByClass(overlay.element, "job-list__refresh-button").length, 1);
       overlay.destroy();
     }
   });
@@ -383,12 +389,21 @@ test("Busy Packages header Refresh remains disabled with an accessible label", (
   });
 });
 
-test("Missing Package details have Back and retained header Refresh recovery", () => {
+test("Missing Package details retain Back and error-only Retry without header Refresh", () => {
   withDocument(() => {
     const { store } = fixture("live");
     const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
     void overlay.showJobDetails({ jobId: "missing-job" });
     assert.equal(findByClass(overlay.element, "job-list__state--error").length, 1);
+    assertRefreshIconButton(overlay.element, { hidden: true });
+    const back = findByClass(overlay.element, "data-catalogue-overlay-panel__back")[0];
+    assert.equal(back.hidden, false);
+    const retry = findByClass(
+      overlay.packageInformationElement,
+      "dc-package-information-panel__retry"
+    )[0];
+    assert.equal(retry.hidden, false);
+    back.dispatchEvent({ type: "click" });
     assertRefreshIconButton(overlay.element);
     overlay.destroy();
   });
@@ -816,5 +831,250 @@ test("Main Map Package list filters a Pipeline and optional Workspace without me
     // The completed Workspace has its own Job identity and remains hidden by the default status filter.
     assert.equal(findByClass(list.element, "job-card").length, 0);
     list.destroy();
+  });
+});
+
+function readInformationFields(panel) {
+  const fields = findByClass(panel, "dc-information-fields")[0];
+  if (!fields) return [];
+  return fields.children
+    .filter((node) => node.tagName === "dt")
+    .map((term, index) => [term.textContent, fields.children[index * 2 + 1].textContent]);
+}
+
+function informationToggle(overlay) {
+  return findByClass(overlay.element, "data-catalogue-overlay-panel__information")[0];
+}
+
+function informationClose(panel) {
+  return findByTag(panel, "calcite-action").find((button) => button.icon === "x");
+}
+
+function informationStatus(panel) {
+  return findByClass(panel, "dc-package-information-panel__status")[0].textContent;
+}
+
+test("Entering live Details opens the shared Package metadata without a new read", async () => {
+  await withAsyncDocument(async () => {
+    const job = {
+      ...fixture("live").job,
+      category: "NM",
+      details: "Full description from the normalized Package",
+      nauticalCharts: "123 / 456",
+      publication: "Source publication",
+    };
+    let reads = 0;
+    const store = createJobStore({
+      service: {
+        async loadJobs() {
+          reads++;
+          return { ok: true, data: { jobs: [job] } };
+        },
+      },
+    });
+    await store.loadJobs();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const panel = overlay.packageInformationElement;
+    try {
+      assert.equal(panel.hidden, true);
+      assert.equal(informationToggle(overlay).hidden, true);
+      findByClass(overlay.element, "job-card__details-action")[0].dispatchEvent({ type: "click" });
+      assert.equal(panel.hidden, false);
+      assert.equal(panel.inert, false);
+      assert.equal(informationToggle(overlay).attributes.get("aria-controls"), panel.id);
+      assert.equal(informationToggle(overlay).attributes.get("aria-expanded"), "true");
+      assert.deepEqual(readInformationFields(panel), [
+        ["Title", "Harbour notice"],
+        ["Category", "NM"],
+        ["Severity", "Severity 9007199254740993"],
+        ["Details", "Full description from the normalized Package"],
+        ["Nautical charts", "123 / 456"],
+        ["Publication", "Source publication"],
+      ]);
+      assert.equal(findByClass(panel, "dc-information-panel__name")[0].textContent, "NM1000");
+      assert.equal(findByClass(overlay.element, "job-status-button").length, 2);
+      const refresh = assertRefreshIconButton(overlay.element, { hidden: true });
+      refresh.dispatchEvent({ type: "click" });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(reads, 1, "The hidden list action cannot start a Details refresh");
+      await overlay.showJobDetails({ jobId: job.id });
+      assert.equal(reads, 1, "Reopening Details must reuse the current store snapshot");
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});
+
+test("Closing information leaves contextual Details open and a status update does not reopen it", async () => {
+  await withAsyncDocument(async () => {
+    const job = fixture("live").job;
+    const store = createJobStore({
+      service: {
+        loadJobs: async () => ({ ok: true, data: { jobs: [job] } }),
+        updateJobStatus: async (id, status) => ({
+          ok: true,
+          data: { job: { ...job, id, status }, createdJobs: [] },
+        }),
+      },
+    });
+    await store.loadJobs();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const panel = overlay.packageInformationElement;
+    try {
+      await overlay.showJobDetails({ jobId: job.id });
+      const fields = findByClass(panel, "dc-information-fields")[0];
+      const close = informationClose(panel);
+      close.focus();
+      close.dispatchEvent({ type: "click" });
+      assert.equal(panel.hidden, true);
+      assert.equal(panel.inert, true);
+      assert.equal(globalThis.document.activeElement, informationToggle(overlay));
+      assert.equal(findByClass(overlay.element, "job-details").length, 1);
+      await store.updateJobStatus(job.id, "done");
+      assertRefreshIconButton(overlay.element, { hidden: true });
+      assert.equal(panel.hidden, true);
+      assert.equal(findByClass(panel, "dc-information-fields")[0], fields);
+      informationToggle(overlay).dispatchEvent({ type: "click" });
+      assert.equal(panel.hidden, false);
+      assert.equal(findByClass(panel, "dc-information-fields")[0], fields);
+      close.focus();
+      let prevented = false;
+      panel.dispatchEvent({
+        type: "keydown",
+        key: "Escape",
+        preventDefault: () => (prevented = true),
+        stopPropagation() {},
+      });
+      assert.equal(prevented, true);
+      assert.equal(panel.hidden, true);
+      await overlay.showJobDetails({ jobId: job.id });
+      assert.equal(panel.hidden, false, "An explicit Details intent reopens information");
+      findByClass(overlay.element, "data-catalogue-overlay-panel__back")[0].dispatchEvent({
+        type: "click",
+      });
+      assert.equal(panel.hidden, true);
+      assert.deepEqual(readInformationFields(panel), []);
+      assert.equal(informationToggle(overlay).hidden, true);
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});
+
+test("A pending refresh cannot display another Package under the latest Details selection", async () => {
+  await withAsyncDocument(async () => {
+    const a = { ...fixture("live").job, details: "Description A" };
+    const b = {
+      ...a,
+      id: '["package-b","enc","east"]',
+      packageId: "package-b",
+      shortId: "NM2000",
+      packageTitle: "Package B",
+      details: "Description B",
+    };
+    let reads = 0;
+    let finishOld;
+    let finishRetry;
+    const store = createJobStore({
+      service: {
+        loadJobs() {
+          reads++;
+          if (reads === 1) return Promise.resolve({ ok: true, data: { jobs: [a, b] } });
+          if (reads === 2) {
+            return new Promise((resolve) => {
+              finishOld = resolve;
+            });
+          }
+          if (reads === 3) return Promise.resolve({ ok: true, data: { jobs: [a] } });
+          return new Promise((resolve) => {
+            finishRetry = resolve;
+          });
+        },
+      },
+    });
+    await store.loadJobs();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const panel = overlay.packageInformationElement;
+    try {
+      await overlay.showJobDetails({ jobId: a.id });
+      const pending = store.loadJobs();
+      assert.match(informationStatus(panel), /Refreshing/);
+      await overlay.showJobDetails({ jobId: b.id });
+      assert.ok(elementText(panel).includes("Description B"));
+      assert.ok(!elementText(panel).includes("Description A"));
+      await store.loadJobs();
+      assert.deepEqual(readInformationFields(panel), []);
+      assert.match(informationStatus(panel), /unavailable/);
+      finishOld({ ok: true, data: { jobs: [a, { ...b, details: "Stale description" }] } });
+      assert.equal((await pending).stale, true);
+      assert.ok(!elementText(panel).includes("Stale description"));
+      const retry = findByClass(panel, "dc-package-information-panel__retry")[0];
+      retry.dispatchEvent({ type: "click" });
+      retry.dispatchEvent({ type: "click" });
+      assert.equal(reads, 4, "One pending Retry must own the new read");
+      assert.match(informationStatus(panel), /Loading/);
+      finishRetry({ ok: true, data: { jobs: [b] } });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(informationStatus(panel), "");
+      assert.ok(elementText(panel).includes("Description B"));
+      assert.equal(retry.hidden, true);
+      overlay.clearSelectedJob();
+      assert.equal(panel.hidden, true);
+      assert.deepEqual(readInformationFields(panel), []);
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});
+
+test("A failed refresh retains only the selected Package metadata and offers shared Retry", async () => {
+  await withAsyncDocument(async () => {
+    const job = { ...fixture("live").job, details: "Last successful description" };
+    let reads = 0;
+    const store = createJobStore({
+      service: {
+        async loadJobs() {
+          reads++;
+          if (reads === 2) return { ok: false, error: new Error("Offline") };
+          return { ok: true, data: { jobs: [job] } };
+        },
+      },
+    });
+    await store.loadJobs();
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const panel = overlay.packageInformationElement;
+    try {
+      await overlay.showJobDetails({ jobId: job.id });
+      await store.loadJobs();
+      assert.match(informationStatus(panel), /Refresh failed/);
+      assert.ok(elementText(panel).includes("Last successful description"));
+      const retry = findByClass(panel, "dc-package-information-panel__retry")[0];
+      assert.equal(retry.hidden, false);
+      retry.dispatchEvent({ type: "click" });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(reads, 3);
+      assert.equal(informationStatus(panel), "");
+      assert.equal(retry.hidden, true);
+      await overlay.showJobDetails({ jobId: "not-loaded" });
+      assert.deepEqual(readInformationFields(panel), []);
+      assert.ok(!elementText(panel).includes("Last successful description"));
+    } finally {
+      overlay.destroy();
+      store.destroy();
+    }
+  });
+});
+
+test("Mock Details does not mount a live Package information panel", () => {
+  withDocument(() => {
+    const { store, job } = fixture("mock");
+    const overlay = createJobsOverlay({ jobStore: store });
+    void overlay.showJobDetails({ jobId: job.id });
+    assert.equal(overlay.packageInformationElement, null);
+    assert.equal(informationToggle(overlay), undefined);
+    overlay.destroy();
   });
 });

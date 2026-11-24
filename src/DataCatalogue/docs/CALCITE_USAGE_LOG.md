@@ -1,3 +1,53 @@
+## DC-PACKAGE-DETAILS-PANEL-01 - Shared metadata and native scroll region (2026-11-24)
+
+The Main Map information panel uses an application-owned semantic `aside`, a
+native heading and a scroll region with the same `dl` / `dt` / `dd` renderer and
+sanitized description content as live Package Assignment. Public `calcite-action`
+controls provide information disclosure and Close; `calcite-button` provides
+Retry. This intentionally avoids a second Calcite shell or panel lifecycle and
+keeps read-only data separate from interactive assignment controls. Following
+v1 browser feedback, v2 positions the native aside over the unchanged map and
+preserves the existing left-panel shadow. The public icon-based header Refresh
+remains mounted but is hidden in Details; error-only Retry remains available.
+Existing application theme tokens style the shared fields and both shadows. No private component DOM,
+additional component registration, or SDK dependency change is required.
+
+---
+
+## DC-MAP-POPUP-05 - Native header compatibility exception (2026-11-24)
+
+The rebuilt Workspace popup uses the native ArcGIS `PopupTemplate` title and
+close button plus application-owned native DOM for actions and read-only facts.
+`calcite-icon` provides the public `hammer-lock` and `unlock` icons. Native
+`Take workspace` remains disabled and `None` is a labeled placeholder until a
+verified ownership endpoint is introduced. No mock mutations are installed.
+
+ProductCatalogue's working-tree popup reference showed that native status-header
+backgrounds are assigned on Calcite's internal header element. The public
+`Popup.visibleElements` API cannot replace or color that header and previous
+DataCatalogue attempts left a duplicate SDK toolbar. To match the approved
+visual layout without a second title or close control, DataCatalogue has one
+bounded compatibility exception in `workspacePopupHeaderStyle.js` that locates
+the native Calcite panel header and sets/restores its background and text
+colors. After the user confirmed the rebuilt layout in both themes but reported
+weak dark-mode title contrast, the adapter also styles the existing heading
+explicitly and uses public `--calcite-panel-header-action-*` and
+`--calcite-action-*` color tokens for the native header actions. Black or white
+is chosen against the legend background using relative luminance; hover/press
+colors remain legible. The correction introduces no new private selector or
+control, and restores the original inline styles and priorities on popup
+switch, close, replacement or disposal. It remains isolated to Main Map
+Workspace popups.
+
+**Risk:** This internal DOM access is not an official public contract and must
+be reverified after ArcGIS/Calcite upgrades. If the header is unavailable, the
+native title/close remain functional but no color is applied. Browser tests on
+`@arcgis/core` 5.2.1 in both themes are mandatory. Prefer an official public
+styling API if one is exposed by a future SDK release. The remaining popup
+content relies on application-owned elements and standard CSS only.
+
+---
+
 ## DC-ASSIGN-AUTOMATCH — Native read-only Workspace names (2026-11-17)
 
 Package Assignment continues to use a native Pipeline checkbox and the public

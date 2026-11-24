@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderInformationFields } from "./renderInformationFields.js";
+import {
+  getLivePackageInformation,
+  renderInformationFields,
+  renderLivePackageInformation,
+} from "./renderInformationFields.js";
 
 class TestNode {
   constructor(tagName, text = "") {
@@ -154,5 +158,36 @@ test("Mock Feature details retain the existing flat list and never collapse", ()
 
     renderInformationFields(container, [], { live: true });
     assert.equal(container.childNodes.length, 0);
+  });
+});
+
+test("Shared Package information preserves exact Severity and optional metadata", () => {
+  withDocument((container) => {
+    const item = {
+      title: "Original Package title",
+      category: null,
+      severity: "18446744073709551614",
+      details: "Full details",
+      nauticalCharts: "123 / 456",
+      publication: null,
+    };
+    const fromAssignment = getLivePackageInformation(item);
+    const fromContextualJob = getLivePackageInformation(
+      { ...item, title: "NM1000 · Original Package title" },
+      { title: item.title }
+    );
+    assert.deepEqual(fromAssignment, fromContextualJob);
+    renderLivePackageInformation(container, fromAssignment);
+    assert.deepEqual(
+      pairs(container).map(([term, value]) => [term.textContent, value.textContent]),
+      [
+        ["Title", "Original Package title"],
+        ["Category", "Not provided"],
+        ["Severity", "Severity 18446744073709551614"],
+        ["Details", "Full details"],
+        ["Nautical charts", "123 / 456"],
+        ["Publication", "Not provided"],
+      ]
+    );
   });
 });
