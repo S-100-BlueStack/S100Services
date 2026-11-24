@@ -145,6 +145,81 @@
   outline: 2px solid var(--calcite-color-focus, #007ac2);
   outline-offset: 2px;
 }
+/* Native radios keep tab/arrow navigation and focus independent of scope option rerenders. */
+.dc-package-scope__work-mode {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.dc-package-scope__mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem;
+}
+.dc-package-scope__mode-option {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+}
+.dc-package-scope__mode-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.dc-package-scope__mode-option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--calcite-color-border-2, #999);
+  background: var(--calcite-color-foreground-1, Canvas);
+  color: var(--calcite-color-text-1, CanvasText);
+  font-size: 0.76rem;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+}
+.dc-package-scope__mode-option:hover span {
+  background: var(--calcite-color-foreground-2, Canvas);
+}
+.dc-package-scope__mode-option input:checked + span {
+  border-color: var(--calcite-color-brand, #007ac2);
+  background: color-mix(
+    in srgb,
+    var(--calcite-color-brand, #007ac2) 12%,
+    var(--calcite-color-foreground-1, Canvas)
+  );
+  box-shadow: inset 0 -2px var(--calcite-color-brand, #007ac2);
+  font-weight: 600;
+}
+.dc-package-scope__mode-option input:focus-visible + span {
+  outline: 2px solid var(--calcite-color-focus, #007ac2);
+  outline-offset: -2px;
+}
+.dc-package-scope__mode-notice {
+  color: var(--calcite-color-text-2, CanvasText);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+.dc-package-scope__mode-notice:not(:empty) {
+  margin-top: 0.3rem;
+}
+@media (forced-colors: active) {
+  .dc-package-scope__mode-option input:checked + span {
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+  .dc-package-scope__mode-option input:focus-visible + span {
+    outline-color: CanvasText;
+  }
+}
+
 /* Center the Package title against the Refresh and Close controls, including Calcite actions. */
 .data-catalogue-jobs-overlay .data-catalogue-overlay-panel__header {
   align-items: center;

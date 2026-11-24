@@ -1,3 +1,19 @@
+## DC-PACKAGE-QC-01 - Work mode design preview (2026-11-24)
+
+`features/jobs/ui/createPackageScopeControls.js` owns the native Compilation/QC
+radio group and its unavailable-filter notice as presentation-only state. The
+controls remain mounted independently of the dynamic Pipeline/Workspace options;
+`createJobsOverlay.js` already hides the entire scope section in Details. The
+preview uses no store, preference, API request or persistence. `getScope()` and
+`onChange` retain their existing Pipeline/Workspace/Show empty contracts; changing
+the preview cannot initiate a new map scope or change contextual Job status.
+Existing count, geometry, label and selection owners are unchanged. The preview
+is live Main Map list-only; no mock data or Assignment changes are introduced.
+A future verified QC contract must extend the existing scope/filter pipeline
+rather than installing a second visibility owner.
+
+---
+
 ## DC-MAP-LABEL - Native labels on existing live Main Map geometry (2026-11-24)
 
 `features/map/labels/createMapLabelLayers.js` is a presentation-only adapter.

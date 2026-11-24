@@ -1,3 +1,4 @@
+import { createReviewComparisonController } from "../../review/ui/reviewComparisonController.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
@@ -195,6 +196,7 @@ async function createHarness(
       ...reviewList,
       getReviewResolutionAliases,
       createReviewProductSession,
+      createReviewComparisonController,
       resolveReviewComposition: async (items) => ({
         items: items.map((item) =>
           packageData && ["Primary", "Secondary"].includes(item.datasetName)

@@ -3,8 +3,11 @@
 > **Latest update (2026-11-24):** The user accepted the Package Details overlay
 > in commit `6342966632af3774d336b6f7e7d4e85ac0a51cf9`. Future individual
 > Package history belongs in the left Packages detail view; the right panel
-> remains dedicated to metadata. `DC-MAP-LABEL` is a frontend candidate on
-> baseline `76c268f042dd4b35988c82071bc5e5d2fec2729c`, awaiting local verification.
+> remains dedicated to metadata. `DC-MAP-LABEL` was accepted with scale limits
+> of 1:5,000,000 for Workspaces and 1:3,000,000 for Packages in user-reported
+> commit `26472a59188f61eed632c59abc0e59d2a06e64e9`. `DC-PACKAGE-QC-01` now
+> has a design-only frontend candidate; local UX acceptance is pending and
+> functional filtering remains backend-dependent. See the current QC tracker entry.
 >
 > **Planning update (2026-11-24):** The user reports acceptance and commit of the
 > Main Map Workspace popup (`a7bd819d46da1e22fcd5dd7036bfc80631a20a91`) and
@@ -216,7 +219,8 @@ up-to-date implementation status claim.
 | ID / topic                             | Next action                                                                                               | Current planning classification                                      |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `DC-MAP-POPUP`                         | Design and implement useful Workspace popup context using existing public ArcGIS APIs and verified fields | Frontend investigation, then implementation                          |
-| `DC-MAP-LABEL`                         | Verify candidate label visibility, scales, collisions and popup behavior in browser                       | Frontend candidate; local acceptance pending                         |
+| `DC-MAP-LABEL`                         | Accepted label visibility and scales; revisit only on new feedback                                        | Accepted (`26472a59`); complete                                      |
+| `DC-PACKAGE-QC-01`                     | Validate Compilation/QC preview; agree authoritative workflow and filter contract before filtering        | UI preview candidate; backend-dependent functional filtering         |
 | `PAGE-01` global Package search        | Confirm server-side title/ID/details filtering across paginated results                                   | Backend contract gap                                                 |
 | `JOB-01` durable status/history        | Define persistence for contextual Job status and completion history; do not reuse temporary demo state    | Backend design gap                                                   |
 | `COMMENT-01` binding comments          | Agree authorized persistence/readback contract for Pipeline binding comments                              | Backend contract gap                                                 |
