@@ -52,6 +52,17 @@ The Product Collection tray can open a new Review tab with the current collectio
 
 This keeps the workflow predictable and avoids hidden cross-tab synchronization. Future work can reintroduce live Review sessions if there is a clear need for it.
 
+## Cross-workspace navigation (R07)
+
+The Products list offers an **Analyze** link per item and **Open all in Analyze** for the
+entire current composition, including hidden Products. A Package remains one canonical
+work unit and ordering is retained. Native links use the existing canonical workspace URL;
+Analyze resolves the names through its own source-aware loader. Destination defaults apply:
+Review visibility, content-type selections, report expansion and pending operations do not
+transfer. Empty lists offer no bulk link, and an unrepresentable name disables the affected
+link rather than silently transferring a subset. The navbar and Product Collection retain
+their existing navigation policy.
+
 ## Shared workspace Product picker
 
 Review uses the same source-aware workspace catalog/resolver as Analyze:

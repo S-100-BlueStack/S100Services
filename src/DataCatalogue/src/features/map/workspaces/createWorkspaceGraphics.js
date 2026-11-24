@@ -1,6 +1,7 @@
 import Graphic from "@arcgis/core/Graphic.js";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
+import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 import Polygon from "@arcgis/core/geometry/Polygon.js";
 import * as simplifyOperator from "@arcgis/core/geometry/operators/simplifyOperator.js";
 import * as projectOperator from "@arcgis/core/geometry/operators/projectOperator.js";
@@ -10,6 +11,7 @@ import { workspaceColorForOpenJobs } from "./workspaceJobColors.js";
 import { createAssignmentWorkspaceSymbol } from "./workspaceCoverageSymbol.js";
 import { createWorkspacePopupTemplate } from "../popups/workspacePopupContent.js";
 import { createWorkspacePopupHeaderStyle } from "../popups/workspacePopupHeaderStyle.js";
+import { createMapLabelLayers } from "../labels/createMapLabelLayers.js";
 
 let projectionReady;
 function loadProjection() {
@@ -33,6 +35,9 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
     ? createWorkspacePopupHeaderStyle({ view, layerId: id, watch: reactiveUtils.watch })
     : null;
   map.add(layer);
+  const labels = colorByOpenJobs
+    ? createMapLabelLayers({ map, FeatureLayer, Graphic, kind: "workspace" })
+    : null;
   const ready = view.when().then(
     () => true,
     () => false
@@ -70,6 +75,20 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
     }
   }
 
+  function syncLabels() {
+    labels?.replace(
+      currentEntries
+        .filter(
+          ({ workspace }) => !visibleKeys || visibleKeys.has(workspaceSelectionKey(workspace))
+        )
+        .map(({ workspace, geometry }) => ({
+          id: workspaceSelectionKey(workspace),
+          text: workspace.name,
+          geometry,
+        }))
+    );
+  }
+
   function publish() {
     if (!alive) return;
     const nextKeys = new Set();
@@ -98,6 +117,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
         graphics.delete(key);
       }
     }
+    syncLabels();
     headerStyle?.refresh();
   }
 
@@ -145,6 +165,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
         currentEntries = [];
         graphics.clear();
         layer.removeAll();
+        labels?.clear();
       }
     },
     replace(entries) {
@@ -157,6 +178,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       visibleKeys = new Set(workspaces.map(workspaceSelectionKey));
       for (const [key, graphic] of graphics) graphic.visible = visibleKeys.has(key);
       closeStaleWorkspacePopup();
+      syncLabels();
       headerStyle?.refresh();
     },
     setOpenJobCounts(nextCounts) {
@@ -186,6 +208,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       closeStaleWorkspacePopup(new Set());
       alive = false;
       headerStyle?.destroy();
+      labels?.destroy();
       map.remove(layer);
       layer.destroy();
     },

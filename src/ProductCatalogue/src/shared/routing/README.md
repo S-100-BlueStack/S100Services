@@ -57,6 +57,17 @@ enabled Products in the URL; disabled entries and Review content toggles remain 
 History state fields, unrelated query parameters, and fragments survive synchronization.
 Deployment under Vite `BASE_URL` remains supported.
 
+## Explicit cross-workspace transfers (R07)
+
+The Analyze and Review Product lists provide native same-tab links for a single listed
+Product or the entire composition, including disabled entries. These links are built from
+the current list items rather than the active URL or loaded content. Already resolved
+Packages use the canonical representative; pending names remain subject to the existing
+destination resolver. The destination uses its normal initial visibility and content
+settings. This is explicit navigation, not cross-tab synchronization, and does not change
+how the current workspace persists enabled Products in its own URL. An unrepresentable
+composition has no navigable bulk link. No changes to the route format are required.
+
 ## Temporary legacy compatibility and limits
 
 `/Analyze/ProductA&ProductB` and `/Review/ProductA&ProductB`, including baseline lowercase paths,

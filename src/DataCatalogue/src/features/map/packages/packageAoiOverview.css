@@ -1,0 +1,62 @@
+.dc-package-layers {
+  color-scheme: inherit;
+  font: inherit;
+  color: var(--calcite-color-text-1, #222);
+}
+.dc-package-layers__trigger,
+.dc-package-layers__refresh {
+  min-height: 32px;
+  padding: 4px 9px;
+  border: 1px solid var(--calcite-color-border-2, #9da5ae);
+  border-radius: 2px;
+  background: var(--calcite-color-foreground-1, Canvas);
+  color: var(--calcite-color-text-1, CanvasText);
+  font: inherit;
+  cursor: pointer;
+}
+.dc-package-layers__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dc-package-layers__trigger:focus-visible,
+.dc-package-layers__refresh:focus-visible,
+.dc-package-layers__option input:focus-visible {
+  outline: 2px solid var(--calcite-color-focus, #007ac2);
+  outline-offset: 2px;
+}
+.dc-package-layers__panel {
+  width: 210px;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--calcite-color-border-2, #9da5ae);
+  border-radius: 2px;
+  background: var(--calcite-color-foreground-1, Canvas);
+  color: var(--calcite-color-text-1, CanvasText);
+  box-shadow: 0 2px 8px #0002;
+}
+.dc-package-layers__heading {
+  margin: 0 0 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.dc-package-layers__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.dc-package-layers__status {
+  display: block;
+  margin: 7px 0;
+  font-size: 12px;
+  color: var(--calcite-color-text-2, CanvasText);
+}
+.dc-package-layers__refresh {
+  font-size: 12px;
+  min-height: 26px;
+}
+.dc-package-layers__refresh:disabled {
+  cursor: default;
+  opacity: 0.55;
+}

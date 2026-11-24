@@ -166,12 +166,20 @@ body.pc-review-route #last-updated {
   border: 1px solid var(--pc-border);
 }
 
+.pc-review-product-list:has(> .pc-workspace-transfer--all) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .pc-review-product-list__header,
 .pc-review-product-list__item-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.pc-review-product-list__item-header {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .pc-review-product-list__header-controls {
@@ -237,7 +245,9 @@ body.pc-review-route #last-updated {
   border: 1px solid var(--pc-border);
 }
 
-.pc-review-product-list__item.is-disabled {
+.pc-review-product-list__item.is-disabled .pc-review-product-list__toggle,
+.pc-review-product-list__item.is-disabled .pc-review-product-list__remove-button,
+.pc-review-product-list__item.is-disabled .pc-review-product-list__content-types {
   opacity: 0.62;
 }
 

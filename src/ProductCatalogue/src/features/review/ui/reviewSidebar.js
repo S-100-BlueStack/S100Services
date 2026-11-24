@@ -1,3 +1,4 @@
+import { createWorkspaceTransferLink } from "../../../shared/ui/workspaceTransferLink.js";
 import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
   getReviewContentTypeAggregateState,
@@ -136,6 +137,12 @@ function createProductList(productItems, loading) {
     return section;
   }
 
+  const transfer = createWorkspaceTransferLink({
+    destination: "analyze",
+    datasetNames: productItems.map((item) => item.datasetName),
+  });
+  if (transfer) section.appendChild(transfer);
+
   const list = document.createElement("div");
   list.className = "pc-review-product-list__items pc-scrollbar";
   list.setAttribute("role", "list");
@@ -192,7 +199,14 @@ function createProductListItem(productItem) {
   });
 
   toggleLabel.append(checkbox, content);
-  header.append(toggleLabel, removeButton);
+  header.appendChild(toggleLabel);
+  const transfer = createWorkspaceTransferLink({
+    destination: "analyze",
+    datasetNames: [productItem.datasetName],
+    productId: productItem.id,
+  });
+  if (transfer) header.appendChild(transfer);
+  header.appendChild(removeButton);
   item.append(header, createContentTypeList(productItem));
 
   return item;

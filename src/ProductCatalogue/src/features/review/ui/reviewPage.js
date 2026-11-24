@@ -1,4 +1,8 @@
 import {
+  captureWorkspaceTransferFocus,
+  restoreWorkspaceTransferFocus,
+} from "../../../shared/ui/workspaceTransferLink.js";
+import {
   getEnabledReviewDatasetNames,
   normalizeReviewProductItems,
 } from "../domain/reviewProductList.js";
@@ -24,6 +28,7 @@ export function renderReviewPage({
   const previousBoard = page.querySelector(".pc-review-board");
   const activeElement = document.activeElement;
   const pickerInteraction = captureReviewPickerInteraction(page, activeElement);
+  const transferFocus = captureWorkspaceTransferFocus(page, ".pc-review-product-list__items");
   const previousScrollLeft =
     previousBoard?.querySelector(".pc-review-board__columns")?.scrollLeft ?? 0;
   const normalizedProductItems = normalizeReviewProductItems(productItems);
@@ -53,6 +58,7 @@ export function renderReviewPage({
   restoreReviewPickerInteraction(page, pickerInteraction);
   restoreReviewProductListInteraction(productListInteraction, { page });
   restoreReviewWorkspaceContentInteraction(workspaceContentInteraction, { page });
+  restoreWorkspaceTransferFocus(page, ".pc-review-product-list__items", transferFocus);
 }
 
 function getOrCreateReviewPage() {

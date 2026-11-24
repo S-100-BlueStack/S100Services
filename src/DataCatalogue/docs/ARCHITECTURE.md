@@ -1,3 +1,25 @@
+## DC-MAP-LABEL - Native labels on existing live Main Map geometry (2026-11-24)
+
+`features/map/labels/createMapLabelLayers.js` is a presentation-only adapter.
+`createWorkspaceGraphics` publishes labels from its prepared, visible Workspace
+entries only in the count-colored Main Map mode. `createPackageAoiOverview`
+publishes Package short IDs from its existing deduplicated and scoped AOI graphics.
+Both retain their original GraphicsLayers, source requests and lifecycle owners.
+The helper uses in-memory `FeatureLayer.source`, grouped by actual spatial
+reference, with invisible geometry symbols, disabled popups and native
+`LabelClass` placement and static deconfliction. Workspace polygon placement
+uses the actual prepared polygon; Package point labels use the AOI extent
+center, a presentation anchor only, never new displayed geographic data.
+The existing hover handler explicitly includes only its original AOI/Job layers.
+No independent selection, API request, map navigation, or asynchronous geometry
+publication is introduced. The adapter replaces label layers only when visible
+identity/text/geometry changes and destroys them when the parent clears or
+replaces its view. Initial scale limits are 5,000,000 and 3,000,000, respectively;
+font/halo colors are independent of application theme. Verify visual placement,
+SDK font loading, collisions and popup behavior in the real 5.2.1 browser.
+
+---
+
 ## DC-PACKAGE-DETAILS-PANEL-01 - Shared read-only Package metadata (2026-11-24)
 
 The existing live contextual selection in `features/jobs/ui/jobList.js` is the
@@ -29,7 +51,9 @@ refresh preserves the selected metadata only while that same context is present;
 missing selections show an unavailable state and Retry uses the existing refresh.
 The stable header Refresh button is hidden in Details and restored on Back;
 error-only Retry remains available. Status-only changes retain the metadata DOM and its scroll/focus. No timeline or
-history service is introduced by this candidate.
+history service is introduced by this candidate. Following local acceptance,
+future Package history is assigned to the left contextual detail view; the
+right information panel remains dedicated to Package metadata.
 
 ---
 
