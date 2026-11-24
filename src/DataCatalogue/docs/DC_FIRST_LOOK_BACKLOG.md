@@ -27,6 +27,18 @@ accepted behavior or defining an undocumented backend API.
   statuses (`Done` / `No update`). The existing API has not been verified to
   provide a durable historical Package search or completed-Job history feed.
 
+## DC-MAP-POPUP-05 - Main Map Workspace popup (candidate, 2026-11-24)
+
+The Workspace popup is rebuilt from the current committed DataCatalogue
+baseline with the verified ProductCatalogue popup layout as reference. The
+SDK owns a single native title and close button. The application owns only
+the flat action and information content. The visual lock state `unlock`/`None`
+is an explicit placeholder; `Take workspace` is disabled until `OWNER-01` gains
+an authoritative backend contract. Workspace header colors come from the
+existing legend palette; the compatibility adapter for the native header is
+isolated and requires real ArcGIS 5.2.1 visual verification before acceptance.
+This candidate does not complete the separate Workspace-label task.
+
 ## First-look follow-ups
 
 Priority is a **recommended implementation order**, not a severity claim.

@@ -220,6 +220,128 @@
     top: 0.75rem;
   }
 }
+/* Resolve the Workspace popup palette at the host. The application tokens
+   normally reference Calcite tokens, so feeding those same tokens back into
+   Calcite here would create a circular CSS custom-property dependency. */
+html[data-theme="light"] .esri-popup {
+  --dc-popup-surface: #ffffff;
+  --dc-popup-surface-alt: #f8f9fa;
+  --dc-popup-border: #d5d9dd;
+  --dc-popup-text: #212529;
+  --dc-popup-text-muted: #555f68;
+}
+
+html[data-theme="dark"] .esri-popup {
+  --dc-popup-surface: #23282d;
+  --dc-popup-surface-alt: #2c3339;
+  --dc-popup-border: #515b63;
+  --dc-popup-text: #f8f9fa;
+  --dc-popup-text-muted: #c6cdd3;
+}
+
+/* Match ProductCatalogue's native-title popup layout. The SDK retains the
+   sole title/close chrome; the application only renders the actions and facts. */
+.esri-popup__main-container:has(.dc-workspace-popup) {
+  box-sizing: border-box;
+  width: min(400px, calc(100vw - 32px)) !important;
+  max-width: min(400px, calc(100vw - 32px)) !important;
+}
+
+.esri-popup__content:has(.dc-workspace-popup) {
+  padding: 0;
+}
+
+.dc-workspace-popup {
+  box-sizing: border-box;
+  margin: -12px -10px 0;
+  color: var(--dc-popup-text, #212529);
+  font-size: 0.82rem;
+}
+
+.dc-workspace-popup__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dc-popup-border);
+  background: var(--dc-popup-surface);
+}
+
+.dc-workspace-popup__take,
+.dc-workspace-popup__lock-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font: inherit;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.dc-workspace-popup__take {
+  min-height: 32px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 0;
+  color: var(--dc-popup-text);
+  background: transparent;
+  text-align: left;
+}
+
+.dc-workspace-popup__take:disabled {
+  color: var(--dc-popup-text-muted);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.dc-workspace-popup__lock-owner {
+  margin-left: auto;
+  color: var(--dc-popup-text-muted);
+}
+
+.dc-workspace-popup__information {
+  padding: 6px 10px;
+  background: var(--dc-popup-surface);
+}
+
+.dc-workspace-popup__section-title {
+  margin: 0 0 0.35rem;
+  color: var(--dc-popup-text-muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.dc-workspace-popup__details {
+  margin: 0;
+}
+
+.dc-workspace-popup__detail {
+  display: grid;
+  grid-template-columns: minmax(5.7rem, 0.85fr) minmax(0, 1.15fr);
+  column-gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--dc-popup-border);
+}
+
+.dc-workspace-popup__detail dt,
+.dc-workspace-popup__detail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dc-workspace-popup__detail dt {
+  color: var(--dc-popup-text-muted);
+  font-weight: 600;
+}
+
+.dc-workspace-popup__detail dd {
+  color: var(--dc-popup-text);
+}
+
 /* =========================================================
    ArcGIS popup theme integration
    Feed popup-related Calcite tokens into ArcGIS popup surfaces so

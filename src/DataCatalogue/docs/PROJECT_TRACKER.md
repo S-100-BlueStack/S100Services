@@ -1,3 +1,38 @@
+## DC-MAP-POPUP-05 - Workspace popup rebuild from ProductCatalogue (candidate, 2026-11-24)
+
+**Baseline:** `2a6310c206749de555e72ec22f8b48b74f9c25fb` (286 source files verified).
+This is a fresh implementation from the committed baseline, superseding the uncommitted
+DC-MAP-POPUP-01 through -04 candidates. The ProductCatalogue working-tree reference
+export of 2026-11-23 was verified (98 files) and used for the native-title,
+action-row and metadata layout; no ProductCatalogue files are changed.
+
+- The Main Map Workspace layer alone has an ArcGIS `PopupTemplate`. Its native
+  title and native close control remain the only popup header and close action.
+  The application-owned content contains one disabled `Take workspace` action,
+  the visual `unlock`/`None` placeholder, and a compact read-only `Pipeline`/
+  `Open packages` information table. `None` is not an authoritative lock state.
+- Header background uses the exact current count-based Workspace color. The
+  adapter follows ProductCatalogue's native-header implementation. Since the
+  SDK has no public header-background property, its DOM access is isolated and
+  explicitly documented in `CALCITE_USAGE_LOG.md`; verify against the installed
+  ArcGIS 5.2.1 build and reconsider when an official styling hook is available.
+- Popup surface colors have independent light/dark values at the popup host to
+  avoid circular Calcite CSS custom-property references. No second panel,
+  custom header, or custom close button is rendered.
+- Hidden/removed Workspaces close only their own popup. Package, Job and AOI
+  popups retain their normal SDK behavior. No backend endpoints or mock lock
+  state are added; `OWNER-01` remains a separate backend integration task.
+- **Browser feedback (2026-11-24):** The user confirmed the rebuilt single-header
+  layout is substantially improved in light and dark mode. The remaining issue
+  is weak native title contrast in dark mode. A focused correction applies
+  contrast-selected foreground colors to the native title and header actions,
+  preserving the v5 layout and restoring all temporary style overrides.
+- **Acceptance pending:** Local `npm run format`, `npm run check`, and browser
+  verification of corrected header contrast in both themes, including popup
+  switching, overlapping features and keyboard/Escape behavior.
+
+---
+
 ## DC-MAP-POLISH-01 — Main Map and Package Assignment legends (frontend candidate, 2026-11-23)
 
 **Baseline:** `6c8a5db695f990f014108360010689170be611b8` (Git-archive

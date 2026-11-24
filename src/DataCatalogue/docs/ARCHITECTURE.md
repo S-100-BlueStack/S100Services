@@ -1,3 +1,27 @@
+## DC-MAP-POPUP-05 - Main Map Workspace popup ownership (candidate, 2026-11-24)
+
+`features/map/workspaces/createWorkspaceGraphics.js` owns the Main Map-only
+Workspace `GraphicsLayer`, the selected-Workspace source fields and popup
+lifetime. `features/map/popups/workspacePopupContent.js` supplies native ArcGIS
+`PopupTemplate.title` and an application-owned, flat action/metadata content
+subtree. `workspacePopupHeaderStyle.js` follows ProductCatalogue's native
+header-color pattern and resets styling on popup replacement/disposal. No
+second title/close element is created. The assignment map keeps `popupEnabled`
+false. Count-colored header and Workspace fill read the same `workspaceJobColors`
+source; unknown counts remain unknown, not fabricated zero.
+
+The header-color adaptation is an SDK internal-DOM exception: no public ArcGIS
+popup header background API is available in the currently used MapView widget.
+The isolated adapter styles the existing native header and title, and applies
+public Calcite header-action color tokens to its panel. Foreground contrast is
+selected from the actual Workspace background, independent of the theme. All
+changed inline values and priorities are restored when their owner changes.
+It does not insert controls into Calcite internals, alter backend state or own
+popup clicks. `CALCITE_USAGE_LOG.md` records the compatibility risk and
+required browser verification. `OWNER-01` lock state is not implemented.
+
+---
+
 ## DC-ASSIGN-AUTOMATCH — Binding-owned automatic Workspace display (2026-11-17)
 
 The live `createPipelineRow` renders Workspace names exclusively from

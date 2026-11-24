@@ -1,4 +1,5 @@
 import Graphic from "@arcgis/core/Graphic.js";
+import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import Polygon from "@arcgis/core/geometry/Polygon.js";
 import * as simplifyOperator from "@arcgis/core/geometry/operators/simplifyOperator.js";
@@ -7,6 +8,8 @@ import { normalizeWorkspacePolygon } from "../../../shared/api/workspaceGeometry
 import { workspaceSelectionKey } from "./pipelineVisibility.js";
 import { workspaceColorForOpenJobs } from "./workspaceJobColors.js";
 import { createAssignmentWorkspaceSymbol } from "./workspaceCoverageSymbol.js";
+import { createWorkspacePopupTemplate } from "../popups/workspacePopupContent.js";
+import { createWorkspacePopupHeaderStyle } from "../popups/workspacePopupHeaderStyle.js";
 
 let projectionReady;
 function loadProjection() {
@@ -20,7 +23,15 @@ function loadProjection() {
 }
 
 export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false }) {
-  const layer = new GraphicsLayer({ id, title: "Workspace coverage", popupEnabled: false });
+  const layer = new GraphicsLayer({
+    id,
+    title: "Workspace coverage",
+    popupEnabled: colorByOpenJobs,
+  });
+  const popupTemplate = colorByOpenJobs ? createWorkspacePopupTemplate() : null;
+  const headerStyle = colorByOpenJobs
+    ? createWorkspacePopupHeaderStyle({ view, layerId: id, watch: reactiveUtils.watch })
+    : null;
   map.add(layer);
   const ready = view.when().then(
     () => true,
@@ -49,7 +60,14 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       graphic.symbol = createAssignmentWorkspaceSymbol();
     }
     const count = counts?.get(workspaceSelectionKey(workspace));
-    if (colorByOpenJobs) graphic.attributes.openJobs = counts ? (count ?? 0) : null;
+    if (colorByOpenJobs) {
+      graphic.attributes = {
+        ...graphic.attributes,
+        workspaceName: workspace.name,
+        pipelineName: workspace.pipelineName,
+        openJobs: counts ? (count ?? 0) : null,
+      };
+    }
   }
 
   function publish() {
@@ -63,6 +81,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
         graphic = new Graphic({
           geometry,
           attributes: { pipelineId: workspace.pipelineId, workspaceId: workspace.workspaceId },
+          ...(popupTemplate ? { popupTemplate } : {}),
         });
         graphics.set(key, graphic);
         layer.add(graphic);
@@ -72,12 +91,24 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       graphic.visible = !visibleKeys || visibleKeys.has(key);
       applySymbol(graphic, workspace);
     }
+    closeStaleWorkspacePopup(nextKeys);
     for (const [key, graphic] of graphics) {
       if (!nextKeys.has(key)) {
         layer.remove(graphic);
         graphics.delete(key);
       }
     }
+    headerStyle?.refresh();
+  }
+
+  function closeStaleWorkspacePopup(validKeys = new Set(graphics.keys())) {
+    if (!colorByOpenJobs) return;
+    const selected = view.popup?.selectedFeature ?? view.popup?.viewModel?.selectedFeature;
+    if (selected?.layer?.id !== id) return;
+    const key = workspaceSelectionKey(selected.attributes ?? {});
+    if (validKeys.has(key) && graphics.get(key)?.visible) return;
+    if (typeof view.closePopup === "function") view.closePopup();
+    else view.popup?.close?.();
   }
 
   return {
@@ -110,6 +141,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
     },
     clear() {
       if (alive) {
+        closeStaleWorkspacePopup(new Set());
         currentEntries = [];
         graphics.clear();
         layer.removeAll();
@@ -124,6 +156,8 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       if (!alive) return;
       visibleKeys = new Set(workspaces.map(workspaceSelectionKey));
       for (const [key, graphic] of graphics) graphic.visible = visibleKeys.has(key);
+      closeStaleWorkspacePopup();
+      headerStyle?.refresh();
     },
     setOpenJobCounts(nextCounts) {
       if (!alive || !colorByOpenJobs) return;
@@ -132,6 +166,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
         const graphic = graphics.get(workspaceSelectionKey(workspace));
         if (graphic) applySymbol(graphic, workspace);
       }
+      headerStyle?.refresh();
     },
     async focus(entries, { shouldApply = () => true } = {}) {
       if (!(await ready) || !alive || !shouldApply() || !entries.length) return;
@@ -148,7 +183,9 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       if (alive) view.animation?.stop();
     },
     destroy() {
+      closeStaleWorkspacePopup(new Set());
       alive = false;
+      headerStyle?.destroy();
       map.remove(layer);
       layer.destroy();
     },
