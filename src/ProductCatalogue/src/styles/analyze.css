@@ -200,7 +200,7 @@ body.pc-analyze-route {
 
 .analyze-dataset-list__item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   min-width: 0;
@@ -210,7 +210,8 @@ body.pc-analyze-route {
   border-radius: 4px;
 }
 
-.analyze-dataset-list__item.is-disabled {
+.analyze-dataset-list__item.is-disabled .analyze-dataset-list__item-toggle,
+.analyze-dataset-list__item.is-disabled .analyze-dataset-list__remove-button {
   opacity: 0.62;
 }
 

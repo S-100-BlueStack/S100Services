@@ -45,6 +45,20 @@ Request-generation checks remain the publication boundary for superseded loads.
 The configured mock Paper Charts and S-102 workspace sources are separate source contracts. They keep
 their registry-owned attributes and geometry and do not fall through to the compatibility Analyze API.
 
+## Cross-workspace navigation (R07)
+
+The Products list offers a compact **Review** link per item and **Open all in Review**
+for the entire current composition. The latter includes disabled Products in list order,
+not only the enabled names serialized in the current Analyze URL. A resolved Package is
+represented by its existing canonical Product; its members are not separate transfer entries.
+The destination resolves identities and permissions using its own existing loader.
+
+These native same-tab links carry only Product names through the canonical workspace route.
+They do not transfer Analyze map visibility, report disclosure, content settings, popup state,
+or pending operations. Review starts with its normal destination defaults. An empty list
+has no bulk action; a name unsupported by the route contract makes the affected link unavailable.
+The navbar, Main Map Product Collection and Dashboard navigation remain unchanged.
+
 ## Map graphics
 
 Analyze map graphics should contain only fields needed for map rendering, selection, popup display and indexing.

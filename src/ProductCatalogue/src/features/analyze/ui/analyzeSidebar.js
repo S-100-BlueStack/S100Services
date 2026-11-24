@@ -1,4 +1,9 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
+import {
+  captureWorkspaceTransferFocus,
+  createWorkspaceTransferLink,
+  restoreWorkspaceTransferFocus,
+} from "../../../shared/ui/workspaceTransferLink.js";
 import { applyProductStatusTone } from "../../../shared/ui/productStatusTone.js";
 import "@esri/calcite-components/components/calcite-link";
 import { createProductPickerForm } from "../../products/ui/productPicker.js";
@@ -21,6 +26,7 @@ export function renderAnalyzeSidebar({
   const panel = getOrCreateAnalyzePanel();
   const calcitePanel = panel.querySelector("calcite-panel");
   const content = panel.querySelector(".analyze-sidebar__content");
+  const transferFocus = captureWorkspaceTransferFocus(content, ".analyze-dataset-list__items");
   const pickerHadFocus =
     content.contains(document.activeElement) &&
     Boolean(document.activeElement.closest?.(".pc-product-picker"));
@@ -49,6 +55,7 @@ export function renderAnalyzeSidebar({
       if (pickerInputFocused) replacement.focus({ preventScroll: true });
     }
   }
+  restoreWorkspaceTransferFocus(content, ".analyze-dataset-list__items", transferFocus);
 }
 
 function getOrCreateAnalyzePanel() {
@@ -160,6 +167,12 @@ function createDatasetList(datasetItems) {
     empty.textContent = "No products added.";
     content.appendChild(empty);
   } else {
+    const transfer = createWorkspaceTransferLink({
+      destination: "review",
+      datasetNames: datasetItems.map((item) => item.name),
+    });
+    if (transfer) content.appendChild(transfer);
+
     const list = document.createElement("div");
     list.className = "analyze-dataset-list__items";
     list.classList.add("pc-scrollbar");
@@ -212,6 +225,12 @@ function createDatasetListItem(datasetItem) {
   toggleLabel.appendChild(checkbox);
   toggleLabel.appendChild(name);
   item.appendChild(toggleLabel);
+  const transfer = createWorkspaceTransferLink({
+    destination: "review",
+    datasetNames: [datasetItem.name],
+    productId: datasetItem.id,
+  });
+  if (transfer) item.appendChild(transfer);
   item.appendChild(removeButton);
 
   return item;
