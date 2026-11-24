@@ -232,71 +232,105 @@ namespace S100FC.ProductCatalogue
 
         #region IElectronicProductManager
 
-        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? productMapping, int? optimumDisplayScale) {
-            if (string.IsNullOrEmpty(name))
-                throw new System.ArgumentNullException(nameof(name));
+        /// <summary>Creates an ElectronicProduct and optionally binds it to an existing product by dataset name.</summary>
+        /// <remarks>The row and its ProductMapping are persisted together; the lookup index is published only after commit.</remarks>
+        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? productMapping, int? optimumDisplayScale) =>
+            CreateElectronicProductCoreAsync(name, productSpecification, specificUsage, boundary, productMapping, optimumDisplayScale, null);
 
-            name = name.ToUpperInvariant();
+        /// <inheritdoc />
+        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? productMapping, int? optimumDisplayScale, int sourceIdentifier) =>
+            CreateElectronicProductCoreAsync(name, productSpecification, specificUsage, boundary, productMapping, optimumDisplayScale, sourceIdentifier);
 
-            var key = new ElectronicProductKey(productSpecification.name, name);
+        /// <summary>Persists the product, optional source identifier and mapping together, then refreshes the mapping index.</summary>
+        /// <param name="name">Unique dataset name.</param>
+        /// <param name="productSpecification">Specification of the product.</param>
+        /// <param name="specificUsage">Optional specific usage.</param>
+        /// <param name="boundary">Product boundary in Esri JSON format.</param>
+        /// <param name="productMapping">Optional existing target dataset name.</param>
+        /// <param name="optimumDisplayScale">Optional optimum display scale.</param>
+        /// <param name="sourceIdentifier">Explicit surface source identifier, or null to retain the geodatabase default.</param>
+        /// <returns>A task that completes after persistence and index refresh.</returns>
+        private async Task CreateElectronicProductCoreAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? productMapping, int? optimumDisplayScale, int? sourceIdentifier) {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentNullException(nameof(name));
+
+            name = name.Trim().ToUpperInvariant();
+            var targetName = productMapping?.Trim();
 
             await this.Dispatch(() => {
-                if (this._preferredElectronicProductsByName.ContainsKey(name))
-                    throw new System.ArgumentException("An element with the same key already exists!");
+                var electronicProduct = new ElectronicProduct {
+                    datasetName = name,
+                    typeOfProductFormat = 2,
+                    notForNavigation = true,
+                    issueDate = DateOnly.FromDateTime(DateTime.Now),
+                    editionNumber = 0,
+                    updateNumber = 0,
+                    agencyResponsibleForProduction = "Danish Geodata Agency",
+                    specificUsage = specificUsage,
+                    productSpecification = productSpecification,
+                    optimumDisplayScale = optimumDisplayScale,
+                };
 
+                ElectronicProductMappingIndex? updatedMappings = null;
                 this._geodatabase!.ApplyEdits(() => {
-                    using (var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"))) {
-                        using var buffer = surface.CreateRowBuffer();
-                        buffer["ps"] = "S-128";
-                        buffer["code"] = nameof(S100FC.S128.FeatureTypes.ElectronicProduct);
+                    using var surface = this._geodatabase.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+                    var entries = new List<ElectronicProductCatalogueEntry>();
+                    using (var cursor = surface.Search(new QueryFilter {
+                        WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'"
+                    }, false)) {
+                        while (cursor.MoveNext()) {
+                            using var row = cursor.Current;
+                            var product = AttributeFlattenExtensions.UnflattenFeatureType<ElectronicProduct>(Convert.ToString(row["attributebindings"])!);
+                            entries.Add(new ElectronicProductCatalogueEntry(row.UID(), product, row.IsNull("featurebindings") ? null : Convert.ToString(row["featurebindings"])));
+                        }
+                    }
 
-                        var electronicProduct = new S100FC.S128.FeatureTypes.ElectronicProduct {
-                            datasetName = name,
-                            typeOfProductFormat = 2,                 //IsoIec8211,
-                            notForNavigation = true,
-                            issueDate = DateOnly.FromDateTime(DateTime.Now),
-                            editionNumber = 0,
-                            updateNumber = 0,
-                            agencyResponsibleForProduction = "Danish Geodata Agency",
-                            specificUsage = specificUsage,
-                            productSpecification = productSpecification,
-                            optimumDisplayScale = optimumDisplayScale,
+                    if (entries.Any(entry => string.Equals(entry.Product.datasetName, name, StringComparison.OrdinalIgnoreCase)))
+                        throw new ArgumentException("An element with the same key already exists!", nameof(name));
 
+                    string? flattenedBindings = null;
+                    if (!string.IsNullOrWhiteSpace(targetName)) {
+                        var targets = entries.Where(entry => string.Equals(entry.Product.datasetName, targetName, StringComparison.OrdinalIgnoreCase)).ToArray();
+                        if (targets.Length != 1 || string.IsNullOrWhiteSpace(targets[0].FeatureId))
+                            throw new ProductMappingIntegrityException($"ProductMapping target '{targetName}' must identify exactly one existing ElectronicProduct with a feature ID.");
 
+                        featureBinding[] bindings = [
+                            new featureBinding<ProductMapping> {
+                                association = new ProductMapping { categoryOfProductMapping = 1 },
+                                roleType = "association",
+                                role = "theReference",
+                                featureType = nameof(ElectronicProduct),
+                                featureId = targets[0].FeatureId,
+                                Primitive = S100FC.Primitives.surface
+                            }
+                        ];
+                        flattenedBindings = bindings.Flatten();
+                    }
 
-                        };
+                    using var buffer = surface.CreateRowBuffer();
+                    buffer["ps"] = "S-128";
+                    buffer["code"] = nameof(ElectronicProduct);
+                    buffer["attributebindings"] = electronicProduct.Flatten();
+                    if (sourceIdentifier.HasValue)
+                        buffer["sourceIdentifier"] = sourceIdentifier.Value;
+                    if (flattenedBindings is not null)
+                        buffer["featurebindings"] = flattenedBindings;
+                    buffer["shape"] = GeometryEngine.Instance.ImportFromJson(JsonImportFlags.JsonImportDefaults, boundary);
+                    using var created = surface.CreateRow(buffer);
 
-                        //if (!string.IsNullOrEmpty(productMapping)) {
-
-
-                        //    featureBinding[] bindings = [
-                        //        new featureBinding<ProductMapping>
-                        //        {
-                        //            roleType = "association",
-                        //            role = "theReference",
-                        //            association = new() {
-                        //               // ProductMapping
-                        //            }
-                        //        }
-                        //    ];
-
-                        //    buffer["featurebindings"] = bindings.Flatten();
-
-                        //}
-
-                        var flattened = electronicProduct.Flatten();
-                        buffer["attributebindings"] = flattened;
-
-                        // cast to EsriGeometry
-                        var shape = ArcGIS.Core.Geometry.GeometryEngine.Instance.ImportFromJson(JsonImportFlags.JsonImportDefaults, boundary);
-                        buffer["shape"] = shape;
-                        surface.CreateRow(buffer);
-
-                        AddElectronicProduct(electronicProduct);
+                    entries.Add(new ElectronicProductCatalogueEntry(created.UID(), electronicProduct, flattenedBindings));
+                    // Build inside the edit operation so an invalid catalogue cannot leave a committed, unindexed product.
+                    updatedMappings = ElectronicProductMappingIndex.Create(entries);
+                    if (!string.IsNullOrWhiteSpace(targetName)) {
+                        var target = entries.Single(entry => string.Equals(entry.Product.datasetName, targetName, StringComparison.OrdinalIgnoreCase));
+                        if (!updatedMappings.GetMapped(name, target.Product.productSpecification?.name ?? string.Empty).Any(product => ReferenceEquals(product, target.Product)))
+                            throw new ProductMappingIntegrityException($"ProductMapping from '{name}' to '{targetName}' could not be resolved.");
                     }
                 });
-            });
 
+                AddElectronicProduct(electronicProduct);
+                _productMappings = updatedMappings!;
+            });
         }
 
         Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
