@@ -341,3 +341,99 @@ test("Escape dismisses a dropdown and returns keyboard focus to its summary", ()
   assert.equal(event.stopped, true);
   controls.destroy();
 });
+
+function workModeElements(controls) {
+  const workMode = controls.element.children.find(
+    (child) => child.className === "dc-package-scope__work-mode"
+  );
+  const [options, notice] = workMode.children;
+  const radios = options.children.map((option) => option.children[0]);
+  return { workMode, options, notice, radios };
+}
+
+function selectWorkMode(radios, value) {
+  const next = radios.find((radio) => radio.value === value);
+  assert.ok(next);
+  // The fake document does not implement the browser's mutual radio exclusion.
+  for (const radio of radios) radio.checked = radio === next;
+  next.change(true);
+}
+
+test("work mode preview defaults to Compilation with native radio semantics", () => {
+  const controls = createPackageScopeControls({ doc: fakeDocument() });
+  const { options, notice, radios } = workModeElements(controls);
+  assert.equal(options.attrs.get("role"), "radiogroup");
+  assert.equal(options.attrs.get("aria-label"), "Work mode preview");
+  assert.equal(options.attrs.get("aria-describedby"), notice.id);
+  assert.equal(notice.attrs.get("role"), "status");
+  assert.deepEqual(
+    options.children.map((option) => option.children[1].textContent),
+    ["Compilation", "QC"]
+  );
+  assert.deepEqual(
+    radios.map(({ type, name, value, checked }) => ({ type, name, value, checked })),
+    [
+      { type: "radio", name: "dc-package-work-mode", value: "compilation", checked: true },
+      { type: "radio", name: "dc-package-work-mode", value: "qc", checked: false },
+    ]
+  );
+  assert.equal(notice.textContent ?? "", "");
+  controls.destroy();
+});
+
+test("previewing QC changes only its notice and never publishes a new work scope", () => {
+  const changes = [];
+  const controls = createPackageScopeControls({
+    doc: fakeDocument(),
+    onChange: (scope) => changes.push(scope),
+  });
+  controls.setCatalogue(groups);
+  controls.setJobs([{ id: "open", pipelineId: "enc", workspaceId: "west", status: "todo" }]);
+  const [, pipelines, workspaces] = controls.element.children;
+  getInput(pipelines, "ENC").change(true);
+  getInput(workspaces, "West").change(true);
+  const before = controls.getScope();
+  const published = changes.length;
+  const workspaceRows = workspaces.children[1].children;
+  const { notice, radios } = workModeElements(controls);
+
+  selectWorkMode(radios, "qc");
+  assert.equal(notice.textContent, "QC filtering is not yet available.");
+  assert.deepEqual(controls.getScope(), before);
+  assert.equal(changes.length, published);
+  assert.equal(workspaces.children[1].children, workspaceRows);
+
+  selectWorkMode(radios, "compilation");
+  assert.equal(notice.textContent, "");
+  assert.deepEqual(controls.getScope(), before);
+  assert.equal(changes.length, published);
+  controls.destroy();
+});
+
+test("work mode preview keeps its selection and focus across catalogue and Job updates", () => {
+  const doc = fakeDocument();
+  const controls = createPackageScopeControls({ doc });
+  controls.setCatalogue(groups);
+  const { workMode, notice, radios } = workModeElements(controls);
+  selectWorkMode(radios, "qc");
+  controls.setJobs([{ id: "open", pipelineId: "enc", workspaceId: "west", status: "todo" }]);
+  controls.setCatalogue(groups.slice(0, 1));
+  assert.equal(workModeElements(controls).workMode, workMode);
+  assert.equal(radios[1].checked, true);
+  assert.equal(notice.textContent, "QC filtering is not yet available.");
+  assert.equal(doc.activeElement, radios[1]);
+  controls.destroy();
+});
+
+test("disposed work mode preview cannot publish and a new instance starts in Compilation", () => {
+  const doc = fakeDocument();
+  const controls = createPackageScopeControls({ doc });
+  const { notice, radios } = workModeElements(controls);
+  controls.destroy();
+  selectWorkMode(radios, "qc");
+  assert.equal(notice.textContent ?? "", "");
+  const next = createPackageScopeControls({ doc });
+  assert.equal(workModeElements(next).radios[0].checked, true);
+  assert.equal(workModeElements(next).radios[1].checked, false);
+  next.destroy();
+});

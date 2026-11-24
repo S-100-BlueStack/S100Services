@@ -1,3 +1,17 @@
+## DC-PACKAGE-QC-01 - Native segmented work mode preview (2026-11-24)
+
+The existing application-owned live Work Scope section uses two native radio
+inputs with associated labels for the Compilation/QC design preview. A shared
+radio name provides mutual exclusion and built-in keyboard navigation without
+another component registration or custom key handlers. The checked and
+`:focus-visible` states style the visible labels using public Calcite theme
+colors; forced-colors mode uses system highlight colors. A native status region
+announces unavailable QC filtering. Stable native controls avoid replacing focus
+during scope option updates and require no Calcite shadow-DOM access. This is
+presentation state only, not a second scope or a persisted workflow filter.
+
+---
+
 ## DC-PACKAGE-DETAILS-PANEL-01 - Shared metadata and native scroll region (2026-11-24)
 
 The Main Map information panel uses an application-owned semantic `aside`, a

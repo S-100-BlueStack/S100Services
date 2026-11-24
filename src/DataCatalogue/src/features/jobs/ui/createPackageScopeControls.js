@@ -87,6 +87,42 @@ export function createPackageScopeControls({ doc = document, onChange = () => {}
   showEmptyToggleLabel.append(showEmptyCaption, showEmptyToggle);
   element.append(showEmptyToggleLabel);
 
+  // The preview deliberately owns only native radio state, not Package or map filtering.
+  const workMode = doc.createElement("div");
+  workMode.className = "dc-package-scope__work-mode";
+  const modeOptions = doc.createElement("div");
+  modeOptions.className = "dc-package-scope__mode-options";
+  modeOptions.setAttribute("role", "radiogroup");
+  modeOptions.setAttribute("aria-label", "Work mode preview");
+  modeOptions.title = "Preview work modes without changing the Package list or map";
+  const modeNotice = doc.createElement("div");
+  modeNotice.className = "dc-package-scope__mode-notice";
+  modeNotice.id = "dc-package-work-mode-notice";
+  modeNotice.setAttribute("role", "status");
+  modeOptions.setAttribute("aria-describedby", modeNotice.id);
+  for (const [value, label] of [
+    ["compilation", "Compilation"],
+    ["qc", "QC"],
+  ]) {
+    const option = doc.createElement("label");
+    option.className = "dc-package-scope__mode-option";
+    const input = doc.createElement("input");
+    input.type = "radio";
+    input.name = "dc-package-work-mode";
+    input.value = value;
+    input.checked = value === "compilation";
+    const caption = doc.createElement("span");
+    caption.textContent = label;
+    option.append(input, caption);
+    input.addEventListener("change", () => {
+      if (!alive || !input.checked) return;
+      modeNotice.textContent = value === "qc" ? "QC filtering is not yet available." : "";
+    });
+    modeOptions.append(option);
+  }
+  workMode.append(modeOptions, modeNotice);
+  element.append(workMode);
+
   let groups = [];
   let selectedPipelineIds = [];
   let allPipelines = false;

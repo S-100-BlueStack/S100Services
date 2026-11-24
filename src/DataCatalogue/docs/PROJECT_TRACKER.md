@@ -2,15 +2,16 @@
 
 **Authoritative baseline:** `76c268f042dd4b35988c82071bc5e5d2fec2729c` (merge;
 312 committed source files verified, including the previously ignored
-`src/features/map/packages` modules). **Status:** frontend candidate; local
-browser acceptance and full npm check pending.
+`src/features/map/packages` modules). **Status:** accepted; the user confirmed
+browser acceptance, adjusted the scale limits, updated tests/documentation and
+reported commit `26472a59188f61eed632c59abc0e59d2a06e64e9`.
 
 - Live Main Map labels use the existing normalized Workspace display name and
   the `shortId` from the existing paged Package AOI response. Blank/missing
   Package short IDs produce no label; no description, synthetic identifier or
   extra detail read is substituted. The existing Workspace display-name
   normalization (including its existing ID fallback) is unchanged.
-- Initial scale limits: Workspace names from 1:5,000,000 and closer; Package
+- Accepted scale limits: Workspace names from 1:5,000,000 and closer; Package
   short IDs from 1:3,000,000 and closer. Compact dark text with a white halo
   remains legible independently of the chosen basemap/theme. ArcGIS native
   label deconfliction can suppress crowded labels rather than drawing every
@@ -50,13 +51,13 @@ Packages detail view**. History itself is not implemented.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
-| Suggested order | Task                                                                                                            | Status / dependency                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                                   |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Candidate; frontend implemented, local acceptance pending                                         |
-| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Open; UI design can proceed separately, functional filtering depends on backend workflow contract |
-| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Open; backend history contract needed for real data                                               |
-| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                                  |
+| Suggested order | Task                                                                                                            | Status / dependency                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                 |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                 |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | UI preview candidate; functional filtering depends on backend workflow contract |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Open; backend history contract needed for real data                             |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                |
 
 This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
 
@@ -103,7 +104,14 @@ This is a proposed next-work shortlist, not a complete audit of all historical t
 - Once the backend contract is agreed, filter the authoritative Package/Job list using the selected mode alongside existing Pipeline/Workspace and status scope. Define map/AOI visibility, Workspace counts/legend behavior, empty-state and selection reconciliation explicitly before implementation. Avoid adding a second map scope owner. Verify behavior on mode changes, refresh, stale responses, navigation and error recovery.
 - Do not add a QC completion button, reassignment, status mutation, or QC authorization rule in the design-only scope. Those require separate product/backend decisions.
 
-Backend dependencies for the timeline and QC are recorded in [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md). Earlier first-look requirements remain in [DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md). No new endpoint, schema, dependency or runtime behavior is authorized by this planning entry.
+**Design-only frontend candidate (2026-11-24; baseline `26472a59188f61eed632c59abc0e59d2a06e64e9`):**
+
+- A compact native radio group below the existing live Work Scope selectors and `Show empty` switch exposes `Compilation` (default) and `QC`. It is list-only, with theme-aware selected and keyboard-focus states. Selecting QC displays `QC filtering is not yet available.` Selecting Compilation removes that notice.
+- The mounted radio inputs own ephemeral presentation state. Scope option rerenders, catalogue and Job updates do not replace these inputs. The existing Details visibility lifecycle hides the entire scope section; Back shows the same selection. Recreating the controls starts in Compilation. No storage preference or authoritative workflow state is introduced.
+- Mode changes do not publish `onChange` scope events, alter `getScope()`, rerender the Package list, reload data, change map/label visibility or Workspace counts, or write status. Existing Work Scope and status controls continue to operate normally. The preview is mounted only in the existing live scope controls; mock mode and Package Assignment are unchanged.
+- Local design, keyboard, light/dark, refresh and Details/Back acceptance are pending. Backend workflow identity, status values, transition rules and actual mode-dependent filtering remain open. This candidate does not establish a QC workflow or authorize any QC actions.
+
+Backend dependencies for the timeline and QC are recorded in [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md). Earlier first-look requirements remain in [DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md). No new endpoint, schema or dependency is introduced.
 
 ---
 

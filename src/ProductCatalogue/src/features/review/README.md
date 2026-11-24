@@ -351,3 +351,19 @@ Refresh icon and Remove Product actions retain help. The approved short
 Refresh tooltip is included in R05 v2. Introduction suppresses
 application-owned hover help while its highlights are shown, without changing
 Review's data loading or Product selection lifecycle.
+
+## PC-UX-R08 optional comparison (candidate)
+
+The Review board provides two session-local, unchecked-by-default comparison controls.
+Sync scrolling maps the outer column position to a matching member and content section
+in other compatible, visible columns, using relative position within that section.
+Columns with missing matching sections, unresolved identities or retained refresh errors
+are not forced to an unrelated position. Nested History and report scroll areas remain
+independent. Retained DOM nodes restore their scroll offsets after board reconciliation.
+
+Highlight differences marks known conflicting Status and Edition values with a neutral
+outline and a difference symbol plus an accessible description. Comparisons require
+matching source, Product type and specification; package members remain separate.
+Missing values, unknown statuses and stale retained metadata are excluded. No arbitrary
+reference Product is selected. These options do not change Product selection, content
+visibility, navigation, API requests or backend state, and are not persisted.

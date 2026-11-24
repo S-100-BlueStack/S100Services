@@ -30,11 +30,13 @@ import {
   setReviewRouteUrl,
 } from "../routing/reviewRoute.js";
 import { renderReviewPage } from "../ui/reviewPage.js";
+import { createReviewComparisonController } from "../ui/reviewComparisonController.js";
 import { captureReviewProductListInteraction } from "../ui/reviewProductListInteraction.js";
 import { captureReviewWorkspaceContentInteraction } from "../ui/reviewWorkspaceContentInteraction.js";
 
 export async function initReviewPage({ datasetNames } = {}) {
   const initialProductItems = createReviewProductItems(datasetNames);
+  const comparison = createReviewComparisonController();
   let productItems = [];
   let pendingProductItems = null;
   let compositionResolutions = [];
@@ -60,6 +62,7 @@ export async function initReviewPage({ datasetNames } = {}) {
   } = {}) => {
     const visibleItems = pendingProductItems ?? productItems;
     renderReviewPage({
+      comparison,
       productItems: visibleItems,
       // Keep new selections visibly pending without publishing synthetic backend data.
       products: visibleItems
@@ -401,6 +404,7 @@ export async function initReviewPage({ datasetNames } = {}) {
     loadReviewDatasetNames,
     destroy() {
       disposed = true;
+      comparison.destroy();
       productSession.destroy();
       productCatalogRequestId += 1;
       document.removeEventListener("pc-review-product-add", handleProductAdd);

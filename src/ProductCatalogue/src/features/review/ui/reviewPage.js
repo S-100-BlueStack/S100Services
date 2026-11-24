@@ -23,6 +23,7 @@ export function renderReviewPage({
   productCatalog = createEmptyProductCatalogState(),
   productListInteraction = null,
   workspaceContentInteraction = null,
+  comparison = null,
 }) {
   const page = getOrCreateReviewPage();
   const previousBoard = page.querySelector(".pc-review-board");
@@ -31,6 +32,11 @@ export function renderReviewPage({
   const transferFocus = captureWorkspaceTransferFocus(page, ".pc-review-product-list__items");
   const previousScrollLeft =
     previousBoard?.querySelector(".pc-review-board__columns")?.scrollLeft ?? 0;
+  const retainedScroll = [
+    ...(previousBoard?.querySelectorAll(
+      ".pc-review-column__content, .pc-review-content-card__body--scrollable"
+    ) ?? []),
+  ].map((element) => ({ element, top: element.scrollTop, left: element.scrollLeft }));
   const normalizedProductItems = normalizeReviewProductItems(productItems);
   const enabledDatasetNames = getEnabledReviewDatasetNames(normalizedProductItems);
 
@@ -49,8 +55,17 @@ export function renderReviewPage({
       previousBoard,
     })
   );
+  comparison?.connect(page.querySelector(".pc-review-board"), activeElement);
   const columns = page.querySelector(".pc-review-board__columns");
   if (columns) columns.scrollLeft = previousScrollLeft;
+  // Reparenting a retained column can reset native scroll offsets in Chromium.
+  // Restore only surviving nodes, never positions from a replaced Product payload.
+  for (const { element, top, left } of retainedScroll) {
+    if (!page.contains(element)) continue;
+    element.scrollTop = top;
+    element.scrollLeft = left;
+  }
+  comparison?.rememberScrollPositions();
   // A retained column keeps its actual controls; restore only a surviving node.
   if (activeElement && page.contains(activeElement)) activeElement.focus?.({ preventScroll: true });
   // Selection rerenders the sidebar before the picker handler has completed.

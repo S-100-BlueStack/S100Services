@@ -1,3 +1,4 @@
+import { createReviewComparisonController } from "../ui/reviewComparisonController.js";
 import {
   createReviewPackageFixture,
   packageNames,
@@ -60,6 +61,7 @@ async function harness({
         workspaceWorkUnitService: { resolveWorkUnit },
       }),
     createReviewProductSession,
+    createReviewComparisonController,
     validateProductCatalogSelection,
     console,
     document: {
