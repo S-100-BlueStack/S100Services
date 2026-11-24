@@ -89,7 +89,7 @@ function getInput(dropdown, label) {
 
 const contextKey = (pipelineId, workspaceId) => JSON.stringify([pipelineId, workspaceId]);
 
-test("All pipelines is the default and both dropdowns support multi-select", () => {
+test("All workstreams is the default and both dropdowns support multi-select", () => {
   const changes = [];
   const doc = fakeDocument();
   const controls = createPackageScopeControls({ doc, onChange: (scope) => changes.push(scope) });
@@ -100,7 +100,11 @@ test("All pipelines is the default and both dropdowns support multi-select", () 
     workspaceKeys: null,
     showEmptyWorkspaces: false,
   });
-  assert.equal(getInput(pipelines, "All pipelines").checked, true);
+  assert.equal(getInput(pipelines, "All workstreams").checked, true);
+  assert.equal(pipelines.children[0].children[0].textContent, "Workstreams");
+  assert.equal(pipelines.children[1].attrs.get("aria-label"), "Workstreams selection");
+  assert.equal(workspaces.children[0].children[0].textContent, "Workspaces");
+  assert.equal(workspaces.children[1].attrs.get("aria-label"), "Workspaces selection");
   getInput(pipelines, "ENC").change(true);
   assert.deepEqual(controls.getScope().pipelineIds, ["enc"]);
   getInput(pipelines, "Paper Charts").change(true);
@@ -113,9 +117,13 @@ test("All pipelines is the default and both dropdowns support multi-select", () 
     contextKey("paper", "north"),
   ]);
   assert.equal(doc.activeElement?.dataset.scopeKey, "North (Paper Charts)");
-  getInput(pipelines, "All pipelines").change(true);
+  getInput(pipelines, "All workstreams").change(true);
   assert.deepEqual(controls.getScope().pipelineIds, ["enc", "paper"]);
-  assert.equal(getInput(pipelines, "All pipelines").checked, true);
+  assert.equal(getInput(pipelines, "All workstreams").checked, true);
+  assert.equal(pipelines.children[0].children[0].textContent, "Workstreams");
+  assert.equal(pipelines.children[1].attrs.get("aria-label"), "Workstreams selection");
+  assert.equal(workspaces.children[0].children[0].textContent, "Workspaces");
+  assert.equal(workspaces.children[1].attrs.get("aria-label"), "Workspaces selection");
   getInput(pipelines, "ENC").change(true);
   assert.deepEqual(controls.getScope().pipelineIds, ["enc"]);
   assert.deepEqual(controls.getScope().workspaceKeys, [contextKey("enc", "west")]);
@@ -233,14 +241,15 @@ test("rebuilding options preserves scroll positions and the external switch", ()
 test("a first empty catalogue does not lock in a missing Pipeline selection", () => {
   const controls = createPackageScopeControls({ doc: fakeDocument() });
   controls.setCatalogue([]);
+  assert.equal(controls.element.children[1].children[0].children[1].textContent, "No Workstreams");
   assert.deepEqual(controls.getScope().pipelineIds, []);
   controls.setCatalogue(groups);
   assert.deepEqual(controls.getScope().pipelineIds, ["enc", "paper"]);
-  assert.equal(getInput(controls.element.children[1], "All pipelines").checked, true);
+  assert.equal(getInput(controls.element.children[1], "All workstreams").checked, true);
   controls.destroy();
 });
 
-test("All pipelines includes newly discovered Pipelines but an explicit choice stays narrow", () => {
+test("All workstreams includes new Pipelines but an explicit choice stays narrow", () => {
   const controls = createPackageScopeControls({ doc: fakeDocument() });
   controls.setCatalogue(groups);
   const added = { id: "s102", name: "S-102", workspaces: [] };

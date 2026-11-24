@@ -1,3 +1,20 @@
+## DC-TERMINOLOGY-WORKSTREAM-01 - Frontend presentation terminology (2026-11-24)
+
+The user-facing Workstream/Workstreams concept maps to the existing backend
+Pipeline. Workspaces remain Workspaces; the Main Map workflow is Packages and
+its internal work items remain contextual Jobs. UI labels, ARIA names and
+application-owned display/error messages use Workstream. The service/adapter
+layer retains all Pipeline methods, route segments, query/payload fields and
+identifiers, including the `(packageId, pipelineId, workspaceId)` tuple. No new
+normalization, requests, layer ownership, persisted settings or filters are
+introduced. Backend-supplied display names, IDs and diagnostic text stay verbatim.
+The historical Feature/Work stream mock prototype and its `WorkStream` symbols
+are not a live Pipeline and are intentionally preserved. Older dated entries
+below may use their original UI vocabulary; technical Pipeline references
+remain valid. See [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md).
+
+---
+
 ## DC-PACKAGE-QC-01 - Work mode design preview (2026-11-24)
 
 `features/jobs/ui/createPackageScopeControls.js` owns the native Compilation/QC
@@ -9,6 +26,9 @@ preview uses no store, preference, API request or persistence. `getScope()` and
 the preview cannot initiate a new map scope or change contextual Job status.
 Existing count, geometry, label and selection owners are unchanged. The preview
 is live Main Map list-only; no mock data or Assignment changes are introduced.
+The user accepted and committed the design preview (`d038defa009814f60e6c25c660f232a2dce6a722`),
+subsequently merged at `d91b54b2a0cbe1ff00a60f483a5f0f39f5d3a3fc`. Functional QC
+filtering remains open.
 A future verified QC contract must extend the existing scope/filter pipeline
 rather than installing a second visibility owner.
 

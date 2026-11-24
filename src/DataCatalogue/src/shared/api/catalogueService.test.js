@@ -325,3 +325,41 @@ test("collectPages continues after the embedded membership page without rereadin
     /changed/
   );
 });
+
+
+test("Workstream presentation leaves Pipeline wire contracts intact", async () => {
+  const pipelineId = "Pipeline ID / 42";
+  const packageId = "Package ID / 7";
+  const requests = [];
+  const service = createCatalogueService({
+    request: async (path, options) => {
+      requests.push({ path, options });
+      if (path === "/v1/pipelines")
+        return page([{ id: pipelineId, displayName: "Pipeline Survey" }]);
+      return null;
+    },
+  });
+  assert.deepEqual(await service.pipelines(), [
+    { id: pipelineId, name: "Pipeline Survey", description: null, layerIds: [] },
+  ]);
+  await service.bind(packageId, pipelineId);
+  await service.unbind("Pipeline binding / 42");
+  assert.deepEqual(requests, [
+    { path: "/v1/pipelines", options: { signal: undefined } },
+    {
+      path: "/v1/dispatcher/bindings",
+      options: { method: "POST", signal: undefined, body: { packageId, pipelineId } },
+    },
+    {
+      path: "/v1/dispatcher/bindings/Pipeline%20binding%20%2F%2042",
+      options: { method: "DELETE", signal: undefined },
+    },
+  ]);
+});
+
+test("Incomplete Pipeline catalogue fails with application-owned Workstream wording", async () => {
+  const service = createCatalogueService({
+    request: async () => page([{ id: "pipe", displayName: "Pipeline Survey" }], 2),
+  });
+  await assert.rejects(service.pipelines(), { message: "Workstream catalogue is incomplete." });
+});

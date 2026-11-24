@@ -1,3 +1,31 @@
+## DC-TERMINOLOGY-WORKSTREAM-01 - Workstream terminology (2026-11-24)
+
+**Authoritative baseline:** `d91b54b2a0cbe1ff00a60f483a5f0f39f5d3a3fc`.
+**Status:** frontend candidate; local full check and browser acceptance pending.
+
+- Use Workstream / Workstreams for the backend Pipeline in user-facing live Main
+  Map Work Scope, Package list/details, Workspace popup, assignment controls,
+  accessible names and application-owned messages. Workspaces remain Workspaces.
+  The Main Map workflow is Packages; contextual Job identities are unchanged.
+- Preserve backend routes, methods, request/response fields, identity, existing
+  bindings, storage keys, service names, stable DOM IDs and map/list lifecycle.
+  Preserve backend-provided names, opaque IDs and diagnostic text verbatim; do
+  not rewrite arbitrary backend error payloads. Historical mock Feature/Work
+  stream terminology is distinct and remains historical. The retry label in
+  that prototype uses its existing Work stream vocabulary, not the live term.
+- The terminology rule supersedes earlier user-facing Pipeline labels in dated
+  sections below; technical Pipeline references and historical evidence remain
+  valid. No dependency, backend or authorization change.
+- DC-PACKAGE-QC-01 design preview is accepted in user-reported commit
+  `d038defa009814f60e6c25c660f232a2dce6a722`, merged into this baseline. Functional
+  QC filtering remains open. Preserve the preview without scope changes, status
+  writes, new reads or persisted workflow state.
+- Acceptance: verify both themes, long labels, keyboard/ARIA, unchanged Work
+  Scope and contextual statuses, saved Workspace matches, and identical wire
+  contracts/request behavior. See the candidate delivery report for actual checks.
+
+---
+
 ## DC-MAP-LABEL - Main Map Workspace and Package labels (2026-11-24)
 
 **Authoritative baseline:** `76c268f042dd4b35988c82071bc5e5d2fec2729c` (merge;
@@ -51,13 +79,13 @@ Packages detail view**. History itself is not implemented.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
-| Suggested order | Task                                                                                                            | Status / dependency                                                             |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                 |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                 |
-| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | UI preview candidate; functional filtering depends on backend workflow contract |
-| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Open; backend history contract needed for real data                             |
-| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                |
+| Suggested order | Task                                                                                                            | Status / dependency                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                        |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                        |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Open; backend history contract needed for real data                                    |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                       |
 
 This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
 
@@ -98,18 +126,20 @@ This is a proposed next-work shortlist, not a complete audit of all historical t
 
 **Requirements / acceptance criteria:**
 
-- Provide a clear two-mode control labelled `Compilation` and `QC`; proposed initial/default mode is `Compilation`, subject to UX confirmation. The control must be distinguishable from `Show empty Workspaces` and existing Work Scope/status controls, with keyboard access and both themes. A design-only candidate may implement the toggle before backend integration.
+- Provide a clear two-mode control labelled `Compilation` and `QC`, with the accepted initial/default mode `Compilation`. The control must be distinguishable from `Show empty Workspaces` and existing Work Scope/status controls, with keyboard access and both themes. The accepted design-only preview precedes backend integration.
 - The working and QC states, eligible transitions, ownership, permissions, and whether the workflow is Package-level or scoped to Pipeline/Workspace are not yet defined by a verified backend contract. Do not infer that a Workspace lock, Severity, `Done`, or `No update` means QC. Preserve contextual Job identities and existing status semantics.
 - In a pre-backend live UI, a toggle may expose the intended layout/selection but must explicitly indicate that QC filtering is unavailable. It must not invent QC membership, persist synthetic live workflow state, hide real Packages under a misleading filter, or send writes. Any later isolated mock-mode design data must be explicitly scoped and never used as live fallback.
 - Once the backend contract is agreed, filter the authoritative Package/Job list using the selected mode alongside existing Pipeline/Workspace and status scope. Define map/AOI visibility, Workspace counts/legend behavior, empty-state and selection reconciliation explicitly before implementation. Avoid adding a second map scope owner. Verify behavior on mode changes, refresh, stale responses, navigation and error recovery.
 - Do not add a QC completion button, reassignment, status mutation, or QC authorization rule in the design-only scope. Those require separate product/backend decisions.
 
-**Design-only frontend candidate (2026-11-24; baseline `26472a59188f61eed632c59abc0e59d2a06e64e9`):**
+**Accepted design-only frontend preview (2026-11-24; implementation baseline `26472a59188f61eed632c59abc0e59d2a06e64e9`):**
+
+The user reported successful local testing and commit `d038defa009814f60e6c25c660f232a2dce6a722`, merged at `d91b54b2a0cbe1ff00a60f483a5f0f39f5d3a3fc`. Preview UX acceptance is complete; the backend-dependent functional stage is not.
 
 - A compact native radio group below the existing live Work Scope selectors and `Show empty` switch exposes `Compilation` (default) and `QC`. It is list-only, with theme-aware selected and keyboard-focus states. Selecting QC displays `QC filtering is not yet available.` Selecting Compilation removes that notice.
 - The mounted radio inputs own ephemeral presentation state. Scope option rerenders, catalogue and Job updates do not replace these inputs. The existing Details visibility lifecycle hides the entire scope section; Back shows the same selection. Recreating the controls starts in Compilation. No storage preference or authoritative workflow state is introduced.
 - Mode changes do not publish `onChange` scope events, alter `getScope()`, rerender the Package list, reload data, change map/label visibility or Workspace counts, or write status. Existing Work Scope and status controls continue to operate normally. The preview is mounted only in the existing live scope controls; mock mode and Package Assignment are unchanged.
-- Local design, keyboard, light/dark, refresh and Details/Back acceptance are pending. Backend workflow identity, status values, transition rules and actual mode-dependent filtering remain open. This candidate does not establish a QC workflow or authorize any QC actions.
+- The design preview is accepted on the basis of the user-reported testing and merge. No new browser-test run is claimed here. Backend workflow identity, status values, transition rules and actual mode-dependent filtering remain open. The preview does not establish a QC workflow or authorize any QC actions.
 
 Backend dependencies for the timeline and QC are recorded in [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md). Earlier first-look requirements remain in [DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md). No new endpoint, schema or dependency is introduced.
 

@@ -7,7 +7,7 @@ function entry(number) {
 }
 
 test("Package AOIs require a selected Pipeline and only read its assigned geometry", async () => {
-  await assert.rejects(loadPackageAois({ packageGeometries() {} }), /Select a Pipeline/);
+  await assert.rejects(loadPackageAois({ packageGeometries() {} }), /Select a Workstream/);
   const calls = [];
   const items = await loadPackageAois(
     {

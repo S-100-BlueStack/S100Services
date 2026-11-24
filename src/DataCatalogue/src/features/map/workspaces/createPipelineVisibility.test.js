@@ -116,7 +116,9 @@ test("Every Pipeline starts enabled and visibility toggles do not reload Jobs", 
     assert.equal(f.callbacks[0].options.autoFocus, false);
 
     const list = f.container.children[1];
+    assert.equal(list.attributes.get("aria-label"), "Visible Workstreams and Workspaces");
     const encCheckbox = list.children[0].children[0].children[0];
+    assert.equal(encCheckbox.attributes.get("aria-label"), "Show ENC Workstream");
     assert.equal(encCheckbox.checked, true);
     encCheckbox.checked = false;
     encCheckbox.dispatchEvent(new Event("change"));
@@ -259,7 +261,7 @@ test("Pipeline groups separate headers from Workspace rows without adding short-
     assert.equal(groups.length, 2);
     for (const group of groups) {
       assert.equal(group.attributes.get("role"), "group");
-      assert.match(group.attributes.get("aria-label"), / Pipeline$/);
+      assert.match(group.attributes.get("aria-label"), / Workstream$/);
       assert.equal(group.children[0].className, "dc-pipeline-row dc-pipeline-row--pipeline");
       const workspaceList = group.children[1];
       assert.equal(workspaceList.className, "dc-pipeline-workspaces");
@@ -435,6 +437,27 @@ test("superseded combined overview cannot replace newer Workspace membership", a
     firstResolve(catalogue("old"));
     await new Promise(setImmediate);
     assert.deepEqual(loaded, [["current"]]);
+  } finally {
+    f.restore();
+  }
+});
+
+
+test("Workstream load failure preserves the diagnostic and uses a user-facing prefix", async () => {
+  const f = fixture({
+    loadCatalogue: async () => {
+      throw new Error("Pipeline ID / 42 unavailable");
+    },
+  });
+  try {
+    const result = await f.controller.ensureLoaded();
+    assert.equal(result.ok, false);
+    assert.equal(
+      f.container.children[0].textContent,
+      "Workstreams could not be loaded: Pipeline ID / 42 unavailable"
+    );
+    assert.equal(result.error.message, "Pipeline ID / 42 unavailable");
+    assert.deepEqual(f.loaded, []);
   } finally {
     f.restore();
   }

@@ -1,3 +1,13 @@
+## DC-TERMINOLOGY-WORKSTREAM-01 - Existing component labels (2026-11-24)
+
+Existing native controls and Calcite actions retain their DOM IDs, lifecycle,
+focus and keyboard behavior. The user-facing labels and accessible names use
+Workstream / Workstreams for the existing Pipeline concept; Workspace remains
+unchanged. No new component or private Calcite access is introduced. Older
+entries retain their original technical and historical terminology.
+
+---
+
 ## DC-PACKAGE-QC-01 - Native segmented work mode preview (2026-11-24)
 
 The existing application-owned live Work Scope section uses two native radio
@@ -9,6 +19,7 @@ colors; forced-colors mode uses system highlight colors. A native status region
 announces unavailable QC filtering. Stable native controls avoid replacing focus
 during scope option updates and require no Calcite shadow-DOM access. This is
 presentation state only, not a second scope or a persisted workflow filter.
+The user accepted this design preview; functional QC filtering remains open.
 
 ---
 

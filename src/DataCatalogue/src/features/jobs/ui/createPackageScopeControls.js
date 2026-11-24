@@ -41,7 +41,7 @@ export function createPackageScopeControls({ doc = document, onChange = () => {}
     return { details, summary, value, options };
   }
 
-  const pipeline = dropdown("Pipelines");
+  const pipeline = dropdown("Workstreams");
   const workspace = dropdown("Workspaces");
 
   function closeDropdownsExcept(active) {
@@ -209,7 +209,7 @@ export function createPackageScopeControls({ doc = document, onChange = () => {}
     const scrollTop = pipeline.options.scrollTop;
     const rows = [
       makeCheckbox(
-        "All pipelines",
+        "All workstreams",
         allPipelines && groups.length > 0,
         () => {
           const previous = getScope();
@@ -261,11 +261,11 @@ export function createPackageScopeControls({ doc = document, onChange = () => {}
     pipeline.options.scrollTop = scrollTop;
     restoreFocus(pipeline.options, focused, pipeline.summary);
     pipeline.value.textContent = !selectedPipelineIds.length
-      ? "No Pipelines"
+      ? "No Workstreams"
       : allPipelines
-        ? "All pipelines"
+        ? "All workstreams"
         : selectedPipelineIds.length === 1
-          ? (groups.find((group) => group.id === selectedPipelineIds[0])?.name ?? "Pipeline")
+          ? (groups.find((group) => group.id === selectedPipelineIds[0])?.name ?? "Workstream")
           : `${selectedPipelineIds.length} selected`;
   }
 
@@ -359,7 +359,7 @@ export function createPackageScopeControls({ doc = document, onChange = () => {}
     getScope,
     setCatalogue(nextGroups) {
       if (!alive) return;
-      if (!Array.isArray(nextGroups)) throw new Error("Pipeline catalogue must be an array.");
+      if (!Array.isArray(nextGroups)) throw new Error("Workstream catalogue must be an array.");
       const previous = getScope();
       const pipelineIds = new Set();
       const next = nextGroups.map((group) => {
@@ -369,7 +369,7 @@ export function createPackageScopeControls({ doc = document, onChange = () => {}
           pipelineIds.has(group.id) ||
           !Array.isArray(group.workspaces)
         ) {
-          throw new Error("Pipeline catalogue contains an invalid or duplicate identity.");
+          throw new Error("Workstream catalogue contains an invalid or duplicate identity.");
         }
         pipelineIds.add(group.id);
         const workspaceIds = new Set();

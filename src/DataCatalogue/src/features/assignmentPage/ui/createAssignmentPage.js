@@ -32,13 +32,14 @@ export function createAssignmentPage({
 }) {
   const live = services.source === "live";
   const entityName = live ? "Package" : "Feature";
-  const assignmentName = live ? "Pipeline" : "Work stream";
+  // Live workStreams lists backend Pipelines, not the historical mock Workspace concept.
+  const assignmentName = live ? "Workstream" : "Work stream";
   const element = document.createElement("main");
   element.className = "dc-assignment-page";
   element.id = "data-catalogue-feature-assignment";
   element.setAttribute(
     "aria-label",
-    live ? "Package Pipeline assignment" : "Feature assignment prototype"
+    live ? "Package Workstream assignment" : "Feature assignment prototype"
   );
   const markup = `
     <div class="dc-assignment-column dc-assignment-column--left">
@@ -53,7 +54,7 @@ export function createAssignmentPage({
         <div class="dc-assignment-scroll" data-features></div>
         <footer class="dc-assignment-toolbar"><button type="button" data-feature-prev>Previous</button><span data-feature-page></span><button type="button" data-feature-next>Next</button><span class="dc-feature-list-refresh-group"><button class="dc-assignment-icon-action dc-feature-list-refresh" type="button" data-feature-retry aria-label="Refresh Packages" title="Refresh Packages"><calcite-icon icon="refresh" scale="s" aria-hidden="true"></calcite-icon></button><time class="dc-feature-list-last-refreshed" data-feature-last-refreshed></time></span></footer>
       </section>
-      <section class="dc-assignment-panel dc-work-stream-panel" data-work-stream-panel aria-label="Work stream assignments">
+      <section class="dc-assignment-panel dc-work-stream-panel" data-work-stream-panel aria-label="${assignmentName} assignments">
         <div class="dc-assignment-toolbar dc-assignment-panel-toolbar">
           <span class="dc-assignment-muted" data-active-count></span>
           <button type="button" data-work-stream-mode aria-pressed="false">Show active</button>
@@ -67,7 +68,7 @@ export function createAssignmentPage({
         <p data-work-stream-status role="status">Select a Feature to edit assignments.</p>
         <div class="dc-assignment-scroll" data-work-streams></div>
         <div class="dc-assignment-toolbar dc-work-stream-reload">
-          <button type="button" data-work-stream-retry hidden>Retry pipelines</button>
+          <button type="button" data-work-stream-retry hidden>Retry ${live ? "workstreams" : "Work streams"}</button>
         </div>
       </section>
     </div>
@@ -94,9 +95,7 @@ export function createAssignmentPage({
     </div>
     <footer class="dc-prototype-toolbar dc-assignment-toolbar"><span>Mock data · Prototype user · Saved comments are immutable</span><button type="button" data-fail-load>Fail next load</button><button type="button" data-fail-save>Fail next save</button><button type="button" data-reset>Reset mock data</button><span data-test-status role="status"></span></footer>`;
 
-  element.innerHTML = live
-    ? markup.replaceAll("Feature", "Package").replaceAll("Work stream", "Pipeline")
-    : markup;
+  element.innerHTML = live ? markup.replaceAll("Feature", "Package") : markup;
   if (live) element.className += " dc-assignment-page--live";
 
   const get = createRequiredTargetGetter((name) => element.querySelector(`[data-${name}]`));

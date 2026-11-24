@@ -20,7 +20,7 @@ export function normalizePackageAssignmentSummary(value) {
       !binding.pipelineId.trim() ||
       seen.has(binding.pipelineId)
     ) {
-      throw new Error("API returned invalid Package Pipeline bindings.");
+      throw new Error("API returned invalid Package Workstream bindings.");
     }
     seen.add(binding.pipelineId);
     pipelineIds.push(binding.pipelineId);

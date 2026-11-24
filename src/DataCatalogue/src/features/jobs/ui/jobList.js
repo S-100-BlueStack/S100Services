@@ -662,7 +662,7 @@ function createJobDetailsFactSection(job) {
   if (job.source === "live") {
     sectionElement.classList.add("job-details__section--live-facts");
     const presentation = getLiveJobPresentation(job);
-    factGridElement.append(createJobDetailFact("Pipeline", presentation.pipeline));
+    factGridElement.append(createJobDetailFact("Workstream", presentation.pipeline));
     if (job.createdAt) {
       factGridElement.append(createJobDetailFact("Created", formatDate(job.createdAt)));
     }
@@ -1051,7 +1051,7 @@ function createPackageGroup({ group, collapsedPackageIds, cardOptions }) {
   ).size;
   meta.textContent =
     pipelineCount > 1
-      ? `${pipelineCount} pipelines`
+      ? `${pipelineCount} workstreams`
       : workspaceCount > 1
         ? `${workspaceCount} workspaces`
         : `${group.jobs.length} Jobs`;

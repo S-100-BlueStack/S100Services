@@ -42,7 +42,7 @@ export function createWorkspacePopupTemplate() {
       heading.textContent = "Information";
       information.append(heading);
       const details = element("dl", "dc-workspace-popup__details");
-      appendDetail(details, "Pipeline", pipeline);
+      appendDetail(details, "Workstream", pipeline);
       if (openJobs !== null) appendDetail(details, "Open packages", String(openJobs));
       information.append(details);
       content.append(information);

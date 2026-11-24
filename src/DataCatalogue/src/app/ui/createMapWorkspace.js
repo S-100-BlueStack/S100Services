@@ -18,8 +18,8 @@ export function createMapWorkspace({ live = false, packageInformationElement = n
 
   const pipelineAction = document.createElement("calcite-action");
   pipelineAction.icon = "layers";
-  pipelineAction.text = "Pipelines";
-  pipelineAction.title = "Show Pipelines";
+  pipelineAction.text = "Workstreams";
+  pipelineAction.title = "Show Workstreams";
   pipelineAction.setAttribute("aria-controls", "data-catalogue-pipelines-panel");
   pipelineAction.setAttribute("aria-expanded", String(live));
   pipelineAction.hidden = !live;
@@ -30,10 +30,10 @@ export function createMapWorkspace({ live = false, packageInformationElement = n
   const pipelinePanel = document.createElement("section");
   pipelinePanel.id = "data-catalogue-pipelines-panel";
   pipelinePanel.className = "dc-map-pipelines-panel";
-  pipelinePanel.setAttribute("aria-label", "Pipelines");
+  pipelinePanel.setAttribute("aria-label", "Workstreams");
   pipelinePanel.hidden = !live;
   const panelHeading = document.createElement("h2");
-  panelHeading.textContent = "Pipelines";
+  panelHeading.textContent = "Workstreams";
   const pipelineContent = document.createElement("div");
   pipelineContent.className = "dc-map-pipelines-panel__content";
   pipelinePanel.append(panelHeading, pipelineContent);

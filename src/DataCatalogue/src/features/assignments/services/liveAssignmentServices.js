@@ -195,14 +195,14 @@ export function createLiveAssignmentServices(
     workspaces: {
       async list({ pipelineId, signal } = {}) {
         if (typeof pipelineId !== "string" || !pipelineId.trim())
-          throw new Error("Pipeline ID is required for Workspace listing.");
+          throw new Error("Workstream ID is required for Workspace listing.");
         const items = await collectPages(
           ({ page, pageSize, signal: requestSignal }) =>
             catalogue.workspaces({ pipelineId, page, pageSize, signal: requestSignal }),
           { signal }
         );
         if (items.some((item) => item.pipelineId !== pipelineId))
-          throw new Error("Workspace catalogue returned a different Pipeline scope.");
+          throw new Error("Workspace catalogue returned a different Workstream scope.");
         return { items, total: items.length };
       },
     },

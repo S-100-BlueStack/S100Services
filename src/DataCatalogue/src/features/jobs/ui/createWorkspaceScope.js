@@ -6,7 +6,7 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange,
   const label = document.createElement("label");
   label.textContent = "Workspace";
   const select = document.createElement("select");
-  select.setAttribute("aria-label", "Pipeline and Workspace for Packages");
+  select.setAttribute("aria-label", "Workstream and Workspace for Packages");
   select.append(new Option("Select a Workspace", ""));
   label.append(select);
   const focus = document.createElement("button");

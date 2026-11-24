@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAssignmentPage } from "./createAssignmentPage.js";
+import { CatalogueApiError } from "../../../shared/api/catalogueClient.js";
 import { REQUIRED_ASSIGNMENT_PAGE_TARGETS } from "./assignmentPageContract.js";
 
 function deferred() {
@@ -214,7 +215,7 @@ test("Switching Package clears displayed details and bindings while retaining co
     assert.equal(dom.get("package-name").textContent, "");
     assert.deepEqual(dom.get("saved-bindings").children, []);
     assert.deepEqual(dom.get("information").children, []);
-    assert.match(dom.get("work-stream-status").textContent, /Loading Pipelines/);
+    assert.match(dom.get("work-stream-status").textContent, /Loading Workstreams/);
     assert.equal(dom.get("work-streams").inert, true);
 
     nextPackage.resolve(packageData("B"));
@@ -223,7 +224,7 @@ test("Switching Package clears displayed details and bindings while retaining co
     nextBindings.resolve(record(false));
     assert.equal(await pending, true);
     assert.deepEqual(mapSelections, [...before, "B"]);
-    assert.match(dom.get("work-stream-status").textContent, /Loading Pipelines/);
+    assert.match(dom.get("work-stream-status").textContent, /Loading Workstreams/);
     assert.deepEqual(dom.get("work-streams").children, []);
     assert.equal(dom.get("work-streams").inert, true);
 
@@ -320,7 +321,8 @@ test("Failed Pipeline catalogue does not show stale bindings under a new Package
     workStreams: {
       list: async () => {
         pipelineReads++;
-        if (pipelineReads === 2) throw new Error("Pipelines unavailable");
+        if (pipelineReads === 2)
+          throw new CatalogueApiError("Pipeline PIPE-42 is unavailable", { status: 403 });
         return { items: [{ id: "ENC", name: "ENC" }], total: 1 };
       },
     },
@@ -337,7 +339,7 @@ test("Failed Pipeline catalogue does not show stale bindings under a new Package
     assert.equal(dom.get("work-streams").children.length, 1);
     assert.equal(await page.selectPackage("B"), true);
     await flush();
-    assert.match(dom.get("work-stream-status").textContent, /Pipelines unavailable/);
+    assert.equal(dom.get("work-stream-status").textContent, "Pipeline PIPE-42 is unavailable");
     assert.equal(dom.get("work-streams").children.length, 0);
     assert.equal(dom.get("work-stream-retry").disabled, false);
 
@@ -559,6 +561,9 @@ test("Live details show ordered fields and only saved Pipeline and Workspace bin
       createMap: () => ({ view: null, selectContext() {}, destroy() {} }),
     });
     const html = page.element.innerHTML;
+    assert.equal(page.element.getAttribute("aria-label"), "Package Workstream assignment");
+    assert.match(html, /aria-label="Workstream assignments"/);
+    assert.match(html, />Retry workstreams<\/button>/);
     const left = html.split('class="dc-assignment-column dc-assignment-column--right"')[0];
     const right = html.split('class="dc-assignment-column dc-assignment-column--right"')[1];
     assert.ok(left.indexOf("dc-feature-panel") < left.indexOf("dc-work-stream-panel"));
@@ -581,6 +586,10 @@ test("Live details show ordered fields and only saved Pipeline and Workspace bin
     ]);
     const binding = dom.get("saved-bindings").children[0];
     assert.equal(binding.children[0].textContent, "ENC Production");
+    assert.equal(
+      dom.get("work-stream-panel").getAttribute("aria-label"),
+      "Workstream assignments for A"
+    );
     assert.equal(binding.children[1].textContent, " · Kattegat");
 
     const checkbox = dom.get("work-streams").children[0].children[0].children[0].children[0];
@@ -1085,6 +1094,36 @@ test("Package rows show authoritative assignment and Pipeline names before any P
     assert.equal(rows[1].children[0].children[1].textContent, "Not assigned");
     assert.equal(rows[1].children[0].children[0].children[1].textContent, "");
     assert.deepEqual(calls, ["pipelines"]);
+  } finally {
+    page?.destroy();
+    dom.restore();
+  }
+});
+
+
+test("Mock Feature assignment retains historical Work stream terminology", async () => {
+  const dom = fakeDom();
+  let page;
+  try {
+    page = createAssignmentPage({
+      services: {
+        source: "mock",
+        features: {
+          search: async () => ({ items: [], page: 0, pageSize: 25, total: 0 }),
+        },
+      },
+      createMap: () => ({ destroy() {} }),
+    });
+    await flush();
+    assert.equal(page.element.getAttribute("aria-label"), "Feature assignment prototype");
+    assert.match(page.element.innerHTML, /aria-label="Work stream assignments"/);
+    assert.match(page.element.innerHTML, />Retry Work streams<\/button>/);
+    assert.match(page.element.innerHTML, />Assigned Work stream<\/span>/);
+    assert.doesNotMatch(page.element.innerHTML, /\bWorkstreams?\b/);
+    assert.equal(
+      dom.get("work-stream-panel").getAttribute("aria-label"),
+      "Work stream assignments"
+    );
   } finally {
     page?.destroy();
     dom.restore();

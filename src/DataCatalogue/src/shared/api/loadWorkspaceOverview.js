@@ -9,7 +9,7 @@ export async function loadWorkspaceOverview(catalogue, { signal } = {}) {
   const pipelines = await catalogue.pipelines({ signal });
   signal?.throwIfAborted();
   if (new Set(pipelines.map((pipeline) => pipeline.id)).size !== pipelines.length)
-    throw new Error("Pipeline catalogue contains duplicate identifiers.");
+    throw new Error("Workstream catalogue contains duplicate identifiers.");
   const pages = new Array(pipelines.length);
   let nextPipeline = 0;
 
@@ -47,7 +47,7 @@ export async function loadWorkspaceOverview(catalogue, { signal } = {}) {
             throw new Error("Workspace overview paging returned an incomplete page.");
           for (const row of result.items) {
             if (row.workspace.pipelineId !== pipeline.id)
-              throw new Error("Workspace overview contains a different Pipeline identity.");
+              throw new Error("Workspace overview contains a different Workstream identity.");
             const workspace = { ...row.workspace, pipelineName: pipeline.name };
             const key = workspaceGeometryKey(workspace);
             if (seen.has(key))

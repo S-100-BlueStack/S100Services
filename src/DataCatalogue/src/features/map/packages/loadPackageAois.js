@@ -19,7 +19,7 @@ export async function loadPackageAois(
     !selected.length ||
     selected.some((id) => typeof id !== "string" || !id.trim())
   ) {
-    throw new Error("Select a Pipeline before loading Package AOIs.");
+    throw new Error("Select a Workstream before loading Package AOIs.");
   }
   if (!Number.isSafeInteger(maxPackages) || maxPackages < 1) {
     throw new Error("Package AOI display limit is invalid.");
@@ -50,7 +50,7 @@ export async function loadPackageAois(
       }
       if (expectedTotal === null) expectedTotal = result.total;
       if (result.total > maxPackages) {
-        throw new Error(`Pipeline Package AOI overview exceeds ${maxPackages} features.`);
+        throw new Error(`Workstream Package AOI overview exceeds ${maxPackages} features.`);
       }
       for (const item of result.items) {
         if (seenInPipeline.has(item.packageId)) {

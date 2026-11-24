@@ -1,3 +1,15 @@
+## Frontend terminology boundary (2026-11-24)
+
+Workstream / Workstreams is a presentation-only name for the existing Pipeline
+entity in DataCatalogue. This contract document deliberately retains the actual
+Pipeline entity, `/v1/pipelines` routes, `pipelineId`, `hasPipeline`,
+`pipelineBindings` and existing binding request/response fields. Workspace is
+unchanged. No backend contract, permissions, identity, normalization or wire
+schema is migrated by DC-TERMINOLOGY-WORKSTREAM-01. The older mock `Work stream`
+prototype is not the live Pipeline contract. Backend diagnostics remain verbatim.
+
+---
+
 ## DC-PERF-FE-01 — Frontend consumer of combined Workspace overview (2026-11-16)
 
 The live **Main Map** now uses the DC-PERF-BE-02 endpoint described below.

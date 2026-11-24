@@ -57,7 +57,7 @@ test("native Workspace title owns the only header and close button", () => {
       false
     );
     assert.deepEqual(details(content), [
-      ["Pipeline", "ENC"],
+      ["Workstream", "ENC"],
       ["Open packages", "5"],
     ]);
   });
@@ -78,7 +78,7 @@ test("lock action is disabled and status is an explicit placeholder", () => {
     assert.equal(owner.children[0].getAttribute("icon"), "unlock");
     assert.equal(owner.children[1].textContent, "None");
     assert.match(owner.title, /not yet available/);
-    assert.deepEqual(details(content), [["Pipeline", "Unavailable"]]);
+    assert.deepEqual(details(content), [["Workstream", "Unavailable"]]);
   });
 });
 
@@ -90,13 +90,13 @@ test("missing counts are omitted instead of invented as zero", () => {
           attributes: { workspaceId: "workspace-1", pipelineId: "pipeline-1", openJobs: count },
         },
       });
-      assert.deepEqual(details(content), [["Pipeline", "pipeline-1"]]);
+      assert.deepEqual(details(content), [["Workstream", "pipeline-1"]]);
     }
     const content = createWorkspacePopupTemplate().content({
       graphic: { attributes: { openJobs: 0 } },
     });
     assert.deepEqual(details(content), [
-      ["Pipeline", "Unavailable"],
+      ["Workstream", "Unavailable"],
       ["Open packages", "0"],
     ]);
   });
@@ -113,8 +113,28 @@ test("backend names cannot inject markup into native title or app-owned content"
       "&lt;img src=&quot;x&quot; onerror=&quot;alert(1)&quot;&gt;"
     );
     assert.deepEqual(details(template.content({ graphic })), [
-      ["Pipeline", pipeline],
+      ["Workstream", pipeline],
       ["Open packages", "1"],
+    ]);
+  });
+});
+
+
+test("Workstream field label does not rewrite backend names or opaque identifiers", () => {
+  withDocument(() => {
+    const template = createWorkspacePopupTemplate();
+    const attributes = {
+      workspaceName: "Pipeline Survey Workspace",
+      pipelineName: "Pipeline Survey",
+      pipelineId: "Pipeline ID / 42",
+    };
+    assert.equal(template.title({ graphic: { attributes } }), "Pipeline Survey Workspace");
+    assert.deepEqual(details(template.content({ graphic: { attributes } })), [
+      ["Workstream", "Pipeline Survey"],
+    ]);
+    delete attributes.pipelineName;
+    assert.deepEqual(details(template.content({ graphic: { attributes } })), [
+      ["Workstream", "Pipeline ID / 42"],
     ]);
   });
 });

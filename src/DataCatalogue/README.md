@@ -1,30 +1,33 @@
 ## Package Assignment: automatic Workspace matches (2026-11-17)
 
-Live Pipeline bindings remain editable and saved through the existing API.
-Workspace names beneath each selected Pipeline are read-only matches from the
-last saved binding response; new Pipeline assignments calculate matches on Save.
+Live Workstream bindings remain editable and saved through the existing Pipeline
+API. Workspace names beneath each selected Workstream are read-only matches from
+the last saved binding response; new Workstream assignments calculate matches on Save.
 No manual Workspace include/exclude draft, extra Workspace catalogue read or
 Workspace mutation is offered. Mock Feature/Work stream assignment is unchanged.
-The implementation is a candidate pending full local `npm run check` and browser
-validation. See `docs/PROJECT_TRACKER.md` for DC-ASSIGN-AUTOMATCH.
+DC-ASSIGN-AUTOMATCH was accepted and committed as reported by the user.
+See `docs/PROJECT_TRACKER.md` for the acceptance record.
 
 # DataCatalogue frontend
 
 DataCatalogue is an ArcGIS/Vite frontend in `S100Services/src/DataCatalogue`.
 
-## Current candidate
+## Terminology and source modes
 
-DC-API integrates source-verified v1 reads and Package–Pipeline writes against baseline
-`08d9281fe35b06012bda430c94767ef69a439d3e`. It is a frontend integration candidate,
-not a claim that deployment, authentication, map geometry or browser acceptance is verified.
-No backend files, dependencies or lockfiles are changed.
+The live frontend calls the backend Pipeline concept **Workstream** (plural
+**Workstreams**). **Workspace** is a separate, unchanged geographic work area.
+API routes, DTOs, `pipelineId`, `hasPipeline`, `pipelineBindings`, bindings and
+contextual Job identities retain the technical Pipeline terminology. Historical
+`Work stream` in the mock prototype denotes a different concept and is not a
+live Pipeline. Backend-provided names, opaque IDs and diagnostic text are not
+rewritten. See [current scope](docs/FEATURE_WORKSPACE_SCOPE.md).
 
 Two explicit source modes are available:
 
 - `mock` (default): existing Jobs/AOI and four-panel Feature/Work stream demo, including its
   isolated saved assignments, comments, failure controls and reset.
-- `live`: whole Packages with multiple Pipeline bindings; read-only derived Workspaces;
-  Workspace-backed Jobs in the existing Jobs panel. Job status is mock-only, in memory and
+- `live`: whole Packages with multiple Workstream bindings; read-only derived Workspaces;
+  contextual Jobs displayed in the Packages panel. Job status is mock-only, in memory and
   independently keyed by Package, Pipeline and Workspace. Live failures never load demo data.
 
 Severity is exact uint64 priority, with smaller values first, `0` highest and
@@ -32,14 +35,14 @@ Severity is exact uint64 priority, with smaller values first, `0` highest and
 No High/Medium/Low bands are inferred. Jobs are sorted within the complete selected Workspace;
 the Package assignment list retains server paging/order.
 
-Live maps do not display Package/Workspace overlays until the approved geographic mapping is
-verified. Workspace list and Package/Job access remain usable independently of map readiness.
-Demo geometry URLs must not be treated as live catalogue joins.
+Live maps use the verified backend geometry contracts for Workspace coverage and
+Package AOIs. Workspace list and Package/Job access remain usable independently
+of map readiness. Demo geometry URLs must not be treated as live catalogue joins.
 
 ## Main-map Packages presentation
 
 In the live main-map Packages panel, the Package short ID is the primary item
-identity. Pipeline/Workspace context and exact Severity remain visible without
+identity. Workstream/Workspace context and exact Severity remain visible without
 treating every value as a heading. Status actions (`Done` and `No update`) are
 presented together on each row and in Package Details. Details use compact
 label/value rows with alternating neutral surfaces in light and dark modes.
@@ -61,11 +64,12 @@ Assignment. The user accepted this panel in commit `6342966632af3774d336b6f7e7d4
 Future individual Package history belongs in the left Packages detail view,
 not the right metadata overlay; its backend contract remains open.
 
-The live Main Map label candidate displays Workspace names at 1:3,000,000 or
-closer and Package Short IDs at 1:250,000 or closer. Labels reuse existing
+The accepted live Main Map labels display Workspace names at 1:5,000,000 or
+closer and Package Short IDs at 1:3,000,000 or closer. Labels reuse existing
 visible geometry and metadata and use native SDK collision handling. No
-additional catalogue read is required; see `docs/PROJECT_TRACKER.md` for
-DC-MAP-LABEL and pending browser acceptance.
+additional catalogue read is required. See `docs/PROJECT_TRACKER.md` for
+DC-MAP-LABEL. The accepted Compilation/QC design preview is presentation-only;
+functional QC filtering remains open pending a verified backend contract.
 
 See [DC-UX-03D validation](docs/DC_UX_03D_VALIDATION.md) for browser acceptance.
 
@@ -197,7 +201,7 @@ paths must not contain secrets or authentication tokens.
 ## Documentation
 
 - [Project tracker](docs/PROJECT_TRACKER.md): current candidate status and historical work.
-- [Current assignment and Jobs scope](docs/FEATURE_WORKSPACE_SCOPE.md).
+- [Current Package, Workstream and Workspace scope](docs/FEATURE_WORKSPACE_SCOPE.md).
 - [Historical demo scope](docs/FEATURE_WORK_STREAM_SCOPE.md).
 - [Architecture](docs/ARCHITECTURE.md).
 - [Backend contracts](docs/BACKEND_CONTRACTS.md).

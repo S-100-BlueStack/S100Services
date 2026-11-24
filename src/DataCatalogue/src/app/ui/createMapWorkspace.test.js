@@ -32,6 +32,15 @@ test("Action Bar reserves map width while Pipelines and Jobs overlay the same ma
     assert.equal(shell.children[1].children[4].children[0].textContent, "Workspace colors");
     assert.equal(ui.panelHost.hidden, false);
     assert.equal(ui.pipelineAction.active, true);
+    assert.equal(ui.pipelineAction.text, "Workstreams");
+    assert.equal(ui.pipelineAction.title, "Show Workstreams");
+    assert.equal(
+      ui.pipelineAction.attributes.get("aria-controls"),
+      "data-catalogue-pipelines-panel"
+    );
+    assert.equal(ui.panelHost.children[0].id, "data-catalogue-pipelines-panel");
+    assert.equal(ui.panelHost.children[0].attributes.get("aria-label"), "Workstreams");
+    assert.equal(ui.panelHost.children[0].children[0].textContent, "Workstreams");
     assert.equal(ui.actionBar.expandToggleDisabled, true);
     assert.equal(ui.actionBar.overflowMode, "none");
 

@@ -23,6 +23,6 @@ test("Live assignment coverage uses saved intersecting Workspaces, preserving Pi
       liveAssignmentMapContext(feature, {
         relations: { a: { active: true, workspaces: [ws("b")] } },
       }),
-    /Pipeline binding/
+    /Workstream binding/
   );
 });

@@ -1,8 +1,13 @@
 # Live Workspace geometry
 
+The 2026-11-24 terminology change is presentation-only. Dated sections below
+retain earlier UI wording and technical Pipeline references; the historical
+visibility controls are superseded by unified Work Scope.
+
 DC-API-04 uses the existing catalogue Workspace detail read; no Feature Service is required.
-The live Jobs map displays all available Workspace polygons by default, with Pipeline and
-individual Workspace visibility controls. The assignment map renders only the Workspaces from
+The live Main Map uses the Packages Work Scope to select Workstreams and
+Workspaces. Workstream is the UI label for the existing backend Pipeline;
+Workspace identity and all map layer/selection identifiers remain unchanged. The assignment map renders only the Workspaces from
 the selected Package's saved bindings. Neither map invents Package/Job AOIs.
 
 ## Data and lifecycle

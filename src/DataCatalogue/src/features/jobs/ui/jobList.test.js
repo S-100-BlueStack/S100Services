@@ -267,7 +267,7 @@ test("Different contextual Jobs link to the same canonical Package assignment", 
     assert.equal(findByClass(view.element, "job-list__count")[0].textContent, "1 Packages");
     assert.equal(groups[0].open, true);
     assert.equal(findByClass(groups[0], "job-list__package-title")[0].textContent, "NM1000");
-    assert.equal(findByClass(groups[0], "job-list__package-meta")[0].textContent, "2 pipelines");
+    assert.equal(findByClass(groups[0], "job-list__package-meta")[0].textContent, "2 workstreams");
     assert.deepEqual(
       findByClass(groups[0], "job-card__title").map((node) => node.textContent),
       ["ENC / Eastern Denmark", "Paper Charts / Western Denmark"]
@@ -342,7 +342,7 @@ test("Live Job Details show unique context and editable status without duplicate
     const facts = findByClass(view.element, "job-details__fact-label").map(
       (item) => item.textContent
     );
-    assert.deepEqual(facts, ["Pipeline", "Created"]);
+    assert.deepEqual(facts, ["Workstream", "Created"]);
     assert.equal(findByClass(view.element, "job-details__hint").length, 0);
     assert.equal(findByClass(view.element, "job-details__section-title").length, 0);
     assert.equal(findByClass(view.element, "job-details__aoi-list").length, 0);
@@ -453,7 +453,7 @@ test("Optional live metadata cannot create placeholder dates or fabricated Packa
     assert.equal(findByClass(view.element, "job-details__package-title").length, 0);
     assert.deepEqual(
       findByClass(view.element, "job-details__fact-label").map((item) => item.textContent),
-      ["Pipeline"]
+      ["Workstream"]
     );
     view.destroy();
   });

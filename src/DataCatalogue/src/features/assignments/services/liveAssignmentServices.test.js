@@ -344,7 +344,7 @@ test("Workspace catalogue reader rejects cross-Pipeline entries", async () => {
       items: [{ id: "w", key: "other/w", name: "Not in requested Pipeline", pipelineId: "other" }],
     }),
   });
-  await assert.rejects(services.workspaces.list({ pipelineId: "p" }), /different Pipeline scope/);
+  await assert.rejects(services.workspaces.list({ pipelineId: "p" }), /different Workstream scope/);
 });
 
 test("unfiltered Package pages never invent assignment status or bindings", async () => {

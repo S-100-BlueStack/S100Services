@@ -183,7 +183,7 @@ export function createCatalogueService(client) {
         layerIds: [],
       }));
       if (page.page !== 0 || page.items.length !== page.total)
-        throw new Error("Pipeline catalogue is incomplete.");
+        throw new Error("Workstream catalogue is incomplete.");
       return page.items;
     },
     async categories({ signal } = {}) {

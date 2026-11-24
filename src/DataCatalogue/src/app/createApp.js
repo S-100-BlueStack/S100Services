@@ -95,7 +95,7 @@ export async function createApp(rootElement) {
     themeStore,
     onTestNotice() {
       showSuccessNotice({
-        title: "Notice pipeline ready",
+        title: "Notices ready",
         message: "User-facing notices can now be triggered from services.",
       });
     },

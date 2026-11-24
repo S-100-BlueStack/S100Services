@@ -23,7 +23,7 @@ export function createPipelineVisibility({
   list.setAttribute("role", "group");
   list.setAttribute(
     "aria-label",
-    readOnly ? "Pipeline and Workspace overview" : "Visible Pipelines and Workspaces"
+    readOnly ? "Workstream and Workspace overview" : "Visible Workstreams and Workspaces"
   );
   const message = document.createElement("p");
   message.className = "dc-pipeline-message";
@@ -63,7 +63,7 @@ export function createPipelineVisibility({
         const region = document.createElement("div");
         region.className = "dc-pipeline-group";
         region.setAttribute("role", "group");
-        region.setAttribute("aria-label", `${group.name} Pipeline`);
+        region.setAttribute("aria-label", `${group.name} Workstream`);
         const heading = document.createElement("div");
         heading.className = "dc-pipeline-row dc-pipeline-row--pipeline";
         const name = document.createElement("span");
@@ -93,14 +93,14 @@ export function createPipelineVisibility({
       const region = document.createElement("div");
       region.className = "dc-pipeline-group";
       region.setAttribute("role", "group");
-      region.setAttribute("aria-label", `${group.name} Pipeline`);
+      region.setAttribute("aria-label", `${group.name} Workstream`);
       const label = document.createElement("label");
       label.className = "dc-pipeline-row dc-pipeline-row--pipeline";
       const input = document.createElement("input");
       input.type = "checkbox";
       input.checked = enabledPipelines.has(group.id);
       input.value = group.id;
-      input.setAttribute("aria-label", `Show ${group.name} Pipeline`);
+      input.setAttribute("aria-label", `Show ${group.name} Workstream`);
       const name = document.createElement("span");
       name.textContent = group.name;
       const count = document.createElement("small");
@@ -172,7 +172,7 @@ export function createPipelineVisibility({
     request?.abort();
     request = new AbortController();
     const signal = request.signal;
-    message.textContent = "Loading Pipelines…";
+    message.textContent = "Loading Workstreams…";
 
     const operation = (async () => {
       try {
@@ -194,7 +194,7 @@ export function createPipelineVisibility({
         return { ok: true };
       } catch (error) {
         if (!alive || current !== generation) return { ok: false, stale: true };
-        message.textContent = `Pipelines could not be loaded: ${error.message}`;
+        message.textContent = `Workstreams could not be loaded: ${error.message}`;
         return { ok: false, error };
       }
     })();

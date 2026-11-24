@@ -172,7 +172,7 @@ test("Workspace overview rejects duplicates, changing totals and incomplete page
     };
     await assert.rejects(
       loadWorkspaceOverview(catalogue),
-      /duplicate|changed|complete|different Pipeline/
+      /duplicate|changed|complete|different Workstream/
     );
   }
 });

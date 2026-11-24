@@ -6,8 +6,12 @@
 > remains dedicated to metadata. `DC-MAP-LABEL` was accepted with scale limits
 > of 1:5,000,000 for Workspaces and 1:3,000,000 for Packages in user-reported
 > commit `26472a59188f61eed632c59abc0e59d2a06e64e9`. `DC-PACKAGE-QC-01` now
-> has a design-only frontend candidate; local UX acceptance is pending and
-> functional filtering remains backend-dependent. See the current QC tracker entry.
+> has an accepted design-only frontend preview in user-reported commit
+> `d038defa009814f60e6c25c660f232a2dce6a722`, merged at
+> `d91b54b2a0cbe1ff00a60f483a5f0f39f5d3a3fc`. Functional filtering remains
+> backend-dependent. See the current QC tracker entry. The live UI now uses
+> Workstream / Workstreams for Pipeline; Workspaces remain distinct. Earlier
+> wording below is historical or refers to technical Pipeline contracts.
 >
 > **Planning update (2026-11-24):** The user reports acceptance and commit of the
 > Main Map Workspace popup (`a7bd819d46da1e22fcd5dd7036bfc80631a20a91`) and
@@ -216,19 +220,19 @@ backend-gap register. They must be revalidated against the source of the next
 implementation baseline before work begins; older candidate text is not an
 up-to-date implementation status claim.
 
-| ID / topic                             | Next action                                                                                               | Current planning classification                                      |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `DC-MAP-POPUP`                         | Design and implement useful Workspace popup context using existing public ArcGIS APIs and verified fields | Frontend investigation, then implementation                          |
-| `DC-MAP-LABEL`                         | Accepted label visibility and scales; revisit only on new feedback                                        | Accepted (`26472a59`); complete                                      |
-| `DC-PACKAGE-QC-01`                     | Validate Compilation/QC preview; agree authoritative workflow and filter contract before filtering        | UI preview candidate; backend-dependent functional filtering         |
-| `PAGE-01` global Package search        | Confirm server-side title/ID/details filtering across paginated results                                   | Backend contract gap                                                 |
-| `JOB-01` durable status/history        | Define persistence for contextual Job status and completion history; do not reuse temporary demo state    | Backend design gap                                                   |
-| `COMMENT-01` binding comments          | Agree authorized persistence/readback contract for Pipeline binding comments                              | Backend contract gap                                                 |
-| `BIND-02` assignment concurrency       | Define version/precondition or idempotent desired-set semantics for concurrent assignment updates         | Backend contract gap                                                 |
-| `OWNER-01` Workspace ownership/locking | Design ownership and authorization separately from Package workflow status                                | Deferred cross-stack work                                            |
-| `DC-CREATOR-EDITOR`                    | Separate Package creation/editing and AOI drawing workflow after verified mutation contracts              | Larger future phase                                                  |
-| `DC-INTEGRATIONS`                      | Define identifiers, authorization and target actions for Notice to Mariners and WorkZone                  | Larger future phase                                                  |
-| `DC-UX-LOADER-01`                      | Reassess startup-loader value after accepted performance work and real deployment measurements            | Low-priority reassessment; do not reopen performance work by default |
+| ID / topic                             | Next action                                                                                               | Current planning classification                                       |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `DC-MAP-POPUP`                         | Design and implement useful Workspace popup context using existing public ArcGIS APIs and verified fields | Frontend investigation, then implementation                           |
+| `DC-MAP-LABEL`                         | Accepted label visibility and scales; revisit only on new feedback                                        | Accepted (`26472a59`); complete                                       |
+| `DC-PACKAGE-QC-01`                     | Agree authoritative workflow and filter contract before functional QC filtering                           | Preview accepted (`d038defa`); backend-dependent functional filtering |
+| `PAGE-01` global Package search        | Confirm server-side title/ID/details filtering across paginated results                                   | Backend contract gap                                                  |
+| `JOB-01` durable status/history        | Define persistence for contextual Job status and completion history; do not reuse temporary demo state    | Backend design gap                                                    |
+| `COMMENT-01` binding comments          | Agree authorized persistence/readback contract for Pipeline binding comments                              | Backend contract gap                                                  |
+| `BIND-02` assignment concurrency       | Define version/precondition or idempotent desired-set semantics for concurrent assignment updates         | Backend contract gap                                                  |
+| `OWNER-01` Workspace ownership/locking | Design ownership and authorization separately from Package workflow status                                | Deferred cross-stack work                                             |
+| `DC-CREATOR-EDITOR`                    | Separate Package creation/editing and AOI drawing workflow after verified mutation contracts              | Larger future phase                                                   |
+| `DC-INTEGRATIONS`                      | Define identifiers, authorization and target actions for Notice to Mariners and WorkZone                  | Larger future phase                                                   |
+| `DC-UX-LOADER-01`                      | Reassess startup-loader value after accepted performance work and real deployment measurements            | Low-priority reassessment; do not reopen performance work by default  |
 
 ## Suggested execution sequence
 

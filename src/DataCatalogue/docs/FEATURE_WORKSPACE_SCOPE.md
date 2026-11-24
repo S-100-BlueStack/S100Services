@@ -11,22 +11,32 @@ part of the current 2026-11-12 auto-match-only requirement.
 
 ---
 
-# Package, Pipeline, Workspace and Jobs scope
+# Package, Workstream, Workspace and contextual Job scope
 
-## Current frontend behavior (DC-STAB-02E, 2026-11-04)
+## Current terminology (2026-11-24)
 
-This document describes the accepted live frontend behavior after DC-STAB-02D.
-Older DC-001 and 2026-10-28 integration candidate requirements are historical where
-superseded here. The authoritative implementation baseline for DC-STAB-02E is
-`664be515a00d89985005634336392d47a0fb4ca3`.
+The live frontend uses **Workstream** / **Workstreams** for the existing backend
+Pipeline concept and **Packages** for the Main Map workflow. A Workstream is
+not a Workspace. Keep `pipelineId`, `hasPipeline`, `pipelineBindings`, API
+routes, binding and contextual Job identities unchanged. Preserve source entity
+names, opaque IDs and backend diagnostic text. The mock Feature/Work stream
+prototype uses historical Workspace-like terminology; its `Work stream` and
+`WorkStream` references do not denote the new live Workstream label.
+
+The current Main Map uses one Work Scope for Workstream and optional Workspace
+selection, with `Show empty Workspaces`. The Compilation/QC design preview is
+accepted but does not filter data. See the latest `PROJECT_TRACKER.md` and
+`ARCHITECTURE.md` entries for current behavior. Older DC-001, DC-STAB-02E and
+integration candidate descriptions are historical where superseded, including
+former map-only visibility controls and earlier geometry limitations.
 
 ## Domain and backend ownership
 
 A **Package** is an assignment unit with a generalized AOI reference and detailed
-geographic **Features**. A Package may be bound to several **Pipelines**. A
-**Workspace** is a Pipeline-scoped geographic work area. The backend computes
-Package membership from saved Package/Pipeline bindings and generalized AOI
-intersection. The current Package Assignment requirement allows **only automatic
+geographic **Features**. A Package may be bound to several **Workstreams**
+(backend Pipelines). A **Workspace** is a Workstream-scoped geographic work area.
+The backend computes Package membership from saved Package/Pipeline bindings
+and generalized AOI intersection. The current Package Assignment requirement allows **only automatic
 Workspace matches**, read-only from the saved Pipeline binding. The earlier
 manual include/exclude concept is not active scope and must not be prototyped
 without a new explicit decision and verified backend contract.
@@ -42,12 +52,12 @@ The four-panel page retains independent scrolling, draft navigation decisions,
 keyboard/Escape behavior and saved binding reconciliation:
 
 1. **Packages:** paged records with supported Category and Assigned/Not assigned
-   filters. Unsupported Package name search stays disabled. Display `shortId`,
-   but use canonical `packageId` for API calls and deep links.
+   filters and search on the loaded page. Global Package search remains a backend
+   gap. Display `shortId`, but use canonical `packageId` for API calls and deep links.
 2. **Package details:** render language-specific descriptions as **allowlisted
    sanitized HTML**, including useful tables and safe links. Markup is untrusted;
    it is not inserted raw and is not limited to plain text.
-3. **Bindings:** Pipeline checkboxes form a Package/Pipeline draft. Derived
+3. **Bindings:** Workstream checkboxes form a Package/Pipeline draft. Derived
    Workspaces are read-only and reflect the **saved** bindings. A Package switch
    retains the previous complete selection and disabled bindings while the new
    Package and saved records load; it publishes the replacement atomically.
@@ -63,7 +73,11 @@ draft until **Check saved bindings** runs a read-only reconciliation. **Discard
 local draft** is an explicit local-only action, not a backend rollback. A server
 write may still complete late; version/idempotency semantics are backend-owned.
 
-## Main Jobs map, coverage and filters
+## Historical Main Map behavior (DC-STAB-02E, 2026-11-04)
+
+The following describes the earlier Jobs map before the unified Work Scope and
+Package AOI integration; see the current terminology and tracker above. The
+authoritative baseline for DC-STAB-02E was `664be515a00d89985005634336392d47a0fb4ca3`.
 
 **All discovered Workspaces across all Pipelines** form the live Jobs scope.
 The user does not select a Workspace to make Jobs load. Map-only Pipeline and
@@ -100,7 +114,10 @@ control persistence of theme, basemap and **per-map center/zoom**. Map position
 persistence is **implemented but disabled by default**; `main` and `assignment`
 slots are independent. Disabling an option clears its persisted values.
 
-## Deferred work and historical prototype
+## Historical deferred work and prototype
+
+The geometry gaps below record the earlier integration stage; consult the current
+tracker and backend gap register for current status.
 
 - `GEO-01` / `GEO-04`: authorized generalized Package and detailed Feature AOI
   coordinates (including spatial reference) are not verified as browser reads.

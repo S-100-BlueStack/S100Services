@@ -8,7 +8,7 @@ export function liveAssignmentMapContext(feature, record) {
       if (!relation.active) continue;
       for (const workspace of relation.workspaces ?? []) {
         if (workspace.pipelineId !== pipelineId)
-          throw new Error("Workspace does not belong to its saved Pipeline binding.");
+          throw new Error("Workspace does not belong to its saved Workstream binding.");
         workspaces.set(workspaceGeometryKey(workspace), workspace);
       }
     }

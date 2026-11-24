@@ -14,10 +14,10 @@ These instructions apply to `src/DataCatalogue/**` in `S-100-BlueStack/S100Servi
 ## Language and terminology
 
 - Reply to the user in Danish. Use English for UI text, code, identifiers, comments, filenames, documentation, tests, logs, configuration, and commit messages.
-- Use **Jobs** in the UI, never **Tasks** or **Opgaver**.
+- Use **Packages** for the user-facing Main Map workflow. Retain `Job` for the internal contextual work item and preserve the isolated historical mock workflow. Do not introduce **Tasks** or **Opgaver**.
 - A **Package** is the assignment unit: one generalized AOI with one or more detailed geographic **Features**. A Feature is not a Package.
-- A **Pipeline** is a product definition. A Package may have bindings to multiple Pipelines.
-- A **Workspace** is a geographic work area scoped to a Pipeline. `Work area` and `Work stream` are historical frontend terms for Workspace, not additional live entities. Avoid broad internal renames solely to update labels.
+- A **Workstream** (plural **Workstreams**) is the user-facing name for a backend **Pipeline**, a product definition. A Package may have bindings to multiple Pipelines. Keep Pipeline identifiers, routes, payload fields, keys and service boundaries unchanged. Use Workstream in application-owned UI text, accessible names and user-facing messages; retain actual entity names, opaque IDs and backend diagnostics verbatim.
+- A **Workspace** is a geographic work area scoped to a Pipeline (shown as a Workstream). Workspaces remain Workspaces. `Work area` and `Work stream` are historical prototype terms for Workspace, not synonyms for the live Workstream/Pipeline concept. Preserve the historical mock UI and its technical identifiers; do not perform a global search-and-replace.
 - Live Workspace membership is derived by the backend from an active Package–Pipeline binding and intersection with the Package's generalized rectangular AOI. It is not a manually saved Package–Workspace selection.
 - A **Job** is a Package in a particular Pipeline and Workspace context. Its contextual identity must distinguish `(packageId, pipelineId, workspaceId)`; do not merge distinct contexts based only on Package ID.
 - Job workflow status is currently isolated mock state per contextual identity; it is not persisted by the API. Future status labels are not final. Workspace ownership/locks are not Job progress. Comments remain demo/mock-only until a contract is provided.
