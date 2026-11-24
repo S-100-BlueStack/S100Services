@@ -1,3 +1,63 @@
+## DC-MEETING-02 - Package details, history and QC follow-ups (2026-11-24)
+
+**User-reported accepted baseline:** `a7bd819d46da1e22fcd5dd7036bfc80631a20a91`.
+**Meeting:** 2026-11-23. This section records requirements and priorities, not an implementation or new backend contract.
+
+### Accepted work and current priorities
+
+- `DC-MAP-POPUP` / `DC-MAP-POPUP-05`: user accepted the rebuilt native Workspace popup and the v6 header contrast correction in both themes, then reported the commit above. The earlier candidate-only status and pending visual acceptance statements below are superseded. Local checks are accepted on the basis of the reported commit; no new test run is claimed here. The disabled `Take workspace` action and visual `unlock` / `None` placeholder remain non-authoritative. `OWNER-01` is still open.
+- `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
+- `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
+
+| Suggested order | Task                                                                                                            | Status / dependency                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Open; frontend, confirm existing detail-read contract                                             |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Open; frontend design and geometry/scale verification                                             |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Open; UI design can proceed separately, functional filtering depends on backend workflow contract |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Open; backend history contract needed for real data                                               |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                                  |
+
+This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
+
+### DC-PACKAGE-DETAILS-PANEL-01 - Main Map Package information panel
+
+**Observed:** Users must follow a Package Assignment quick link merely to inspect a Package's full details, losing the convenience of the Main Map workflow. The current contextual Package Details view is relatively sparse.
+
+**Requirements / acceptance criteria:**
+
+- On entering the existing Main Map Package Details view, show a right-hand information panel for the selected Package with the same read-only Package metadata as the Package Assignment details panel. Keep the contextual Details view and its workflow/status actions separate; this is not a second assignment editor. Preserve the explicit quick link to Package Assignment for actual assignment work.
+- Reuse the existing detail service/normalization and presentation logic where practical. Keep canonical Package identity separate from contextual Job identity (`packageId`, `pipelineId`, `workspaceId`). Preserve the exact Severity, optional fields and sanitized description HTML. Do not invent metadata, duplicate independent detail requests, or make the map and list own separate selected Packages.
+- Provide a compact panel with independent scrolling, light/dark styling, keyboard navigation, close/Back behavior and predictable focus. Preserve Work Scope, map selection, existing Package status actions and navigation. Decide exact width and panel closure behavior from the current UI before implementation; do not introduce overlapping layout owners.
+- Handle loading, missing details, errors/retry, selection replacement and teardown without stale data or unintended navigation. Reopening the same current selection should not cause redundant logical requests. Preserve authorized access and truthful unavailable states.
+- Leave a natural extension point for Package history; neither a history backend nor a simulated history is required to deliver this panel.
+
+### DC-PACKAGE-TIMELINE-01 - History of an individual Package
+
+**Observed:** Users want to inspect what has happened to a Package. There is no confirmed backend history feed yet. The existing Main Map Package Details view is the proposed initial location; consider a secondary history entry in Package Assignment, but exact placement there remains undecided.
+
+**Requirements / acceptance criteria:**
+
+- Provide a compact, read-only history section or secondary view reachable from the selected Package's Details. If also exposed in Package Assignment, reuse the same history presentation/service rather than building a second independent history model. Keep normal metadata and assignment controls accessible and uncluttered.
+- Define actual history semantics with the product and backend owners: which events are recorded, event time and ordering, actors, transitions, Package identity/version, and whether Pipeline/Workspace context is present. These are contract questions, not promised fields or event types.
+- Render only authorized backend history once a contract is verified. Do not synthesize events from temporary `Done` / `No update` state, current assignments, or browser storage. If a UI shell is explicitly selected before integration, label history as unavailable rather than claiming an empty history. Support loading, valid empty, failure, retry and bounded paging if required by the eventual contract.
+- Keep `DC-PACKAGE-HISTORY-01` (finding older or archived Packages in the catalogue), `JOB-01` (durable contextual Job status/history), and this individual Package timeline distinct. They may share backend capabilities after agreement but none implies the others are complete.
+
+### DC-PACKAGE-QC-01 - Compilation / QC work mode
+
+**Observed:** The planned workflow introduces quality control (QC) in addition to the working/compilation phase. Users want a compact toggle by the Main Map Packages list, in the spirit of the existing `Show empty Workspaces` control, switching between `Compilation` and `QC` and filtering Packages by workflow state.
+
+**Requirements / acceptance criteria:**
+
+- Provide a clear two-mode control labelled `Compilation` and `QC`; proposed initial/default mode is `Compilation`, subject to UX confirmation. The control must be distinguishable from `Show empty Workspaces` and existing Work Scope/status controls, with keyboard access and both themes. A design-only candidate may implement the toggle before backend integration.
+- The working and QC states, eligible transitions, ownership, permissions, and whether the workflow is Package-level or scoped to Pipeline/Workspace are not yet defined by a verified backend contract. Do not infer that a Workspace lock, Severity, `Done`, or `No update` means QC. Preserve contextual Job identities and existing status semantics.
+- In a pre-backend live UI, a toggle may expose the intended layout/selection but must explicitly indicate that QC filtering is unavailable. It must not invent QC membership, persist synthetic live workflow state, hide real Packages under a misleading filter, or send writes. Any later isolated mock-mode design data must be explicitly scoped and never used as live fallback.
+- Once the backend contract is agreed, filter the authoritative Package/Job list using the selected mode alongside existing Pipeline/Workspace and status scope. Define map/AOI visibility, Workspace counts/legend behavior, empty-state and selection reconciliation explicitly before implementation. Avoid adding a second map scope owner. Verify behavior on mode changes, refresh, stale responses, navigation and error recovery.
+- Do not add a QC completion button, reassignment, status mutation, or QC authorization rule in the design-only scope. Those require separate product/backend decisions.
+
+Backend dependencies for the timeline and QC are recorded in [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md). Earlier first-look requirements remain in [DC_FIRST_LOOK_BACKLOG.md](DC_FIRST_LOOK_BACKLOG.md). No new endpoint, schema, dependency or runtime behavior is authorized by this planning entry.
+
+---
+
 ## DC-MAP-POPUP-05 - Workspace popup rebuild from ProductCatalogue (candidate, 2026-11-24)
 
 **Baseline:** `2a6310c206749de555e72ec22f8b48b74f9c25fb` (286 source files verified).

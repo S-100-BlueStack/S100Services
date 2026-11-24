@@ -1,5 +1,14 @@
 # DataCatalogue first-look feedback and outstanding work
 
+> **Planning update (2026-11-24):** The user reports acceptance and commit of the
+> Main Map Workspace popup (`a7bd819d46da1e22fcd5dd7036bfc80631a20a91`) and
+> previously accepted the map legend/saved-match changes. The popup candidate
+> status and earlier suggested execution order below are retained as historical
+> context, not the latest priority list. See the `DC-MEETING-02` section of
+> [PROJECT_TRACKER.md](PROJECT_TRACKER.md) for accepted status, the recommended
+> next Package Details panel, individual Package history, Compilation/QC, and
+> the remaining open preview and historical discovery work.
+
 **Recorded:** 2026-11-23 (date of feedback capture; the internal demo date is not confirmed)  
 **Accepted frontend baseline reported by user:** `50b12afaee6d26e7fd0b58b06d31687cbaad6c8d`  
 **Status:** Planning source; `DC-MAP-POLISH-01` v3 adjusts saved Workspace
