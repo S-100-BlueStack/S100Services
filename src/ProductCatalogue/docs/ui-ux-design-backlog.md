@@ -34,7 +34,7 @@ Main-map navbar, coordinated with existing Filters/Sources/Preferences panels. P
 and geographic provider contracts are unchanged.
 
 **Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
-**Current documentation-audit snapshot:** `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10).
+**Current documentation-audit snapshot:** `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` (2026-11-24).
 **Purpose:** A compact index of _current UX decisions, accepted behavior and outstanding design work_. This is not a new manual acceptance report or an instruction to reopen completed tasks. Historical per-iteration plans and detailed original requirements are available in the Git history of this file.
 
 For current task status see the [frontend tracker](frontend-hardening-tracker.md); for the actual demonstration test matrix see [demo readiness](demo-readiness-plan.md); for preserved technical contracts see [invariants](INVARIANTS.md), [module ownership](MODULE_MAP.md) and the relevant feature README.
@@ -250,7 +250,35 @@ permission/disabled reasons, Product workflows, data loading and R01-R04
 behavior remain unchanged. No new dependencies. Local browser acceptance
 is pending; do not mark R05 complete from Node tests alone.
 
-## PC-UX-R06 – Dashboard visual hierarchy (candidate)
+## PC-UX-R06 – Dashboard operational reporting (accepted)
+
+**Final state (developer-reported, 2026-11-23):** backend reporting committed at
+`dca718363ec901add42985e4da1755fecf409a31`; final frontend committed at
+`c382d760f2f137974eaade673e5029112b288cc4` and merged at
+`c45a1255ea9a7138cc5045de0bc8ec90d39d48dd`.
+
+The accepted reporting layout retains compact KPI cards and the activity list,
+with Status and Operation summaries together, followed by IC-ENC distribution,
+Activity over time and Additional insights. `Distributed` replaces the ambiguous
+Accepted UI label; the demo presentation combines recorded live and simulated
+acceptance decisions without changing the backend provenance. The combined count
+is not proof of external distribution. Date labels use day/month presentation.
+Current workflow track counts remain distinct from historical activity counts.
+Validation diagnostics and formal validation reports contribute to `Validation files`.
+
+History, IC-ENC and Validation remain direct panel toggles; the compact `Links`
+dropdown contains Review and Analyze only. The final correction restores the stable
+onboarding target, constrains the menu width and suppresses redundant hover help
+while the menu is open. No new chart library, dependency or backend mutation is
+introduced by the frontend integration.
+
+The following v1–v3 design records describe earlier proposals. Their pending
+acceptance and unavailable-distribution statements are historical and superseded
+by the developer-accepted R06 reporting implementation. Full post-merge smoke and
+real external report-download verification remain separate; see the
+[frontend tracker](frontend-hardening-tracker.md) and [demo plan](demo-readiness-plan.md).
+
+### Historical R06 v1 – Dashboard visual hierarchy
 
 Implementation-review baseline: `f85d5a5d41d7b2b0dd61fa2279bfd6f1cc39e1fa`.
 This targeted presentation candidate compacts existing KPI cards, makes
@@ -261,7 +289,7 @@ summary filter actions and right-hand History/IC-ENC/Validation panels remain
 unchanged. See [Dashboard](../src/features/dashboard/README.md). Browser design
 acceptance and local `npm run check` are pending; do not mark R06 complete.
 
-### PC-UX-R06 v2 – Operational reporting dashboard (review candidate)
+### Historical R06 v2 – Operational reporting dashboard
 
 R06 v2 supersedes the v1 presentation proposal while retaining its accepted
 filter layout, visible activity heading and backend-independent interactions.
@@ -275,7 +303,7 @@ completed activity records or from a paginated response. No server changes are
 part of this candidate. Browser review and the local `npm run check` gate remain
 pending; do not mark R06 accepted before those checks.
 
-### PC-UX-R06 v3 – Reporting layout and activity scanability (review candidate)
+### Historical R06 v3 – Reporting layout and activity scanability
 
 R06 v3 supersedes the visual treatment of v2 while preserving its report-panel
 toggles, backend summaries, empty states, filters and safe Accepted-for-distribution

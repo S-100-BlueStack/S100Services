@@ -91,7 +91,7 @@ the list does not claim complete backend or browser/deployment acceptance:
   error-message details, confirmation focus/Escape and application-owned tooltips.
 - Product Collection, Product History/Timeline and source-aware Analyze/Review workspaces.
 - Dashboard range/calendar, committed filtering, sorting, cursor pagination, operational
-  summaries and route-local History panel.
+  reporting and route-local History, IC-ENC and Validation panels.
 - Shared navbar, Theme/Preferences, Basemap Gallery on Main Map and Analyze, route-specific
   onboarding, notices, light/dark interaction and reduced-motion behavior.
 - Initial Main-map and Analyze loading/readiness safeguards. Final acceptance still needs
@@ -349,7 +349,6 @@ Some current behavior is intentionally frontend-only or placeholder-only:
 - popup export leaf/scope presentation state
 - same-browser job cache and cross-tab synchronization
 - synthetic Paper Charts/S-102 source contracts retained for explicit fail-closed tests only
-- Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
 The backend active-job endpoint is the source of truth for shared visibility. Frontend state remains responsible for presentation, polling and responsive local reconciliation.
 
@@ -361,8 +360,8 @@ Do not implement the following fully until backend/database contracts are ready:
 - external shared Hangfire worker migration
 - global map timeline
 - real Paper Charts and S-102 export endpoints
-- real Dashboard IC-ENC report links
-- real Dashboard internal validation report links
+- complete external IC-ENC delivery/report-ingestion verification and exact report-to-activity attribution;
+  read-only artifact retrieval and Dashboard reporting aggregates are already integrated
 
 ## User guidance and onboarding
 
@@ -412,23 +411,39 @@ Dashboard can show:
 
 - compact `From` and optional `To` date/time controls that apply valid committed changes automatically
 - `Refresh` and the last-successful load time
-- read-only operational summary cards
-- compact activity list
-- status summary
-- operation summary
+- read-only operational KPI cards and compact activity list
+- status and operation summaries, IC-ENC distribution and activity over time
+- activity by specification, current workflow state and stored report file counts
 - debounced server-side search
 - server-side filters
 - cursor pagination with a browser-persisted `25 / 50 / 100 / 200` page-size selector, defaulting to 50
 - stale-request suppression and last-successful-result retention
 - actionable status/operation summary rows that apply matching filters
-- Dashboard History panel opened from activity-row `History`
-- collapsed Product History event rows inside the Dashboard History panel
-- onward links to Review and Analyze
-- disabled or placeholder report actions until report endpoints exist
+- direct `History`, `IC-ENC` and `Validation` panel toggles in each applicable activity row
+- collapsed Product History event rows and verified report metadata/download links
+- `Links` dropdown containing Review and Analyze navigation
+- explicit unavailable, loading, empty and error states where applicable
 
-Dashboard filters run in the backend before summary calculation and cursor page selection. Summary cards, status summary, operation summary and total counts represent the complete filtered result, while the activity list contains only the current page. Filter, range, or page-size changes reset cursor history. Page size is browser-local Dashboard state and is not added to the route URL.
+Activity filters run in the backend before activity summary calculation and cursor page selection.
+Activity counts, status/operation summaries, activity trends and specification breakdowns represent the
+complete filtered activity result, not just the current page. Filter, range or page-size changes reset
+cursor history. Page size is browser-local Dashboard state and is not added to the route URL.
+Distribution and stored-report totals have their own date/Product scope; current operational health is
+an as-of-now track snapshot. They must not be interpreted as filtered historical activity counts.
+The report filter uses Product-level report availability, not a proven association with a specific event.
 
-Dashboard History panel is route-local. It replaces the right summary column while open, closes with `Close` or `Escape`, shows selected activity context, highlights the selected activity row, and reuses the shared product history API/renderers without interacting with main map popup state or Product Collection state.
+The reporting backend retains separate live and simulated delivery counts. The accepted demo-facing
+`Distributed` presentation combines recorded acceptance decisions; it is not evidence of actual external
+delivery. S-101 and S-57 revision deliveries are counted independently, not as unique ENC packages.
+`Validation files` counts stored report and diagnostic files, not unique validation runs.
+See [the current tracker](docs/frontend-hardening-tracker.md) for acceptance and remaining verification.
+
+Dashboard History, IC-ENC and Validation panels are route-local and mutually exclusive. They replace
+the right summary column while open, close via the active row button, `Close` or `Escape`, and restore
+the summaries on dismissal. History uses the shared Product History API/renderers. Report actions use
+verified activity-provided links or on-demand Product artifact history; the latter does not prove that a
+file belongs to the selected event. Switching or closing a panel invalidates its pending requests.
+Main-map popup and Product Collection state remain independent.
 
 ## Adding future export endpoints
 
@@ -676,7 +691,11 @@ Run `npm run format` and `npm run check` locally before accepting a Product Cata
 ## Current status
 
 The last planned general UI polish is committed at `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4`.
-Next work is targeted real-usage feedback and demo regression verification, not new UI features.
+The subsequent Dashboard reporting backend (`dca718363ec901add42985e4da1755fecf409a31`) and
+R06 reporting frontend (`c382d760f2f137974eaade673e5029112b288cc4`) are developer-accepted;
+the frontend is merged at `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd`.
+Next work is targeted real-usage feedback, production-style Main-map performance measurement and
+post-merge demo/deployment verification, not another general UI redesign.
 For package aggregate status, navigation and accessibility changes since October, see the
 [hardening tracker](docs/frontend-hardening-tracker.md) and
 [UI/UX backlog](docs/ui-ux-design-backlog.md).
@@ -719,8 +738,10 @@ The normalized workflow adaptation was accepted in the earlier integration at
 the frontend tracker; the current demo baseline still requires its own browser/deployment smoke.
 BE-108A Batch 1 and the later developer-reported Batch 2 manual Export/recovery acceptance
 at `0cab4e4f08a88717c25794a85fb691e8d64a7fbd` are separate backend history,
-not evidence of frontend popup dispatch. Real distribution, production mock-source replacements,
-Dashboard report associations and the global timeline remain deferred.
+not evidence of frontend popup dispatch. Live IC-ENC rollout and attachment retrieval verification,
+exact Dashboard event-to-report attribution, production mock-source replacements and the global timeline
+remain separate outstanding boundaries. The reporting aggregates and artifact presentation themselves
+are no longer unimplemented.
 
 ## Shared Preferences
 

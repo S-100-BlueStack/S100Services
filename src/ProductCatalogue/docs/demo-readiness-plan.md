@@ -3,8 +3,8 @@
 Status: **verification planned; not yet accepted as demo-ready**.
 
 Original planning baseline: `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26).
-Documentation-audit snapshot: `63c89ff0d11899ef81a54dcd18b116de8c5dfdf4`
-(2026-11-10, committed source export; not a new full-system demo acceptance).
+Documentation-audit snapshot: `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd`
+(2026-11-24, committed documentation export; not a new full-system demo acceptance).
 The previous reconciliation snapshot was `2d8c1637425e971572bd09d98de9e29e45745de4` (2026-10-27).
 
 Scope: **stabilize existing behavior only**. No SDK upgrade, new map visualization, alternate test framework or broad refactor in the demo stabilization branch.
@@ -15,7 +15,7 @@ This checklist supplements the [historical release review](frontend-release-read
 
 | Check                     | Acceptance evidence                                                               | Status at document creation                                                                                                                                                        |
 | ------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Snapshot files exported from `63c89ff0`; the six recorded Git status entries were outside the commit snapshot and require local review before applying replacements                |
+| Repository baseline | Git SHA and clean/understood working tree; documentation matches current branch | Committed documentation archive for `c45a1255`, SHA-256 checked; current application source and ProductCatalogue working-tree cleanliness were not included. |
 | Local frontend gate       | `cd src/ProductCatalogue; npm run format; npm run check`                          | Developer reports running frontend tests, format, lint and build before each accepted frontend commit; this documentation pass did not rerun them                                  |
 | Real browser + deployment | Real UI behavior and server integration in the intended demonstration environment | New end-to-end pass pending                                                                                                                                                        |
 | FI-027 and FI-029         | Latest committed changes, no regressions in supported paths                       | FI-027 hover fix committed; owner reported ENC-package popup looked correct, but cross-source workflows unverified                                                                 |
@@ -43,17 +43,60 @@ cross-browser or deployment verification result.
 | Locator                      | Open/close beside navbar Product search; geographic search/navigation; light-mode hover and dark-mode contrast; focus/Escape                   | No Product selection or transient marker introduced by Locator                                                                                                   |
 | Filters and Preferences      | Aggregate Package status versus ProductState filter, counts/reset, saved state, Restore defaults, Scale hiding, Theme and Basemap              | Preserve source-aware defaults; verify Basemap Gallery and theme/manual choices on Main Map and Analyze                                                          |
 | Popup and Product Collection | Open/reopen; common action row, Package and member statuses, error help, confirmation focus/Escape, Tools/Collection and cross-workspace links | Only trigger mutations against approved disposable Products; verify unsupported actions fail closed, focus returns and no stale popup overrides newer selection. |
-| Dashboard                    | Date/calendar keyboard navigation, range drafts and valid commits, filtering/sorting, paging, History, route actions and independent errors    | Check accessible full date labels and no duplicate logical requests after a single committed input                                                               |
+| Dashboard | Range, filters/sort/cursor paging, reporting aggregates, chart actions, History/IC-ENC/Validation toggles, Links, errors | Check complete-result versus page counts, distinct current-health/report scopes, focus, Escape, onboarding and no duplicate logical requests. |
 | Analyze and Review           | Direct-route initial Analyze loading/readiness, popup content, Product composition, History/validation, toggles, targeted refresh and errors   | Preserve unaffected Products, focus and source-isolated state; no second full loader on interactive changes                                                      |
-| Timeline / reports           | Show available Product History and truthful unavailable report placeholders                                                                    | Do not claim report links or external delivery without backend artifacts                                                                                         |
+| Timeline / reports | Product History and available IC-ENC/internal validation artifact files across Analyze, Review and Dashboard | Verify actual authorized downloads and exact Product/revision provenance; missing reports remain empty/unavailable. Do not infer provider verdicts from file names. |
 | Onboarding (FI-043)          | Main map, Dashboard, Analyze and Review first visit and replay; known/missing target, popup steps, Escape, focus return and session cleanup    | Recheck selectors and controls changed by FI-027 and FI-029                                                                                                      |
 | Refresh / async lifecycle    | Reopen popup during refresh, rapid Product/source changes, superseded requests and route leaving                                               | Stale operations must not publish newer state; investigate observers only with actual evidence                                                                   |
 | Accessibility / visual       | Light/dark, pointer hover, Tab/Shift+Tab, Escape, focus return, reduced motion, 320–820px layout and 100–150% zoom                             | Check accessible confirmation dialog, keyboard-operable Close notifications, calendar and navbar with no hidden actions                                          |
 
+## Post-R06 verification and next performance investigation
+
+R06 backend `dca718363ec901add42985e4da1755fecf409a31` and frontend
+`c382d760f2f137974eaade673e5029112b288cc4` are developer-accepted; frontend merge
+`c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` is the current planning baseline.
+This acceptance does not certify a full deployed smoke. Earlier R06 candidate
+checks and the actual November 17 API samples remain recorded historical evidence.
+
+| Check | Expected result | Status |
+| --- | --- | --- |
+| Dashboard sorting and cursor paging (FI-010) | Stable ascending/descending order for Time, Product, Activity and Status; cursor navigation does not duplicate or omit activities for unchanged data | Not tested in this reconciliation |
+| Reporting scope and empty results | Activity summaries reflect the entire filtered result; page changes alone do not change totals. Current health and report/distribution counts retain their documented independent scopes. Missing aggregates are not replaced by fabricated zeroes. | Not tested in this reconciliation |
+| Panel and navigation regression | History, IC-ENC and Validation toggle directly; Links has only Review/Analyze; keyboard, Escape, focus return, narrow/wide layouts, themes and onboarding remain usable | Final UI accepted by developer; post-merge smoke pending |
+| IC-ENC artifact retrieval | Authorized Product artifact history and actual download succeed when suitable files exist; no incorrect revision ownership; unavailable/failed states remain truthful | Pending suitable data/backend verification |
+| Full deployment demo | Main map, Dashboard, Analyze and Review, including accepted workflow boundaries and the matrix above | Pending |
+
+### Main-map performance capture (read-only)
+
+The previous November capture was a Vite development-server run, not a production
+baseline. Do not change dependencies, bundle splitting, map loading or backend SQL
+on that evidence alone. The next independent technical task is a comparable
+built/deployed Main-map measurement:
+
+1. Use the actual deployed/built ProductCatalogue frontend and record the deployed
+   commit, browser, viewport, map extent and dataset conditions. Verify this is not
+   a Vite development-server module waterfall.
+2. Capture three comparable cold-cache hard reloads (DevTools Network, Disable
+   cache), plus one warm-cache load. For every run record first visible basemap,
+   first visible Product geometry and first successful Product search/popup
+   interaction. Record failures rather than substituting the last network request
+   time for readiness.
+3. Keep raw HAR files local. Use the established local
+   `Export-CatalogueHarTiming.ps1` script for ProductCatalogue to export sanitized
+   timing and summary CSVs; inspect the exported fields for internal URLs, tokens
+   and identifiers before sharing. Report actual user-facing milestones and any
+   reproducible long main-thread tasks separately.
+4. Compare request counts, transferred bytes, API and SDK/basemap timing, and the
+   real usability milestones. Only a persistent, measured production bottleneck
+   justifies a targeted source audit or implementation candidate.
+
+No production capture or application benchmark has been run by this documentation
+reconciliation.
+
 ## Known limitations and go/no-go
 
 1. **FI-029 is not end-to-end accepted for ordinary Products.** The unified action row is shared, but non-package mutations remain disabled in the verified frontend architecture until the appropriate source-owned backend dispatch/eligibility contract exists. The demonstration may show available ENC-package behavior, but must not imply universal dispatch support.
-2. **Backend-dependent surfaces:** Real report links, authoritative mutation capabilities, related Product relationships, final status classifications and truthful backend chunk/progress remain separately scoped. Show unavailable states, not fictional results.
+2. **Backend-dependent surfaces:** Real IC-ENC ingestion/download verification, exact report-to-event attribution, authoritative mutation capabilities, related Product relationships, final error classification and truthful backend chunk/progress remain separate. The integrated artifact UI and Dashboard reporting aggregates are not unimplemented features. The demo-facing combined `Distributed` count is not evidence of external delivery.
 3. **No destructive production-data tests:** Test mutations only against explicitly approved disposable data. Otherwise check availability, descriptions, disabled state and confirmation presentation without invoking operations.
 4. **Demo freeze gate:** Record the commit SHA, `npm run check` result, representative actual browser/deployment smoke results and known limitations. Fix confirmed regressions with minimal targeted changes; defer broad refactors and exploratory tooling.
 5. **Future experiment branch:** Only after the demo baseline is accepted, investigate SDK/Calcite upgrades, Product labels/linked annotations, Sonda, Vitest/browser harnesses, FeatureEffect and optional UI framework changes.
