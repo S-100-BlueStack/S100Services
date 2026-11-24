@@ -10,6 +10,7 @@ using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
+using ProductCatalogueAPI.Services.S102;
 using ProductCatalogueAPI.Services.SevenCs;
 using Serilog;
 using ProductCatalogueAPI.Services.ValidationEmail;
@@ -99,6 +100,8 @@ public static class BackendRegistrations
         services.AddTransient<DiscardEncPackageJob>();
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<DetectProductChangesJob>();
+        services.AddScoped<IS102ChangeDetector, S102ChangeDetector>();
+        services.AddTransient<DetectS102ChangesJob>();
 
         return services;
     }
