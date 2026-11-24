@@ -40,6 +40,11 @@ const PREFERENCE_ITEMS = [
     noticeTitle: "Scale hiding",
     requiresMapContext: true,
   },
+  {
+    key: PREFERENCE_PERSISTENCE_KEY.REVIEW_SYNC_SCROLLING,
+    title: "Sync scrolling",
+    requiresReviewScrollContext: true,
+  },
 ];
 const POPOVER_ID = "preferences";
 let activePanel = null;
@@ -51,6 +56,7 @@ export function initPreferencesPanel({
   onStartIntroduction,
   themeView,
   basemapSettings,
+  reviewScrollSettings,
   navbarPopoverCoordinator,
 } = {}) {
   if (activePanel) {
@@ -61,6 +67,7 @@ export function initPreferencesPanel({
       onStartIntroduction,
       themeView,
       basemapSettings,
+      reviewScrollSettings,
       navbarPopoverCoordinator,
     });
     return activePanel.api;
@@ -85,11 +92,13 @@ export function initPreferencesPanel({
     onStartIntroduction: null,
     themeView: null,
     basemapSettings: null,
+    reviewScrollSettings: null,
   };
 
   const isOpen = () => !panel.hidden;
   let displayScaleControlHandle = null;
   let unsubscribeBasemapSettings = null;
+  let unsubscribeReviewScrollSettings = null;
   let currentNavbarCoordinator = null;
   let unregisterPopover = null;
   const render = () => {
@@ -103,7 +112,8 @@ export function initPreferencesPanel({
     const availableItems = PREFERENCE_ITEMS.filter(
       (item) =>
         (!item.requiresMapContext || context.mapPreferences) &&
-        (!item.requiresBasemapContext || context.basemapSettings)
+        (!item.requiresBasemapContext || context.basemapSettings) &&
+        (!item.requiresReviewScrollContext || context.reviewScrollSettings)
     );
 
     panel.innerHTML = `
@@ -123,6 +133,7 @@ export function initPreferencesPanel({
           ${renderThemeSetting(getCurrentTheme())}
           ${context.basemapSettings ? renderBasemapSetting(context.basemapSettings) : ""}
           ${context.mapPreferences ? renderDisplayScaleSetting(context.mapPreferences) : ""}
+          ${context.reviewScrollSettings ? renderReviewScrollSetting(context.reviewScrollSettings) : ""}
         </section>
         <section class="pc-preferences-panel__group" aria-labelledby="preferences-saved-heading">
           <h3 id="preferences-saved-heading">Saved preferences</h3>
@@ -184,6 +195,10 @@ export function initPreferencesPanel({
     if (scale && context.mapPreferences) {
       scale.checked = !context.mapPreferences.isDisplayScaleHidingDisabled();
     }
+    const reviewScroll = panel.querySelector("#preferences-review-sync-scrolling");
+    if (reviewScroll && context.reviewScrollSettings) {
+      reviewScroll.checked = context.reviewScrollSettings.getValue();
+    }
   };
   // Owner subscribers may run later in the same persistence event dispatch.
   const persistenceHandle = onPreferencePersistenceChanged(() => queueMicrotask(sync));
@@ -239,6 +254,7 @@ export function initPreferencesPanel({
         }
         resetThemePreference(context.themeView ?? context.view);
         context.basemapSettings?.resetToThemeDefault();
+        context.reviewScrollSettings?.reset();
         sync();
         noticeSuccess("Preferences reset", null, { countAsUnread: false });
         break;
@@ -284,6 +300,12 @@ export function initPreferencesPanel({
       if (wantsDarkMode !== darkModeIsActive) {
         toggleTheme(context.themeView ?? context.view);
       }
+      sync();
+      return;
+    }
+
+    if (switchElement.id === "preferences-review-sync-scrolling") {
+      context.reviewScrollSettings?.setValue(switchElement.checked);
       sync();
       return;
     }
@@ -343,6 +365,7 @@ export function initPreferencesPanel({
     destroy() {
       displayScaleControlHandle?.remove();
       unsubscribeBasemapSettings?.();
+      unsubscribeReviewScrollSettings?.();
       persistenceHandle.remove();
       unregisterPopover?.();
       unregisterPopover = null;
@@ -380,6 +403,13 @@ export function initPreferencesPanel({
           unsubscribeBasemapSettings = context.basemapSettings?.subscribe(() => sync()) ?? null;
         }
       }
+      if (Object.prototype.hasOwnProperty.call(nextContext, "reviewScrollSettings")) {
+        if (context.reviewScrollSettings !== nextContext.reviewScrollSettings) {
+          unsubscribeReviewScrollSettings?.();
+          context.reviewScrollSettings = nextContext.reviewScrollSettings;
+          unsubscribeReviewScrollSettings = context.reviewScrollSettings?.subscribe(sync) ?? null;
+        }
+      }
       if (Object.prototype.hasOwnProperty.call(nextContext, "mapPreferences")) {
         context.mapPreferences = nextContext.mapPreferences;
       }
@@ -410,6 +440,7 @@ export function initPreferencesPanel({
     onStartIntroduction,
     themeView,
     basemapSettings,
+    reviewScrollSettings,
     navbarPopoverCoordinator,
   });
   render();
@@ -491,6 +522,23 @@ function renderDisplayScaleSetting(mapPreferences) {
         aria-labelledby="preferences-scale-hiding-label"
         aria-describedby="preferences-scale-hiding-description"
         ${scaleHidingEnabled ? "checked" : ""}
+      ></calcite-switch>
+    </section>
+  `;
+}
+
+function renderReviewScrollSetting(settings) {
+  return `
+    <section class="pc-preferences-panel__setting">
+      <div class="pc-preferences-panel__copy">
+        <h4 id="preferences-review-sync-scrolling-label">Sync scrolling</h4>
+      </div>
+      <calcite-switch
+        id="preferences-review-sync-scrolling"
+        class="pc-preferences-panel__switch"
+        label="Sync scrolling"
+        aria-labelledby="preferences-review-sync-scrolling-label"
+        ${settings.getValue() ? "checked" : ""}
       ></calcite-switch>
     </section>
   `;

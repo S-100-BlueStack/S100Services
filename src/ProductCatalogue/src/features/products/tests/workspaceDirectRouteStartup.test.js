@@ -197,6 +197,11 @@ async function createHarness(
       getReviewResolutionAliases,
       createReviewProductSession,
       createReviewComparisonController,
+      createReviewScrollSettings: () => ({
+        getValue: () => false,
+        subscribe: () => () => {},
+        destroy() {},
+      }),
       resolveReviewComposition: async (items) => ({
         items: items.map((item) =>
           packageData && ["Primary", "Secondary"].includes(item.datasetName)

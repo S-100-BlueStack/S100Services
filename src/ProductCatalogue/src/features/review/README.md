@@ -352,18 +352,19 @@ Refresh tooltip is included in R05 v2. Introduction suppresses
 application-owned hover help while its highlights are shown, without changing
 Review's data loading or Product selection lifecycle.
 
-## PC-UX-R08 optional comparison (candidate)
+## PC-UX-R08 scroll synchronization (candidate)
 
-The Review board provides two session-local, unchecked-by-default comparison controls.
-Sync scrolling maps the outer column position to a matching member and content section
-in other compatible, visible columns, using relative position within that section.
-Columns with missing matching sections, unresolved identities or retained refresh errors
-are not forced to an unrelated position. Nested History and report scroll areas remain
-independent. Retained DOM nodes restore their scroll offsets after board reconciliation.
+Review exposes **Sync scrolling** in Preferences under Display. The setting defaults to off.
+Enabling it leaves existing positions unchanged until the next outer-column scroll. Compatible
+visible columns follow the matching member and content section, using the relative position within
+that section. Missing matching sections, unresolved identities and retained refresh errors are not
+forced to an unrelated position. Nested History and report scroll areas remain independent.
+Retained DOM nodes restore their scroll offsets after board reconciliation.
 
-Highlight differences marks known conflicting Status and Edition values with a neutral
-outline and a difference symbol plus an accessible description. Comparisons require
-matching source, Product type and specification; package members remain separate.
-Missing values, unknown statuses and stale retained metadata are excluded. No arbitrary
-reference Product is selected. These options do not change Product selection, content
-visibility, navigation, API requests or backend state, and are not persisted.
+The Review session owns the runtime value and its scroll listeners. Shared Preferences receives
+only the Review scroll-settings capability. The Saved preferences Auto-save switch independently
+controls browser persistence (`pc.review.syncScrolling.v1`). Turning Auto-save off clears only
+that saved value, while keeping the current runtime value. Turning it on saves the current value.
+Restore defaults turns synchronization off and removes its saved value without changing Auto-save.
+The setting is not shown on other routes and makes no API calls or changes to Product selection,
+metadata, content visibility, navigation or backend state.

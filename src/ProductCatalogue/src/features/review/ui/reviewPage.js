@@ -55,7 +55,6 @@ export function renderReviewPage({
       previousBoard,
     })
   );
-  comparison?.connect(page.querySelector(".pc-review-board"), activeElement);
   const columns = page.querySelector(".pc-review-board__columns");
   if (columns) columns.scrollLeft = previousScrollLeft;
   // Reparenting a retained column can reset native scroll offsets in Chromium.
@@ -65,7 +64,7 @@ export function renderReviewPage({
     element.scrollTop = top;
     element.scrollLeft = left;
   }
-  comparison?.rememberScrollPositions();
+  comparison?.connect(page.querySelector(".pc-review-board"));
   // A retained column keeps its actual controls; restore only a surviving node.
   if (activeElement && page.contains(activeElement)) activeElement.focus?.({ preventScroll: true });
   // Selection rerenders the sidebar before the picker handler has completed.

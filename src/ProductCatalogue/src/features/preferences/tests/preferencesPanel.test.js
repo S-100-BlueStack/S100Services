@@ -147,6 +147,8 @@ const { module: preferences } = await loadModule("../ui/preferencesPanel.js", {
 const persistence = await import("../state/preferencePersistenceState.js");
 const scale = await import("../../map/scale/displayScaleOverrideState.js");
 const dashboard = await import("../../dashboard/state/dashboardPageSizePreference.js");
+const { createReviewScrollSettings, REVIEW_SYNC_SCROLLING_STORAGE_KEY } =
+  await import("../../review/state/reviewScrollSettings.js");
 
 function event(type, target, properties = {}) {
   const result = new Event(type, { cancelable: true });
@@ -180,6 +182,11 @@ for (const route of ["analyze", "review", "dashboard", "other-shared-page"]) {
     assert.deepEqual(values, before);
     assert.equal(panel.querySelectorAll("#preferences-dark-mode").length, 1);
     assert.equal(panel.querySelector("#preferences-scale-hiding"), null);
+    assert.equal(panel.querySelector("#preferences-review-sync-scrolling"), null);
+    assert.equal(
+      panel.querySelector('[data-preference-persistence-key="reviewSyncScrolling"]'),
+      null
+    );
     assert.equal(panel.querySelector('[data-preference-persistence-key="mapViewpoint"]'), null);
     assert.doesNotMatch(panel.html, />Introduction<\/h3>|>Settings<\/h3>/);
     assert.match(panel.html, /id="preferences-theme-label">Theme<\/h4>/);
@@ -424,9 +431,10 @@ for (const routeName of ["analyze", "review", "dashboard"]) {
     const noop = () => {};
     const title = () => "Workspace";
     globalThis.requestAnimationFrame = (callback) => callback();
+    const reviewScrollSettings = routeName === "review" ? createReviewScrollSettings() : null;
     globalThis.preferencesBootstrapDependencies = {
       initAnalyzePage: async () => ({ view: null }),
-      initReviewPage: async () => ({}),
+      initReviewPage: async () => ({ reviewScrollSettings }),
       initDashboardPage: async () => ({}),
       createAnalyzeDocumentTitle: title,
       createReviewDocumentTitle: title,
@@ -477,8 +485,13 @@ for (const routeName of ["analyze", "review", "dashboard"]) {
       assert.equal(mounted.panel.hidden, false);
       assert.equal(mounted.panel.querySelector("#preferences-scale-hiding"), null);
       assert.equal(mounted.panel.querySelectorAll("#preferences-dark-mode").length, 1);
+      assert.equal(
+        Boolean(mounted.panel.querySelector("#preferences-review-sync-scrolling")),
+        routeName === "review"
+      );
     } finally {
       mounted?.api.destroy();
+      reviewScrollSettings?.destroy();
       delete globalThis.preferencesBootstrapDependencies;
       delete globalThis.requestMainMapForPreferencesTest;
       delete globalThis.requestAnimationFrame;
@@ -621,5 +634,72 @@ test("Main map Preferences joins navbar popover coordination after shared UI boo
   } finally {
     api.destroy();
     coordinator.destroy();
+  }
+});
+
+test("Review Sync scrolling applies immediately and Auto-save controls only its stored value", async () => {
+  const key = persistence.PREFERENCE_PERSISTENCE_KEY.REVIEW_SYNC_SCROLLING;
+  persistence.setPreferencePersistenceEnabled(key, true);
+  values.delete(REVIEW_SYNC_SCROLLING_STORAGE_KEY);
+  values.set("unrelated-source-state", "unchanged");
+  const settings = createReviewScrollSettings();
+  const observed = [];
+  const unsubscribe = settings.subscribe((enabled) => observed.push(enabled));
+  const { api, panel, button } = mount({}, "review");
+  try {
+    assert.equal(panel.querySelector("#preferences-review-sync-scrolling"), null);
+    api.updateContext({ reviewScrollSettings: settings });
+    const control = panel.querySelector("#preferences-review-sync-scrolling");
+    const autoSave = panel.querySelector('[data-preference-persistence-key="reviewSyncScrolling"]');
+    assert.ok(control && autoSave);
+    assert.equal(control.checked, false);
+    assert.equal(autoSave.checked, true);
+    assert.equal(values.has(REVIEW_SYNC_SCROLLING_STORAGE_KEY), false);
+    assert.equal(control.getAttribute("label"), "Sync scrolling");
+    control.focus();
+    control.checked = true;
+    panel.dispatchEvent(event("calciteSwitchChange", control));
+    assert.equal(settings.getValue(), true);
+    assert.deepEqual(observed, [true]);
+    assert.equal(values.get(REVIEW_SYNC_SCROLLING_STORAGE_KEY), "true");
+    assert.equal(panel.querySelector("#preferences-review-sync-scrolling"), control);
+    assert.equal(document.activeElement, control);
+    autoSave.focus();
+    autoSave.checked = false;
+    panel.dispatchEvent(event("calciteSwitchChange", autoSave));
+    await Promise.resolve();
+    assert.equal(settings.getValue(), true);
+    assert.equal(control.checked, true);
+    assert.equal(values.has(REVIEW_SYNC_SCROLLING_STORAGE_KEY), false);
+    assert.equal(document.activeElement, autoSave);
+    assert.deepEqual(observed, [true]);
+    autoSave.checked = true;
+    panel.dispatchEvent(event("calciteSwitchChange", autoSave));
+    assert.equal(values.get(REVIEW_SYNC_SCROLLING_STORAGE_KEY), "true");
+    autoSave.checked = false;
+    panel.dispatchEvent(event("calciteSwitchChange", autoSave));
+    const reset = click(panel, "reset-all");
+    assert.equal(settings.getValue(), false);
+    assert.equal(control.checked, false);
+    assert.equal(values.has(REVIEW_SYNC_SCROLLING_STORAGE_KEY), false);
+    assert.equal(persistence.isPreferencePersistenceEnabled(key), false);
+    assert.equal(values.get("unrelated-source-state"), "unchanged");
+    assert.equal(document.activeElement, reset);
+    assert.deepEqual(observed, [true, false]);
+    button.dispatchEvent(event("click", button));
+    button.dispatchEvent(event("click", button));
+    assert.equal(panel.querySelector("#preferences-review-sync-scrolling").checked, false);
+    api.updateContext({ reviewScrollSettings: null });
+    assert.equal(panel.querySelector("#preferences-review-sync-scrolling"), null);
+    assert.equal(
+      panel.querySelector('[data-preference-persistence-key="reviewSyncScrolling"]'),
+      null
+    );
+  } finally {
+    api.destroy();
+    unsubscribe();
+    settings.destroy();
+    persistence.setPreferencePersistenceEnabled(key, true);
+    values.delete(REVIEW_SYNC_SCROLLING_STORAGE_KEY);
   }
 });

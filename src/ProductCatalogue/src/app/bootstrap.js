@@ -181,6 +181,7 @@ async function bootstrapReviewRoute(route) {
     });
 
     initializeTheme();
+    ui.preferencesPanel.updateContext({ reviewScrollSettings: app.reviewScrollSettings });
     hideLoader();
     ui.onboarding.setRouteReady();
   } catch (error) {

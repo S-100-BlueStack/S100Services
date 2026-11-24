@@ -7,6 +7,7 @@ export const PREFERENCE_PERSISTENCE_KEY = Object.freeze({
   ATTRIBUTE_FILTERS: "attributeFilters",
   DISPLAY_SCALE_OVERRIDE: "displayScaleOverride",
   THEME: "theme",
+  REVIEW_SYNC_SCROLLING: "reviewSyncScrolling",
 });
 
 const DEFAULT_PERSISTENCE_STATE = Object.freeze({
@@ -15,6 +16,7 @@ const DEFAULT_PERSISTENCE_STATE = Object.freeze({
   [PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS]: true,
   [PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE]: true,
   [PREFERENCE_PERSISTENCE_KEY.THEME]: true,
+  [PREFERENCE_PERSISTENCE_KEY.REVIEW_SYNC_SCROLLING]: true,
 });
 
 let persistenceState = readPersistenceState();

@@ -1,9 +1,8 @@
-import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
 import { serializeProductIdentity } from "../../dataSources/domain/productIdentity.js";
 import { reviewDatasetKey } from "./reviewWorkUnits.js";
 
-// Comparison is a read-only projection of the published Review payload. In particular,
-// aggregate Package status and stale retained metadata are not member metadata.
+// Scroll peers are a read-only projection of published Review work units.
+// Only compatible, verified member layouts may synchronize.
 export function projectReviewComparison(product) {
   if (
     !product?.productContext ||
@@ -52,15 +51,11 @@ export function projectReviewComparison(product) {
     ) {
       return null;
     }
-    const metadata = isPackage ? member : attributes;
-    const electronic = specification === "S101" || specification === "S57";
     return {
       identity,
       memberKey: declaration?.key ?? null,
       // A source with the same display label is not necessarily the same data contract.
       groupKey: JSON.stringify([context.sourceId, context.productType, specification]),
-      status: electronic ? (normalizeElectronicProductStatus(metadata?.status) ?? null) : null,
-      edition: electronic ? normalizeEdition(metadata?.edition) : null,
     };
   });
   if (
@@ -85,41 +80,6 @@ export function projectReviewComparison(product) {
   };
 }
 
-// Every known differing value is marked, not only deviations from an arbitrary first Product.
-// Missing values never participate, and duplicate identities cannot become comparison peers.
-export function getReviewMetadataDifferences(projections) {
-  const groups = new Map();
-  for (const projection of projections) {
-    for (const member of projection.members) {
-      if (!groups.has(member.groupKey)) groups.set(member.groupKey, new Map());
-      const group = groups.get(member.groupKey);
-      if (!group.has(member.identity)) {
-        group.set(member.identity, member);
-      } else {
-        const existing = group.get(member.identity);
-        // Contradictory duplicate values cannot become evidence for a difference.
-        group.set(member.identity, {
-          ...existing,
-          status: existing.status === member.status ? existing.status : null,
-          edition: existing.edition === member.edition ? existing.edition : null,
-        });
-      }
-    }
-  }
-  const differences = new Map();
-  for (const group of groups.values()) {
-    for (const field of ["status", "edition"]) {
-      const known = [...group.values()].filter((member) => member[field] !== null);
-      if (new Set(known.map((member) => member[field])).size < 2) continue;
-      for (const member of known) {
-        if (!differences.has(member.identity)) differences.set(member.identity, new Set());
-        differences.get(member.identity).add(field);
-      }
-    }
-  }
-  return differences;
-}
-
 // Map the visible top of a column to the same section in a peer. The ratio is local
 // to that section, rather than a percentage of the entire (possibly different) column.
 export function getReviewSynchronizedScrollTop(source, target, scrollTop, targetMax) {
@@ -138,12 +98,4 @@ function normalizeSpecification(value) {
   if (normalized === "101") return "S101";
   if (normalized === "57") return "S57";
   return normalized;
-}
-
-function normalizeEdition(value) {
-  if (typeof value !== "number" && (typeof value !== "string" || !/^\d+$/.test(value.trim()))) {
-    return null;
-  }
-  const edition = Number(value);
-  return Number.isSafeInteger(edition) && edition >= 0 ? edition : null;
 }

@@ -90,12 +90,6 @@ function createColumn(name, edition, height, withHistory = true) {
 }
 
 function setup(t) {
-  const original = globalThis.document;
-  globalThis.document = { createElement: () => new Element(), activeElement: null };
-  t.after(() => {
-    if (original === undefined) delete globalThis.document;
-    else globalThis.document = original;
-  });
   const comparison = createReviewComparisonController();
   t.after(() => comparison.destroy());
   const board = new Element();
@@ -104,17 +98,7 @@ function setup(t) {
   const c = createColumn("C", 3, 200, false);
   board.append(a.column, b.column, c.column);
   comparison.connect(board);
-  const checkboxes = () =>
-    board
-      .querySelector(".pc-review-comparison")
-      .children.slice(1)
-      .map((label) => label.children[0]);
-  return { comparison, board, a, b, c, checkboxes };
-}
-
-function change(input, checked) {
-  input.checked = checked;
-  input.dispatchEvent(new Event("change"));
+  return { comparison, board, a, b, c };
 }
 
 function scrollTo(element, top) {
@@ -123,12 +107,12 @@ function scrollTo(element, top) {
 }
 
 test("outer scroll synchronization is opt-in, maps matching sections and ignores echoes", (t) => {
-  const { comparison, a, b, c, checkboxes } = setup(t);
-  const [sync] = checkboxes();
-  assert.equal(sync.checked, false);
+  const { comparison, board, a, b, c } = setup(t);
+  assert.equal(board.querySelector(".pc-review-comparison"), null);
   scrollTo(a.scroll, 50);
   assert.equal(b.scroll.scrollTop, 0);
-  change(sync, true);
+  comparison.setSyncScrolling(true);
+  assert.equal(b.scroll.scrollTop, 0);
   scrollTo(a.scroll, 100);
   assert.equal(b.scroll.scrollTop, 200);
   assert.equal(c.scroll.scrollTop, 0);
@@ -141,20 +125,22 @@ test("outer scroll synchronization is opt-in, maps matching sections and ignores
   assert.equal(b.scroll.scrollTop, 200);
 });
 
-test("difference markers and comparison focus survive reconnect without duplicate controls", (t) => {
-  const { comparison, board, c, checkboxes } = setup(t);
-  const [, highlight] = checkboxes();
-  assert.equal(highlight.checked, false);
-  assert.equal(board.querySelectorAll(".pc-review-comparison-marker").length, 0);
-  change(highlight, true);
-  assert.equal(board.querySelectorAll(".pc-review-comparison-marker").length, 3);
-  highlight.focus();
+test("the setting survives reconnect and disabling restores independent scrolling", (t) => {
+  const { comparison, board, a, b, c } = setup(t);
+  comparison.setSyncScrolling(true);
+  scrollTo(a.scroll, 100);
+  assert.equal(b.scroll.scrollTop, 200);
   c.column.remove();
-  comparison.connect(board, document.activeElement);
-  assert.equal(board.querySelectorAll(".pc-review-comparison").length, 1);
-  assert.equal(board.querySelectorAll(".pc-review-comparison-marker").length, 2);
-  assert.equal(checkboxes()[1].checked, true);
-  assert.equal(document.activeElement, checkboxes()[1]);
-  change(checkboxes()[1], false);
-  assert.equal(board.querySelectorAll(".pc-review-comparison-marker").length, 0);
+  comparison.connect(board);
+  assert.equal(board.querySelector(".pc-review-comparison"), null);
+  assert.equal(board.querySelector(".pc-review-comparison-marker"), null);
+  scrollTo(a.scroll, 150);
+  assert.equal(b.scroll.scrollTop, 300);
+  comparison.setSyncScrolling(false);
+  scrollTo(a.scroll, 50);
+  assert.equal(b.scroll.scrollTop, 300);
+  comparison.setSyncScrolling(true);
+  assert.equal(b.scroll.scrollTop, 300);
+  scrollTo(a.scroll, 75);
+  assert.equal(b.scroll.scrollTop, 150);
 });

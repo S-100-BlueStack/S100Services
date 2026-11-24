@@ -62,6 +62,11 @@ async function harness({
       }),
     createReviewProductSession,
     createReviewComparisonController,
+    createReviewScrollSettings: () => ({
+      getValue: () => false,
+      subscribe: () => () => {},
+      destroy() {},
+    }),
     validateProductCatalogSelection,
     console,
     document: {

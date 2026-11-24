@@ -31,12 +31,16 @@ import {
 } from "../routing/reviewRoute.js";
 import { renderReviewPage } from "../ui/reviewPage.js";
 import { createReviewComparisonController } from "../ui/reviewComparisonController.js";
+import { createReviewScrollSettings } from "../state/reviewScrollSettings.js";
 import { captureReviewProductListInteraction } from "../ui/reviewProductListInteraction.js";
 import { captureReviewWorkspaceContentInteraction } from "../ui/reviewWorkspaceContentInteraction.js";
 
 export async function initReviewPage({ datasetNames } = {}) {
   const initialProductItems = createReviewProductItems(datasetNames);
   const comparison = createReviewComparisonController();
+  const reviewScrollSettings = createReviewScrollSettings();
+  comparison.setSyncScrolling(reviewScrollSettings.getValue());
+  const unsubscribeReviewScroll = reviewScrollSettings.subscribe(comparison.setSyncScrolling);
   let productItems = [];
   let pendingProductItems = null;
   let compositionResolutions = [];
@@ -402,8 +406,11 @@ export async function initReviewPage({ datasetNames } = {}) {
       return currentProducts;
     },
     loadReviewDatasetNames,
+    reviewScrollSettings,
     destroy() {
       disposed = true;
+      unsubscribeReviewScroll();
+      reviewScrollSettings.destroy();
       comparison.destroy();
       productSession.destroy();
       productCatalogRequestId += 1;

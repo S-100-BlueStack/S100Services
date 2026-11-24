@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { serializeProductIdentity } from "../../dataSources/domain/productIdentity.js";
-import {
-  getReviewMetadataDifferences,
-  getReviewSynchronizedScrollTop,
-  projectReviewComparison,
-} from "./reviewComparison.js";
+import { getReviewSynchronizedScrollTop, projectReviewComparison } from "./reviewComparison.js";
 
 function product(name, specification, { status = 8, edition = 3, sourceId = specification } = {}) {
   const productContext = {
@@ -41,52 +37,22 @@ function packageProduct(name, primary = {}, secondary = {}) {
   };
 }
 
-const fieldsFor = (differences, member) => [...(differences.get(member.identity) ?? [])];
-
-test("Package members compare only their own authoritative specification and metadata", () => {
-  const a = projectReviewComparison(
-    packageProduct("A", { status: 8, edition: 3 }, { status: 11, edition: 7 })
-  );
-  const b = projectReviewComparison(
-    packageProduct("B", { status: 8, edition: 4 }, { status: 15, edition: 7 })
-  );
-  const differences = getReviewMetadataDifferences([a, b]);
-  assert.deepEqual(fieldsFor(differences, a.members[0]), ["edition"]);
-  assert.deepEqual(fieldsFor(differences, b.members[0]), ["edition"]);
-  assert.deepEqual(fieldsFor(differences, a.members[1]), ["status"]);
-  assert.deepEqual(fieldsFor(differences, b.members[1]), ["status"]);
+test("Packages synchronize only matching ordered source and specification layouts", () => {
+  const a = projectReviewComparison(packageProduct("A"));
+  const b = projectReviewComparison(packageProduct("B"));
   assert.equal(a.scrollGroup, b.scrollGroup);
-  assert.equal(getReviewMetadataDifferences([a]).size, 0);
-});
-
-test("missing, unknown and differently scoped metadata never create a difference", () => {
-  const a = projectReviewComparison(product("A", "S101", { status: 8, edition: 0 }));
-  const b = projectReviewComparison(product("B", "S101", { status: "8", edition: "0" }));
-  const c = projectReviewComparison(product("C", "S101", { status: 99, edition: "-" }));
-  const d = projectReviewComparison(product("D", "S57", { status: 15, edition: 7 }));
-  const e = projectReviewComparison(
-    product("E", "S101", { status: 15, edition: 7, sourceId: "other-source" })
+  assert.notEqual(a.members[0].groupKey, a.members[1].groupKey);
+  assert.deepEqual(
+    a.members.map((member) => member.memberKey),
+    ["a", "b"]
   );
-  assert.equal(c.members[0].status, null);
-  assert.equal(c.members[0].edition, null);
-  assert.equal(getReviewMetadataDifferences([a, b, c, d, e]).size, 0);
-  assert.notEqual(a.scrollGroup, d.scrollGroup);
-  assert.notEqual(a.scrollGroup, e.scrollGroup);
-});
-
-test("all known differing values are marked without using the first Product as a reference", () => {
-  const a = projectReviewComparison(product("A", "S101", { status: 8, edition: 0 }));
-  const b = projectReviewComparison(product("B", "S101", { status: 8, edition: 2 }));
-  const c = projectReviewComparison(product("C", "S101", { status: 8, edition: 2 }));
-  const d = projectReviewComparison(product("D", "S101", { status: 8, edition: null }));
-  const differences = getReviewMetadataDifferences([a, b, c, d]);
-  for (const entry of [a, b, c]) {
-    assert.deepEqual(fieldsFor(differences, entry.members[0]), ["edition"]);
-  }
-  assert.deepEqual(fieldsFor(differences, d.members[0]), []);
-  assert.equal(getReviewMetadataDifferences([a, a]).size, 0);
-  const conflictingA = projectReviewComparison(product("A", "S101", { status: 8, edition: 3 }));
-  assert.equal(getReviewMetadataDifferences([a, conflictingA, b]).size, 0);
+  const standalone = projectReviewComparison(product("C", "S101"));
+  assert.notEqual(a.scrollGroup, standalone.scrollGroup);
+  assert.notEqual(standalone.scrollGroup, projectReviewComparison(product("D", "S57")).scrollGroup);
+  assert.notEqual(
+    standalone.scrollGroup,
+    projectReviewComparison(product("E", "S101", { sourceId: "other-source" })).scrollGroup
+  );
 });
 
 test("failed refresh, incomplete package, conflicting identity and pending payload fail closed", () => {
@@ -113,14 +79,6 @@ test("failed refresh, incomplete package, conflicting identity and pending paylo
     projectReviewComparison({ ...verified, productContext: verified.members[1].productContext }),
     null
   );
-});
-
-test("a standalone Product and a Package share metadata peers but not outer scroll groups", () => {
-  const a = projectReviewComparison(packageProduct("A", { status: 8, edition: 3 }));
-  const b = projectReviewComparison(product("B", "S101", { status: 11, edition: 3 }));
-  assert.notEqual(a.scrollGroup, b.scrollGroup);
-  assert.deepEqual(fieldsFor(getReviewMetadataDifferences([a, b]), a.members[0]), ["status"]);
-  assert.deepEqual(fieldsFor(getReviewMetadataDifferences([a, b]), a.members[1]), []);
 });
 
 test("scroll mapping follows the matching member and content section at different heights", () => {
