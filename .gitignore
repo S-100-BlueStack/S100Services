@@ -448,6 +448,7 @@ dist-ssr
 
 *.zip
 !src/DataCatalogueAPI/Samples/MarineAggregateExtraction/*.zip
+!src/DataCatalogueAPI/Samples/ChartSubmissions/*/*.zip
 /src/ProductCatalogueService/exports
 /src/ProductCatalogueAPI/exports
 /src/ProductCatalogueAPI/config

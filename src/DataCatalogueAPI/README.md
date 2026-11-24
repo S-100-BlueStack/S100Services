@@ -42,7 +42,7 @@ unchanged. To verify the IIS deployment and local configuration, see
 Package creation (`CreatePackageRequest`), severity areas (`AddSeverityAreaRequest`)
 and workspaces (`AddWorkspaceRequest`) accept **Esri JSON**, not GeoJSON. Their
 C# property is `EsriJSON`, exposed as `esriJSON` in JSON request bodies and OpenAPI.
-MA and WorkZone archive imports are an alternative package creation mode: the request supplies
+MA, WorkZone, ENC, Landdata and Coast and Rock use an archive import mode: the request supplies
 the uploaded ZIP URI and `importFromArchive=true`, and the server converts the
 archive's source GeoJSON internally as described below.
 Replace the previous request field `geoJSON` with `esriJSON` in API clients;
@@ -165,16 +165,11 @@ links retain their existing HTTP(S) validation. MA descriptions already use
 `en`. General Submission samples now default their description language to
 `en`; an optional `language` string in `submission.json` overrides that default
 and is trimmed and lowercased. This labels source text; it does not translate it.
-The ENC workspace fixtures contain one workspace per unique `PRODUCTNAME` in
-the supplied DK2 dataset snapshot: 16 workspaces from 18 source polygons. Their
-display names are the dataset identifiers. Each AOI is the axis-aligned WGS84
-envelope of every polygon belonging to that dataset; `DK20133C` and `DK20149C`
-each combine two source polygons into one rectangular workspace. Coordinates
-retain the supplied extent precision, and display scales retain the existing
-sample defaults. These are development fixtures loaded through the existing
-controller-based initializer, not a live dataset synchronization. Paper Chart
-footprints retain their source polygons. Restart the development API to recreate
-samples from these changes.
+The ENC workspace fixtures use DK2 dataset identifiers as display names and
+retain the source coverage polygons. The sample excludes `DK20109C`,
+`DK20909C`, `DK21733C` and `DK21741C`. The 18 paper-chart footprints are split
+between the ESRI and CARIS sample pipelines, with their coordinates preserved.
+Restart the development API to recreate the sample data.
 
 Regression coverage includes `PackageGeometryPageTests`,
 `PackageGeometryReadTests`, `PackageSampleTests`,
@@ -369,7 +364,60 @@ An empty catalogue returns an empty `items` array and zero `totalCount`.
 through the existing dispatcher subscription. The controller and subscription
 resolve the same singleton; listing does not scan the event store. Like the
 other subscription-backed listings, newly created pipelines appear once their
-events have been processed, including startup's ENC and Paper Chart pipelines.
+events have been processed, including startup's ENC, Paper Chart ESRI and Paper Chart CARIS pipelines.
+
+## ENC, Landdata and Coast and Rock submissions
+
+Upload each ZIP using multipart field `File` on `POST /api/v1/packages/repository`.
+Use its returned URI in the body of `POST /api/v1/packages`.
+
+```json
+{
+  "category": "CoastAndRock",
+  "absoluteUri": "database://11111111-2222-3333-4444-555555555555",
+  "importFromArchive": true
+}
+```
+
+| Category ID | Short ID prefix | Required ZIP contents |
+| --- | --- | --- |
+| `ENC` | `ENC` | Root `metadata.json`, a nonempty `.000` dataset and a nonempty `.vld` report. The metadata includes an `aoi` WGS84 GeoJSON Polygon or MultiPolygon. |
+| `Landdata` | `LD` | Root `metadata.json` and exactly one nonempty `.geojson` file. |
+| `CoastAndRock` | `CR` | Root `metadata.json` and exactly one nonempty `.geojson` file. |
+
+Metadata requires `title` and `source`. Optional fields are `shortId`, `refId`,
+`createdUtc` (ISO 8601), `summary` (plain text) and `language` (defaults to `en`).
+Omit `shortId` to allocate the next `PREFIX-NNN-YY` identifier. The ZIP is
+retained as the original attachment. For ENC, package geometry comes from the
+supplied footprint. DataCatalogue checks the presence of the dataset and report
+and stores both as supplied. It does not interpret the report or validate the
+chart. The sample ENC archive contains a synthetic S-57 cell and a placeholder
+validation report.
+
+GeoJSON uses two-dimensional WGS84 longitude/latitude. Point, line and polygon
+geometries, their multipart forms, and collections are supported. The detailed
+geometry is stored in the catalogue and its envelope becomes the package AOI.
+Import limits are 16 MiB compressed, 64 MiB expanded, 64 KiB metadata, and
+8 MiB for the standalone GeoJSON.
+
+## Automatic pipeline bindings
+
+Set `automaticPipelineIds` on `POST /api/v1/dispatcher/categories` using IDs
+from `GET /api/v1/pipelines`. To replace the list, send
+`PUT /api/v1/dispatcher/categories/{id}/automatic-pipelines` with the full list.
+
+```json
+{
+  "automaticPipelineIds": ["the-first-pipeline-id", "the-second-pipeline-id"]
+}
+```
+
+An empty array clears the defaults. Unknown IDs return 400 and duplicate IDs
+are collapsed. The category read and list endpoints return the saved list.
+Creation uses the category defaults it reads during creation and commits
+the package and its initial binding events as one event-store batch.
+Editing defaults affects future packages. Existing bindings can still be
+removed or added through the dispatcher binding endpoints.
 
 ## WorkZone submissions
 
@@ -498,20 +546,18 @@ Its constructor receives the DI-registered `DispatcherController`,
 `PackageController`, `PipelineController`, the initialization-only `SamplePackageReader`
 and logger. The sample reader creates API request models from the local fixture files;
 all packages still go through `PackageController.CreatePackage`. Production
-package types are not responsible for constructing requests to their own API. Startup creates the `NoticeToMariners`,
-`GeneralSubmission`, `MarineAggregateExtraction` and `WorkZone` categories and imports the supplied notice JSON,
-submission ZIPs, MA ZIP fixtures and five WorkZone ZIP fixtures.
-
-Startup also creates `ENC` and `Paper Chart` through `PipelineController.Create`.
-Half of the development sample packages are randomly assigned to the two pipelines,
-with balanced counts. Production assignments are selected explicitly through
-`POST /api/v1/dispatcher/bindings` using professional judgment.
+package types define how each archive is parsed. Startup creates the
+`NoticeToMariners`, `GeneralSubmission`, `MarineAggregateExtraction`, `WorkZone`,
+`ENC`, `Landdata` and `CoastAndRock` categories and imports their sample packages. Startup creates `ENC`, `Paper Chart ESRI` and
+`Paper Chart CARIS` through `PipelineController.Create`. Sample category defaults
+route ENC packages to ENC and route Landdata and Coast and Rock packages to
+both paper-chart pipelines. Additional randomly chosen samples are manually
+bound to one pipeline each so that half of the packages have at least one binding.
 
 Bindings use typed package/pipeline stream names and persist their own ID.
 Creation returns 201 and a retrievable binding URL; missing package/pipeline IDs
 return 404, and an existing pair returns 409. A package can be bound to multiple
-pipelines. `GET /api/v1/dispatcher/bindings/{id}` reads the saved link. Startup
-does not create sample bindings.
+pipelines. `GET /api/v1/dispatcher/bindings/{id}` reads the saved link.
 Pipeline IDs are logged at startup and can be read using
 `GET /api/v1/pipelines/{id}`. Missing bindings/pipelines return 404; unexpected
 store failures and cancellation are no longer disguised as missing records.
@@ -608,8 +654,8 @@ They contain no downloaded PDFs. The original 141-site
 startup imports only the first ten ZIPs in ordinal filename order. It uploads
 each ZIP through `PackageController.UploadFile` before calling
 `PackageController.CreatePackage` with archive import enabled. Existing category
-and pipeline creation still uses the registered controllers. After import,
-half of all sample packages are randomly assigned to the sample pipelines.
+and pipeline creation still uses the registered controllers. The initializer
+uses category defaults and sample bindings as described above.
 
 | Source value | Package mapping |
 | --- | --- |
@@ -683,9 +729,8 @@ Live synchronization is a separate feature. Before implementing it, decide the
 authoritative source and reconciliation rules, whether expired/missing sites
 remain available, and whether one package represents a site or a source change.
 The current sample initializer assumes fresh stores and is not a recurring,
-idempotent import. After verifying every sample geometry through the package read
-path, it randomly assigns half of all samples to pipelines, balanced between ENC
-and Paper Chart. The remaining samples stay unassigned. Chart data is unchanged.
+idempotent import. The initializer verifies every sample geometry through the
+package read path.
 
 `PackageTypes/NoticeToMariners.cs` reads every geometry from every part and
 converts GeoJSON into Esri JSON in WGS84. The AOI is always a rectangle covering
@@ -878,11 +923,11 @@ coordinates through `GET /api/v1/pipelines/{id}/workspaces/{workspace}`.
 
 ### Editable sample workspace coverage
 
-`Samples/Workspaces/ENC.json` and `Samples/Workspaces/PaperChart.json` define
-independent Danish work areas. Each file is an array of objects with
-`displayName`, an optional `displayScale`, and `aoi` as an Esri JSON polygon
-object containing `rings` and `spatialReference`. Add Paper Chart areas to
-`PaperChart.json`; no C# changes are needed. Names must be unique per pipeline.
+`Samples/Workspaces/ENC.json`, `Samples/Workspaces/PaperChart.json` and
+`Samples/Workspaces/PaperChartCARIS.json` define the ENC, Paper Chart ESRI and
+Paper Chart CARIS workspaces, respectively. Each file is an array of objects
+with `displayName`, an optional `displayScale`, and `aoi` as an Esri JSON polygon
+with `rings` and `spatialReference`. Names must be unique per pipeline.
 Files are copied to build, publish and test output. Restart the application to
 load edits; normal startup rebuilds the development stores as before.
 
@@ -903,10 +948,8 @@ Initialization validates all samples through `PackageController.GetGeometry`
 after import and before assignment. Every sample must resolve a nonempty AOI
 and at least one detail group; a failed native lookup or incomplete geometry
 stops startup with the sample identifier rather than leaving unusable samples.
-All supplied notice fixtures already contain source geometry. No fabricated
-fallback coordinates are used. Roughly half (`count / 2`, rounded down) are
-shuffled and assigned once through `DispatcherController.CreateBinding`;
-pipeline totals differ by at most one. Package choices vary each startup.
+All supplied notice fixtures contain source geometry. The additional sample
+bindings are spread across the pipelines. Package choices vary each startup.
 
 `GET /api/v1/pipelines/{id}/workspaces/{workspace}/packages` retains pagination,
 ordinal package ordering and total matching count. Every item now includes

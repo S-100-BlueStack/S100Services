@@ -12,6 +12,20 @@ public sealed class PipelineAssignmentService(IEventStore store, StreamNameMap s
 {
     private static readonly SemaphoreSlim MutationGate = new(1, 1);
 
+    /// <summary>Validates category defaults against saved pipeline streams and normalizes them to a distinct, sorted list.</summary>
+    public async Task<string[]> ValidateAutomaticPipelineIdsAsync(IEnumerable<string> pipelineIds, CancellationToken cancellationToken) {
+        var normalized = pipelineIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        foreach (var pipelineId in normalized) {
+            if (string.IsNullOrWhiteSpace(pipelineId) || pipelineId.Length > 200 || pipelineId.Contains("::")) {
+                throw new InvalidDataException("Each automatic pipeline ID must be a valid pipeline identifier.");
+            }
+            if (!await store.StreamExists(streams.GetStreamName(new PipelineId(pipelineId)), cancellationToken)) {
+                throw new InvalidDataException($"Automatic pipeline '{pipelineId}' does not exist.");
+            }
+        }
+        return normalized;
+    }
+
     public async Task<BindingState> AssignAsync(string packageId, string pipelineId, CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(pipelineId) || packageId.Contains("::") || pipelineId.Contains("::")) {
             throw new InvalidDataException("Supply valid package and pipeline identifiers.");

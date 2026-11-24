@@ -72,14 +72,24 @@ namespace DataCatalague.Api.Repositories
             }
 
             lock (this._gate) {
-                var results = new AppendEventsResult[appends.Count];
-                var index = 0;
-
+                // All stream versions must match before any part of the batch is written.
+                var versions = new Dictionary<StreamName, int>();
                 foreach (var append in appends) {
                     if (append.Events.Count == 0) {
                         throw new ArgumentException("Each append must contain at least one event.", nameof(appends));
                     }
+                    if (!versions.TryGetValue(append.StreamName, out var version)) {
+                        version = this.FindStream(append.StreamName, false).Version;
+                    }
+                    if (append.ExpectedVersion != ExpectedStreamVersion.Any && append.ExpectedVersion.Value != version) {
+                        throw new WrongVersion(append.ExpectedVersion, version);
+                    }
+                    versions[append.StreamName] = checked(version + append.Events.Count);
+                }
 
+                var results = new AppendEventsResult[appends.Count];
+                var index = 0;
+                foreach (var append in appends) {
                     var existing = this._storage.GetOrAdd(
                         append.StreamName,
                         static s => new InMemoryStream(s));

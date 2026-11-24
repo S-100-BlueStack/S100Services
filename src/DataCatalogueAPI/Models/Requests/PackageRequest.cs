@@ -1,11 +1,12 @@
 using DataCatalague.Api.Domain;
+using DataCatalague.Api.PackageTypes;
 using System.ComponentModel.DataAnnotations;
 
 namespace DataCatalague.Api.Models.V1
 {
     public sealed class CreatePackageRequest : IValidatableObject
     {
-        /// <summary>Reads the uploaded ZIP referenced by AbsoluteUri. Supported for MarineAggregateExtraction and WorkZone; omit all derived metadata and geometry.</summary>
+        /// <summary>Reads the uploaded ZIP referenced by AbsoluteUri. Supported for MarineAggregateExtraction, WorkZone, ENC, Landdata and CoastAndRock. Omit derived metadata and geometry.</summary>
         public bool ImportFromArchive { get; init; }
 
         /// <summary>Complete Esri geometry groups; the AOI is recomputed after projection when supplied.</summary>
@@ -37,13 +38,16 @@ namespace DataCatalague.Api.Models.V1
         /// <returns>Contract violations for MVC and direct controller/service callers.</returns>
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) {
             if (!this.ImportFromArchive) {
-                if (string.IsNullOrWhiteSpace(this.EsriJSON)) {
+                if (ChartSubmissionArchive.Supports(this.Category)) {
+                    yield return new ValidationResult("ENC, Landdata and CoastAndRock require archive import.", [nameof(this.ImportFromArchive)]);
+                }
+                else if (string.IsNullOrWhiteSpace(this.EsriJSON)) {
                     yield return new ValidationResult("EsriJSON is required unless importFromArchive is true.", [nameof(this.EsriJSON)]);
                 }
                 yield break;
             }
-            if (this.Category is not ("MarineAggregateExtraction" or "WorkZone")) {
-                yield return new ValidationResult("Archive import is supported for MarineAggregateExtraction and WorkZone.", [nameof(this.Category)]);
+            if (this.Category is not ("MarineAggregateExtraction" or "WorkZone") && !ChartSubmissionArchive.Supports(this.Category)) {
+                yield return new ValidationResult("Archive import is supported for MarineAggregateExtraction, WorkZone, ENC, Landdata and CoastAndRock.", [nameof(this.Category)]);
             }
             // System.Uri normalizes a bare database://UUID authority to a root path.
             if (!Uri.TryCreate(this.AbsoluteUri, UriKind.Absolute, out var uri) || uri.Scheme != "database"

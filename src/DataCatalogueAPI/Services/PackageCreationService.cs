@@ -19,7 +19,7 @@ public sealed class PackageCreationException(PackageCreationError error, string 
 }
 
 /// <summary>Coordinates package validation, identity reservation, geometry persistence and creation events.</summary>
-public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap streams, ICommandService<PackageState> commands, PackageRepository packages, PackageIdentityService identities, ArcGisDispatcher dispatcher, DispatcherResourceService resources, ILogger<PackageCreationService> logger)
+public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap streams, ICommandService<PackageState> commands, PackageRepository packages, PackageIdentityService identities, ArcGisDispatcher dispatcher, DispatcherResourceService resources, PipelineAssignmentIndex assignmentIndex, ILogger<PackageCreationService> logger)
 {
     // Event and geometry writes cannot share a transaction; serialize reservations
     // across service instances until their persistence outcome is known.
@@ -39,20 +39,28 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
         if (request.ImportFromArchive) {
             try {
                 var id = Guid.Parse(new Uri(request.AbsoluteUri).Host);
-                var maximumBytes = request.Category == "WorkZone" ? WorkZoneArchive.MaximumArchiveBytes : MarineAggregateArchive.MaximumArchiveBytes;
+                var maximumBytes = request.Category switch {
+                    "WorkZone" => WorkZoneArchive.MaximumArchiveBytes,
+                    "MarineAggregateExtraction" => MarineAggregateArchive.MaximumArchiveBytes,
+                    _ => ChartSubmissionArchive.MaximumArchiveBytes,
+                };
                 var stored = await resources.ReadArchiveAsync(id, maximumBytes, cancellationToken);
                 if (stored is null) { throw new PackageCreationException(PackageCreationError.NotFound, "Uploaded archive not found."); }
                 using var input = new MemoryStream(stored.Value.Data, writable: false);
                 PackageGeometry geometry;
                 PackageMetaData metadata;
-                PackageDescription[] descriptions;
+                PackageDescription[]? descriptions;
                 if (request.Category == "WorkZone") {
                     var submission = await WorkZoneArchive.ReadAsync(input, cancellationToken);
                     (geometry, metadata, descriptions) = (submission.Geometry, submission.MetaData, submission.Descriptions);
                 }
-                else {
+                else if (request.Category == "MarineAggregateExtraction") {
                     var archive = await MarineAggregateArchive.ReadAsync(input, cancellationToken);
                     (geometry, metadata, descriptions) = (archive.Site.Geometry, archive.Site.MetaData, archive.Site.Descriptions);
+                }
+                else {
+                    var submission = await ChartSubmissionArchive.ReadAsync(request.Category, input, cancellationToken);
+                    (geometry, metadata, descriptions) = (submission.Geometry, submission.MetaData, submission.Descriptions);
                 }
                 archiveFileName = stored.Value.FileName;
                 request = new CreatePackageRequest {
@@ -67,7 +75,7 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
                 };
             }
             catch (InvalidDataException exception) {
-                throw new PackageCreationException(PackageCreationError.Validation, request.Category == "WorkZone" ? "Invalid WorkZone archive." : "Invalid MA archive.", exception.Message);
+                throw new PackageCreationException(PackageCreationError.Validation, request.Category == "MarineAggregateExtraction" ? "Invalid MA archive." : $"Invalid {request.Category} archive.", exception.Message);
             }
         }
 
@@ -131,16 +139,19 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
             var filename = archiveFileName ?? IO.Path.GetFileName(request.AbsoluteUri);
 
             // Once geometry commits, finish recording its references even if the caller disconnects.
-            var cmd = await commands.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, metadata, request.DisplayScale, references.Details, request.Descriptions, request.Charts), CancellationToken.None);
-
-            if (!cmd.Success) {
-                logger.LogError("Package command failed after geometry persistence. PackageId: {PackageId}, ShortId: {ShortId}, Aoi: {Aoi}, Details: {@Details}.", streamId, metadata.ShortId, references.Aoi, references.Details);
+            var command = new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, metadata, request.DisplayScale, references.Details, request.Descriptions, request.Charts);
+            try {
+                if (category.State.AutomaticPipelineIds.Count > 0) {
+                    return await CreateWithBindingsAsync(command, category.State.AutomaticPipelineIds);
+                }
+                var result = await commands.Handle(command, CancellationToken.None);
+                result.ThrowIfError();
+                return result.Get()!.State;
+            }
+            catch (Exception exception) {
+                logger.LogError(exception, "Package creation failed after geometry persistence. PackageId: {PackageId}, ShortId: {ShortId}, Aoi: {Aoi}, Details: {@Details}.", streamId, metadata.ShortId, references.Aoi, references.Details);
                 throw new PackageCreationException(PackageCreationError.Persistence, "Could not record the package after storing its geometry.");
             }
-
-            var result = cmd.Get()!;
-
-            return result.State;
         }
         catch (InvalidDataException exception) {
             throw new PackageCreationException(PackageCreationError.Validation, "Invalid package geometry.", exception.Message);
@@ -149,5 +160,30 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
             if (!geometryCommitted && identity is { } reserved) { identities.Release(reserved.ShortId); }
             CreationGate.Release();
         }
+    }
+
+    private async Task<PackageState> CreateWithBindingsAsync(PackagesCommands.CreatePackage command, IReadOnlyList<string> pipelineIds) {
+        var package = new Package();
+        await package.CreatePackage(command.PackageId, command.Category, command.FileName, command.AbsoluteUri, command.GeometryRef, command.Severity, command.MetaData, command.DisplayScale, command.DetailedGeometry, command.Descriptions, command.Charts);
+        var appends = new List<NewStreamAppend>(pipelineIds.Count + 1);
+        foreach (var pipelineId in pipelineIds) {
+            var bindingId = new BindingId($"{command.PackageId}::{pipelineId}");
+            var binding = new Binding();
+            await binding.Create(bindingId.Value, command.PackageId, pipelineId);
+            appends.Add(BuildAppend(streams.GetStreamName(bindingId), binding.Changes));
+        }
+        // Publish binding events before the package event so the list projection
+        // cannot return a seeded package before its routing is projected.
+        appends.Add(BuildAppend(streams.GetStreamName(new PackageId(command.PackageId)), package.Changes));
+
+        var saved = await eventStore.AppendEvents(appends, CancellationToken.None);
+        for (var i = 0; i < pipelineIds.Count; i++) {
+            assignmentIndex.Update(command.PackageId, pipelineIds[i], true, saved[i].GlobalPosition);
+        }
+        return package.State;
+    }
+
+    private static NewStreamAppend BuildAppend(StreamName stream, IEnumerable<object> events) {
+        return new NewStreamAppend(stream, ExpectedStreamVersion.NoStream, events.Select(payload => new NewStreamEvent(Guid.NewGuid(), payload, new())).ToArray());
     }
 }

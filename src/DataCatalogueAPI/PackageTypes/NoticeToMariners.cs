@@ -39,31 +39,12 @@ public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, Packa
             }
             foreach (var feature in collection.GetProperty("features").EnumerateArray()) {
                 if (feature.TryGetProperty("geometry", out var geometry) && geometry.ValueKind != JsonValueKind.Null) {
-                    AddGeometry(geometry, points, paths, rings);
+                    GeoJsonPackageGeometry.AddGeometry(geometry, points, paths, rings);
                 }
             }
         }
 
-        var coordinates = points.Concat(paths.SelectMany(path => path)).Concat(rings.SelectMany(ring => ring)).ToArray();
-        if (coordinates.Length == 0) {
-            throw new InvalidDataException($"Notice '{id}' contains no geometry.");
-        }
-        var xmin = coordinates.Min(point => point[0]);
-        var ymin = coordinates.Min(point => point[1]);
-        var xmax = coordinates.Max(point => point[0]);
-        var ymax = coordinates.Max(point => point[1]);
-        // A point or an axis-aligned line has a zero-area envelope. Give only
-        // those collapsed dimensions a roughly metre-wide extent in WGS84.
-        const double padding = 0.000005;
-        if (xmin == xmax) { xmin -= padding; xmax += padding; }
-        if (ymin == ymax) { ymin -= padding; ymax += padding; }
-        double[][] rectangle = [[xmin, ymin], [xmin, ymax], [xmax, ymax], [xmax, ymin], [xmin, ymin]];
-        var spatialReference = new { wkid = 4326 };
-        return new(id, metadata, new PackageGeometry(
-            JsonSerializer.Serialize(new { rings = new[] { rectangle }, spatialReference }),
-            points.Count == 0 ? null : JsonSerializer.Serialize(new { points, spatialReference }),
-            paths.Count == 0 ? null : JsonSerializer.Serialize(new { paths, spatialReference }),
-            rings.Count == 0 ? null : JsonSerializer.Serialize(new { rings, spatialReference })),
+        return new(id, metadata, GeoJsonPackageGeometry.Build(points, paths, rings, $"notice '{id}'"),
             ReadDescriptions(root), ReadCharts(root));
     }
 
@@ -96,57 +77,4 @@ public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, Packa
 
     private static string? Text(JsonElement element, string property)
         => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
-    private static void AddGeometry(JsonElement geometry, List<double[]> points, List<double[][]> paths, List<double[][]> rings) {
-        var type = geometry.GetProperty("type").GetString();
-        var coordinates = geometry.GetProperty("coordinates");
-        switch (type) {
-            case "Point": points.Add(Position(coordinates)); break;
-            case "MultiPoint": points.AddRange(coordinates.EnumerateArray().Select(Position)); break;
-            case "LineString": paths.Add(Line(coordinates)); break;
-            case "MultiLineString": paths.AddRange(coordinates.EnumerateArray().Select(Line)); break;
-            case "Polygon": AddPolygon(coordinates, rings); break;
-            case "MultiPolygon":
-                foreach (var polygon in coordinates.EnumerateArray()) { AddPolygon(polygon, rings); }
-                break;
-            default: throw new InvalidDataException($"Unsupported notice geometry type '{type}'.");
-        }
-    }
-
-    private static double[] Position(JsonElement position) {
-        if (position.GetArrayLength() != 2) {
-            throw new InvalidDataException("Notices must contain two-dimensional longitude/latitude coordinates.");
-        }
-        var x = position[0].GetDouble();
-        var y = position[1].GetDouble();
-        if (!double.IsFinite(x) || !double.IsFinite(y) || x < -180 || x > 180 || y < -90 || y > 90) {
-            throw new InvalidDataException("Notice coordinates must be valid WGS84 longitude/latitude values.");
-        }
-        return [x, y];
-    }
-
-    private static double[][] Line(JsonElement coordinates) {
-        var positions = coordinates.EnumerateArray().Select(Position).ToArray();
-        if (positions.Length < 2) { throw new InvalidDataException("A notice line must contain at least two positions."); }
-        return positions;
-    }
-
-    private static void AddPolygon(JsonElement coordinates, List<double[][]> rings) {
-        var index = 0;
-        foreach (var ring in coordinates.EnumerateArray()) {
-            var positions = ring.EnumerateArray().Select(Position).ToArray();
-            if (positions.Length < 4 || !positions[0].SequenceEqual(positions[^1])) {
-                throw new InvalidDataException("A notice polygon must contain closed rings with at least four positions.");
-            }
-            var area = 0d;
-            for (var i = 0; i < positions.Length - 1; i++) {
-                area += positions[i][0] * positions[i + 1][1] - positions[i + 1][0] * positions[i][1];
-            }
-            if (area == 0) { throw new InvalidDataException("A notice polygon ring has zero area."); }
-            // Esri JSON uses clockwise shells and counterclockwise holes.
-            if ((index == 0 && area > 0) || (index > 0 && area < 0)) { Array.Reverse(positions); }
-            rings.Add(positions);
-            index++;
-        }
-    }
 }

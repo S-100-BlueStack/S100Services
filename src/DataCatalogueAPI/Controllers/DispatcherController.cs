@@ -97,7 +97,11 @@ namespace DataCatalague.Api.Controllers
             if (await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new CategoryId(categoryId)), cancellationToken)) {
                 return this.Conflict(new ProblemDetails { Title = "Category already exists.", Detail = $"Category '{categoryId}' already exists." });
             }
-            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(categoryId, displayName, description, request.Prefix), cancellationToken);
+            string[] automaticPipelineIds;
+            try { automaticPipelineIds = await assignments.ValidateAutomaticPipelineIdsAsync(request.AutomaticPipelineIds ?? [], cancellationToken); }
+            catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+
+            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(categoryId, displayName, description, request.Prefix, automaticPipelineIds), cancellationToken);
 
             if (cmd.Exception is WrongVersion) { return this.Problem(title: "Category changed; retry the request.", statusCode: StatusCodes.Status409Conflict); }
             if (!cmd.Success) {
@@ -137,6 +141,40 @@ namespace DataCatalague.Api.Controllers
                     detail: $"No category exists with identifier {id}.",
                     statusCode: StatusCodes.Status404NotFound);
             }
+        }
+
+        /// <summary>Replaces the pipelines automatically assigned to future packages in the category.</summary>
+        /// <param name="id">The category ID.</param>
+        /// <param name="request">The complete desired set of pipeline IDs.</param>
+        /// <param name="cancellationToken">Cancels the lookup and update.</param>
+        /// <returns>The updated category. Existing package bindings are preserved.</returns>
+        [HttpPut("categories/{id}/automatic-pipelines")]
+        [Consumes("application/json")]
+        [ProducesResponseType<CategoryResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<CategoryResponse>> UpdateCategoryAutomaticPipelines(string id, [FromBody] UpdateCategoryAutomaticPipelinesRequest request, CancellationToken cancellationToken) {
+            if (request?.AutomaticPipelineIds is null) {
+                return this.Problem(title: "Supply the complete list of automatic pipeline IDs.", statusCode: StatusCodes.Status400BadRequest);
+            }
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new CategoryId(id)), cancellationToken)) {
+                return this.Problem(title: "Category not found.", statusCode: StatusCodes.Status404NotFound);
+            }
+
+            string[] pipelineIds;
+            try { pipelineIds = await assignments.ValidateAutomaticPipelineIdsAsync(request.AutomaticPipelineIds, cancellationToken); }
+            catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+
+            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.UpdateAutomaticPipelines(id, pipelineIds), cancellationToken);
+            if (cmd.Exception is WrongVersion) { return this.Problem(title: "Category changed; retry the request.", statusCode: StatusCodes.Status409Conflict); }
+            if (!cmd.Success) {
+                this._logger.LogError(cmd.Exception, "Could not save automatic pipeline assignments. CategoryId: {CategoryId}.", id);
+                return this.Problem(title: "Could not save category changes.", statusCode: StatusCodes.Status500InternalServerError);
+            }
+
+            return this.Ok(Map(cmd.Get()!.State));
         }
 
         [HttpPut("categories/{id}/specification")]
@@ -296,6 +334,7 @@ namespace DataCatalague.Api.Controllers
             Id = state.Id,
             DisplayName = state.DisplayName,
             Prefix = state.Prefix,
+            AutomaticPipelineIds = state.AutomaticPipelineIds,
             Description = state.Description,
             Version = state.Version?.ToString(),
             Specification = state.Markdown,

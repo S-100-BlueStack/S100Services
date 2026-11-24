@@ -175,7 +175,8 @@ namespace DataCatalague.Api.Repositories
         public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {            
             return context.Message switch {
                 DispatcherEvents.V1.CategoryCreated evt => this.Handle_CategoryCreated(evt),
-                DispatcherEvents.V1.CategorySpecificationUpdated evt => this.Handle_CategorySpecificationUpdated(context.Stream.GetId(), evt),
+                DispatcherEvents.V1.CategorySpecificationUpdated evt => this.Handle_CategoryUpdated(context.Stream.GetId(), evt),
+                DispatcherEvents.V1.CategoryAutomaticPipelinesUpdated evt => this.Handle_CategoryUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.PackageCreated evt => this.Handle_PackageCreated(evt),
                 _ => EventHandlingStatus.Ignored,
             };
@@ -189,9 +190,8 @@ namespace DataCatalague.Api.Repositories
             return EventHandlingStatus.Handled;
         }
 
-        private EventHandlingStatus Handle_CategorySpecificationUpdated(string categoryId, DispatcherEvents.V1.CategorySpecificationUpdated evt) {
-            // Specification events carry no category ID; their stream identifies the
-            // category. Apply them to its existing state to preserve creation fields.
+        private EventHandlingStatus Handle_CategoryUpdated(string categoryId, object evt) {
+            // Category updates identify the category by stream and preserve the other fields.
             while (this._categories.TryGetValue(categoryId, out var state)) {
                 var updated = state.When(evt);
                 if (this._categories.TryUpdate(categoryId, updated, state)) {
@@ -199,7 +199,7 @@ namespace DataCatalague.Api.Repositories
                 }
             }
 
-            this._logger.LogError("Cannot project category specification before category creation. CategoryId: {CategoryId}, SpecificationVersion: {SpecificationVersion}.", categoryId, evt.Version);
+            this._logger.LogError("Cannot project category update before category creation. CategoryId: {CategoryId}, EventType: {EventType}.", categoryId, evt.GetType().Name);
             return EventHandlingStatus.Failure;
         }
 

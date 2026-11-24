@@ -30,6 +30,43 @@ public sealed class CategoryAndPipelineTests(CatalogueFixture runtime) : Catalog
         Assert.Equal(HttpStatusCode.NotFound, (await this.Client.GetAsync("/v1/dispatcher/categories/missing")).StatusCode);
     }
 
+    [Fact]
+    public async Task Category_defaults_bind_new_packages_and_edits_apply_only_to_future_packages() {
+        const string categories = "/v1/dispatcher/categories";
+        const string defaults = categories + "/test/automatic-pipelines";
+        var first = await this.PipelineAsync();
+        var second = await this.PipelineAsync();
+        var expected = new[] { first.Id, second.Id }.Order(StringComparer.Ordinal).ToArray();
+        var category = await this.App.CreateAsync<CategoryResponse>(categories, new {
+            id = "test", displayName = "Test", description = "Test", prefix = "TT",
+            automaticPipelineIds = new[] { first.Id, second.Id, first.Id },
+        });
+        Assert.Equal(expected, category.AutomaticPipelineIds);
+
+        var original = await this.PackageAsync();
+        Assert.Equal(expected, original.PipelineBindings.Select(binding => binding.PipelineId).ToArray());
+        var bindings = (await this.Client.GetFromJsonAsync<BindingResponse[]>($"/v1/dispatcher/bindings?packageId={original.Id}"))!;
+        Assert.Equal(expected, bindings.Select(binding => binding.PipelineId).ToArray());
+
+        using var invalid = await this.Client.PutAsJsonAsync(defaults, new { automaticPipelineIds = new[] { "missing" } });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        using var updated = await this.Client.PutAsJsonAsync(defaults, new { automaticPipelineIds = new[] { second.Id } });
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        await this.App.EventuallyAsync(async () => {
+            var list = (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>(categories))!;
+            return list.Items.SingleOrDefault(item => item.Id == "test")?.AutomaticPipelineIds.SequenceEqual([second.Id]) == true;
+        });
+        Assert.Equal(second.Id, Assert.Single((await this.PackageAsync()).PipelineBindings).PipelineId);
+        Assert.Equal(expected, (await this.Client.GetFromJsonAsync<PackageResponse>($"/v1/packages/{original.Id}"))!.PipelineBindings.Select(binding => binding.PipelineId).ToArray());
+
+        using var cleared = await this.Client.PutAsJsonAsync(defaults, new { automaticPipelineIds = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        Assert.Empty((await this.PackageAsync()).PipelineBindings);
+        using var unbound = await this.Client.DeleteAsync($"/v1/dispatcher/bindings/{original.PipelineBindings[0].Id}");
+        Assert.Equal(HttpStatusCode.NoContent, unbound.StatusCode);
+        Assert.Single((await this.Client.GetFromJsonAsync<PackageResponse>($"/v1/packages/{original.Id}"))!.PipelineBindings);
+    }
+
     // Create a specification, retry it unchanged, replace it and submit invalid or missing targets.
     // Expected: Creation returns 201; updates return 200, retries keep the timestamp, and failures return 400/404.
     [Fact]

@@ -10,6 +10,9 @@ namespace DataCatalague.Api.Models.V1
 
         public required string Prefix { get; init; }
 
+        /// <summary>Pipeline IDs that new packages in the category are automatically bound to.</summary>
+        public IReadOnlyList<string> AutomaticPipelineIds { get; init; } = [];
+
         public required string? Description { get; init; }
 
         public string? Version { get; init; }

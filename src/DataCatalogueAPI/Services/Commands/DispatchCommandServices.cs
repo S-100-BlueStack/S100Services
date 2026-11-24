@@ -11,8 +11,13 @@ namespace DataCatalague.Api.Services.Commands
                 .InState(ExpectedState.New)
                 .GetId(cmd => new(cmd.CategoryId))
                 .ActAsync(
-                    (category, cmd, _) => category.Create(cmd.CategoryId, cmd.DisplayName, cmd.Description, cmd.Prefix)
+                    (category, cmd, _) => category.Create(cmd.CategoryId, cmd.DisplayName, cmd.Description, cmd.Prefix, cmd.AutomaticPipelineIds)
                 );
+
+            this.On<DispatcherCommands.UpdateAutomaticPipelines>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.CategoryId))
+                .ActAsync((category, cmd, _) => category.UpdateAutomaticPipelines(cmd.PipelineIds));
 
             this.On<DispatcherCommands.UpdateSpecificationCategory>()
                 .InState(ExpectedState.Existing)
