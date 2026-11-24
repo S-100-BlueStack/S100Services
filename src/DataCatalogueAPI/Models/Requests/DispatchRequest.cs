@@ -18,6 +18,17 @@ namespace DataCatalague.Api.Models.V1
         /// <summary>Unique two- or three-letter package identifier prefix.</summary>
         [Required, RegularExpression(@"\A[A-Z]{2,3}\z")]
         public required string Prefix { get; init; }
+
+        /// <summary>Existing pipeline IDs to bind to every new package in this category.</summary>
+        public string[]? AutomaticPipelineIds { get; init; }
+    }
+
+    /// <summary>Replaces a category's automatic pipeline bindings for future packages.</summary>
+    public sealed class UpdateCategoryAutomaticPipelinesRequest
+    {
+        /// <summary>The complete list of pipeline IDs. An empty list clears the defaults.</summary>
+        [Required]
+        public required string[] AutomaticPipelineIds { get; init; }
     }
 
     public sealed class UpdateCategorySpecificationRequest

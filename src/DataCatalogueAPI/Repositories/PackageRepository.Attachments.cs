@@ -24,7 +24,7 @@ public partial class PackageRepository
         if (!cursor.MoveNext()) { return null; }
         using var row = cursor.Current;
         var size = Convert.ToInt64(row["data_size"], System.Globalization.CultureInfo.InvariantCulture);
-        if (size <= 0 || size > maximumBytes) { throw new InvalidDataException("The stored MA archive must be nonempty and no larger than 16 MiB."); }
+        if (size <= 0 || size > maximumBytes) { throw new InvalidDataException("The stored archive must be nonempty and within the import size limit."); }
         using var data = row["data"] as MemoryStream ?? throw new InvalidDataException("The uploaded archive has no stored content.");
         if (data.Length != size || data.Length > maximumBytes) { throw new InvalidDataException("The stored archive size does not match its content."); }
         S100BlueStack.Settings.SupportFile? supportFile;
@@ -32,7 +32,7 @@ public partial class PackageRepository
         catch (JsonException exception) { throw new InvalidDataException("The stored archive metadata is invalid.", exception); }
         var fileName = supportFile?.FileName;
         if (string.IsNullOrWhiteSpace(fileName) || !Path.GetExtension(fileName).Equals(".zip", StringComparison.OrdinalIgnoreCase)) {
-            throw new InvalidDataException("The uploaded MA source must be a ZIP file.");
+            throw new InvalidDataException("The uploaded source must be a ZIP file.");
         }
         cancellationToken.ThrowIfCancellationRequested();
         return (data.ToArray(), fileName);

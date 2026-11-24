@@ -22,7 +22,8 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         var pipelineSamples = new List<PipelineResponse>();
         foreach (var sample in new[] {
             (Name: "ENC", Description: "Electronic navigational chart production.", FileName: "ENC.json"),
-            (Name: "Paper Chart", Description: "Paper chart production.", FileName: "PaperChart.json"),
+            (Name: "Paper Chart ESRI", Description: "Paper chart production in Esri.", FileName: "PaperChart.json"),
+            (Name: "Paper Chart CARIS", Description: "Paper chart production in CARIS.", FileName: "PaperChartCARIS.json"),
         }) {
             var created = await pipelines.Create(new CreatePipelineRequest { DisplayName = sample.Name, Description = sample.Description }, cancellationToken).ConfigureAwait(false);
             var pipeline = RequireSuccess(created, $"create pipeline '{sample.Name}'");
@@ -46,6 +47,13 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             logger.LogInformation("Created sample pipeline {DisplayName}. PipelineId: {PipelineId}.", pipeline.DisplayName, pipeline.Id);
         }
         var packageSamples = new List<PackageResponse>();
+        var encPipelineId = pipelineSamples.Single(pipeline => pipeline.DisplayName == "ENC").Id;
+        var paperChartPipelineIds = pipelineSamples.Where(pipeline => pipeline.DisplayName != "ENC").Select(pipeline => pipeline.Id).ToArray();
+        var automaticPipelines = new Dictionary<string, string[]>(StringComparer.Ordinal) {
+            ["ENC"] = [encPipelineId],
+            ["Landdata"] = paperChartPipelineIds,
+            ["CoastAndRock"] = paperChartPipelineIds,
+        };
 
         // Create Categories for the sample packages. These are required by the package controller to accept the sample packages.
         foreach (var category in new[] {
@@ -102,13 +110,20 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 - The supplementary AOI accepts WGS84 Polygon/MultiPolygon, Feature or a one-feature FeatureCollection.
                 - Complete polygons are stored as surfaces; their envelopes become catalogue AOIs.
                 - Startup imports five fictional case submissions, each with sample document files, using the registered upload/import controllers.
-                """)
+                """),
+            (Id: "ENC", Name: "ENC", Prefix: "ENC", Description: "Electronic navigational chart submissions.", Specification:
+                "Upload a ZIP containing root metadata.json, a .000 dataset and a .vld report. Metadata provides the WGS84 GeoJSON polygon in aoi."),
+            (Id: "Landdata", Name: "Landdata", Prefix: "LD", Description: "Land feature and coverage submissions.", Specification:
+                "Upload a ZIP containing root metadata.json and one WGS84 .geojson file."),
+            (Id: "CoastAndRock", Name: "Coast and Rock", Prefix: "CR", Description: "Coastline and rock feature submissions.", Specification:
+                "Upload a ZIP containing root metadata.json and one WGS84 .geojson file."),
         }) {
             var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
                 Id = category.Id,
                 DisplayName = category.Name,
                 Prefix = category.Prefix,
                 Description = category.Description,
+                AutomaticPipelineIds = automaticPipelines.GetValueOrDefault(category.Id),
             }, cancellationToken).ConfigureAwait(false);
             RequireSuccess(created, $"create category '{category.Id}'");
 
@@ -186,6 +201,24 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         }
         logger.LogInformation("Created WorkZone ZIP samples. CreatedPackages: {CreatedPackages}.", workZoneFiles.Length);
 
+        foreach (var categoryId in automaticPipelines.Keys) {
+            var sampleDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "ChartSubmissions", categoryId);
+            var sampleFiles = Directory.GetFiles(sampleDirectory, "*.zip").Order(StringComparer.Ordinal).ToArray();
+            if (sampleFiles.Length == 0) { throw new InvalidDataException($"No ZIP samples found in '{sampleDirectory}'."); }
+            foreach (var file in sampleFiles) {
+                await using var input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+                var upload = RequireSuccess(await packages.UploadFile(new UploadFileRequest {
+                    File = new FormFile(input, 0, input.Length, "File", Path.GetFileName(file)),
+                }, cancellationToken).ConfigureAwait(false), $"store sample '{Path.GetFileName(file)}'");
+                var created = await packages.CreatePackage(new CreatePackageRequest {
+                    Category = categoryId,
+                    AbsoluteUri = upload.AbsoluteUri!,
+                    ImportFromArchive = true,
+                }, cancellationToken).ConfigureAwait(false);
+                packageSamples.Add(RequireSuccess(created, $"import sample '{Path.GetFileName(file)}'"));
+            }
+        }
+
         // Verify the same read path used by clients, including event replay and
         // native row resolution. Never finish startup with unusable sample geometry.
         foreach (var package in packageSamples) {
@@ -196,20 +229,20 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             }
         }
 
-        // Shuffle without replacement so exactly half are assigned once. Rotate
-        // through shuffled pipelines to exercise both routes with varied packages.
-        var shuffledPackages = packageSamples.ToArray();
+        // Fill the sample assignment target with packages that have no category defaults.
+        var shuffledPackages = packageSamples.Where(package => package.Category is null || !automaticPipelines.ContainsKey(package.Category)).ToArray();
         var shuffledPipelines = pipelineSamples.ToArray();
         Random.Shared.Shuffle(shuffledPackages.AsSpan());
         Random.Shared.Shuffle(shuffledPipelines.AsSpan());
-        var assignedCount = shuffledPackages.Length / 2;
-        for (var index = 0; index < assignedCount; index++) {
+        var automaticCount = packageSamples.Count - shuffledPackages.Length;
+        var manualCount = Math.Max(0, packageSamples.Count / 2 - automaticCount);
+        for (var index = 0; index < manualCount; index++) {
             RequireSuccess(await dispatcher.CreateBinding(new BindRequest {
                 PackageId = shuffledPackages[index].Id,
                 PipelineId = shuffledPipelines[index % shuffledPipelines.Length].Id,
             }, cancellationToken).ConfigureAwait(false), $"assign sample package '{shuffledPackages[index].Id}' to a pipeline");
         }
-        logger.LogInformation("Verified sample geometry and assigned packages. VerifiedPackages: {VerifiedPackages}, AssignedPackages: {AssignedPackages}.", packageSamples.Count, assignedCount);
+        logger.LogInformation("Verified sample geometry and assigned packages. VerifiedPackages: {VerifiedPackages}, AssignedPackages: {AssignedPackages}.", packageSamples.Count, automaticCount + manualCount);
 
         logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}.", pipelineSamples.Count, packageSamples.Count);
     }

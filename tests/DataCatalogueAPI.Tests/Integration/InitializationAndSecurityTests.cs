@@ -14,27 +14,33 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
     [Fact]
     public async Task Initialization_loads_file_workspaces_geometry_for_every_sample_and_half_assigned_packages() {
         var workspaceCounts = new Dictionary<string, int>();
-        foreach (var (name, file) in new[] { ("ENC", "ENC.json"), ("Paper Chart", "PaperChart.json") }) {
+        var workspaceFiles = new Dictionary<string, string> {
+            ["ENC"] = "ENC.json",
+            ["Paper Chart CARIS"] = "PaperChartCARIS.json",
+            ["Paper Chart ESRI"] = "PaperChart.json",
+        };
+        foreach (var (name, file) in workspaceFiles) {
             using var definitions = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Samples", "Workspaces", file)));
             workspaceCounts.Add(name, definitions.RootElement.GetArrayLength());
         }
         await this.App.SeedAsync();
         var extractionCount = Math.Min(10, Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction"), "*.zip").Length);
-        var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount + 5;
+        var chartSampleCount = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "ChartSubmissions"), "*.zip", SearchOption.AllDirectories).Length;
+        var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount + 5 + chartSampleCount;
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == expected);
         await this.App.EventuallyAsync(async () => {
             var page = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/v1/pipelines"))!;
-            return page.TotalCount == 2 && page.Items.All(pipeline => pipeline.Workspaces.Count == workspaceCounts[pipeline.DisplayName]);
+            return page.TotalCount == 3 && page.Items.All(pipeline => pipeline.Workspaces.Count == workspaceCounts[pipeline.DisplayName]);
         });
-        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/v1/dispatcher/categories"))!.TotalCount == 4);
+        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/v1/dispatcher/categories"))!.TotalCount == 7);
         var categories = (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/v1/dispatcher/categories"))!;
-        Assert.Equal(new[] { "GeneralSubmission", "MarineAggregateExtraction", "NoticeToMariners", "WorkZone" }, categories.Items.Select(item => item.Id).Order().ToArray());
+        Assert.Equal(new[] { "CoastAndRock", "ENC", "GeneralSubmission", "Landdata", "MarineAggregateExtraction", "NoticeToMariners", "WorkZone" }, categories.Items.Select(item => item.Id).Order(StringComparer.Ordinal).ToArray());
         Assert.All(categories.Items, category => Assert.NotNull(category.Specification));
         var pipelines = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/v1/pipelines"))!;
-        Assert.Equal(new[] { "ENC", "Paper Chart" }, pipelines.Items.Select(item => item.DisplayName).Order().ToArray());
+        Assert.Equal(workspaceFiles.Keys.Order(StringComparer.Ordinal).ToArray(), pipelines.Items.Select(item => item.DisplayName).Order(StringComparer.Ordinal).ToArray());
         var workspacePolygons = new List<string>();
         foreach (var pipeline in pipelines.Items) {
-            var filename = pipeline.DisplayName == "ENC" ? "ENC.json" : "PaperChart.json";
+            var filename = workspaceFiles[pipeline.DisplayName];
             using var definitions = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Samples", "Workspaces", filename)));
             Assert.Equal(definitions.RootElement.EnumerateArray().Select(area => area.GetProperty("displayName").GetString()).Order().ToArray(), pipeline.Workspaces.Select(workspace => workspace.DisplayName).Order().ToArray());
             foreach (var workspace in pipeline.Workspaces) {
@@ -46,9 +52,13 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
             }
         }
         Assert.Equal(workspacePolygons.Count, workspacePolygons.Distinct().Count());
+        var enc = pipelines.Items.Single(pipeline => pipeline.DisplayName == "ENC");
+        Assert.All(new[] { "DK20109C", "DK20909C", "DK21733C", "DK21741C" }, name => Assert.DoesNotContain(enc.Workspaces, workspace => workspace.DisplayName == name));
+        Assert.All(pipelines.Items.Where(pipeline => pipeline.Id != enc.Id), pipeline => Assert.Equal(9, pipeline.Workspaces.Count));
         Assert.Equal(expected / 2, (await this.PackagesAsync("?hasPipeline=true&pageSize=200")).TotalCount);
         Assert.Equal(expected - expected / 2, (await this.PackagesAsync("?hasPipeline=false&pageSize=200")).TotalCount);
-        var bindingCounts = pipelines.Items.ToDictionary(pipeline => pipeline.Id, _ => 0);
+        var categoryDefaults = categories.Items.ToDictionary(category => category.Id, category => category.AutomaticPipelineIds);
+        var manualBindingCounts = pipelines.Items.ToDictionary(pipeline => pipeline.Id, _ => 0);
         foreach (var package in (await this.PackagesAsync("?pageSize=200")).Items) {
             if (package.Category is "GeneralSubmission" or "MarineAggregateExtraction" or "WorkZone") {
                 Assert.NotEmpty(package.Descriptions!);
@@ -60,11 +70,19 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
             var details = Assert.IsType<PackageDetailedGeometryResponse>(geometry.DetailedGeometry);
             Assert.True(details.Points.Count > 0 || details.Curves.HasValue || details.Surfaces.HasValue, package.Id);
             var bindings = (await this.Client.GetFromJsonAsync<BindingResponse[]>("/v1/dispatcher/bindings?packageId=" + package.Id))!;
-            Assert.InRange(bindings.Length, 0, 1);
-            foreach (var binding in bindings) { bindingCounts[binding.PipelineId!]++; }
+            var defaults = categoryDefaults[package.Category!];
+            if (defaults.Count > 0) {
+                Assert.Equal(defaults, bindings.Select(binding => binding.PipelineId!).ToArray());
+                Assert.StartsWith("database://", package.AbsoluteUri);
+                Assert.EndsWith(".zip", package.FileName);
+            }
+            else {
+                Assert.InRange(bindings.Length, 0, 1);
+                foreach (var binding in bindings) { manualBindingCounts[binding.PipelineId!]++; }
+            }
         }
-        Assert.Equal(expected / 2, bindingCounts.Values.Sum());
-        Assert.InRange(bindingCounts.Values.Max() - bindingCounts.Values.Min(), 0, 1);
+        Assert.Equal(expected / 2 - chartSampleCount, manualBindingCounts.Values.Sum());
+        Assert.InRange(manualBindingCounts.Values.Max() - manualBindingCounts.Values.Min(), 0, 1);
         Assert.Equal(2, (await this.PackagesAsync("?category=GeneralSubmission")).TotalCount);
         var workZones = await this.PackagesAsync("?category=WorkZone&pageSize=200");
         Assert.Equal(5, workZones.TotalCount);

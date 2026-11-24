@@ -7,13 +7,19 @@ namespace DataCatalague.Api.Domain
 {
     public class Category : Aggregate<CategoryState>
     {
-        public async Task Create(
-                    string CategoryId,
-                    string DisplayName,
-                    string? Description, string Prefix
-            ) {
+        public Task Create(string categoryId, string displayName, string? description, string prefix, string[]? automaticPipelineIds = null) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.CategoryCreated(CategoryId, DisplayName, Description, DateTime.UtcNow, Prefix));
+            this.Apply(new V1.CategoryCreated(categoryId, displayName, description, DateTimeOffset.UtcNow, prefix, automaticPipelineIds));
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Replaces the pipeline defaults used by future package creations.</summary>
+        public Task UpdateAutomaticPipelines(string[] pipelineIds) {
+            this.EnsureExists();
+            if (!this.State.AutomaticPipelineIds.SequenceEqual(pipelineIds, StringComparer.Ordinal)) {
+                this.Apply(new V1.CategoryAutomaticPipelinesUpdated(pipelineIds, DateTimeOffset.UtcNow));
+            }
+            return Task.CompletedTask;
         }
 
         public async Task UpdateSpecification(
@@ -35,6 +41,9 @@ namespace DataCatalague.Api.Domain
 
         public string Prefix { get; set; } = string.Empty;
 
+        /// <summary>Pipeline identifiers copied into bindings when a package is created.</summary>
+        public IReadOnlyList<string> AutomaticPipelineIds { get; init; } = [];
+
         public string? Description { get; set; } = string.Empty;
 
         public Version? Version { get; set; } = null;
@@ -48,6 +57,10 @@ namespace DataCatalague.Api.Domain
         public CategoryState() {
             this.On<V1.CategoryCreated>(Created);
             this.On<V1.CategorySpecificationUpdated>(UpdateSpecification);
+            this.On<V1.CategoryAutomaticPipelinesUpdated>((state, e) => state with {
+                AutomaticPipelineIds = e.PipelineIds.ToArray(),
+                LastUpdatedUtc = e.UTC,
+            });
         }
 
         static CategoryState Created(CategoryState state, V1.CategoryCreated e)
@@ -55,6 +68,7 @@ namespace DataCatalague.Api.Domain
                 Id = new(e.CategoryId),
                 DisplayName = e.DisplayName,
                 Prefix = e.Prefix ?? string.Empty,
+                AutomaticPipelineIds = e.AutomaticPipelineIds?.ToArray() ?? [],
                 Description = e.Description,
                 IsTerminated = false,
                 LastUpdatedUtc = e.UTC,
@@ -128,7 +142,9 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class DispatcherCommands
     {
-        public record CreateCategory(string CategoryId, string DisplayName, string? Description, string Prefix);
+        public record CreateCategory(string CategoryId, string DisplayName, string? Description, string Prefix, string[]? AutomaticPipelineIds = null);
+
+        public record UpdateAutomaticPipelines(string CategoryId, string[] PipelineIds);
 
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
@@ -152,8 +168,12 @@ namespace DataCatalague.Api.Domain.Events
                     string DisplayName,
                     string? Description,
                     DateTimeOffset UTC,
-                    string? Prefix = null
+                    string? Prefix = null,
+                    string[]? AutomaticPipelineIds = null
                 );
+
+            [EventType("V1.CategoryAutomaticPipelinesUpdated")]
+            public record CategoryAutomaticPipelinesUpdated(string[] PipelineIds, DateTimeOffset UTC);
 
             [EventType("V1.CategorySpecificationUpdated")]
             public record CategorySpecificationUpdated(
