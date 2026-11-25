@@ -276,6 +276,53 @@ test("global and popup tooltips share one compact overlay with native title clea
     }
     assert.equal(reviewCheckbox.getAttribute("aria-label"), "History for Product name");
 
+    const failedKpi = doc.body.appendChild(new Element("button"));
+    failedKpi.className = "pc-dashboard-summary-card is-interactive";
+    failedKpi.setAttribute("aria-label", "2 failed events. Filter to failed activity");
+    const metricHelp = doc.body.appendChild(new Element("button"));
+    metricHelp.className = "pc-dashboard-metric-help";
+    metricHelp.setAttribute("aria-label", "About Failed events");
+    metricHelp.setAttribute(
+      "data-app-original-title",
+      "Historical failed events, not current errors"
+    );
+    metricHelp.setAttribute("data-app-help-on-click", "");
+    applyGlobalHelpTooltips(doc);
+    doc.emit("pointerover", { target: failedKpi });
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 0);
+    assert.equal(
+      failedKpi.getAttribute("aria-label"),
+      "2 failed events. Filter to failed activity"
+    );
+
+    doc.activeElement = metricHelp;
+    doc.emit("focusin", { target: metricHelp });
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 1);
+    assert.equal(
+      doc.body.children.at(-1).textContent,
+      "Historical failed events, not current errors"
+    );
+    assert.equal(metricHelp.hasAttribute("title"), false);
+    assert.equal(doc.emit("keydown", { key: "Escape" }).defaultPrevented, true);
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 0);
+    assert.equal(doc.activeElement, metricHelp);
+    doc.emit("click", { target: metricHelp });
+    assert.equal(
+      doc.body.querySelectorAll(".pc-help-tooltip").length,
+      1,
+      "Activation reopens dismissed help"
+    );
+    doc.activeElement = failedKpi;
+    assert.equal(doc.emit("keydown", { key: "Escape" }).defaultPrevented, undefined);
+    doc.emit("click", { target: metricHelp });
+    metricHelp.remove();
+    applyGlobalHelpTooltips(doc);
+    assert.equal(
+      doc.body.querySelectorAll(".pc-help-tooltip").length,
+      0,
+      "Detached help is retired"
+    );
+
     const popup = doc.body.appendChild(new Element("button"));
     popupHelp = bindPopupActionHelp(popup, "Discard the package. This cannot be undone.");
     popup.emit("pointerenter");

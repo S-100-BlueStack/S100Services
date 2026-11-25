@@ -188,6 +188,7 @@ export function initGlobalHelpTooltips() {
     document.addEventListener("pointerout", onPointerOut, true);
     document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("focusout", onFocusOut, true);
+    document.addEventListener("click", onExplicitHelpClick, true);
     observeTooltipTargets();
   };
 
@@ -255,7 +256,12 @@ function onFocusIn(event) {
   activateHelp(event.target);
 }
 
-function activateHelp(start) {
+function onExplicitHelpClick(event) {
+  const anchor = event.target?.closest?.("[data-app-help-on-click]");
+  if (anchor) activateHelp(anchor, { reopen: true });
+}
+
+function activateHelp(start, { reopen = false } = {}) {
   const anchor = findHelpAnchor(start);
   if (!anchor) {
     clearActiveBinding();
@@ -274,7 +280,7 @@ function activateHelp(start) {
     activeBinding?.update(text);
   }
   // Delegated events run even if a newly inserted control was not scanned yet.
-  activeBinding?.show();
+  activeBinding?.show({ reopen });
 }
 
 function onPointerOut(event) {
@@ -366,7 +372,8 @@ function isSelfDescriptiveHelpTarget(element) {
   return Boolean(
     element.matches?.(
       ".pc-dashboard-filter__control, .pc-dashboard-page-size__select, " +
-        ".pc-dashboard-activity-table__product, .pc-review-product-list__item-name"
+        ".pc-dashboard-activity-table__product, .pc-dashboard-summary-card, " +
+        ".pc-review-product-list__item-name"
     ) ||
     element.closest?.(".pc-review-workspace-content__toggle, .pc-review-product-list__content-type")
   );

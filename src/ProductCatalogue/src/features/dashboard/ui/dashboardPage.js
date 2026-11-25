@@ -41,6 +41,22 @@ const DASHBOARD_METRIC_DESCRIPTIONS = {
   reportsAvailable: "Stored report files available for matching Products in the selected range",
 };
 
+// These explanations describe the reporting scopes, not additional calculations.
+const DASHBOARD_METRIC_HELP = {
+  openErrors:
+    "Product tracks currently in Error or Rejected. Independent of the date range and activity-only filters.",
+  failedOperations:
+    "Historical failed events matching the selected range and activity filters, not current errors. Select the KPI to filter.",
+  distribution:
+    "Distributed / (Distributed + Rejected) for recorded outcomes in the selected date and Product scope. Pending is excluded.",
+  specification:
+    "Events and unique Products by specification in the filtered range. Package members are counted separately.",
+  workflow:
+    "Current Product tracks, independent of the date range. Export / validate: exporting or validating. At IC-ENC: in transit. Paused: frozen tracks.",
+  reports:
+    "Stored files in the date and Product scope. Validation files include reports and diagnostics, not validation runs.",
+};
+
 const IMPORTANCE_OPTIONS = [
   { value: "all", label: "All" },
   { value: "important", label: "Important only" },
@@ -987,7 +1003,16 @@ function createSummaryCards(dashboard) {
     description.textContent = DASHBOARD_METRIC_DESCRIPTIONS[metric.key];
 
     card.append(label, value, description);
-    cards.appendChild(card);
+    if (DASHBOARD_METRIC_HELP[metric.key]) {
+      // Keep the help button outside the KPI button so help never changes a filter.
+      const slot = document.createElement("div");
+      slot.className = "pc-dashboard-summary-card-slot";
+      card.classList.add("has-metric-help");
+      slot.append(card, createMetricHelpButton(metric.key, metric.label));
+      cards.appendChild(slot);
+    } else {
+      cards.appendChild(card);
+    }
   }
 
   return cards;
@@ -1645,8 +1670,8 @@ function ensureDashboardHistoryKeyboardHandlers() {
 
   dashboardHistoryKeyboardHandlersRegistered = true;
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    // The open dropdown owns Escape before the Dashboard detail panel does.
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    // Explicit metric help and the open dropdown own Escape before the detail panel does.
     if (
       event.composedPath?.().some((node) => node?.tagName?.toLowerCase() === "calcite-dropdown")
     ) {
@@ -2230,7 +2255,7 @@ function createDistributionOverview(distribution) {
   const decisions = accepted === null || rejected === null ? null : accepted + rejected;
   const rate =
     decisions > 0 ? `${Math.round(((accepted ?? 0) / decisions) * 100)}% distributed` : "";
-  const panel = createReportingPanel("IC-ENC distribution", rate);
+  const panel = createReportingPanel("IC-ENC distribution", rate, "distribution");
   const totals = document.createElement("div");
   totals.className = "pc-dashboard-reporting-totals";
   for (const [label, value, tone] of [
@@ -2245,10 +2270,10 @@ function createDistributionOverview(distribution) {
   return panel;
 }
 
-function createReportingPanel(title, detail) {
+function createReportingPanel(title, detail, helpKey = null) {
   const panel = document.createElement("section");
   panel.className = "pc-dashboard-panel pc-dashboard-reporting-panel";
-  panel.appendChild(createPanelHeader({ title, count: detail }));
+  panel.appendChild(createPanelHeader({ title, count: detail, helpKey }));
   return panel;
 }
 
@@ -2260,10 +2285,10 @@ function hasAdditionalDashboardInsights(dashboard) {
   );
 }
 
-function createReportingInsightGroup(title, count) {
+function createReportingInsightGroup(title, count, helpKey) {
   const insight = document.createElement("section");
   insight.className = "pc-dashboard-insight";
-  insight.appendChild(createPanelHeader({ title, count, headingLevel: "h3" }));
+  insight.appendChild(createPanelHeader({ title, count, headingLevel: "h3", helpKey }));
   return insight;
 }
 
@@ -2431,8 +2456,8 @@ function formatDashboardSpecification(value) {
 function createSpecificationBreakdown(rows, { compact = false } = {}) {
   const total = rows.reduce((count, row) => count + row.activities, 0);
   const panel = compact
-    ? createReportingInsightGroup("Activity by specification", `${total} events`)
-    : createReportingPanel("Activity by specification", `${total} events`);
+    ? createReportingInsightGroup("Activity by specification", `${total} events`, "specification")
+    : createReportingPanel("Activity by specification", `${total} events`, "specification");
   const list = document.createElement("div");
   list.className = "pc-dashboard-specification-list";
   for (const [index, row] of rows.entries()) {
@@ -2467,8 +2492,12 @@ function createSpecificationBreakdown(rows, { compact = false } = {}) {
 
 function createOperationalHealthOverview(health, { compact = false } = {}) {
   const panel = compact
-    ? createReportingInsightGroup("Current workflow state", `${health.tracks ?? "—"} tracks`)
-    : createReportingPanel("Current workflow state", `${health.tracks ?? "—"} tracks`);
+    ? createReportingInsightGroup(
+        "Current workflow state",
+        `${health.tracks ?? "—"} tracks`,
+        "workflow"
+      )
+    : createReportingPanel("Current workflow state", `${health.tracks ?? "—"} tracks`, "workflow");
   const totals = document.createElement("div");
   totals.className = "pc-dashboard-reporting-totals is-three";
   for (const [label, count, tone] of [
@@ -2484,8 +2513,8 @@ function createOperationalHealthOverview(health, { compact = false } = {}) {
 
 function createReportSummaryOverview(summary, { compact = false } = {}) {
   const panel = compact
-    ? createReportingInsightGroup("Stored report files", `${summary.total ?? "—"} files`)
-    : createReportingPanel("Stored report files", `${summary.total ?? "—"} files`);
+    ? createReportingInsightGroup("Stored report files", `${summary.total ?? "—"} files`, "reports")
+    : createReportingPanel("Stored report files", `${summary.total ?? "—"} files`, "reports");
   const totals = document.createElement("div");
   totals.className = "pc-dashboard-reporting-totals is-two";
   // Both kinds are validation-related files, not necessarily distinct validation runs.
@@ -2678,6 +2707,7 @@ function createPanelHeader({
   status = null,
   visuallyHiddenTitle = false,
   headingLevel = "h2",
+  helpKey = null,
 }) {
   const header = document.createElement("header");
   header.className = "pc-dashboard-panel__header";
@@ -2692,7 +2722,28 @@ function createPanelHeader({
   meta.textContent = status ? `${status} - ${count}` : String(count);
 
   header.append(heading, meta);
+  if (helpKey) {
+    header.classList.add("has-metric-help");
+    header.appendChild(createMetricHelpButton(helpKey, title));
+  }
   return header;
+}
+
+function createMetricHelpButton(key, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pc-dashboard-metric-help";
+  button.dataset.dashboardFocusKey = `metric-help-${key}`;
+  button.setAttribute("aria-label", `About ${label}`);
+  // The delegated help owner supplies the overlay without a second native title.
+  button.setAttribute("data-app-original-title", DASHBOARD_METRIC_HELP[key]);
+  button.setAttribute("data-app-help-on-click", "");
+  const icon = document.createElement("calcite-icon");
+  icon.icon = "information";
+  icon.scale = "s";
+  icon.setAttribute("aria-hidden", "true");
+  button.appendChild(icon);
+  return button;
 }
 
 function createEmptyText(text) {

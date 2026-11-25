@@ -36,3 +36,14 @@ Preferences and ordinary popup action help use shorter labels. Visible Product
 option names do not produce redundant hover titles. This change does not
 override backend-supplied disabled reasons, remove accessible names or suppress
 selectable Product-error details. Local browser acceptance remains pending.
+
+## Explicit metric help
+
+Controls that deliberately explain a metric can opt into delegated activation with
+`data-app-help-on-click`. Their accessible name identifies the metric, while
+`data-app-original-title` supplies the explanation without a native title. Hover
+and focus use the same overlay as other application controls; activation can reopen
+help after Escape. Escape consumes the event only while explicit help is open and
+its trigger owns focus. Consumers with their own Escape handler must respect
+`defaultPrevented`. Ordinary hover help and popup-specific Escape behavior are
+unchanged. Visible Dashboard KPI cards are excluded from redundant delegated help.

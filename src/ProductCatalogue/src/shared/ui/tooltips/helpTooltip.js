@@ -16,7 +16,8 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
 
   const controller = { hide };
 
-  function show() {
+  function show({ reopen = false } = {}) {
+    if (reopen) dismissed = false;
     if (
       disposed ||
       dismissed ||
@@ -109,6 +110,14 @@ export function bindHelpTooltip(anchor, initialText = "", { popup = false } = {}
 
   function onEscape(event) {
     if (event.key !== "Escape") return;
+    // Explicit help should dismiss before its surrounding keyboard-controlled panel.
+    // Ordinary hover help keeps the existing non-consuming Escape behavior.
+    if (
+      anchor.hasAttribute?.("data-app-help-on-click") &&
+      anchor.contains?.(document.activeElement)
+    ) {
+      event.preventDefault();
+    }
     if (popup) {
       event.preventDefault();
       // Preserve the Tools menu's own Escape handling.

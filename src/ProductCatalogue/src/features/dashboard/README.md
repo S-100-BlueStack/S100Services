@@ -731,3 +731,20 @@ the Dashboard route and does not change tooltip behavior elsewhere.
 This correction builds on reporting frontend v5.1 and preserves the stable
 `.pc-dashboard-activity-links` onboarding selector. No API, backend, workflow or
 package dependency change is involved.
+
+## PC-UX-R09 – Contextual metric help
+
+Six dedicated information buttons explain Open errors, Failed events, IC-ENC
+distribution, Activity by specification, Current workflow state and Stored report
+files. The explanations distinguish current track health from historical activity,
+recorded distribution decisions from pending decisions, specification-level counts
+from Package counts, and stored report files from validation runs. No metric
+calculation, reporting scope, provenance, filter or API request changes.
+
+The existing shared help overlay opens on hover, keyboard focus or activation of
+the information button; Escape dismisses focused explicit help before an open
+Dashboard detail panel. Help is separate from the Failed events filter button and
+uses stable Dashboard focus keys during rerenders. KPI labels and numbers do not
+receive redundant hover help. The reporting and Activity layouts otherwise remain
+unchanged. Verify narrow insight headers, both themes, focus, Escape, repeated
+activation, filter isolation, and the existing Links dropdown during local acceptance.

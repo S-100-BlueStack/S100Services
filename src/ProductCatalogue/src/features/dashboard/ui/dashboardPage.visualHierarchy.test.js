@@ -78,6 +78,12 @@ async function createHarness() {
   );
 }
 
+function getSummaryCards(section) {
+  return section.children.map((element) =>
+    element.className === "pc-dashboard-summary-card-slot" ? element.children[0] : element
+  );
+}
+
 test("Dashboard KPI cards retain semantic labels without redundant tooltip subtitles", async () => {
   const { createSummaryCards } = await createHarness();
   const section = createSummaryCards({
@@ -93,21 +99,20 @@ test("Dashboard KPI cards retain semantic labels without redundant tooltip subti
 
   assert.equal(section.attributes.get("aria-label"), "Dashboard summary");
   assert.equal(section.children.length, 6);
+  const cards = getSummaryCards(section);
   assert.deepEqual(
-    Array.from(section.children, (card) => card.children[0].textContent),
+    Array.from(cards, (card) => card.children[0].textContent),
     ["Activities", "Products touched", "Open errors", "Distributed", "Failed events", "Reports"]
   );
   assert.deepEqual(
-    Array.from(section.children, (card) => card.children[1].textContent),
+    Array.from(cards, (card) => card.children[1].textContent),
     ["42", "18", "—", "—", "2", "9"]
   );
-  assert.equal(section.children[3].classList.contains("is-unavailable"), true);
-  assert.ok(section.children.every((card) => card.children.length === 3));
-  assert.ok(
-    section.children.every((card) => card.children[2].className === "pc-dashboard-visually-hidden")
-  );
-  assert.ok(section.children.every((card) => card.children[2].textContent.length > 0));
-  assert.ok(section.children.every((card) => card.title === undefined));
+  assert.equal(cards[3].classList.contains("is-unavailable"), true);
+  assert.ok(cards.every((card) => card.children.length === 3));
+  assert.ok(cards.every((card) => card.children[2].className === "pc-dashboard-visually-hidden"));
+  assert.ok(cards.every((card) => card.children[2].textContent.length > 0));
+  assert.ok(cards.every((card) => card.title === undefined));
 });
 
 test("Ready for distribution is never misreported as a Distributed KPI", async () => {
@@ -120,7 +125,7 @@ test("Ready for distribution is never misreported as a Distributed KPI", async (
       { label: "ready for distribution", count: 12 },
     ],
   });
-  assert.equal(section.children[2].children[1].textContent, "—");
+  assert.equal(getSummaryCards(section)[2].children[1].textContent, "—");
   assert.equal(section.children[3].children[1].textContent, "—");
 });
 
@@ -135,11 +140,11 @@ test("Dashboard KPI counts recorded accepted revisions without changing backend 
     operationalHealth: { openErrors: 1, tracks: 12 },
     reportSummary: { total: 16, icEnc: 2, validationDiagnostics: 14 },
   });
-  assert.equal(cards.children[2].children[1].textContent, "1");
+  assert.equal(getSummaryCards(cards)[2].children[1].textContent, "1");
   assert.equal(cards.children[3].children[1].textContent, "2");
   assert.equal(cards.children[3].children[2].className, "pc-dashboard-visually-hidden");
   assert.equal(cards.children[3].classList.contains("is-unavailable"), false);
-  assert.equal(cards.children[4].children[1].textContent, "2");
+  assert.equal(getSummaryCards(cards)[4].children[1].textContent, "2");
   assert.equal(cards.children[5].children[2].className, "pc-dashboard-visually-hidden");
 });
 
@@ -171,7 +176,12 @@ test("Activity list exposes its heading and retains the count and filter/table/f
 test("Failed KPI is an accessible toggle for the existing server-side failed filter", async () => {
   const { createSummaryCards, events } = await createHarness();
   const section = createSummaryCards({ summary: { failedOperations: 3 } });
-  const failed = section.children[4];
+  const failed = getSummaryCards(section)[4];
+  const help = section.children[4].children[1];
+  assert.equal(help.tagName, "button");
+  assert.equal(help.attributes.get("aria-label"), "About Failed events");
+  help.click();
+  assert.equal(events.length, 0, "Help is a separate action, not a filter toggle");
   assert.equal(failed.tagName, "button");
   assert.equal(failed.type, "button");
   assert.equal(failed.dataset.dashboardFocusKey, "failed-kpi");
@@ -183,7 +193,7 @@ test("Failed KPI is an accessible toggle for the existing server-side failed fil
   assert.equal(events[0].type, "pc-dashboard-filter-change");
   assert.equal(events[0].detail.filters.importance, "failed");
   const rerendered = createSummaryCards({ summary: { failedOperations: 3 } });
-  const selected = rerendered.children[4];
+  const selected = getSummaryCards(rerendered)[4];
   assert.equal(selected.attributes.get("aria-pressed"), "true");
   selected.click();
   assert.equal(events[1].detail.filters.importance, "all");
@@ -271,4 +281,66 @@ test("Dashboard reporting has requested chart hierarchy and an always-visible on
   assert.equal(aside.children[2].children[1].children[0].children.length, 1);
   assert.equal(aside.children[3].children[1].children.length, 3);
   assert.equal(aside.children[3].children.length, 2);
+});
+
+function findMetricHelp(element) {
+  return [
+    ...(element.className === "pc-dashboard-metric-help" ? [element] : []),
+    ...element.children.flatMap(findMetricHelp),
+  ];
+}
+
+test("Only the six reporting metrics with non-obvious scopes expose explicit help", async () => {
+  const { createDashboardGrid } = await createHarness();
+  const grid = createDashboardGrid({
+    dashboard: {
+      activities: [],
+      summary: { totalActivities: 100, failedOperations: 2 },
+      distribution: { live: { accepted: 1, rejected: 0 } },
+      productBreakdown: [],
+      operationalHealth: { tracks: 12 },
+      reportSummary: { total: 16 },
+      activityTrend: [],
+      statusSummary: [],
+      operationSummary: [],
+      range: {},
+      paging: {},
+    },
+    sourceActivityCount: 100,
+    filters: {},
+    filterOptions: { types: [], statuses: [], products: [] },
+    pageSize: 50,
+    pageNumber: 1,
+  });
+  const buttons = findMetricHelp(grid);
+  assert.deepEqual(
+    Array.from(buttons, (button) => button.attributes.get("aria-label")),
+    [
+      "About Open errors",
+      "About Failed events",
+      "About IC-ENC distribution",
+      "About Activity by specification",
+      "About Current workflow state",
+      "About Stored report files",
+    ]
+  );
+  assert.equal(new Set(buttons.map((button) => button.dataset.dashboardFocusKey)).size, 6);
+  for (const button of buttons) {
+    assert.equal(button.tagName, "button");
+    assert.equal(button.type, "button");
+    assert.equal(button.attributes.has("data-app-help-on-click"), true);
+    assert.ok(button.attributes.get("data-app-original-title").length > 30);
+    assert.equal(button.attributes.has("title"), false);
+    assert.equal(button.children[0].tagName, "calcite-icon");
+    assert.equal(button.children[0].attributes.get("aria-hidden"), "true");
+  }
+  const explanations = Array.from(buttons, (button) =>
+    button.attributes.get("data-app-original-title")
+  );
+  assert.match(explanations[0], /currently in Error or Rejected/);
+  assert.match(explanations[1], /Historical failed events/);
+  assert.match(explanations[2], /Pending is excluded/);
+  assert.match(explanations[3], /Package members are counted separately/);
+  assert.match(explanations[4], /independent of the date range/);
+  assert.match(explanations[5], /not validation runs/);
 });
