@@ -402,3 +402,11 @@ Without permission or for ordinary Products the action stays unavailable.
 This supersedes the earlier statement that Analyze's popup cannot expose
 mutations: the metadata remains read-only, while verified backend actions
 are independently owned by `analyzePackageActions.js`.
+
+## PC-UX-R10 - SevenCs validation report viewer
+
+Verified VLD artifacts expose a **View report** action beside their existing download. The
+[shared validation viewer](../validationViewer/README.md) owns on-demand byte retrieval, structured findings, raw
+text, filtering, and modal lifecycle. The current Product/member and artifact identities,
+report availability, download behavior and the underlying view's lifecycle are preserved.
+ZIP files and other report formats remain download-only.

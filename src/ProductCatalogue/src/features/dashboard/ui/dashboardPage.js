@@ -1,3 +1,4 @@
+import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { fetchDashboardValidationReports } from "../services/dashboardValidationReports.js";
 import { loadStatuses } from "../../data/stores/statusStore.js";
@@ -2183,9 +2184,12 @@ function createDashboardReportPanelContent() {
       })
     );
   } else {
+    const tiles = document.createElement("div");
+    tiles.className = "pc-dashboard-report-tiles";
     for (const report of state.reports) {
-      fragment.appendChild(createDashboardReportItem(report));
+      tiles.appendChild(createDashboardReportItem(report));
     }
+    fragment.appendChild(tiles);
   }
   if (state.hasUnavailableLinks) {
     fragment.appendChild(
@@ -2208,7 +2212,7 @@ function createDashboardReportPanelContent() {
 
 function createDashboardReportItem(report) {
   const item = document.createElement("article");
-  item.className = "pc-dashboard-history-context";
+  item.className = "pc-dashboard-report-tile";
   const title = document.createElement("div");
   title.className = "pc-dashboard-history-context__title";
   title.textContent = report.title || "Report file";
@@ -2221,7 +2225,18 @@ function createDashboardReportItem(report) {
     });
     item.appendChild(meta);
   }
-  item.appendChild(createDashboardReportLink(report, "Download"));
+  const actions = document.createElement("div");
+  actions.className = "pc-dashboard-report-tile__actions";
+  actions.appendChild(createDashboardReportLink(report, "Download"));
+  if (dashboardReportPanelState.reportType === "internal" && dashboardReportPanelState.datasetName && /\.vld$/i.test(report.title ?? "")) {
+    appendValidationViewerAction(actions, report.artifact ?? {
+      id: report.id,
+      fileName: report.title,
+      url: report.url,
+      createdAtUtc: report.generatedAt,
+    }, dashboardReportPanelState.datasetName);
+  }
+  item.appendChild(actions);
   return item;
 }
 

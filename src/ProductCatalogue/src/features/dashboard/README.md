@@ -748,3 +748,17 @@ uses stable Dashboard focus keys during rerenders. KPI labels and numbers do not
 receive redundant hover help. The reporting and Activity layouts otherwise remain
 unchanged. Verify narrow insight headers, both themes, focus, Escape, repeated
 activation, filter isolation, and the existing Links dropdown during local acceptance.
+
+## PC-UX-R10 - SevenCs validation report viewer
+
+Verified VLD artifacts expose a **View report** action beside their existing download. The
+[shared validation viewer](../validationViewer/README.md) owns on-demand byte retrieval, structured findings, raw
+text, filtering, and modal lifecycle. The current Product/member and artifact identities,
+report availability, download behavior and the underlying view's lifecycle are preserved.
+ZIP files and other report formats remain download-only.
+
+R10 v2 presents both report types in a wrapping row of compact file tiles. Each
+file retains its title, stored timestamp and original download; an eligible VLD
+has **View report** beside **Download** in a shared action row. The selected
+activity remains a full-width context card above the tiles. Tile width adapts
+to the report pane without stretching isolated buttons or clipping filenames.

@@ -1,0 +1,374 @@
+.pc-validation-viewer-action,
+.pc-vld-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  background: var(--pc-button-secondary-bg, var(--pc-surface));
+  color: var(--pc-text);
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pc-validation-viewer-action {
+  margin-inline-start: 0.35rem;
+}
+.pc-validation-viewer-action:hover,
+.pc-vld-button:hover {
+  background: var(--pc-button-secondary-bg-hover, var(--pc-surface-alt));
+}
+.pc-vld-dialog {
+  box-sizing: border-box;
+  width: min(92vw, 1520px);
+  height: 88dvh;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  background: var(--pc-surface);
+  color: var(--pc-text);
+  box-shadow: var(--pc-shadow);
+  font-size: 0.875rem;
+  overflow: hidden;
+}
+.pc-vld-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.pc-vld-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+.pc-vld-dialog h2, .pc-vld-dialog h3, .pc-vld-dialog h4, .pc-vld-dialog p {
+  margin: 0;
+}
+.pc-vld-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: var(--pc-surface-alt);
+  border-bottom: 1px solid var(--pc-border);
+  padding: 0.75rem;
+}
+.pc-vld-title-wrap {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pc-vld-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.pc-vld-file-name {
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+.pc-vld-actions, .pc-vld-mode, .pc-vld-occurrence-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+.pc-vld-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+.pc-vld-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pc-vld-meta {
+  font-size: 0.75rem;
+  color: var(--pc-text-muted);
+  overflow-wrap: anywhere;
+}
+.pc-vld-panel {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pc-vld-findings {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pc-vld-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.pc-vld-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid var(--pc-border);
+  border-inline-start: 3px solid var(--calcite-color-status-danger, #d83020);
+  border-radius: 0;
+  color: var(--pc-text);
+  background: var(--pc-surface-alt);
+  padding: 0.4rem 0.6rem;
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+.pc-vld-metric[data-severity="Warning"] {
+  border-inline-start-color: var(--calcite-color-status-warning, #dba000);
+}
+.pc-vld-metric strong {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.pc-vld-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.pc-vld-input {
+  min-width: 0;
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  color: var(--pc-text);
+  background: var(--pc-surface);
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+.pc-vld-controls input {
+  flex: 1 1 14rem;
+}
+.pc-vld-split {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+  border: 1px solid var(--pc-border);
+}
+.pc-vld-check-list, .pc-vld-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.pc-vld-check-list {
+  border-inline-end: 1px solid var(--pc-border);
+}
+.pc-vld-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  width: 100%;
+  color: var(--pc-text);
+  background: var(--pc-surface);
+  border: 0;
+  border-bottom: 1px solid var(--pc-border);
+  border-radius: 0;
+  padding: 0.55rem 0.65rem;
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+.pc-vld-check .pc-vld-meta {
+  grid-column: 1 / -1;
+}
+.pc-vld-check-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pc-vld-count {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.pc-vld-severity {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--pc-text);
+  border-inline-start: 3px solid var(--calcite-color-status-danger, #d83020);
+  padding-inline-start: 0.25rem;
+}
+.pc-vld-severity--warning {
+  border-inline-start-color: var(--calcite-color-status-warning, #dba000);
+}
+.pc-vld-button[aria-pressed="true"], .pc-vld-metric[aria-pressed="true"], .pc-vld-check[aria-pressed="true"] {
+  background: var(--pc-surface-alt);
+  box-shadow: inset 0 0 0 2px var(--calcite-color-brand, #0079c1);
+}
+.pc-vld-check:hover {
+  background: var(--pc-surface-alt);
+}
+.pc-vld-detail {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.pc-vld-detail-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.pc-vld-occurrence-nav {
+  justify-content: space-between;
+  padding: 0.3rem 0;
+}
+.pc-vld-occurrence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.pc-vld-field-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 0.4rem !important;
+}
+.pc-vld-field-value {
+  white-space: pre-wrap;
+}
+.pc-vld-references {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+}
+.pc-vld-objects {
+  border: 1px solid var(--pc-border);
+  margin-top: 0.35rem;
+}
+.pc-vld-objects summary, .pc-vld-report-info summary {
+  cursor: pointer;
+  padding: 0.4rem 0.5rem;
+  background: var(--pc-surface-alt);
+  font-weight: 600;
+}
+.pc-vld-object-table-wrap {
+  overflow-x: auto;
+}
+.pc-vld-object-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.pc-vld-object-table td, .pc-vld-object-table th {
+  padding: 0.35rem;
+  border-bottom: 1px solid var(--pc-border);
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.pc-vld-objects .pc-vld-occurrence-nav {
+  padding: 0.35rem;
+}
+.pc-vld-report-info {
+  flex: 0 0 auto;
+  border: 1px solid var(--pc-border);
+}
+.pc-vld-info-content {
+  max-height: min(18vh, 160px);
+  overflow: auto;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.pc-vld-info-content h4 {
+  font-size: 0.8rem;
+  margin: 0.25rem 0;
+}
+.pc-vld-warning {
+  padding: 0.4rem 0.6rem;
+  border-inline-start: 3px solid var(--calcite-color-status-warning, #dba000);
+  background: var(--pc-surface-alt);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.pc-vld-state {
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.pc-vld-state h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+.pc-vld-state .pc-vld-button {
+  margin-top: 0.5rem;
+}
+.pc-vld-raw-view {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pc-vld-raw {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  color: var(--pc-text);
+  background: var(--pc-surface);
+  font: 0.75rem/1.5 monospace;
+  padding: 0.5rem;
+}
+.pc-vld-dialog :focus-visible, .pc-validation-viewer-action:focus-visible {
+  outline: 2px solid var(--pc-focus-ring, #0079c1);
+  outline-offset: -2px;
+}
+.pc-vld-dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (max-width: 760px) {
+  .pc-vld-dialog {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+  }
+  .pc-vld-header, .pc-vld-body {
+    padding: 0.5rem;
+  }
+  .pc-vld-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 38fr) minmax(0, 62fr);
+  }
+  .pc-vld-check-list {
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--pc-border);
+  }
+  .pc-vld-metric strong {
+    font-size: 1rem;
+  }
+  .pc-vld-header {
+    flex-wrap: wrap;
+  }
+}
+
+.pc-validation-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-self: start;
+  gap: 0.35rem;
+}
+.pc-validation-report-actions .pc-validation-viewer-action {
+  margin-inline-start: 0;
+}

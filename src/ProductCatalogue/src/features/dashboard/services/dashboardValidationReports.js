@@ -51,6 +51,7 @@ export async function fetchDashboardValidationReports(
       title: artifact.fileName || "Validation file",
       url: artifact.url,
       generatedAt: artifact.createdAtUtc ?? null,
+      artifact,
     })),
     hasUnattributedArtifacts: selection.hasUnattributedArtifacts,
     hasUnknownKinds: partition.unknown.length > 0,

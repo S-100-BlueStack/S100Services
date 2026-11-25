@@ -368,3 +368,11 @@ that saved value, while keeping the current runtime value. Turning it on saves t
 Restore defaults turns synchronization off and removes its saved value without changing Auto-save.
 The setting is not shown on other routes and makes no API calls or changes to Product selection,
 metadata, content visibility, navigation or backend state.
+
+## PC-UX-R10 - SevenCs validation report viewer
+
+Verified VLD artifacts expose a **View report** action beside their existing download. The
+[shared validation viewer](../validationViewer/README.md) owns on-demand byte retrieval, structured findings, raw
+text, filtering, and modal lifecycle. The current Product/member and artifact identities,
+report availability, download behavior and the underlying view's lifecycle are preserved.
+ZIP files and other report formats remain download-only.

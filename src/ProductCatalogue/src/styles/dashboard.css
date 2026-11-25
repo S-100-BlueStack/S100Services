@@ -1463,6 +1463,61 @@ body.pc-dashboard-route:has(.pc-dashboard-navigation-dropdown[open]) .pc-help-to
   white-space: nowrap;
 }
 
+/* File tiles have their own layout; the selected activity stays full width. */
+.pc-dashboard-report-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 10px;
+}
+
+.pc-dashboard-report-tile {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  max-width: min(100%, 280px);
+  padding: 8px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+}
+
+.pc-dashboard-report-tile .pc-dashboard-history-context__title,
+.pc-dashboard-report-tile .pc-dashboard-history-context__meta {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.pc-dashboard-report-tile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 3px;
+}
+
+.pc-dashboard-report-tile__actions > .pc-validation-viewer-action {
+  box-sizing: border-box;
+  min-height: 24px;
+  margin: 0;
+  padding: 3px 6px;
+  color: var(--pc-button-secondary-text);
+  background: var(--pc-button-secondary-bg);
+  border: 1px solid var(--pc-button-secondary-border);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pc-dashboard-report-tile__actions > .pc-validation-viewer-action:hover {
+  background: var(--pc-button-secondary-bg-hover);
+}
+
 .pc-dashboard-history-panel .pc-product-history-summary {
   margin: 0 0 10px;
 }

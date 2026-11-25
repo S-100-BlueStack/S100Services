@@ -1,3 +1,4 @@
+import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { getStatusName } from "../../data/stores/statusStore.js";
 import {
   captureWorkspaceTransferFocus,
@@ -392,7 +393,8 @@ function createProductCard(product) {
   content.appendChild(
     createInternalValidationReportsBlock(
       product.internalValidationReports,
-      product.contentAvailability?.internalValidation
+      product.contentAvailability?.internalValidation,
+      product.datasetName
     )
   );
   content.appendChild(createHistoryBlock(product));
@@ -468,7 +470,7 @@ function createXmlBlock(xml, availability = null, reports = [], error = null) {
 
 let nextValidationScrollLabelId = 0;
 
-function createInternalValidationReportsBlock(reports = [], availability = null) {
+function createInternalValidationReportsBlock(reports = [], availability = null, datasetName = null) {
   const details = document.createElement("details");
   details.className = "analyze-internal-validation";
 
@@ -508,7 +510,7 @@ function createInternalValidationReportsBlock(reports = [], availability = null)
   }
 
   for (const [index, report] of validReports.entries()) {
-    content.appendChild(createInternalValidationReport(report, index));
+    content.appendChild(createInternalValidationReport(report, index, undefined, false, datasetName));
   }
   details.append(summary, content);
   return details;
@@ -518,7 +520,8 @@ function createInternalValidationReport(
   report,
   index,
   downloadLabel = "Download validation file",
-  isIcEnc = false
+  isIcEnc = false,
+  datasetName = null
 ) {
   const details = document.createElement("details");
   details.className = "analyze-internal-validation__report";
@@ -557,7 +560,15 @@ function createInternalValidationReport(
     link.href = report.url;
     link.textContent = downloadLabel;
     link.download = report.title || "";
-    content.appendChild(link);
+    if (!isIcEnc && datasetName && /\.vld$/i.test(report.raw?.fileName ?? "")) {
+      const actions = document.createElement("div");
+      actions.className = "pc-validation-report-actions";
+      actions.appendChild(link);
+      appendValidationViewerAction(actions, report.raw, datasetName);
+      content.appendChild(actions);
+    } else {
+      content.appendChild(link);
+    }
   }
   if (hasReportContent(report.content)) {
     const pre = document.createElement("pre");

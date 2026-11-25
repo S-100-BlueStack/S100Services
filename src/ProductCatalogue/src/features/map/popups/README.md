@@ -781,3 +781,17 @@ than replicating ProductState rules.
 The email review endpoint remains server-protected; never put the IC-ENC
 operator key in browser JavaScript, Vite configuration or network requests.
 See [IC-ENC integration gaps](../../../../docs/pc-icenc-01-backend-gaps.md).
+
+## PC-UX-R10 - SevenCs validation report viewer
+
+Verified VLD artifacts expose a **View report** action beside their existing download. The
+[shared validation viewer](../../validationViewer/README.md) owns on-demand byte retrieval, structured findings, raw
+text, filtering, and modal lifecycle. The current Product/member and artifact identities,
+report availability, download behavior and the underlying view's lifecycle are preserved.
+ZIP files and other report formats remain download-only.
+
+R10 v2 uses a compact validation-file row inside each member column: **View report**
+with an icon-only download for a verified VLD, and **Download ZIP** for a single
+ZIP file. Exact filenames and download targets remain available through the
+controls' accessible names and download metadata. Multiple VLDs or ZIPs retain
+visible filenames to distinguish them. Other formats retain filename links.

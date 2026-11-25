@@ -1,3 +1,4 @@
+import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { getStatusIdByName, getStatusName } from "../../data/stores/statusStore.js";
 import { applyProductStatusTone } from "../../../shared/ui/productStatusTone.js";
 import "@esri/calcite-components/components/calcite-icon";
@@ -247,7 +248,7 @@ function createArtifactReviewCard({ product, contentType, title, presentation, a
     card.body.tabIndex = 0;
   }
   for (const artifact of artifacts) {
-    card.body.appendChild(createValidationArtifactRow(artifact));
+    card.body.appendChild(createValidationArtifactRow(artifact, product.datasetName, contentType));
   }
   return card.root;
 }
@@ -338,7 +339,7 @@ function createContentStateMessage(message) {
   return element;
 }
 
-function createValidationArtifactRow(artifact) {
+function createValidationArtifactRow(artifact, datasetName, contentType) {
   const row = document.createElement("p");
   row.className = "pc-review-content-card__artifact";
   const link = document.createElement("calcite-link");
@@ -346,6 +347,9 @@ function createValidationArtifactRow(artifact) {
   link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
   link.download = artifact.fileName || "";
   row.appendChild(link);
+  if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS && datasetName && /\.vld$/i.test(artifact.fileName ?? "")) {
+    appendValidationViewerAction(row, artifact, datasetName);
+  }
   if (artifact.kind === "IcEncReport" && artifact.revisionId) {
     const revision = document.createElement("span");
     revision.className = "pc-review-content-card__artifact-revision";

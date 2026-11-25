@@ -1,3 +1,4 @@
+import { createValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import {
   createPackagePopupPresentation,
   isCurrentPackagePopupContext,
@@ -471,7 +472,10 @@ function renderProductRows(section, columns, errorDetails, attributes, productCo
   if (productContext?.workUnit?.kind === "package") {
     section.appendChild(createPackageStatusRow(attributes, errorDetails));
   }
-  const table = createProductMetadataTable(columns, errorDetails);
+  const table = createProductMetadataTable(columns, errorDetails, {
+    datasetName: productContext?.datasetName,
+    isPackage: productContext?.workUnit?.kind === "package",
+  });
 
   if (table) {
     section.appendChild(table);
@@ -682,12 +686,12 @@ function readDatasetName(attributes) {
   return readAttribute(attributes, ["datasetName", "DatasetName", "datasetname"]);
 }
 
-function createProductMetadataTable(columns, errorDetails) {
+function createProductMetadataTable(columns, errorDetails, owner) {
   if (columns.length === 0) {
     return null;
   }
 
-  const rows = createProductMetadataRows(columns, errorDetails);
+  const rows = createProductMetadataRows(columns, errorDetails, owner);
   if (rows.length === 0) {
     return null;
   }
@@ -704,7 +708,7 @@ function createProductMetadataTable(columns, errorDetails) {
   return container;
 }
 
-function createProductMetadataRows(columns, errorDetails) {
+function createProductMetadataRows(columns, errorDetails, owner) {
   const rows = [
     {
       label: "Product",
@@ -738,7 +742,11 @@ function createProductMetadataRows(columns, errorDetails) {
     },
     {
       label: "Validation files",
-      getContent: (item) => createValidationArtifactLinks(item?.validationArtifacts),
+      getContent: (item) =>
+        createValidationArtifactLinks(
+          item?.validationArtifacts,
+          owner?.isPackage ? item?.datasetName : owner?.datasetName
+        ),
       shouldShow: () => columns.some((column) => column.item?.validationArtifacts?.length),
     },
   ];
@@ -796,19 +804,49 @@ function createProductTableRow({ label, getValue, getContent, decorateCell }, co
   return row;
 }
 
-function createValidationArtifactLinks(artifacts) {
+function createValidationArtifactLinks(artifacts, datasetName) {
   const container = document.createElement("div");
   container.className = "popup-product-table__validation-files";
 
-  for (const [index, artifact] of (artifacts ?? []).entries()) {
-    if (!artifact?.url) continue;
-    if (index > 0) container.appendChild(document.createElement("br"));
+  const available = (artifacts ?? []).filter((artifact) => artifact?.url);
+  const vldCount = available.filter((artifact) => /\.vld$/i.test(artifact.fileName ?? "")).length;
+  const zipCount = available.filter((artifact) => /\.zip$/i.test(artifact.fileName ?? "")).length;
 
+  for (const artifact of available) {
+    const fileName = artifact.fileName || "Validation file";
+    const row = document.createElement("div");
+    row.className = "popup-validation-file";
+    const actions = document.createElement("div");
+    actions.className = "popup-validation-file__actions";
+    const viewAction = datasetName ? createValidationViewerAction(artifact, datasetName) : null;
+    const isZip = /\.zip$/i.test(fileName);
     const link = document.createElement("a");
     link.href = artifact.url;
-    link.textContent = artifact.fileName || "Download validation file";
     link.download = artifact.fileName || "";
-    container.appendChild(link);
+    link.title = fileName;
+    link.setAttribute("aria-label", `Download ${fileName}`);
+    if (viewAction) {
+      // The member name is already in the metadata table. Keep the two common
+      // actions compact, while disambiguating multiple reports by filename.
+      link.className = "popup-validation-file__download-icon";
+      const icon = document.createElement("calcite-icon");
+      icon.icon = "download";
+      icon.scale = "s";
+      icon.setAttribute("aria-hidden", "true");
+      link.appendChild(icon);
+      if (vldCount > 1) {
+        const label = document.createElement("span");
+        label.className = "popup-validation-file__name";
+        label.textContent = fileName;
+        row.appendChild(label);
+      }
+      actions.append(viewAction, link);
+    } else {
+      link.textContent = isZip && zipCount === 1 ? "Download ZIP" : artifact.fileName || "Download validation file";
+      actions.appendChild(link);
+    }
+    row.appendChild(actions);
+    container.appendChild(row);
   }
 
   return container;
