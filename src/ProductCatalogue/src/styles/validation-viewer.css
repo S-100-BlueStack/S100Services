@@ -45,7 +45,10 @@
 .pc-vld-dialog::backdrop {
   background: rgba(0, 0, 0, 0.5);
 }
-.pc-vld-dialog h2, .pc-vld-dialog h3, .pc-vld-dialog h4, .pc-vld-dialog p {
+.pc-vld-dialog h2,
+.pc-vld-dialog h3,
+.pc-vld-dialog h4,
+.pc-vld-dialog p {
   margin: 0;
 }
 .pc-vld-header {
@@ -69,7 +72,9 @@
   font-weight: 600;
   margin-top: 0.25rem;
 }
-.pc-vld-actions, .pc-vld-mode, .pc-vld-occurrence-nav {
+.pc-vld-actions,
+.pc-vld-mode,
+.pc-vld-occurrence-nav {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -164,7 +169,8 @@
   grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
   border: 1px solid var(--pc-border);
 }
-.pc-vld-check-list, .pc-vld-detail {
+.pc-vld-check-list,
+.pc-vld-detail {
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -209,7 +215,9 @@
 .pc-vld-severity--warning {
   border-inline-start-color: var(--calcite-color-status-warning, #dba000);
 }
-.pc-vld-button[aria-pressed="true"], .pc-vld-metric[aria-pressed="true"], .pc-vld-check[aria-pressed="true"] {
+.pc-vld-button[aria-pressed="true"],
+.pc-vld-metric[aria-pressed="true"],
+.pc-vld-check[aria-pressed="true"] {
   background: var(--pc-surface-alt);
   box-shadow: inset 0 0 0 2px var(--calcite-color-brand, #0079c1);
 }
@@ -252,7 +260,8 @@
   border: 1px solid var(--pc-border);
   margin-top: 0.35rem;
 }
-.pc-vld-objects summary, .pc-vld-report-info summary {
+.pc-vld-objects summary,
+.pc-vld-report-info summary {
   cursor: pointer;
   padding: 0.4rem 0.5rem;
   background: var(--pc-surface-alt);
@@ -266,7 +275,8 @@
   border-collapse: collapse;
   font-size: 0.75rem;
 }
-.pc-vld-object-table td, .pc-vld-object-table th {
+.pc-vld-object-table td,
+.pc-vld-object-table th {
   padding: 0.35rem;
   border-bottom: 1px solid var(--pc-border);
   text-align: start;
@@ -330,7 +340,8 @@
   font: 0.75rem/1.5 monospace;
   padding: 0.5rem;
 }
-.pc-vld-dialog :focus-visible, .pc-validation-viewer-action:focus-visible {
+.pc-vld-dialog :focus-visible,
+.pc-validation-viewer-action:focus-visible {
   outline: 2px solid var(--pc-focus-ring, #0079c1);
   outline-offset: -2px;
 }
@@ -343,7 +354,8 @@
     width: calc(100vw - 16px);
     height: calc(100dvh - 16px);
   }
-  .pc-vld-header, .pc-vld-body {
+  .pc-vld-header,
+  .pc-vld-body {
     padding: 0.5rem;
   }
   .pc-vld-split {

@@ -2228,13 +2228,21 @@ function createDashboardReportItem(report) {
   const actions = document.createElement("div");
   actions.className = "pc-dashboard-report-tile__actions";
   actions.appendChild(createDashboardReportLink(report, "Download"));
-  if (dashboardReportPanelState.reportType === "internal" && dashboardReportPanelState.datasetName && /\.vld$/i.test(report.title ?? "")) {
-    appendValidationViewerAction(actions, report.artifact ?? {
-      id: report.id,
-      fileName: report.title,
-      url: report.url,
-      createdAtUtc: report.generatedAt,
-    }, dashboardReportPanelState.datasetName);
+  if (
+    dashboardReportPanelState.reportType === "internal" &&
+    dashboardReportPanelState.datasetName &&
+    /\.vld$/i.test(report.title ?? "")
+  ) {
+    appendValidationViewerAction(
+      actions,
+      report.artifact ?? {
+        id: report.id,
+        fileName: report.title,
+        url: report.url,
+        createdAtUtc: report.generatedAt,
+      },
+      dashboardReportPanelState.datasetName
+    );
   }
   item.appendChild(actions);
   return item;

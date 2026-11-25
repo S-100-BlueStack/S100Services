@@ -2,10 +2,11 @@ import { getValidationViewerArtifact } from "../domain/validationViewerArtifact.
 
 let launchGeneration = 0;
 
-export function createValidationViewerAction(artifact, expectedDatasetName, {
-  ownerDocument = document,
-  loadViewer = () => import("./validationViewer.js"),
-} = {}) {
+export function createValidationViewerAction(
+  artifact,
+  expectedDatasetName,
+  { ownerDocument = document, loadViewer = () => import("./validationViewer.js") } = {}
+) {
   const verified = getValidationViewerArtifact(artifact, expectedDatasetName);
   if (!verified) return null;
   const button = ownerDocument.createElement("button");
@@ -22,13 +23,20 @@ export function createValidationViewerAction(artifact, expectedDatasetName, {
     const generation = ++launchGeneration;
     const view = ownerDocument.defaultView;
     const location = view?.location.href;
-    const retire = () => { if (generation === launchGeneration) launchGeneration++; };
+    const retire = () => {
+      if (generation === launchGeneration) launchGeneration++;
+    };
     loading = true;
     button.setAttribute("aria-busy", "true");
     view?.addEventListener("pagehide", retire, { once: true });
     try {
       const { openValidationViewer } = await loadViewer();
-      if (generation !== launchGeneration || !button.isConnected || view?.location.href !== location) return;
+      if (
+        generation !== launchGeneration ||
+        !button.isConnected ||
+        view?.location.href !== location
+      )
+        return;
       openValidationViewer(verified, button);
       button.textContent = "View report";
       button.setAttribute("aria-label", `View validation report ${verified.fileName}`);

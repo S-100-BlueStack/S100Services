@@ -38,5 +38,8 @@ test("Review keeps validation artifact download links for available content", as
 
   assert.match(source, /link\.href = artifact\.url;/);
   assert.match(source, /link\.download = artifact\.fileName \|\| "";/);
-  assert.match(source, /card\.body\.appendChild\(createValidationArtifactRow\(artifact, product\.datasetName, contentType\)\);/);
+  assert.match(
+    source,
+    /card\.body\.appendChild\(createValidationArtifactRow\(artifact, product\.datasetName, contentType\)\);/
+  );
 });

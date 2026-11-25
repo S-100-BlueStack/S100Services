@@ -33,13 +33,20 @@ function formatDate(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.valueOf())) return value || "";
   return new Intl.DateTimeFormat("da-DK", {
-    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
 }
 
 function labeledText(parent, label, value) {
   if (!value) return;
-  parent.append(element("h4", "pc-vld-field-label", label), element("p", "pc-vld-field-value", value));
+  parent.append(
+    element("h4", "pc-vld-field-label", label),
+    element("p", "pc-vld-field-value", value)
+  );
 }
 
 function restoreTriggerFocus(trigger) {
@@ -58,7 +65,11 @@ function restoreTriggerFocus(trigger) {
   if (replacements.length === 1) replacements[0].focus({ preventScroll: true });
 }
 
-export function openValidationViewer(artifact, trigger, { loadBytes = fetchValidationReportBytes } = {}) {
+export function openValidationViewer(
+  artifact,
+  trigger,
+  { loadBytes = fetchValidationReportBytes } = {}
+) {
   const verified = getValidationViewerArtifact(artifact, artifact?.datasetName);
   if (!verified) throw new Error("Invalid validation artifact.");
   activeViewer?.close({ restoreFocus: false });
@@ -69,7 +80,11 @@ export function openValidationViewer(artifact, trigger, { loadBytes = fetchValid
   const title = element("h2", "", "Validation report");
   title.id = "pc-vld-title";
   titleWrap.append(title, element("div", "pc-vld-file-name", verified.fileName));
-  const metadata = [verified.datasetName, verified.createdAtUtc && `Stored: ${formatDate(verified.createdAtUtc)}`, verified.revisionId && `Revision: ${verified.revisionId}`].filter(Boolean);
+  const metadata = [
+    verified.datasetName,
+    verified.createdAtUtc && `Stored: ${formatDate(verified.createdAtUtc)}`,
+    verified.revisionId && `Revision: ${verified.revisionId}`,
+  ].filter(Boolean);
   titleWrap.append(element("div", "pc-vld-meta", metadata.join(" · ")));
   const actions = element("div", "pc-vld-actions");
   const download = element("a", "pc-vld-button", "Download");
@@ -102,7 +117,9 @@ export function openValidationViewer(artifact, trigger, { loadBytes = fetchValid
     if (restoreFocus) restoreTriggerFocus(trigger);
   }
 
-  function onNavigation() { close({ restoreFocus: false }); }
+  function onNavigation() {
+    close({ restoreFocus: false });
+  }
   function onKeydown(event) {
     if (event.key !== "Escape" || disposed) return;
     // The modal has first priority over map selection, tooltips and the
@@ -111,7 +128,10 @@ export function openValidationViewer(artifact, trigger, { loadBytes = fetchValid
     event.stopImmediatePropagation();
     close();
   }
-  dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    close();
+  });
   dialog.addEventListener("close", () => close());
   // A modal backdrop is retargeted to the dialog itself. Require an actual
   // outside press and click so selecting text or dragging from the report does
@@ -171,9 +191,12 @@ export function openValidationViewer(artifact, trigger, { loadBytes = fetchValid
       let report = null;
       let parseError = "";
       try {
-        report = parseSevenCsValidationReport(decoded.text, { expectedDatasetName: verified.datasetName });
+        report = parseSevenCsValidationReport(decoded.text, {
+          expectedDatasetName: verified.datasetName,
+        });
       } catch (error) {
-        parseError = error instanceof Error ? error.message : "Structured report could not be read.";
+        parseError =
+          error instanceof Error ? error.message : "Structured report could not be read.";
       }
       if (disposed || current !== generation) return;
       renderReport(body, decoded, report, parseError);
@@ -181,7 +204,18 @@ export function openValidationViewer(artifact, trigger, { loadBytes = fetchValid
       if (disposed || current !== generation || signal.aborted) return;
       const state = element("div", "pc-vld-state");
       state.setAttribute("role", "alert");
-      state.append(element("h3", "", "Report could not be loaded"), element("p", "", error instanceof Error ? error.message : "The validation file could not be loaded."), button("Retry", () => { closeButton.focus(); void load(); }));
+      state.append(
+        element("h3", "", "Report could not be loaded"),
+        element(
+          "p",
+          "",
+          error instanceof Error ? error.message : "The validation file could not be loaded."
+        ),
+        button("Retry", () => {
+          closeButton.focus();
+          void load();
+        })
+      );
       body.replaceChildren(state);
     } finally {
       if (!disposed && current === generation) body.setAttribute("aria-busy", "false");
@@ -199,16 +233,37 @@ function renderReport(body, decoded, report, parseError) {
   const rawButton = button("Raw file", () => switchMode("raw"));
   mode.append(findingsButton, rawButton);
   top.appendChild(mode);
-  if (report) top.append(element("span", "pc-vld-meta", [report.tool, report.validationStart && `Validated: ${formatDate(report.validationStart)}`, report.datasetFile].filter(Boolean).join(" · ")));
+  if (report)
+    top.append(
+      element(
+        "span",
+        "pc-vld-meta",
+        [
+          report.tool,
+          report.validationStart && `Validated: ${formatDate(report.validationStart)}`,
+          report.datasetFile,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      )
+    );
   const panel = element("div", "pc-vld-panel");
   body.replaceChildren(top);
   if (decoded.encodingWarning) {
-    const warning = element("div", "pc-vld-warning", "The file contains invalid UTF-8 bytes. Replacement characters are shown in the preview; the original download is unchanged.");
+    const warning = element(
+      "div",
+      "pc-vld-warning",
+      "The file contains invalid UTF-8 bytes. Replacement characters are shown in the preview; the original download is unchanged."
+    );
     warning.setAttribute("role", "status");
     body.appendChild(warning);
   }
   if (parseError) {
-    const warning = element("div", "pc-vld-warning", `Structured view unavailable: ${parseError} The decoded raw file is available below.`);
+    const warning = element(
+      "div",
+      "pc-vld-warning",
+      `Structured view unavailable: ${parseError} The decoded raw file is available below.`
+    );
     warning.setAttribute("role", "status");
     body.appendChild(warning);
   }
@@ -269,9 +324,12 @@ function createRawFile(text) {
     lastQuery = term;
     // Search the textarea value because native controls normalize CRLF to LF.
     const source = raw.value;
-    let index = direction > 0
-      ? source.indexOf(term, lastIndex < 0 ? 0 : lastIndex + term.length)
-      : lastIndex === 0 ? -1 : source.lastIndexOf(term, lastIndex < 0 ? source.length : lastIndex - 1);
+    let index =
+      direction > 0
+        ? source.indexOf(term, lastIndex < 0 ? 0 : lastIndex + term.length)
+        : lastIndex === 0
+          ? -1
+          : source.lastIndexOf(term, lastIndex < 0 ? source.length : lastIndex - 1);
     let wrapped = false;
     if (index < 0) {
       index = direction > 0 ? source.indexOf(term) : source.lastIndexOf(term);
@@ -284,7 +342,8 @@ function createRawFile(text) {
     raw.setSelectionRange(index, index + term.length);
     const line = source.slice(0, index).split("\n").length - 1;
     const lineHeight = parseFloat(window.getComputedStyle(raw).lineHeight);
-    if (Number.isFinite(lineHeight)) raw.scrollTop = Math.max(0, line * lineHeight - raw.clientHeight / 3);
+    if (Number.isFinite(lineHeight))
+      raw.scrollTop = Math.max(0, line * lineHeight - raw.clientHeight / 3);
   }
 }
 
@@ -298,14 +357,25 @@ function createFindings(report) {
   search.setAttribute("aria-label", "Search validation findings");
   const severity = element("select", "pc-vld-input");
   severity.setAttribute("aria-label", "Finding severity");
-  for (const [value, label] of [["failures", "Critical + Error"], ["all", "All severities"], ...VALIDATION_SEVERITIES.map((name) => [name, name])]) {
+  for (const [value, label] of [
+    ["failures", "Critical + Error"],
+    ["all", "All severities"],
+    ...VALIDATION_SEVERITIES.map((name) => [name, name]),
+  ]) {
     const option = element("option", "", label);
     option.value = value;
     severity.appendChild(option);
   }
   severity.value = report.totals.Critical || report.totals.Error ? "failures" : "all";
   for (const name of VALIDATION_SEVERITIES) {
-    const metric = button("", () => { severity.value = severity.value === name ? "all" : name; update(); }, "pc-vld-metric");
+    const metric = button(
+      "",
+      () => {
+        severity.value = severity.value === name ? "all" : name;
+        update();
+      },
+      "pc-vld-metric"
+    );
     metric.dataset.severity = name;
     metric.append(element("span", "", name), element("strong", "", count(report.totals[name])));
     metrics.appendChild(metric);
@@ -325,7 +395,10 @@ function createFindings(report) {
   const info = element("details", "pc-vld-report-info");
   info.append(element("summary", "", "Report metadata"));
   const infoBody = element("div", "pc-vld-info-content");
-  for (const [label, entries] of [["Validation parameters", report.validationParameters], ["Dataset metadata", report.datasetMetadata]]) {
+  for (const [label, entries] of [
+    ["Validation parameters", report.validationParameters],
+    ["Dataset metadata", report.datasetMetadata],
+  ]) {
     infoBody.appendChild(element("h4", "", label));
     for (const entry of entries) infoBody.appendChild(element("div", "", entry));
   }
@@ -341,39 +414,77 @@ function createFindings(report) {
 
   function update() {
     selection = selectValidationChecks(report, severity.value, search.value);
-    if (!selection.some(({ check }) => check.id === selectedId)) selectedId = selection[0]?.check.id ?? null;
+    if (!selection.some(({ check }) => check.id === selectedId))
+      selectedId = selection[0]?.check.id ?? null;
     activeOccurrence = null;
-    for (const metric of metrics.children) metric.setAttribute("aria-pressed", String(severity.value === metric.dataset.severity));
+    for (const metric of metrics.children)
+      metric.setAttribute("aria-pressed", String(severity.value === metric.dataset.severity));
     resultCount.textContent = `${count(selection.length)} of ${count(report.checks.length)} checks · ${count(selection.reduce((sum, { check }) => sum + check.reportedCount, 0))} reported findings in matching checks · ${count(report.shownCount)} of ${count(report.reportedCount)} occurrences stored in this report`;
     list.replaceChildren();
     for (const item of selection) {
       const { check } = item;
-      const row = button("", () => {
-        selectedId = check.id;
-        activeOccurrence = null;
-        updateSelection();
-      }, "pc-vld-check");
+      const row = button(
+        "",
+        () => {
+          selectedId = check.id;
+          activeOccurrence = null;
+          updateSelection();
+        },
+        "pc-vld-check"
+      );
       row.dataset.checkId = check.id;
-      row.append(element("span", "pc-vld-check-name", check.name), element("span", `pc-vld-severity pc-vld-severity--${check.severity.toLowerCase()}`, check.severity), element("strong", "pc-vld-count", count(check.reportedCount)), element("span", "pc-vld-meta", `${check.categories.join(" · ") || check.section} · ${count(check.occurrences.length)} available`));
+      row.append(
+        element("span", "pc-vld-check-name", check.name),
+        element(
+          "span",
+          `pc-vld-severity pc-vld-severity--${check.severity.toLowerCase()}`,
+          check.severity
+        ),
+        element("strong", "pc-vld-count", count(check.reportedCount)),
+        element(
+          "span",
+          "pc-vld-meta",
+          `${check.categories.join(" · ") || check.section} · ${count(check.occurrences.length)} available`
+        )
+      );
       list.appendChild(row);
     }
     updateSelection();
   }
 
   function updateSelection() {
-    for (const row of list.children) row.setAttribute("aria-pressed", String(row.dataset.checkId === selectedId));
+    for (const row of list.children)
+      row.setAttribute("aria-pressed", String(row.dataset.checkId === selectedId));
     const item = selection.find(({ check }) => check.id === selectedId);
     detail.replaceChildren();
     detail.scrollTop = 0;
     if (!item) {
-      detail.appendChild(element("p", "pc-vld-state", report.reportedCount === 0 ? "No findings were reported." : "No matching checks."));
+      detail.appendChild(
+        element(
+          "p",
+          "pc-vld-state",
+          report.reportedCount === 0 ? "No findings were reported." : "No matching checks."
+        )
+      );
       return;
     }
     const { check, occurrences } = item;
-    detail.append(element("h3", "pc-vld-detail-title", check.name), element("p", "pc-vld-meta", `${check.section} · ${check.severity} · ${count(check.reportedCount)} reported · ${count(check.occurrences.length)} available`));
-    if (check.occurrences.length < check.reportedCount) detail.appendChild(element("p", "pc-vld-warning", "SevenCs stored only a subset of the reported occurrences."));
+    detail.append(
+      element("h3", "pc-vld-detail-title", check.name),
+      element(
+        "p",
+        "pc-vld-meta",
+        `${check.section} · ${check.severity} · ${count(check.reportedCount)} reported · ${count(check.occurrences.length)} available`
+      )
+    );
+    if (check.occurrences.length < check.reportedCount)
+      detail.appendChild(
+        element("p", "pc-vld-warning", "SevenCs stored only a subset of the reported occurrences.")
+      );
     if (!occurrences.length) {
-      detail.appendChild(element("p", "pc-vld-state", "No occurrence details are available for this check."));
+      detail.appendChild(
+        element("p", "pc-vld-state", "No occurrence details are available for this check.")
+      );
       return;
     }
     const nav = element("div", "pc-vld-occurrence-nav");
@@ -405,7 +516,8 @@ function renderOccurrence(content, occurrence) {
   if (occurrence.references.length) {
     content.appendChild(element("h4", "pc-vld-field-label", "References"));
     const references = element("ul", "pc-vld-references");
-    for (const reference of occurrence.references) references.appendChild(element("li", "", reference));
+    for (const reference of occurrence.references)
+      references.appendChild(element("li", "", reference));
     content.appendChild(references);
   }
   appendObjects(content, "Objects", occurrence.objects, true);
@@ -448,13 +560,21 @@ function appendObjects(content, title, objects, expanded) {
     rows.replaceChildren();
     for (const object of objects.slice(start, end)) {
       const row = element("tr");
-      for (const value of [object.cellName, object.name || object.classToken, object.type, object.id, [object.latitude, object.longitude].filter(Boolean).join(" · ")]) row.appendChild(element("td", "", value || "—"));
+      for (const value of [
+        object.cellName,
+        object.name || object.classToken,
+        object.type,
+        object.id,
+        [object.latitude, object.longitude].filter(Boolean).join(" · "),
+      ])
+        row.appendChild(element("td", "", value || "—"));
       rows.appendChild(row);
     }
     label.textContent = `${count(start + 1)}–${count(end)} of ${count(objects.length)}`;
     previous.disabled = page === 0;
     next.disabled = end === objects.length;
-    if (document.activeElement === previous && previous.disabled) next.focus({ preventScroll: true });
+    if (document.activeElement === previous && previous.disabled)
+      next.focus({ preventScroll: true });
     if (document.activeElement === next && next.disabled) previous.focus({ preventScroll: true });
   }
 }

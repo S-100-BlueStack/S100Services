@@ -347,7 +347,11 @@ function createValidationArtifactRow(artifact, datasetName, contentType) {
   link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
   link.download = artifact.fileName || "";
   row.appendChild(link);
-  if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS && datasetName && /\.vld$/i.test(artifact.fileName ?? "")) {
+  if (
+    contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS &&
+    datasetName &&
+    /\.vld$/i.test(artifact.fileName ?? "")
+  ) {
     appendValidationViewerAction(row, artifact, datasetName);
   }
   if (artifact.kind === "IcEncReport" && artifact.revisionId) {

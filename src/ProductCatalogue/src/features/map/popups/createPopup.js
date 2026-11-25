@@ -842,7 +842,8 @@ function createValidationArtifactLinks(artifacts, datasetName) {
       }
       actions.append(viewAction, link);
     } else {
-      link.textContent = isZip && zipCount === 1 ? "Download ZIP" : artifact.fileName || "Download validation file";
+      link.textContent =
+        isZip && zipCount === 1 ? "Download ZIP" : artifact.fileName || "Download validation file";
       actions.appendChild(link);
     }
     row.appendChild(actions);

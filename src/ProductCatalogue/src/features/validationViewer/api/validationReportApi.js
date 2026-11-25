@@ -2,7 +2,10 @@ import { getValidationViewerArtifact } from "../domain/validationViewerArtifact.
 
 export const MAX_VALIDATION_REPORT_BYTES = 16 * 1024 * 1024;
 
-export async function fetchValidationReportBytes(artifact, { signal, request = fetch, maxBytes = MAX_VALIDATION_REPORT_BYTES } = {}) {
+export async function fetchValidationReportBytes(
+  artifact,
+  { signal, request = fetch, maxBytes = MAX_VALIDATION_REPORT_BYTES } = {}
+) {
   const verified = getValidationViewerArtifact(artifact, artifact?.datasetName);
   if (!verified) throw new Error("The validation file could not be verified.");
   signal?.throwIfAborted();
@@ -17,11 +20,15 @@ export async function fetchValidationReportBytes(artifact, { signal, request = f
     throw new Error(`Validation file could not be loaded (HTTP ${response.status}).`);
   }
   const mediaType = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-  if (mediaType && !["application/xml", "text/xml", "text/plain", "application/octet-stream"].includes(mediaType)) {
+  if (
+    mediaType &&
+    !["application/xml", "text/xml", "text/plain", "application/octet-stream"].includes(mediaType)
+  ) {
     await response.body?.cancel();
     throw new Error("The server did not return a supported validation file.");
   }
-  const tooLarge = () => new Error("The file is too large to preview. Download the original file instead.");
+  const tooLarge = () =>
+    new Error("The file is too large to preview. Download the original file instead.");
   if (Number(response.headers.get("content-length")) > maxBytes) {
     await response.body?.cancel();
     throw tooLarge();

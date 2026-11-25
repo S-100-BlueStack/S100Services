@@ -5,7 +5,10 @@ export function decodeValidationReport(bytes) {
   // Analyzer declares UTF-8 even in reports describing invalid UTF-8 input.
   // Replacement decoding is explicit; it must never change the download.
   try {
-    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), encodingWarning: false };
+    return {
+      text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+      encodingWarning: false,
+    };
   } catch {
     return { text: new TextDecoder("utf-8").decode(bytes), encodingWarning: true };
   }
@@ -70,24 +73,42 @@ function readOccurrence(entry) {
     category: text(entry, "Category"),
     message: readable(text(entry, "Message")),
     solution: readable(text(entry, "SuggestedSolution")),
-    references: children(entry, "Reference").map((reference) => readable(reference.textContent.trim())),
+    references: children(entry, "Reference").map((reference) =>
+      readable(reference.textContent.trim())
+    ),
     objects: children(entry, "ObjName").map(readObject),
-    relatedObjects: children(entry, "RelatedObject").flatMap((related) => children(related, "ObjName").map(readObject)),
+    relatedObjects: children(entry, "RelatedObject").flatMap((related) =>
+      children(related, "ObjName").map(readObject)
+    ),
   };
-  occurrence.searchText = [occurrence.category, occurrence.message, occurrence.solution, ...occurrence.references,
-    ...[...occurrence.objects, ...occurrence.relatedObjects].flatMap((object) => Object.values(object))].join(" ").toLowerCase();
+  occurrence.searchText = [
+    occurrence.category,
+    occurrence.message,
+    occurrence.solution,
+    ...occurrence.references,
+    ...[...occurrence.objects, ...occurrence.relatedObjects].flatMap((object) =>
+      Object.values(object)
+    ),
+  ]
+    .join(" ")
+    .toLowerCase();
   return occurrence;
 }
 
 function readCheck(group, section, index) {
   const title = group.getAttribute("Title") ?? "";
   const match = title.match(/^(.+?)\s+:\s+(Critical|Error|Warning) (\d+)(?: \((\d+) shown\))?$/);
-  if (!match || children(group, "LogGroup").length) throw new Error("Unsupported SevenCs finding group.");
+  if (!match || children(group, "LogGroup").length)
+    throw new Error("Unsupported SevenCs finding group.");
   const [, name, severity, count, shown] = match;
   const reportedCount = safeCount(count);
   const shownCount = safeCount(shown ?? count);
   const occurrences = children(group, "LogEntry").map(readOccurrence);
-  if (shownCount > reportedCount || occurrences.length !== shownCount || occurrences.some((entry) => entry.severity !== severity)) {
+  if (
+    shownCount > reportedCount ||
+    occurrences.length !== shownCount ||
+    occurrences.some((entry) => entry.severity !== severity)
+  ) {
     throw new Error("A finding group does not match its reported count or severity.");
   }
   return {
@@ -114,32 +135,52 @@ function getInfo(entries, label) {
   return entries.find((entry) => entry.startsWith(`${label}: `))?.slice(label.length + 2) ?? "";
 }
 
-export function parseSevenCsValidationReport(raw, { parser = new DOMParser(), expectedDatasetName } = {}) {
+export function parseSevenCsValidationReport(
+  raw,
+  { parser = new DOMParser(), expectedDatasetName } = {}
+) {
   // Disallow DTDs/entities; the viewer needs only the observed plain XML format.
-  if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(raw)) throw new Error("XML document type declarations are not supported.");
+  if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(raw))
+    throw new Error("XML document type declarations are not supported.");
   const encoding = raw.match(/^\s*<\?xml[^?]*\bencoding\s*=\s*['"]([^'"]+)['"]/i)?.[1];
-  if (encoding && !/^utf-?8$/i.test(encoding)) throw new Error("Unsupported XML character encoding.");
+  if (encoding && !/^utf-?8$/i.test(encoding))
+    throw new Error("Unsupported XML character encoding.");
   const document = parser.parseFromString(raw, "application/xml");
   const root = document.documentElement;
-  if (document.getElementsByTagName("parsererror").length || root?.tagName !== "LogDocument" || root.getAttribute("Toolname") !== "7Cs Analyzer") {
+  if (
+    document.getElementsByTagName("parsererror").length ||
+    root?.tagName !== "LogDocument" ||
+    root.getAttribute("Toolname") !== "7Cs Analyzer"
+  ) {
     throw new Error("The file is not a readable SevenCs Analyzer XML report.");
   }
   const groups = children(root, "LogGroup");
-  const parameters = groups.find((group) => group.getAttribute("Title") === "Validation Parameters");
+  const parameters = groups.find(
+    (group) => group.getAttribute("Title") === "Validation Parameters"
+  );
   const metadata = groups.find((group) => group.getAttribute("Title") === "Dataset Metadata");
   const validationParameters = readInformation(parameters);
   const datasetMetadata = readInformation(metadata);
   const datasetFile = getInfo(datasetMetadata, "Dataset File Identifier");
   const datasetName = datasetFile.replace(/\.\d{3}$/, "");
-  if (expectedDatasetName && datasetName && datasetName.toUpperCase() !== expectedDatasetName.toUpperCase()) {
+  if (
+    expectedDatasetName &&
+    datasetName &&
+    datasetName.toUpperCase() !== expectedDatasetName.toUpperCase()
+  ) {
     throw new Error("The report identifies a different Product than the selected artifact.");
   }
-  const sections = groups.filter((group) => /^(?:Dataset Entries|Feature and Geometry Entries)\s+:\s+/.test(group.getAttribute("Title") ?? ""));
+  const sections = groups.filter((group) =>
+    /^(?:Dataset Entries|Feature and Geometry Entries)\s+:\s+/.test(
+      group.getAttribute("Title") ?? ""
+    )
+  );
   const summary = groups.find((group) => {
     const title = group.getAttribute("Title") ?? "";
     return datasetName && title.startsWith(`${datasetName} : `);
   });
-  if (!parameters || !metadata || !summary || sections.length !== 2) throw new Error("Unsupported SevenCs report structure.");
+  if (!parameters || !metadata || !summary || sections.length !== 2)
+    throw new Error("Unsupported SevenCs report structure.");
   const totals = readTotals(summary.getAttribute("Title").slice(datasetName.length + 3));
   const checks = [];
   const aggregate = { Critical: 0, Error: 0, Warning: 0 };
@@ -159,13 +200,19 @@ export function parseSevenCsValidationReport(raw, { parser = new DOMParser(), ex
   const actualEntries = Array.from(root.getElementsByTagName("LogEntry"));
   const shownCount = checks.reduce((count, check) => count + check.occurrences.length, 0);
   // Detect unknown nested sections instead of silently omitting their findings.
-  if (actualEntries.filter((entry) => entry.getAttribute("Severity") !== "information").length !== shownCount) {
+  if (
+    actualEntries.filter((entry) => entry.getAttribute("Severity") !== "information").length !==
+    shownCount
+  ) {
     throw new Error("The report contains unsupported finding entries.");
   }
   return {
     datasetName,
     datasetFile,
-    tool: groups.find((group) => group.getAttribute("Title")?.startsWith("7Cs Analyzer"))?.getAttribute("Title") ?? "7Cs Analyzer",
+    tool:
+      groups
+        .find((group) => group.getAttribute("Title")?.startsWith("7Cs Analyzer"))
+        ?.getAttribute("Title") ?? "7Cs Analyzer",
     validationStart: getInfo(validationParameters, "Validation Start"),
     validationParameters,
     datasetMetadata,
@@ -178,10 +225,25 @@ export function parseSevenCsValidationReport(raw, { parser = new DOMParser(), ex
 
 export function selectValidationChecks(report, severity, query) {
   const term = query.trim().toLowerCase();
-  return report.checks.flatMap((check) => {
-    if (severity === "failures" ? check.severity === "Warning" : severity !== "all" && check.severity !== severity) return [];
-    const groupMatches = !term || [check.name, check.section, check.severity].join(" ").toLowerCase().includes(term);
-    const occurrences = groupMatches ? check.occurrences : check.occurrences.filter((entry) => entry.searchText.includes(term));
-    return groupMatches || occurrences.length ? [{ check, occurrences }] : [];
-  }).sort((a, b) => VALIDATION_SEVERITIES.indexOf(a.check.severity) - VALIDATION_SEVERITIES.indexOf(b.check.severity) || b.check.reportedCount - a.check.reportedCount);
+  return report.checks
+    .flatMap((check) => {
+      if (
+        severity === "failures"
+          ? check.severity === "Warning"
+          : severity !== "all" && check.severity !== severity
+      )
+        return [];
+      const groupMatches =
+        !term || [check.name, check.section, check.severity].join(" ").toLowerCase().includes(term);
+      const occurrences = groupMatches
+        ? check.occurrences
+        : check.occurrences.filter((entry) => entry.searchText.includes(term));
+      return groupMatches || occurrences.length ? [{ check, occurrences }] : [];
+    })
+    .sort(
+      (a, b) =>
+        VALIDATION_SEVERITIES.indexOf(a.check.severity) -
+          VALIDATION_SEVERITIES.indexOf(b.check.severity) ||
+        b.check.reportedCount - a.check.reportedCount
+    );
 }

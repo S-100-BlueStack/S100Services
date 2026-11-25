@@ -1,6 +1,7 @@
 import { buildUrl } from "../../../shared/api/apiClient.js";
 
-const artifactRoute = /(?:^|\/)(electronicproducts\/([^/?#]+)\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))$/i;
+const artifactRoute =
+  /(?:^|\/)(electronicproducts\/([^/?#]+)\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))$/i;
 const internalKinds = new Set(["ValidationReport", "ValidationDiagnostic"]);
 
 // The caller supplies an existing authorized download, not a guessed report URL.
@@ -24,11 +25,21 @@ export function getValidationViewerArtifact(artifact, expectedDatasetName) {
   } catch {
     return null;
   }
-  if (!datasetName.trim() || /[\\/\u0000-\u001f\u007f]/.test(datasetName) || [".", ".."].includes(datasetName)) {
+  if (
+    !datasetName.trim() ||
+    [...datasetName].some((character) => {
+      const code = character.charCodeAt(0);
+      return character === "\\" || character === "/" || code <= 0x1f || code === 0x7f;
+    }) ||
+    [".", ".."].includes(datasetName)
+  ) {
     return null;
   }
   for (const owner of [artifact.datasetName, expectedDatasetName]) {
-    if (owner != null && (typeof owner !== "string" || owner.trim().toUpperCase() !== datasetName.toUpperCase())) {
+    if (
+      owner != null &&
+      (typeof owner !== "string" || owner.trim().toUpperCase() !== datasetName.toUpperCase())
+    ) {
       return null;
     }
   }

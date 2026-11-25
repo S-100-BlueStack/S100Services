@@ -18,16 +18,37 @@ function harness(t) {
     open = false;
     isConnected = true;
     focused = false;
-    setAttribute(name, value) { this.attributes.set(name, value); }
-    append(...nodes) { this.children.push(...nodes); }
-    appendChild(node) { this.append(node); return node; }
-    replaceChildren(...nodes) { this.children = nodes; }
-    getClientRects() { return [this.getBoundingClientRect()]; }
-    getBoundingClientRect() { return { left: 10, top: 10, right: 100, bottom: 100 }; }
-    focus() { this.focused = true; }
-    showModal() { this.open = true; }
-    close() { this.open = false; }
-    remove() { this.isConnected = false; }
+    setAttribute(name, value) {
+      this.attributes.set(name, value);
+    }
+    append(...nodes) {
+      this.children.push(...nodes);
+    }
+    appendChild(node) {
+      this.append(node);
+      return node;
+    }
+    replaceChildren(...nodes) {
+      this.children = nodes;
+    }
+    getClientRects() {
+      return [this.getBoundingClientRect()];
+    }
+    getBoundingClientRect() {
+      return { left: 10, top: 10, right: 100, bottom: 100 };
+    }
+    focus() {
+      this.focused = true;
+    }
+    showModal() {
+      this.open = true;
+    }
+    close() {
+      this.open = false;
+    }
+    remove() {
+      this.isConnected = false;
+    }
   }
   const document = {
     body: new Element(),
@@ -39,7 +60,8 @@ function harness(t) {
   globalThis.window = new EventTarget();
   const trigger = new Element();
   const session = openValidationViewer(artifact, trigger, {
-    loadBytes: (_artifact, { signal }) => new Promise((resolve) => requests.push({ signal, resolve })),
+    loadBytes: (_artifact, { signal }) =>
+      new Promise((resolve) => requests.push({ signal, resolve })),
   });
   t.after(() => {
     session.close();
@@ -51,7 +73,14 @@ function harness(t) {
 
 function pointer(dialog, type, values = {}) {
   const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.assign(event, { clientX: 2, clientY: 2, button: 0, isPrimary: true, detail: 1, ...values });
+  Object.assign(event, {
+    clientX: 2,
+    clientY: 2,
+    button: 0,
+    isPrimary: true,
+    detail: 1,
+    ...values,
+  });
   dialog.dispatchEvent(event);
 }
 

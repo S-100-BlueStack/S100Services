@@ -328,7 +328,6 @@
   font-weight: 500;
 }
 
-
 /* Validation file actions fit the narrow member columns without repeating
    the dataset name in every filename. The shared action keeps its identity. */
 .popup-product-table__validation-files {

@@ -470,7 +470,11 @@ function createXmlBlock(xml, availability = null, reports = [], error = null) {
 
 let nextValidationScrollLabelId = 0;
 
-function createInternalValidationReportsBlock(reports = [], availability = null, datasetName = null) {
+function createInternalValidationReportsBlock(
+  reports = [],
+  availability = null,
+  datasetName = null
+) {
   const details = document.createElement("details");
   details.className = "analyze-internal-validation";
 
@@ -510,7 +514,9 @@ function createInternalValidationReportsBlock(reports = [], availability = null,
   }
 
   for (const [index, report] of validReports.entries()) {
-    content.appendChild(createInternalValidationReport(report, index, undefined, false, datasetName));
+    content.appendChild(
+      createInternalValidationReport(report, index, undefined, false, datasetName)
+    );
   }
   details.append(summary, content);
   return details;
