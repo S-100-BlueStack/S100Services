@@ -326,7 +326,6 @@ test("collectPages continues after the embedded membership page without rereadin
   );
 });
 
-
 test("Workstream presentation leaves Pipeline wire contracts intact", async () => {
   const pipelineId = "Pipeline ID / 42";
   const packageId = "Package ID / 7";

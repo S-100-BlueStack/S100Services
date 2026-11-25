@@ -886,3 +886,107 @@
     gap: 0.1rem;
   }
 }
+
+/* The history viewport scrolls independently without moving the status controls. */
+.package-history {
+  min-width: 0;
+}
+
+.package-history__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+
+.package-history__header .job-details__section-title {
+  font-weight: 600;
+}
+
+.package-history__preview-label {
+  color: var(--dc-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.package-history__notice {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.package-history__scroll {
+  min-width: 0;
+  max-block-size: clamp(8rem, 38vh, 21rem);
+  overflow-y: auto;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  scrollbar-gutter: stable;
+}
+
+.package-history__scroll:focus-visible {
+  outline: 2px solid var(--dc-focus-ring);
+  outline-offset: -2px;
+}
+
+.package-history__list {
+  margin: 0;
+  padding: 0.15rem 0.55rem;
+  list-style: none;
+}
+
+.package-history__entry {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.5rem 0.25rem 0.5rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+.package-history__entry::before {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0.24rem;
+  border-inline-start: 1px solid var(--dc-border);
+  content: "";
+}
+
+.package-history__entry:first-child::before {
+  inset-block-start: 0.85rem;
+}
+
+.package-history__entry:last-child::before {
+  inset-block-end: auto;
+  block-size: 0.85rem;
+}
+
+.package-history__entry::after {
+  position: absolute;
+  inset-block-start: 0.64rem;
+  inset-inline-start: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid var(--dc-text-muted);
+  border-radius: 50%;
+  background: var(--dc-surface);
+  content: "";
+}
+
+.package-history__time,
+.package-history__actor,
+.package-history__context {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.package-history__event {
+  margin: 0;
+  color: var(--dc-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+}

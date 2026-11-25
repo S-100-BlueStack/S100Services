@@ -11,6 +11,14 @@ Recorded from the 2026-11-23 internal meeting. The user reports that the history
 - **`DC-PACKAGE-QC-01` - Compilation/QC workflow:** Define whether working/QC state belongs to the Package or a Pipeline/Workspace-specific work item; authoritative state values, eligibility, permitted transitions, ownership/authorization, persistence, concurrent transition protection, and how the state is returned and filtered for list/map queries. Agree how mode filtering affects Workspace counts and Package visibility, including unknown state and context-specific duplicates. `OWNER-01` Workspace locking and existing Severity or `Done` / `No update` statuses do not establish this lifecycle. The accepted design-only frontend preview (user-reported commit `d038defa009814f60e6c25c660f232a2dce6a722`, merged at `d91b54b2a0cbe1ff00a60f483a5f0f39f5d3a3fc`) exposes Compilation/QC selection in the live Main Map list with an explicit unavailable-filter notice. It does not publish a scope change, filter data, persist workflow state or perform mutations. This backend gap remains open until the contract is verified.
 - **`DC-PACKAGE-DETAILS-PANEL-01`:** Frontend-only reuse of the existing authorized Package details read and normalized metadata is the intended scope. Verify that read on the implementation baseline; do not request a new endpoint merely to reproduce existing Package Assignment information. History and QC integration remain independent.
 
+The DC-PACKAGE-TIMELINE-01 frontend design-preview candidate now provides the
+left Details presentation using explicitly fictional, fixed examples. It makes
+no history request and does not infer events from current metadata, bindings or
+temporary status. Real history is explicitly unavailable, not an empty result.
+No event types, field names or ordering contract are asserted by the example
+list. The history gap remains open; loading, empty, error/retry and paging
+behavior await the verified read contract and its owning service lifecycle.
+
 `DC-ASSIGN-MATCH-PREVIEW-01` also remains deferred: an authorized, read-only pre-Save intersection calculation must be verified or agreed with the backend owner. Current saved matches are not preview results. No backend changes or invented routes are included in this documentation update.
 
 ---

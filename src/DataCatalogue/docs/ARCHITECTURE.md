@@ -1,3 +1,29 @@
+## DC-PACKAGE-TIMELINE-01 - Read-only history design preview (2026-11-24)
+
+`features/jobs/ui/jobList.js` mounts `createPackageHistoryPreview` only in
+live contextual Details, below the existing status actions and facts. The
+preview uses `features/jobs/ui/createPackageHistory.js` for a semantic,
+read-only list and `features/jobs/mock/packageHistoryPreviewData.js` for fixed
+fictional display examples. The generic list accepts already ordered and
+formatted presentation entries, not backend DTOs. It renders strings as text,
+with optional context, and does not own requests, persistence or domain mapping.
+
+The existing Job Details selection and render lifecycle remain authoritative.
+The scroll viewport participates in existing `createJobsFocusRecovery` through
+its contextual Job focus identity. Scroll position is restored only for the
+same currently mounted contextual Job on rerender; navigation or unavailable
+selection removes the preview. CSS in `styles/jobs.css` bounds the independent
+history scroll viewport without changing the map or overlay layout owners.
+
+No actual audit events are read, generated from current state, or written. The
+preview explicitly identifies fictional examples and unavailable history. Future
+integration must map verified canonical Package history through an owning
+service/adapter, reuse the list presentation, provide truthful async states and
+preserve the existing contextual Job identity. The right information panel,
+Package Assignment, historical mock workflow and QC preview remain unchanged.
+
+---
+
 ## DC-TERMINOLOGY-WORKSTREAM-01 - Frontend presentation terminology (2026-11-24)
 
 The user-facing Workstream/Workstreams concept maps to the existing backend

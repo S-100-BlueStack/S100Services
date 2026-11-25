@@ -1100,7 +1100,6 @@ test("Package rows show authoritative assignment and Pipeline names before any P
   }
 });
 
-
 test("Mock Feature assignment retains historical Work stream terminology", async () => {
   const dom = fakeDom();
   let page;

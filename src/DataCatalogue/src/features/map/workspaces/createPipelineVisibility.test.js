@@ -442,7 +442,6 @@ test("superseded combined overview cannot replace newer Workspace membership", a
   }
 });
 
-
 test("Workstream load failure preserves the diagnostic and uses a user-facing prefix", async () => {
   const f = fixture({
     loadCatalogue: async () => {

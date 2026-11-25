@@ -26,6 +26,7 @@ import {
 import { getJobsForAoiFromJobs } from "../../relations/services/relationService.js";
 import { createJobStore } from "../state/jobStore.js";
 import { getLiveJobPresentation } from "./liveJobPresentation.js";
+import { createPackageHistoryPreview } from "./createPackageHistory.js";
 import { createJobsFocusRecovery } from "./createJobsFocusRecovery.js";
 import { filterJobsByPackageScope, groupJobsByPackage } from "../domain/packageScopeFilter.js";
 
@@ -583,8 +584,27 @@ function renderJobDetailsView({
     createJobDetailsFactSection(selectedJob),
     ...(selectedJob.source === "live" ? [] : [createJobDetailsAoiSection(selectedJob)])
   );
+  const history = selectedJob.source === "live" ? createPackageHistoryPreview() : null;
+  let historyScrollTop = 0;
+  if (history) {
+    // Reuse the existing contextual focus identity and restore scroll only for the
+    // same Details selection when a store emission replaces the DOM.
+    const previousDetails = [...rootElement.querySelectorAll("[data-job-details-id]")].find(
+      (element) => element.dataset.jobDetailsId === selectedJob.id
+    );
+    const previousHistory = previousDetails
+      ? [...previousDetails.querySelectorAll("[data-job-focus]")].find(
+          (element) => element.dataset.jobFocus === "history"
+        )
+      : null;
+    historyScrollTop = previousHistory?.scrollTop ?? 0;
+    history.scrollElement.dataset.jobFocus = "history";
+    detailsElement.append(history.element);
+  }
+
   contentElements.push(detailsElement);
   rootElement.replaceChildren(...contentElements);
+  if (history) history.scrollElement.scrollTop = historyScrollTop;
 }
 
 function createJobDetailsHeader({ job, requestJobMapFocus, clearJobMapFocus }) {

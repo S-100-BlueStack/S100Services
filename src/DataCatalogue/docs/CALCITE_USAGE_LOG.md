@@ -1,3 +1,16 @@
+## DC-PACKAGE-TIMELINE-01 - Native read-only history list (2026-11-24)
+
+The design preview uses application-owned native `section`, `ol`, `li` and
+`time` elements rather than an interactive Calcite list or a second panel.
+History entries are read-only, not selectable actions. A focusable, named
+scroll region supports native keyboard scrolling; the existing contextual Job
+focus recovery handles rerenders. Theme tokens style the compact timeline and
+its `:focus-visible` outline. The preview heading and unavailable-history notice
+remain outside the bounded scroll region. No private component DOM, new
+component registration, custom keyboard navigation or dependency is required.
+
+---
+
 ## DC-TERMINOLOGY-WORKSTREAM-01 - Existing component labels (2026-11-24)
 
 Existing native controls and Calcite actions retain their DOM IDs, lifecycle,

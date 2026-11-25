@@ -119,7 +119,6 @@ test("backend names cannot inject markup into native title or app-owned content"
   });
 });
 
-
 test("Workstream field label does not rewrite backend names or opaque identifiers", () => {
   withDocument(() => {
     const template = createWorkspacePopupTemplate();
