@@ -20,6 +20,19 @@ This map gives AI-assisted contributors a **navigation starting point**. The pat
 | Shared user interaction           | Confirmation, tooltip and focus helpers                                          | `src/shared/ui/confirm/`, `src/shared/ui/focus/`, `src/shared/ui/tooltips/`                                                      | Cleanup, accessibility, avoid duplicate help surfaces                        |
 | Global styling                    | Theme, map and popup presentation                                                | `src/styles/`                                                                                                                    | Light/dark contrast, public Calcite tokens, responsiveness                   |
 
+## Shared validation viewer ownership
+
+Main Map popup, Dashboard, Analyze and Review delegate eligible VLD preview actions
+to [validationViewer](../src/features/validationViewer/README.md), while retaining
+their own report discovery, member selection, existing downloads and route state.
+The viewer's `domain/validationViewerArtifact.js` verifies identity and route;
+`api/validationReportApi.js` owns bounded credentialed byte reads;
+`domain/sevenCsValidationReport.js` owns parsing and findings projection;
+`ui/validationViewerAction.js` lazily activates `ui/validationViewer.js`, which owns
+the modal request/session and focus lifecycle. These paths are relative to
+`src/features/validationViewer/`. The viewer does not own report storage, validation
+jobs, Product mutation, or the underlying workspace.
+
 ## How to locate a change
 
 1. Start from the requested user behavior and identify the owning feature, not a similarly named button in another workflow.

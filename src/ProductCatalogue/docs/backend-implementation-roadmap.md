@@ -5,6 +5,15 @@
 > Use the explicit task baseline, latest accepted candidate and current contracts;
 > in particular, do not infer today's ENC Package status/UI or BE-108A Batch 2
 > acceptance from these earlier planning snapshots.
+>
+> **2026-11-25 report boundary:** The historical BE-109/blocked-report planning
+> statements below predate the verified artifact history/download contract in
+> [PC-ICENC-02](pc-icenc-02-report-integration.md), R06 report aggregates and the
+> accepted R10 read-only VLD viewer. See [current frontend status](frontend-hardening-tracker.md)
+> and the [viewer contract](../src/features/validationViewer/README.md). These
+> integrations do not settle every BE-109 requirement; exact event attribution,
+> decision history and live verification remain separate. No new backend work
+> or roadmap priority is approved by this reconciliation.
 
 Historical reviewed backend runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 Historical reviewed frontend baseline: `8e375296a286e3228fa8a6f7111769715038b320`.

@@ -30,6 +30,10 @@ features/map/popups -> features/products/state
 features/map/popups -> features/data/api
 features/map/popups -> features/timeline/events
 features/analyze -> features/map/core
+features/map/popups -> features/validationViewer/ui
+features/dashboard -> features/validationViewer/ui
+features/analyze -> features/validationViewer/ui
+features/review -> features/validationViewer/ui
 ```
 
 Avoid feature-to-feature imports when they create domain coupling or circular ownership.
@@ -45,7 +49,11 @@ shared -> features/*
 
 ## Data loading and map rendering
 
-Data fetching belongs under `features/data`.
+Shared Product data fetching belongs under `features/data`. Feature-owned API
+modules may implement a specific verified read contract when that feature owns
+the operation lifecycle. For example, `validationViewer/api/validationReportApi.js`
+reads the already resolved artifact bytes on demand; it does not own Product or
+artifact-history discovery. See [validation viewer](validationViewer/README.md).
 
 Map layer definitions, capabilities, rendering, popup behavior and map state belong under `features/map`.
 

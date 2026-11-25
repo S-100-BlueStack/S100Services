@@ -3,8 +3,8 @@
 Status: **verification planned; not yet accepted as demo-ready**.
 
 Original planning baseline: `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26).
-Documentation-audit snapshot: `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd`
-(2026-11-24, committed documentation export; not a new full-system demo acceptance).
+Documentation-audit snapshot: `ff807a4923fcef01dccae85d2e8db5c594eb612a`
+(2026-11-25, verified committed documentation and scoped R10 source; not a new full-system demo acceptance).
 The previous reconciliation snapshot was `2d8c1637425e971572bd09d98de9e29e45745de4` (2026-10-27).
 
 Scope: **stabilize existing behavior only**. No SDK upgrade, new map visualization, alternate test framework or broad refactor in the demo stabilization branch.
@@ -15,7 +15,7 @@ This checklist supplements the [historical release review](frontend-release-read
 
 | Check                     | Acceptance evidence                                                               | Status at document creation                                                                                                                                                        |
 | ------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Committed documentation archive for `c45a1255`, SHA-256 checked; current application source and ProductCatalogue working-tree cleanliness were not included.                       |
+| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Committed documentation/R10 source archive for `ff807a49`; ZIP SHA-256, 80 file checksums and Git blobs verified; scoped working tree reported clean.                              |
 | Local frontend gate       | `cd src/ProductCatalogue; npm run format; npm run check`                          | Developer reports running frontend tests, format, lint and build before each accepted frontend commit; this documentation pass did not rerun them                                  |
 | Real browser + deployment | Real UI behavior and server integration in the intended demonstration environment | New end-to-end pass pending                                                                                                                                                        |
 | FI-027 and FI-029         | Latest committed changes, no regressions in supported paths                       | FI-027 hover fix committed; owner reported ENC-package popup looked correct, but cross-source workflows unverified                                                                 |
@@ -50,12 +50,35 @@ cross-browser or deployment verification result.
 | Refresh / async lifecycle    | Reopen popup during refresh, rapid Product/source changes, superseded requests and route leaving                                               | Stale operations must not publish newer state; investigate observers only with actual evidence                                                                      |
 | Accessibility / visual       | Light/dark, pointer hover, Tab/Shift+Tab, Escape, focus return, reduced motion, 320–820px layout and 100–150% zoom                             | Check accessible confirmation dialog, keyboard-operable Close notifications, calendar and navbar with no hidden actions                                             |
 
+## PC-UX-R10 viewer regression and real-data verification
+
+The developer accepted the final viewer and committed it at `ff807a49` on 2026-11-25.
+The following is a future regression checklist, not a claim that each scenario has
+been executed in this reconciliation. Use approved real or controlled test artifacts;
+no Product mutation or new validation is required for these checks.
+
+| Scenario                              | Expected result                                                                                                                                                                                                                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Main Map                              | Open a Package with S-101/S-57 member files. Verified VLDs show compact View report/download actions; a single ZIP is download-only. Distinct historical files retain filenames and correct member ownership.                                                                                                |
+| Dashboard                             | Open Validation for a selected activity; report tiles wrap without clipping or losing the full-width activity context. Verify the exact file/revision is previewed; Product history is not proof of activity-specific attribution. IC-ENC attachments remain download-only.                                  |
+| Analyze and Review                    | Open an eligible internal VLD from each workspace; preserve Product cards, selection, scroll and History/IC-ENC state. Foreign member or unsupported files never receive a viewer action.                                                                                                                    |
+| Findings and Raw file                 | Compare summary totals with the original Analyzer report. Show reported totals separately from available occurrences; filter and search only available data. Verify metadata, occurrence navigation, related objects, Raw file find/copy and original-byte download.                                         |
+| Unsupported formats and read failures | Malformed/unsupported XML with readable bytes uses Raw file with an explanation. Oversized (over 16 MiB), empty, unauthorized, redirected or failed downloads do not render fabricated findings. Original download remains available; general S-57 parsing is not assumed.                                   |
+| Lifecycle and accessibility           | Verify keyboard activation, Tab/Shift+Tab containment, Escape, outside press/click, text selection without accidental close, return focus, light/dark and narrow layout. Rapid reopen, close during a throttled request and route navigation must not publish a stale report or duplicate a logical request. |
+
+Verify that no artifact body is requested before View report is activated, that the
+exact existing authorized route is used and that the request is retired when the
+viewer closes. Keep live IC-ENC receipt, report ingestion, and exact event attribution
+checks separate from this internal-validation viewer regression. Record the deployed
+commit and actual pass/fail/skipped results in the test log.
+
 ## Post-R06 verification and next performance investigation
 
 R06 backend `dca718363ec901add42985e4da1755fecf409a31` and frontend
 `c382d760f2f137974eaade673e5029112b288cc4` are developer-accepted; frontend merge
-`c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` is the current planning baseline.
-This acceptance does not certify a full deployed smoke. Earlier R06 candidate
+`c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` is the historical R06 merge baseline.
+The current documentation snapshot additionally includes the accepted R10 viewer at
+`ff807a4923fcef01dccae85d2e8db5c594eb612a`. Neither acceptance certifies a full deployed smoke. Earlier R06 candidate
 checks and the actual November 17 API samples remain recorded historical evidence.
 
 | Check                                        | Expected result                                                                                                                                                                                                                                     | Status                                                   |
@@ -96,7 +119,7 @@ reconciliation.
 ## Known limitations and go/no-go
 
 1. **FI-029 is not end-to-end accepted for ordinary Products.** The unified action row is shared, but non-package mutations remain disabled in the verified frontend architecture until the appropriate source-owned backend dispatch/eligibility contract exists. The demonstration may show available ENC-package behavior, but must not imply universal dispatch support.
-2. **Backend-dependent surfaces:** Real IC-ENC ingestion/download verification, exact report-to-event attribution, authoritative mutation capabilities, related Product relationships, final error classification and truthful backend chunk/progress remain separate. The integrated artifact UI and Dashboard reporting aggregates are not unimplemented features. The demo-facing combined `Distributed` count is not evidence of external delivery.
+2. **Backend-dependent surfaces:** Real IC-ENC ingestion/download verification, exact report-to-event attribution, authoritative mutation capabilities, related Product relationships, final error classification and truthful backend chunk/progress remain separate. The integrated artifact UI, Dashboard reporting aggregates and shared VLD viewer are not unimplemented features. The demo-facing combined `Distributed` count is not evidence of external delivery.
 3. **No destructive production-data tests:** Test mutations only against explicitly approved disposable data. Otherwise check availability, descriptions, disabled state and confirmation presentation without invoking operations.
 4. **Demo freeze gate:** Record the commit SHA, `npm run check` result, representative actual browser/deployment smoke results and known limitations. Fix confirmed regressions with minimal targeted changes; defer broad refactors and exploratory tooling.
 5. **Future experiment branch:** Only after the demo baseline is accepted, investigate SDK/Calcite upgrades, Product labels/linked annotations, Sonda, Vitest/browser harnesses, FeatureEffect and optional UI framework changes.

@@ -1,6 +1,16 @@
 # Product Catalogue UI/UX design backlog
 
-### PC-UX-R04 – Analyze/Review information hierarchy (candidate)
+**Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
+**Current documentation-audit snapshot:** `ff807a4923fcef01dccae85d2e8db5c594eb612a` (2026-11-25).
+**Purpose:** A compact index of _current UX decisions, accepted behavior and outstanding design work_. This is not a new manual acceptance report or an instruction to reopen completed tasks. Historical per-iteration plans and detailed original requirements are available in the Git history of this file.
+
+Candidate sections for R01A, R01C, R03A, R04 and R05 retain their historical
+proposal and acceptance-at-the-time wording; they are not a current pending-task list.
+Do not infer new acceptance or reopen a task solely from those notes.
+
+For current task status see the [frontend tracker](frontend-hardening-tracker.md); for the actual demonstration test matrix see [demo readiness](demo-readiness-plan.md); for preserved technical contracts see [invariants](INVARIANTS.md), [module ownership](MODULE_MAP.md) and the relevant feature README.
+
+### Historical PC-UX-R04 – Analyze/Review information hierarchy (candidate record)
 
 This candidate keeps the accepted R01–R03 workflows and changes only presentation:
 Analyze panel spacing, uniform surfaces, right-aligned Refresh/Open all/Collapse all,
@@ -33,12 +43,6 @@ Search and Locator (`pin-tear`) actions open mutually exclusive compact surfaces
 Main-map navbar, coordinated with existing Filters/Sources/Preferences panels. Product lookup
 and geographic provider contracts are unchanged.
 
-**Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
-**Current documentation-audit snapshot:** `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` (2026-11-24).
-**Purpose:** A compact index of _current UX decisions, accepted behavior and outstanding design work_. This is not a new manual acceptance report or an instruction to reopen completed tasks. Historical per-iteration plans and detailed original requirements are available in the Git history of this file.
-
-For current task status see the [frontend tracker](frontend-hardening-tracker.md); for the actual demonstration test matrix see [demo readiness](demo-readiness-plan.md); for preserved technical contracts see [invariants](INVARIANTS.md), [module ownership](MODULE_MAP.md) and the relevant feature README.
-
 ## Demo-first decision (2026-10-26)
 
 The demo branch prioritizes the accepted application, targeted regression fixes and truthful unavailable states. The planned general November UI-polish work is complete; new work is driven by observed browser usage and feedback. Do **not** introduce SDK/Calcite upgrades, map labels, Linked Annotations, Sonda, Vitest/Playwright migration, FeatureEffect, React or broad UI refactors as prerequisites for the demonstration.
@@ -46,7 +50,7 @@ The demo branch prioritizes the accepted application, targeted regression fixes 
 - **Verify next:** A representative Main-map/Dashboard/Analyze/Review browser/deployment demo smoke after accepted FI-043 and DSA-01–08 stabilization; do not reopen the accepted onboarding work.
 - **Preserve:** the accepted interaction contracts below, separate search workflows, Product identity, backend-owned status, generation-safe state, keyboard/focus/Escape and light/dark mode.
 - **Do not overstate:** FI-029 icon-row parity does not mean non-package Product mutations are operational. Mutations remain disabled when a source-owned authorization/dispatch contract is missing.
-- **Separate work:** FI-030 progress/chunk discovery, FI-016 error-classification palette, FI-020 related Product relationships, FI-023 mutation capabilities, report links and FI-018 cross-repository deployment review.
+- **Separate work:** FI-030 progress/chunk discovery, FI-016 error-classification palette, FI-020 related Product relationships, FI-023 mutation capabilities, remaining report-to-activity attribution/live verification and FI-018 cross-repository deployment review.
 
 ## Open UX and demo items
 
@@ -150,7 +154,7 @@ Accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`. Shared navbar owns route
 
 ### FI-027 - navbar search consolidation
 
-Navbar Product search stays visible; the adjacent Locator icon opens the separate geographic Locator workflow. Accepted at `a0fde73c58a554c58028c2220399e3ae1691121b`, with light-theme Locator hover correction at `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. Product selection/popup belongs exclusively to Product search; Locator only navigates geographically. Recheck focus, Escape and contrast after navbar changes. [Search](../src/features/map/search/README.md) and [Locator](../src/features/map/locator/README.md).
+FI-027 originally kept Product search visible beside the Locator icon; the accepted R03B composition above supersedes that layout with separate icon-only actions. The original FI-027 change was accepted at `a0fde73c58a554c58028c2220399e3ae1691121b`, with light-theme Locator hover correction at `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. Product selection/popup belongs exclusively to Product search; Locator only navigates geographically. Recheck focus, Escape and contrast after navbar changes. [Search](../src/features/map/search/README.md) and [Locator](../src/features/map/locator/README.md).
 
 ### FI-028 - Scale hiding as an opt-in preference
 
@@ -320,3 +324,45 @@ This is not yet accepted. Browser validation must cover responsive layouts,
 status colors in both themes, chart interactions, keyboard/focus restoration,
 existing History/IC-ENC/Validation panel lifecycle, and report/Activity filtering.
 Distribution acceptance requires a separate verified backend aggregate.
+
+## PC-UX-R10 – Shared SevenCs validation report viewer (accepted)
+
+**Final state (developer-reported, 2026-11-25):** reviewed and committed at
+`ff807a4923fcef01dccae85d2e8db5c594eb612a` after the v2 presentation corrections.
+
+The existing report download remains available. Eligible internal VLD files open one
+shared read-only native modal across Main Map, Dashboard, Analyze and Review. Findings
+provide severity filters, search, grouped checks and actual available occurrences;
+reported totals are not treated as occurrence counts. Raw file and original download
+remain distinct. ZIP diagnostics and other report formats remain download-only.
+
+Main Map uses compact member-specific rows with **View report**, an accessible icon-only
+original download, and **Download ZIP** for a single ZIP. Multiple same-format files
+retain visible filenames. Dashboard uses wrapping report tiles with title, timestamp
+when available and grouped actions, below the selected activity context card. Analyze
+and Review retain their existing report-card presentations with the shared viewer action.
+
+Preserve the exact selected artifact and Product/member identity, one on-demand byte
+request per active modal session, truthful unavailable/error states, focus containment
+and restoration, Escape, backdrop click and late-response protection. The viewer does
+not start a validation or mutate workflow state. See the
+[feature contract](../src/features/validationViewer/README.md) and
+[demo regression matrix](demo-readiness-plan.md). The developer accepted the feature;
+full deployed smoke and general S-57 format compatibility are not established by
+this documentation reconciliation.
+
+### Viewer follow-up ideas (not scheduled)
+
+- Map actual reported coordinates and related objects only with a verified spatial
+  reference and feature-identity contract; never infer geometry from display strings.
+- Investigate the validation shapes ZIP as a separate diagnostic map integration;
+  the accepted viewer leaves it download-only.
+- Consider AI-supported explanations that preserve the original Analyzer finding and
+  suggested solution, distinguish interpretation from verified report facts, and
+  use separately approved data handling.
+- Consider Encoding Guide references/integration using an authoritative, maintained
+  guide source and explicit mapping to validation findings.
+
+These ideas are not defects in the accepted R10 implementation, committed work or
+approval to extend the current demo scope. Prioritize them separately with the
+project owner.

@@ -3,8 +3,10 @@
 > **Dated review, not a current certification:** The original smoke results and
 > October addendum below describe their recorded baselines. Subsequent November
 > changes include aggregate Package status, Basemap Gallery, initial loading and
-> accessibility polish. For the 2026-11-10 baseline and still-unverified full
-> browser/deployment pass, see [demo readiness](demo-readiness-plan.md).
+> accessibility polish, operational Dashboard reporting (R06) and the shared
+> SevenCs validation viewer (R10). For the 2026-11-25 reconciliation at `ff807a49`
+> and still-unverified full browser/deployment pass, see [demo readiness](demo-readiness-plan.md).
+> The original smoke evidence and findings below remain historical.
 
 Review baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`
 
@@ -12,7 +14,7 @@ This review focuses on Product Catalogue frontend readiness for controlled user 
 
 ## October 2026 demo-readiness addendum
 
-**Current planning baseline:** `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26). The original review and its 2026-07-16 smoke results remain historical evidence for the **older** baseline shown above. They do not prove that today's frontend and backend have passed a complete new release test. Use the dedicated [demo-readiness plan](demo-readiness-plan.md) for current acceptance.
+**October planning baseline:** `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26). The original review and its 2026-07-16 smoke results remain historical evidence for the **older** baseline shown above. They do not prove that today's frontend and backend have passed a complete new release test. Use the dedicated [demo-readiness plan](demo-readiness-plan.md) for current acceptance.
 
 - FI-027 Product search is now persistently visible in the Main-map navbar, and Locator opens an independent geographic search. The follow-up Locator light-mode hover correction was committed at the current baseline. Verify navbar keyboard/hover/light/dark behavior in the demo environment.
 - FI-029 now renders one unified, icon-only Pause/Resume, Discard, Send/Accept and Tools action row. The owner manually inspected the available ENC packages and reported no apparent UI regressions; the implementation was committed at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`. The historical Freeze/Export/Cancel Export checklist below does **not** describe the current popup. Ordinary/non-package mutation dispatch remains disabled without a verified source-owned contract; Send/Accept availability must be read from the current backend/demo documentation, not inferred from this historic review.
@@ -130,6 +132,17 @@ Recommendation:
 Blocks controlled user testing: No, unless real exports are expected to be long during user testing.
 
 ### RR-003: Report-link workflows are intentionally incomplete
+
+> **Supersession (2026-11-25):** The historical placeholder-only recommendation
+> below is no longer the current frontend contract. PC-ICENC-02 added verified
+> IC-ENC artifact links, R06 integrated Dashboard report counts and filtering, and
+> the developer accepted PC-UX-R10 at `ff807a49` with a shared read-only VLD viewer
+> on Main Map, Dashboard, Analyze and Review. See [artifact integration](pc-icenc-02-report-integration.md),
+> [validation viewer](../src/features/validationViewer/README.md) and
+> [current demo checks](demo-readiness-plan.md). Actual authorized downloads,
+> live IC-ENC processing and exact event-to-report attribution remain separate
+> verification/contract boundaries. Unsupported formats remain download-only;
+> do not reopen the historical placeholder UI as an implementation task.
 
 Severity: P1 / Backend blocked
 
@@ -292,7 +305,11 @@ Recommendation:
 | Timeline               | Global map timeline database/API contract.                                                                                                        |
 | AOI performance        | `/aoi` currently dominates initial main map load time in smoke testing. Backend performance should be monitored.                                  |
 
-## Recommended next actions
+## Recommended next actions (historical review)
+
+The following actions belong to the original review baseline. For the currently
+accepted implementation, open tasks and verification, use the
+[frontend tracker](frontend-hardening-tracker.md) and [demo plan](demo-readiness-plan.md).
 
 1. Keep the smoke-tested frontend baseline stable while controlled user testing begins.
 2. Define backend-visible active operation state per Product so other sessions can see running work before attempting an action.

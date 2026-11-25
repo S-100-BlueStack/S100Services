@@ -1,7 +1,7 @@
 # Frontend hardening tracker
 
 **Original documentation baseline:** `b52a4ac0833edac94b466176f3f7c6154090f502` (2026-10-26).
-**Current documentation-audit snapshot:** `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd` (2026-11-24; documentation export and developer-reported acceptance).
+**Current documentation-audit snapshot:** `ff807a4923fcef01dccae85d2e8db5c594eb612a` (2026-11-25; verified committed documentation and scoped R10 source, developer-reported acceptance).
 **Purpose:** Current frontend status, outstanding decisions and links to the authoritative feature contracts. This is a planning record, **not** evidence that the current build or demo environment passed a new smoke test.
 
 This compact tracker replaces the accumulated implementation diary. For historical status descriptions and commit-by-commit acceptance notes, consult the Git history of this file before this consolidation. A completed task is not reopened merely because its earlier implementation report was removed from the active branch.
@@ -19,7 +19,7 @@ This compact tracker replaces the accumulated implementation diary. For historic
 
 | Area                               | Accepted/current position                                                                                                                                                          | Demo acceptance or limitation                                                                                                                                                                                                             |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FI-027 / FI-012 search and Locator | Navbar consolidation accepted at `a0fde73c58a554c58028c2220399e3ae1691121b`; Locator light-theme hover correction at `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`.                   | Product search and geographic Locator are separate workflows. Verify hover, keyboard/focus, Escape, light/dark and geographic navigation.                                                                                                 |
+| FI-027 / FI-012 search and Locator | FI-027 accepted at `a0fde73c`; light-theme hover correction at `c4b0f7e1`. R03B (`540141e0`) supersedes the persistent input with separate Search/Locator actions.                 | Product search and geographic Locator are separate workflows. Verify hover, keyboard/focus, Escape, light/dark and geographic navigation.                                                                                                 |
 | FI-029 popup presentation          | Shared Pause/Resume, Discard, Send/Accept and Tools icon row committed at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`; owner reported the ENC-package UI regression looked correct. | **Presentation is accepted, not universal mutation dispatch.** Ordinary non-package Product mutations remain disabled absent a verified source-owned backend eligibility/dispatcher contract. No legacy Freeze/Export route substitution. |
 | FI-043 Introduction                | Route onboarding accepted at `9280c650`; Back/Forward replay correction accepted at `69b0d329` (developer-reported).                                                               | Previously accepted tour interactions remain intact. Full-system demo browser/deployment smoke is still pending.                                                                                                                          |
 | Existing routes / workspaces       | Dashboard, Analyze, Review, Product Collection and History features have accepted implementations with independent refresh and source-aware ownership.                             | Run a representative end-to-end browser/deployment smoke pass and document real results; Node checks alone do not establish demo readiness.                                                                                               |
@@ -66,6 +66,32 @@ candidate entries are historical, not pending tasks.
   no application source or test run from the merged commit. Full post-merge smoke,
   deployment behavior and production-scale performance remain unverified here.
 
+### Post-R10 reconciliation (2026-11-25)
+
+PC-UX-R10 (Shared SevenCs Validation Viewer), including the v2 compact Main Map
+member rows and responsive Dashboard report tiles, was reviewed, accepted and
+committed by the developer at `ff807a4923fcef01dccae85d2e8db5c594eb612a`.
+The committed scoped delta contains the shared feature, integrations in Main Map,
+Dashboard, Analyze and Review, styles, tests and owning feature documentation.
+The 26 committed changed/new files match the combined v1/v2 replacement files
+byte-for-byte in this export. See the [validation viewer contract](../src/features/validationViewer/README.md).
+
+- Existing, verified internal VLD artifacts now support on-demand structured preview,
+  Raw file and original download. ZIP diagnostics, IC-ENC attachments and other
+  artifact formats remain download-only. The viewer is read-only and uses the
+  exact existing artifact identity and download route; it does not validate a Product,
+  change workflow state or establish an IC-ENC verdict.
+- Reported finding totals are not stored occurrence counts. Unsupported/malformed
+  formats use a Raw file fallback; oversized reports remain downloadable. The
+  initial verified Analyzer format is S-101; general S-57 coverage is unverified.
+- R10 implementation and developer acceptance are complete. This reconciliation
+  verified committed source and documentation, not a new browser test or deployed
+  artifact read. Full demo smoke, real-data downloads and exact report-to-activity
+  attribution remain separate verification/contract boundaries.
+- Geographic findings, shapes ZIP processing/map integration, AI interpretation and
+  Encoding Guide integration are possible follow-ups. No implementation is approved
+  or scheduled by this record.
+
 ## Current open, blocked and deferred work
 
 | ID                   | Status                                                                              | Next action or blocker                                                                                                                                                                                                                                                                                      |
@@ -80,7 +106,7 @@ candidate entries are historical, not pending tasks.
 | **FI-020**           | Blocked by backend relationship contract                                            | Show only explicit backend-defined related Products with identity, relation type and display metadata. Do not infer source pairs.                                                                                                                                                                           |
 | **FI-023**           | Blocked by backend mutation-capability projection                                   | Do not infer candidate presence or dispatch permission from a different source or status track.                                                                                                                                                                                                             |
 | **FI-030**           | Loader hold accepted; Main-map and Analyze readiness committed                      | Main-map readiness (`d400be0`) and Analyze direct-route loading (`1065291`) are implementation records. The 300 ms hold remains; full browser acceptance is not documented here. Backend phase/chunk progress remains deferred. [FI-030B](fi-030b-initial-map-readiness.md).                                |
-| **BE-003 / BE-005**  | Global timeline deferred; report UI and aggregates integrated                       | Verify artifact-history retrieval/downloads with actual available files and live IC-ENC processing. Exact report-to-event attribution and historical map reconstruction remain separate backend contracts.                                                                                                  |
+| **BE-003 / BE-005**  | Global timeline deferred; report UI, aggregates and VLD viewer integrated           | Verify artifact-history retrieval/downloads with actual available files and live IC-ENC processing. Exact report-to-event attribution and historical map reconstruction remain separate backend contracts.                                                                                                  |
 | **BE-006**           | Historical plan; current approval must be re-established                            | Atomic job claims and ownership/recovery were previously discussed, but that experimental track was set aside. Do not treat the older tracker label as authorization to implement it.                                                                                                                       |
 | **BE-008 / BE-108A** | Batch 2 manual Export/recovery reported accepted at `0cab4e4f`; later smoke unknown | The 2026-10-15 backend acceptance does not verify current Product History UI, package/Discard event coverage or cross-system demo behavior. Check the current backend owner before any new implementation.                                                                                                  |
 
@@ -90,8 +116,9 @@ Developer-reported commits after FI-043: DSA-01/02 `914c57a9`, DSA-03 `20cb5c60`
 
 ### Next technical verification
 
-No further general UI redesign is scheduled by this snapshot. After the R06 merge, the next independent technical investigation is
-Main-map startup performance in a built/deployed frontend. The previous read-only
+No further general UI redesign is scheduled by this snapshot. The independent
+Main-map startup performance investigation identified after the R06 merge remains
+open and requires a built/deployed frontend. The previous read-only
 November investigation measured 1,878 requests in Vite development mode, including
 1,652 Vite module/dependency requests; the observed electronic-products API request
 was approximately 123 ms. Those historical measurements do not establish production
@@ -99,9 +126,12 @@ startup time or identify a production bottleneck. The production-style capture r
 outstanding. Use sanitized timing CSVs and real first-basemap, first-Product-geometry
 and first-successful-interaction milestones before proposing an optimization.
 
-Run a representative post-merge browser/deployment smoke in parallel with normal demo
-use, and keep the outstanding artifact retrieval check separate until suitable data is
-available. See [demo readiness](demo-readiness-plan.md) for the verification procedure.
+Run a representative browser/deployment smoke in parallel with normal demo use, including
+the accepted R10 viewer on all four surfaces. Keep the outstanding live IC-ENC
+retrieval/attribution checks separate until suitable data is available. See
+[demo readiness](demo-readiness-plan.md) for the verification procedure. The production
+performance investigation remains open; this tracker does not select it over a newly
+prioritized user task.
 
 ## Accepted feature index
 
@@ -128,6 +158,9 @@ This index records _status_, not a complete specification or new acceptance. Det
 | FI-041–FI-042   | Review list-scroll preservation and shared Filter scrollbar.                                                                                                                                                         |
 | FI-044          | Shared Preferences information architecture; Theme, Scale hiding, Auto-save/Reset and route-specific semantics accepted. See [FI-044](fi-044-verification.md).                                                       |
 
+PC-UX-R10 is accepted at `ff807a49`; see the post-R10 reconciliation above for its
+implementation and remaining verification boundaries.
+
 ### FH hardening history
 
 FH-001–FH-049 are the earlier frontend-hardening implementation register. In the recorded tracker, **FH-031 was rejected** and all other FH items were marked Done. This historical status is retained here as an index, not a new verification claim. Critical invariants still include refresh and popup reconciliation (FH-048), async operation visibility (FH-046/047), and general focus, accessibility and error handling. For per-item descriptions and original commits, consult the predecessor of this document in Git history and [the dated release review](frontend-release-readiness-review.md).
@@ -144,6 +177,11 @@ FH-001–FH-049 are the earlier frontend-hardening implementation register. In t
 ## Future exploration (not demo scope)
 
 After a stable demo baseline is accepted, a separate experiment branch may investigate ArcGIS SDK/Calcite upgrades, Product polygon labels or Linked Annotations, Sonda bundle inspection, browser tests with Vitest/Playwright, FeatureEffect and optional isolated UI framework pilots. None is required to demonstrate the current app.
+
+The viewer-specific follow-ups listed under PC-UX-R10 are also deferred pending a
+separate scope decision. Diagnostic ZIP mapping requires a verified shapes/CRS and
+feature-identity contract; AI explanations and Encoding Guide integration require
+separate provenance and content decisions.
 
 ## Historical provenance
 
