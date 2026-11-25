@@ -244,15 +244,21 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-        public async Task<ActionResult<BindingResponse>> CreateBinding([FromBody] BindRequest request, CancellationToken cancellationToken) {
+        public Task<ActionResult<BindingResponse>> CreateBinding([FromBody] BindRequest request, CancellationToken cancellationToken)
+            => this.CreateBindingCore(request, cancellationToken, PackageHistoryActor.FromPrincipal(this.User));
+
+        internal Task<ActionResult<BindingResponse>> CreateSampleBinding(BindRequest request, CancellationToken cancellationToken)
+            => this.CreateBindingCore(request, cancellationToken, PackageHistoryActor.SystemActor);
+
+        private async Task<ActionResult<BindingResponse>> CreateBindingCore(BindRequest request, CancellationToken cancellationToken, string? actor) {
             if (request is null || string.IsNullOrWhiteSpace(request.PackageId) || string.IsNullOrWhiteSpace(request.PipelineId)) {
                 return this.Problem(title: "Package and pipeline identifiers are required.", statusCode: StatusCodes.Status400BadRequest);
             }
             try {
                 // Resolve AOI matches before committing the assignment.
                 var intersections = await workspaceService.GetIntersectionsAsync(request.PackageId, request.PipelineId, cancellationToken);
-                var state = await assignments.AssignAsync(request.PackageId, request.PipelineId, cancellationToken);
-                this._logger.LogInformation("Assigned package {PackageId} to pipeline {PipelineId}. User: {User}.", request.PackageId, request.PipelineId, this.User?.Identity?.Name);
+                var state = await assignments.AssignAsync(request.PackageId, request.PipelineId, cancellationToken, actor);
+                this._logger.LogInformation("Assigned package {PackageId} to pipeline {PipelineId}. User: {User}.", request.PackageId, request.PipelineId, actor);
                 return this.CreatedAtRoute("GetBinding.V1", new { id = state.Id!.Value, version = ApiVersions.V1RouteValue }, Map(state, intersections));
             }
             catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
@@ -321,9 +327,10 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> DeleteBinding(string id, CancellationToken cancellationToken) {
+            var actor = PackageHistoryActor.FromPrincipal(this.User);
             try {
-                await assignments.RemoveAsync(id, cancellationToken);
-                this._logger.LogInformation("Removed pipeline assignment {BindingId}. User: {User}.", id, this.User?.Identity?.Name);
+                await assignments.RemoveAsync(id, cancellationToken, actor);
+                this._logger.LogInformation("Removed pipeline assignment {BindingId}. User: {User}.", id, actor);
                 return this.NoContent();
             }
             catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }

@@ -1343,7 +1343,8 @@ test("History list renders supplied text and optional context safely", () => {
           dateTime: "2026-01-14T10:00:00Z",
           timeLabel: "14 Jan 2026, 10:00 UTC",
           title: "Example event",
-          actor: "Example actor",
+          actor: "B123456",
+          actorIdentity: "PROD\\B123456",
           context: "Workstream: Example / Workspace: Example",
         },
       ],
@@ -1359,6 +1360,9 @@ test("History list renders supplied text and optional context safely", () => {
       findByClass(entries[0], "package-history__actor")[0].textContent,
       "<script>Example</script>"
     );
+    const actor = findByClass(entries[1], "package-history__actor")[0];
+    assert.equal(actor.textContent, "B123456");
+    assert.equal(actor.title, "PROD\\B123456");
     assert.equal(findByTag(list, "img").length, 0);
     assert.equal(findByTag(list, "script").length, 0);
     assert.equal(findByClass(entries[0], "package-history__context").length, 0);

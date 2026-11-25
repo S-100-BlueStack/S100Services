@@ -143,7 +143,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         foreach (var file in files) {
             var request = await sampleReader.ReadNoticeAsync(file, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.MetaData?.ShortId);
-            var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
+            var created = await packages.CreateSamplePackage(request, cancellationToken).ConfigureAwait(false);
             packageSamples.Add(RequireSuccess(created, $"create notice package '{request.MetaData?.ShortId}'"));
         }
 
@@ -159,7 +159,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
 
         foreach (var file in submissionFiles) {
             var request = await sampleReader.ReadGeneralSubmissionAsync(file, cancellationToken).ConfigureAwait(false);
-            var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
+            var created = await packages.CreateSamplePackage(request, cancellationToken).ConfigureAwait(false);
             packageSamples.Add(RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'"));
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
         }
@@ -179,7 +179,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 AbsoluteUri = upload.AbsoluteUri!,
                 ImportFromArchive = true,
             };
-            var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
+            var created = await packages.CreateSamplePackage(request, cancellationToken).ConfigureAwait(false);
             packageSamples.Add(RequireSuccess(created, $"import MA sample '{Path.GetFileName(file)}'"));
         }
         logger.LogInformation("Created marine aggregate extraction ZIP samples. CreatedPackages: {CreatedPackages}.", extractionFiles.Length);
@@ -192,7 +192,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             var upload = RequireSuccess(await packages.UploadFile(new UploadFileRequest {
                 File = new FormFile(input, 0, input.Length, "File", Path.GetFileName(file)),
             }, cancellationToken).ConfigureAwait(false), $"store WorkZone sample '{Path.GetFileName(file)}'");
-            var created = await packages.CreatePackage(new CreatePackageRequest {
+            var created = await packages.CreateSamplePackage(new CreatePackageRequest {
                 Category = "WorkZone",
                 AbsoluteUri = upload.AbsoluteUri!,
                 ImportFromArchive = true,
@@ -210,7 +210,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 var upload = RequireSuccess(await packages.UploadFile(new UploadFileRequest {
                     File = new FormFile(input, 0, input.Length, "File", Path.GetFileName(file)),
                 }, cancellationToken).ConfigureAwait(false), $"store sample '{Path.GetFileName(file)}'");
-                var created = await packages.CreatePackage(new CreatePackageRequest {
+                var created = await packages.CreateSamplePackage(new CreatePackageRequest {
                     Category = categoryId,
                     AbsoluteUri = upload.AbsoluteUri!,
                     ImportFromArchive = true,
@@ -237,7 +237,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         var automaticCount = packageSamples.Count - shuffledPackages.Length;
         var manualCount = Math.Max(0, packageSamples.Count / 2 - automaticCount);
         for (var index = 0; index < manualCount; index++) {
-            RequireSuccess(await dispatcher.CreateBinding(new BindRequest {
+            RequireSuccess(await dispatcher.CreateSampleBinding(new BindRequest {
                 PackageId = shuffledPackages[index].Id,
                 PipelineId = shuffledPipelines[index % shuffledPipelines.Length].Id,
             }, cancellationToken).ConfigureAwait(false), $"assign sample package '{shuffledPackages[index].Id}' to a pipeline");

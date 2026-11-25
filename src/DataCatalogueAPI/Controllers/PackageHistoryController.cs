@@ -20,7 +20,7 @@ public sealed class PackageHistoryController(PackageHistoryService history) : Co
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <param name="before">Optional event identifier from the previous page's nextBefore.</param>
     /// <param name="pageSize">Maximum events to return, from 1 to 100.</param>
-    /// <remarks>Events are read from the current in-memory event store. Historical actors are not recorded by the existing events.</remarks>
+    /// <remarks>Events are read from the current in-memory event store. Actors are taken from committed events. Older events without an actor remain unattributed.</remarks>
     [HttpGet]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType<PackageHistoryResponse>(StatusCodes.Status200OK)]

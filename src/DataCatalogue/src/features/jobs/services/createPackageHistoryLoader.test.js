@@ -115,3 +115,29 @@ test("Duplicate event identities across pages fail instead of showing duplicated
   assert.equal(loader.getSnapshot().entries.length, 1);
   assert.equal(loader.getSnapshot().nextBefore, "same");
 });
+
+test("History displays the recorded Windows account, preserves its full identity, and distinguishes System and legacy events", async () => {
+  const loader = createPackageHistoryLoader({
+    async read() {
+      return result([
+        event("user", undefined, { actor: "PROD\\B123456" }),
+        event("other-domain", undefined, { actor: "OTHER\\B123456" }),
+        event("unqualified", undefined, { actor: "B654321" }),
+        event("system", undefined, { actor: "System" }),
+        event("legacy"),
+      ]);
+    },
+  });
+  loader.select("package");
+  await Promise.resolve();
+  assert.deepEqual(
+    loader.getSnapshot().entries.map(({ actor, actorIdentity }) => [actor, actorIdentity]),
+    [
+      ["B123456", "PROD\\B123456"],
+      ["B123456", "OTHER\\B123456"],
+      ["B654321", "B654321"],
+      ["System", "System"],
+      ["Actor not recorded", null],
+    ]
+  );
+});

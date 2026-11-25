@@ -87,3 +87,11 @@ test("Binding history retains the backend pipeline identity without claiming Wor
   assert.equal(result.items[0].actor, null);
   assert.equal(result.items[0].workspaceId, undefined);
 });
+
+test("History normalization preserves recorded actor identities and does not invent missing ones", () => {
+  for (const actor of ["PROD\\B123456", "System", null, undefined]) {
+    const result = normalizePackageHistoryPage(page([event({ actor })]), PKG, 50);
+    assert.equal(result.items[0].actor, actor ?? null);
+  }
+  assert.throws(() => normalizePackageHistoryPage(page([event({ actor: " " })]), PKG, 50));
+});

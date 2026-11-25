@@ -11,26 +11,26 @@ namespace DataCatalague.Api.Services.Commands
                 .InState(ExpectedState.New)
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync(
-                    (package, cmd, _) => package.CreatePackage(cmd.PackageId, cmd.Category, cmd.FileName, cmd.AbsoluteUri, cmd.GeometryRef, cmd.Severity, cmd.MetaData, cmd.DisplayScale, cmd.DetailedGeometry, cmd.Descriptions, cmd.Charts)
+                    (package, cmd, _) => package.CreatePackage(cmd.PackageId, cmd.Category, cmd.FileName, cmd.AbsoluteUri, cmd.GeometryRef, cmd.Severity, cmd.MetaData, cmd.DisplayScale, cmd.DetailedGeometry, cmd.Descriptions, cmd.Charts, cmd.Actor)
                 );
 
             this.On<PackagesCommands.AddDetailedGeometry>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync(
-                    (package, cmd, _) => package.AddDetailedGeometry(cmd.PointRef, cmd.CurveRef, cmd.SurfaceRef, cmd.PointRefs)
+                    (package, cmd, _) => package.AddDetailedGeometry(cmd.PointRef, cmd.CurveRef, cmd.SurfaceRef, cmd.PointRefs, cmd.Actor)
                 );
 
             this.On<PackagesCommands.ReplaceGeometry>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
-                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details, cmd.RequestHash));
+                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details, cmd.RequestHash, cmd.Actor));
 
             this.On<PackagesCommands.UpdateSeverity>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync(
-                    (package, cmd, _) => package.UpdateSeverity(cmd.Severity)
+                    (package, cmd, _) => package.UpdateSeverity(cmd.Severity, cmd.Actor)
                 );
         }
     }

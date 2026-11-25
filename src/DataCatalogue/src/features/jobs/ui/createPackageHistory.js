@@ -101,11 +101,11 @@ function createHistoryEntries(entries) {
 
     const time = createTextElement("time", "package-history__time", entry.timeLabel);
     time.dateTime = entry.dateTime;
-    item.append(
-      time,
-      createTextElement("p", "package-history__event", entry.title),
-      createTextElement("p", "package-history__actor", entry.actor)
-    );
+    const actor = createTextElement("p", "package-history__actor", entry.actor);
+    if (entry.actorIdentity && entry.actorIdentity !== entry.actor) {
+      actor.title = entry.actorIdentity;
+    }
+    item.append(time, createTextElement("p", "package-history__event", entry.title), actor);
     if (entry.context) {
       item.append(createTextElement("p", "package-history__context", entry.context));
     }

@@ -59,6 +59,7 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
         Assert.Equal(expected - expected / 2, (await this.PackagesAsync("?hasPipeline=false&pageSize=200")).TotalCount);
         var categoryDefaults = categories.Items.ToDictionary(category => category.Id, category => category.AutomaticPipelineIds);
         var manualBindingCounts = pipelines.Items.ToDictionary(pipeline => pipeline.Id, _ => 0);
+        var verifiedSampleHistoryKinds = new HashSet<bool>();
         foreach (var package in (await this.PackagesAsync("?pageSize=200")).Items) {
             if (package.Category is "GeneralSubmission" or "MarineAggregateExtraction" or "WorkZone") {
                 Assert.NotEmpty(package.Descriptions!);
@@ -71,6 +72,12 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
             Assert.True(details.Points.Count > 0 || details.Curves.HasValue || details.Surfaces.HasValue, package.Id);
             var bindings = (await this.Client.GetFromJsonAsync<BindingResponse[]>("/v1/dispatcher/bindings?packageId=" + package.Id))!;
             var defaults = categoryDefaults[package.Category!];
+            if (bindings.Length > 0 && verifiedSampleHistoryKinds.Add(defaults.Count > 0)) {
+                var history = (await this.Client.GetFromJsonAsync<PackageHistoryResponse>($"/v1/packages/{package.Id}/history"))!;
+                Assert.Contains(history.Items, item => item.EventType == "packageCreated");
+                Assert.Contains(history.Items, item => item.EventType == "pipelineAssigned");
+                Assert.All(history.Items, item => Assert.Equal("System", item.Actor));
+            }
             if (defaults.Count > 0) {
                 Assert.Equal(defaults, bindings.Select(binding => binding.PipelineId!).ToArray());
                 Assert.StartsWith("database://", package.AbsoluteUri);

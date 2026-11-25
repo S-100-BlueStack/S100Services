@@ -15,12 +15,15 @@ const TIME = new Intl.DateTimeFormat("en-GB", {
 });
 
 function presentEvent(event) {
+  // The committed identity retains its domain; only the visible label is shortened.
+  const actor = event.actor?.match(/^[^\\]+\\([^\\]+)$/)?.[1] ?? event.actor;
   return {
     id: event.id,
     dateTime: event.occurredAtUtc,
     timeLabel: `${TIME.format(new Date(event.occurredAtUtc))} UTC`,
     title: TITLES[event.eventType],
-    actor: event.actor ?? "Actor not recorded",
+    actor: actor ?? "Actor not recorded",
+    actorIdentity: event.actor,
     context: event.pipelineId
       ? `Workstream: ${event.pipelineName ?? event.pipelineId}`
       : event.severity !== null

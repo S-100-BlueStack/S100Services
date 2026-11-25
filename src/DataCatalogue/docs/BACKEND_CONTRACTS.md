@@ -1,7 +1,36 @@
+## DC-PACKAGE-TIMELINE-03 - Windows actor attribution (2026-11-25)
+
+The existing nullable `actor` response field is populated from the original
+committed event. The request's authenticated `HttpContext.User.Identity.Name`
+is captured on Package creation, geometry replacement, binding creation,
+restoration and removal. Internal Package commands for detailed geometry and
+severity also accept the captured actor. The server never accepts an actor from
+an HTTP request body, query parameter or arbitrary identity header. The
+existing Windows authentication and catalogue access policy are unchanged.
+
+- `actor`: full account identity as supplied by the authenticated principal
+  (e.g. `PROD\B123456`). The frontend shortens a domain-qualified account to
+  its account name and preserves the original identity in a tooltip.
+- `actor: "System"`: explicitly marked internal sample initialization, including
+  automatic and seeded manual bindings. Request-triggered automatic bindings
+  inherit the initiating request's actor.
+- `actor: null`: legacy events, or internal operations without a known actor.
+  UI: `Actor not recorded`. Do not backfill from the reading principal.
+
+`PackageCreated`, `SeverityUpdated`, `DetailedGeometryAdded`, `GeometryReplaced`,
+`Binded`, and `Unbound` retain their existing Eventuous type names and gain an
+optional trailing `Actor` string (serialized as `actor`). No separate attribution
+write, replay side effect or actor-dependent geometry fingerprint is introduced.
+Existing retries must not change prior actors. Profiles are not yet resolved;
+no LDAP dependency, lookup endpoint, or photo payload is part of this contract.
+
+---
+
 ## DC-PACKAGE-TIMELINE-02 - Individual Package history (2026-11-25)
 
-Implemented in the candidate for both DataCatalogueAPI and DataCatalogue frontend.
-Deploy the matching API before enabling the live frontend.
+Accepted by the user in `d453900ffe342354aaf52a628f0b085fd905d6e7`.
+Deploy the matching API before enabling the live frontend. TIMELINE-03 adds
+write-time actor attribution without changing the public response shape.
 
 `GET /v1/packages/{id}/history?pageSize=50&before={eventId}` reads one canonical
 Package ID (not Short ID, Job key or Workspace ID). Use the configured API base;
@@ -39,8 +68,9 @@ Illustrative wire shape (not actual Package data):
 | `pipelineAssigned`      | `Binded`                | `pipelineId`, optional current `pipelineName`; also covers restoration |
 | `pipelineUnassigned`    | `Unbound`               | `pipelineId`, optional current `pipelineName`                          |
 
-Every entry has the stored event GUID and domain UTC timestamp. Existing events
-have no actor; `actor` is null. No Workspace identity, previous severity, source
+Every entry has the stored event GUID and domain UTC timestamp. `actor` is the
+recorded account (e.g. `PROD\B123456`), `System` for explicitly identified sample
+initialization, or null for events without recorded attribution. No Workspace identity, previous severity, source
 file URI, raw geometry, metadata payload or inferred progress is returned.
 Pipeline names are current projection values; they can be absent. Workstream is
 the frontend label for Pipeline, not a different wire entity.
@@ -57,9 +87,11 @@ successful page is distinct from unavailable API or a failed read. Existing
 created Packages normally include at least the creation and initial severity.
 
 The active store is in-memory; no durability across restarts is promised.
-This read is not an archive search or a persistent audit log. Current temporary
-Job statuses and QC do not produce events. No new write endpoint or event schema
-is introduced.
+This read is not an archive search. History will follow the planned durable event
+store and its retention policy; its read implementation must be adapted when
+that store is adopted. No separate history persistence is required. Current
+temporary Job statuses and QC do not produce events. TIMELINE-03 changes the
+stored event payloads additively, not the public write DTOs or history wire shape.
 
 ---
 

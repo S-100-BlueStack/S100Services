@@ -1,8 +1,50 @@
+## DC-PACKAGE-TIMELINE-03 - Attribute history to Windows accounts (2026-11-25)
+
+**Authoritative baseline:** `d453900ffe342354aaf52a628f0b085fd905d6e7`.
+**Status:** implementation candidate; local backend build/test and Windows SSO
+browser acceptance pending.
+
+- Preserve the accepted Package history read, pagination, layout, and request
+  lifecycle. No change to authentication, authorization, public mutation DTOs,
+  routes, or event store configuration.
+- Capture the authenticated request principal's name once at the HTTP mutation
+  boundary. Carry the full Windows account through internal commands and services
+  into each committed Package/binding event. Initial severity, detailed geometry
+  and automatic bindings inherit the initiating creation actor. Restoration and
+  removal record their respective actors. Explicit startup sample operations use
+  `System`; older events and other internal calls without attribution remain null.
+  No inference from the history reader, process identity, request body or logs.
+- Add nullable trailing `Actor` fields to the existing six V1 event types; old
+  payloads without this property remain valid. No change to aggregate state,
+  replay, idempotency, binding identity, event identifiers or timestamps.
+- The existing history response's `actor` contains the recorded identity. Display
+  the account name/B-number for domain-qualified Windows accounts; keep the full
+  identity in the tooltip. `System` and `Actor not recorded` are distinct.
+- Decision: keep the current in-memory event store until the planned durable
+  Eventuous store is adopted. No separate durable history persistence task.
+  When changing stores, the history read must support the new store and retained
+  related binding streams. No history retention beyond the current store is promised.
+- Follow-up: `DC-PACKAGE-TIMELINE-PROFILE-01` (proposed ID) — optional profile
+  enrichment. The user verified a successful LDAP lookup of their own
+  `displayName` and `thumbnailPhoto` from their desktop Windows identity.
+  This does not establish API runtime account permissions or cross-account photo
+  access. Verify those before implementing an authorized, cached, best-effort
+  backend directory lookup. Keep images/display names outside the events and
+  never make a Package mutation depend on AD. Username-only history is the
+  first implementation scope. No directory calls or dependencies here.
+- Contextual `Done` / `No update`, QC, Workspace ownership/history and archived
+  Package discovery remain separate. See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md)
+  and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
+
+---
+
 ## DC-PACKAGE-TIMELINE-02 - Read committed Package history (2026-11-25)
 
 **Authoritative baseline:** `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`.
-**Status:** backend and frontend implementation candidate; local .NET tests,
-full frontend check and browser acceptance pending.
+**Status:** accepted by the user and committed in
+`d453900ffe342354aaf52a628f0b085fd905d6e7`. The user reported testing and acceptance;
+this is not an independent .NET test result. TIMELINE-03 extends this read with
+write-time Windows actor attribution.
 
 - The accepted individual Package history preview is replaced by an authorized,
   paged, read-only history of actual committed Package and binding events.
@@ -13,8 +55,9 @@ full frontend check and browser acceptance pending.
 - The new v1 history read projects event IDs, UTC domain timestamps, known event
   types, optional current Pipeline name/ID and exact decimal severity. Raw event
   payloads and geometry are not exposed. The existing access policy applies.
-  Actors are not recorded by existing events; do not infer them from the requester,
-  logs, or current locks. In-memory retention is limited to the current process.
+  At this milestone existing events had no recorded actor; TIMELINE-03 adds
+  attribution for newly written events. Do not infer historical actors from the
+  reader, logs, or current locks. In-memory retention is limited to the process.
 - Keep the accepted left-panel placement, medium-weight heading and scroll region.
   Load only when live Details opens; history has its own refresh, retry and older
   page controls. Selection replacement/Back abort obsolete reads. Same-Package
@@ -23,10 +66,11 @@ full frontend check and browser acceptance pending.
   history fixtures, status-derived events, map reads or new mutations.
 - ProductCatalogue's history read and safe projection are references only. No
   ProductCatalogue changes, dependency changes or new persistence technology.
-- Remaining gaps: durable event-store configuration and retention, write-time actor
-  attribution, persistent Job status/history, QC and archive discovery. These are
-  not resolved by the current read. See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md)
-  and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
+- Remaining at this milestone: write-time actor attribution (see TIMELINE-03),
+  persistent Job status/history, QC and archive discovery. A separate durable
+  history store is explicitly out of scope; history follows the event store's
+  retention policy. See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md) and
+  [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
 - Acceptance: deploy matching API first, create and bind/unbind a Package, replace
   its geometry, and inspect real events. Check exact severity, actor fallback,
   independent history refresh/paging, unauthorized/failed requests, rapid selection
@@ -163,13 +207,13 @@ see the later DC-PACKAGE-TIMELINE-01 design preview entry.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
-| Suggested order | Task                                                                                                            | Status / dependency                                                                        |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                            |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                            |
-| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract     |
-| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design accepted; live read candidate in DC-PACKAGE-TIMELINE-02; durable audit remains open |
-| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                           |
+| Suggested order | Task                                                                                                            | Status / dependency                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                        |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                        |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design and live read accepted (`d453900f`); Windows actor candidate in TIMELINE-03     |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                       |
 
 This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
 

@@ -26,7 +26,7 @@ public sealed class PipelineAssignmentService(IEventStore store, StreamNameMap s
         return normalized;
     }
 
-    public async Task<BindingState> AssignAsync(string packageId, string pipelineId, CancellationToken cancellationToken) {
+    public async Task<BindingState> AssignAsync(string packageId, string pipelineId, CancellationToken cancellationToken, string? actor = null) {
         if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(pipelineId) || packageId.Contains("::") || pipelineId.Contains("::")) {
             throw new InvalidDataException("Supply valid package and pipeline identifiers.");
         }
@@ -43,8 +43,8 @@ public sealed class PipelineAssignmentService(IEventStore store, StreamNameMap s
             // New streams must not be loaded: ExpectedState.Any probes them by throwing
             // StreamNotFound, which interrupts startup when debugging thrown exceptions.
             var result = exists
-                ? await commands.Handle(new DispatcherCommands.RestoreBinding(id), cancellationToken)
-                : await commands.Handle(new DispatcherCommands.Bind(id, packageId, pipelineId), cancellationToken);
+                ? await commands.Handle(new DispatcherCommands.RestoreBinding(id, actor), cancellationToken)
+                : await commands.Handle(new DispatcherCommands.Bind(id, packageId, pipelineId, actor), cancellationToken);
             if (result.Exception is WrongVersion) { throw new PipelineAssignmentConflictException("Assignment changed; retry the request."); }
             result.ThrowIfError();
             var saved = result.Get()!;
@@ -54,12 +54,12 @@ public sealed class PipelineAssignmentService(IEventStore store, StreamNameMap s
         finally { MutationGate.Release(); }
     }
 
-    public async Task RemoveAsync(string bindingId, CancellationToken cancellationToken) {
+    public async Task RemoveAsync(string bindingId, CancellationToken cancellationToken, string? actor = null) {
         await MutationGate.WaitAsync(cancellationToken);
         try {
             var current = await GetAsync(bindingId, cancellationToken);
             if (!current.IsActive) { return; }
-            var result = await commands.Handle(new DispatcherCommands.Unbind(bindingId), cancellationToken);
+            var result = await commands.Handle(new DispatcherCommands.Unbind(bindingId, actor), cancellationToken);
             if (result.Exception is WrongVersion) { throw new PipelineAssignmentConflictException("Assignment changed; retry the request."); }
             result.ThrowIfError();
             assignments.Update(current.PackageId!.Value, current.PipelineId!.Value, false, result.Get()!.GlobalPosition);

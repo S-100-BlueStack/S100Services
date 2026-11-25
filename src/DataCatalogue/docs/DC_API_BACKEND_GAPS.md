@@ -3,18 +3,32 @@
 > this gap register. Workspace remains a distinct entity. No backend gap is
 > resolved by the display terminology change.
 
-## DC-PACKAGE-TIMELINE-02 - Package history read candidate (2026-11-25)
+## DC-PACKAGE-TIMELINE-03 - Package history actor attribution (2026-11-25)
 
-The authorized paged read of existing Package and binding events is implemented
-in the candidate (see [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md)). The user
-accepted the earlier design preview in `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`.
-Live history integration requires local API build/tests and browser acceptance.
-The current Eventuous store is in-memory, and existing events have no actor.
-Durable retention, write-time actor attribution (including automated operations),
-and historical Workspace context are not supplied by this read. These require
-separate backend decisions and tests. Do not infer an actor from the request
-principal or turn current bindings, temporary Job status or QC into audit events.
-`DC-PACKAGE-HISTORY-01`, `JOB-01`, `PAGE-01`, and functional QC remain separate.
+TIMELINE-02's authorized paged read was accepted and committed at
+`d453900ffe342354aaf52a628f0b085fd905d6e7`. TIMELINE-03 adds write-time Windows
+actor attribution to the existing Package and binding events; local API tests
+and SSO browser acceptance remain pending. Legacy events remain unattributed;
+explicit startup sample operations record `System`. Request-triggered automatic
+assignments inherit the initiating principal. Never infer an actor from the
+history reader or current locks.
+
+- **Retention decision:** no separate permanent history work item. The active
+  Eventuous store remains in-memory until the planned durable store is adopted.
+  History retention follows that store. Adapt the history read to the future
+  store and historical binding streams during that migration.
+- **`DC-PACKAGE-TIMELINE-PROFILE-01` (proposed):** optional AD display names and
+  profile photos. Desktop LDAP lookup confirmed for the user's own account;
+  verify backend runtime identity, allowed directory scope and other-user reads
+  before adding an authorized, cached, best-effort profile lookup. No AD calls
+  during mutations and no profile images in events. Fall back to recorded
+  account names for absent or failed lookups. Username attribution is independent.
+- Historical Workspace context and persistent Job status/history are not
+  supplied by this read. `DC-PACKAGE-HISTORY-01`, `JOB-01`, `PAGE-01`, and functional
+  QC remain separate. Do not turn current bindings, temporary Job status or QC
+  into audit events.
+
+See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md) for the history contract.
 
 ---
 
@@ -32,7 +46,7 @@ no history request and does not infer events from current metadata, bindings or
 temporary status. Real history is explicitly unavailable, not an empty result.
 No event types, field names or ordering contract are asserted by the example
 list. At that stage the history read remained open; see the current
-DC-PACKAGE-TIMELINE-02 entry above for the implemented read and remaining gaps.
+DC-PACKAGE-TIMELINE-03 entry above for the accepted read, actor candidate and remaining gaps.
 
 `DC-ASSIGN-MATCH-PREVIEW-01` also remains deferred: an authorized, read-only pre-Save intersection calculation must be verified or agreed with the backend owner. Current saved matches are not preview results. No backend changes or invented routes are included in this documentation update.
 

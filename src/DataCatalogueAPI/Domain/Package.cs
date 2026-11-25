@@ -42,34 +42,35 @@ namespace DataCatalague.Api.Domain
                     string GeometryRef,
                     ulong Severity,
                     PackageMetaData? MetaData,
-                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null) {
+                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null, string? actor = null) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow, Descriptions, Charts));
-            this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
+            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow, Descriptions, Charts, actor));
+            this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow, actor));
             if (DetailedGeometry is not null) {
-                this.Apply(new V1.DetailedGeometryAdded(DetailedGeometry.PointRef, DetailedGeometry.CurveRef, DetailedGeometry.SurfaceRef, DateTime.UtcNow, DetailedGeometry.PointRefs.ToArray()));
+                this.Apply(new V1.DetailedGeometryAdded(DetailedGeometry.PointRef, DetailedGeometry.CurveRef, DetailedGeometry.SurfaceRef, DateTime.UtcNow, DetailedGeometry.PointRefs.ToArray(), actor));
             }
         }
 
         /// <summary>Records the AOI and detail references together so replay cannot expose mismatched geometries.</summary>
-        public Task ReplaceGeometry(string aoi, DetailedGeometry details, string? requestHash = null) {
+        public Task ReplaceGeometry(string aoi, DetailedGeometry details, string? requestHash = null, string? actor = null) {
             this.EnsureExists();
             if (requestHash is not null && this.State.GeometryRequestHash == requestHash) { return Task.CompletedTask; }
-            this.Apply(new V1.GeometryReplaced(aoi, details, DateTimeOffset.UtcNow, requestHash));
+            this.Apply(new V1.GeometryReplaced(aoi, details, DateTimeOffset.UtcNow, requestHash, actor));
             return Task.CompletedTask;
         }
 
-        public Task AddDetailedGeometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null) {
+        public Task AddDetailedGeometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null, string? actor = null) {
             this.EnsureExists();
-            this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow, PointRefs?.ToArray()));
+            this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow, PointRefs?.ToArray(), actor));
             return Task.CompletedTask;
         }
 
         public async Task UpdateSeverity(
-                    ulong Severity
+                    ulong Severity,
+                    string? actor = null
             ) {
             this.EnsureExists();
-            this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
+            this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow, actor));
         }
     }
 
@@ -135,14 +136,14 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class PackagesCommands
     {
-        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null, string? Actor = null);
 
-        public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null);
+        public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null, string? Actor = null);
 
         /// <summary>Replaces the complete geometry reference set of an existing package.</summary>
-        public record ReplaceGeometry(string PackageId, string Aoi, DetailedGeometry Details, string? RequestHash = null);
+        public record ReplaceGeometry(string PackageId, string Aoi, DetailedGeometry Details, string? RequestHash = null, string? Actor = null);
 
-        public record UpdateSeverity(string PackageId, ulong Severity);
+        public record UpdateSeverity(string PackageId, ulong Severity, string? Actor = null);
     }
 }
 
@@ -162,20 +163,21 @@ namespace DataCatalague.Api.Domain.Events
                     PackageMetaData? MetaData,
                     DisplayScale? DisplayScale,
                     DateTimeOffset UTC,
-                    PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null
+                    PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null, string? Actor = null
                 );
 
             [EventType("V1.DetailedGeometryAdded")]
-            public record DetailedGeometryAdded(string? PointRef, string? CurveRef, string? SurfaceRef, DateTimeOffset UTC, IReadOnlyList<string>? PointRefs = null);
+            public record DetailedGeometryAdded(string? PointRef, string? CurveRef, string? SurfaceRef, DateTimeOffset UTC, IReadOnlyList<string>? PointRefs = null, string? Actor = null);
 
             /// <summary>The complete geometry reference set committed by a replacement request.</summary>
             [EventType("V1.GeometryReplaced")]
-            public record GeometryReplaced(string Aoi, DetailedGeometry Details, DateTimeOffset UTC, string? RequestHash = null);
+            public record GeometryReplaced(string Aoi, DetailedGeometry Details, DateTimeOffset UTC, string? RequestHash = null, string? Actor = null);
 
             [EventType("V1.SeverityUpdated")]
             public record SeverityUpdated(
                     ulong Severity,
-                    DateTimeOffset UTC
+                    DateTimeOffset UTC,
+                    string? Actor = null
                 );
         }
     }

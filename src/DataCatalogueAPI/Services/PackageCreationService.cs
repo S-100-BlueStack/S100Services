@@ -25,7 +25,7 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
     // across service instances until their persistence outcome is known.
     private static readonly SemaphoreSlim CreationGate = new(1, 1);
 
-    public async Task<PackageState> CreateAsync(CreatePackageRequest request, CancellationToken cancellationToken) {
+    public async Task<PackageState> CreateAsync(CreatePackageRequest request, CancellationToken cancellationToken, string? actor = null) {
         if (request is null) { throw new PackageCreationException(PackageCreationError.Validation, "Invalid package request.", "A category, absolute source URI and geometry are required."); }
 
         // Initialization calls controllers directly, so validation must also run here.
@@ -139,7 +139,7 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
             var filename = archiveFileName ?? IO.Path.GetFileName(request.AbsoluteUri);
 
             // Once geometry commits, finish recording its references even if the caller disconnects.
-            var command = new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, metadata, request.DisplayScale, references.Details, request.Descriptions, request.Charts);
+            var command = new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, metadata, request.DisplayScale, references.Details, request.Descriptions, request.Charts, actor);
             try {
                 if (category.State.AutomaticPipelineIds.Count > 0) {
                     return await CreateWithBindingsAsync(command, category.State.AutomaticPipelineIds);
@@ -164,12 +164,12 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
 
     private async Task<PackageState> CreateWithBindingsAsync(PackagesCommands.CreatePackage command, IReadOnlyList<string> pipelineIds) {
         var package = new Package();
-        await package.CreatePackage(command.PackageId, command.Category, command.FileName, command.AbsoluteUri, command.GeometryRef, command.Severity, command.MetaData, command.DisplayScale, command.DetailedGeometry, command.Descriptions, command.Charts);
+        await package.CreatePackage(command.PackageId, command.Category, command.FileName, command.AbsoluteUri, command.GeometryRef, command.Severity, command.MetaData, command.DisplayScale, command.DetailedGeometry, command.Descriptions, command.Charts, command.Actor);
         var appends = new List<NewStreamAppend>(pipelineIds.Count + 1);
         foreach (var pipelineId in pipelineIds) {
             var bindingId = new BindingId($"{command.PackageId}::{pipelineId}");
             var binding = new Binding();
-            await binding.Create(bindingId.Value, command.PackageId, pipelineId);
+            await binding.Create(bindingId.Value, command.PackageId, pipelineId, command.Actor);
             appends.Add(BuildAppend(streams.GetStreamName(bindingId), binding.Changes));
         }
         // Publish binding events before the package event so the list projection

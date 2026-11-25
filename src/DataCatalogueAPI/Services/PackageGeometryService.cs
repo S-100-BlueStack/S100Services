@@ -77,7 +77,7 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
     /// <returns>The updated package state, or null for an unknown identifier.</returns>
     /// <exception cref="InvalidDataException">The geometry request is invalid.</exception>
     /// <exception cref="InvalidOperationException">Geometry committed but the event could not be recorded.</exception>
-    public async Task<PackageState?> ReplaceAsync(string id, AddPackageGeometryRequest request, CancellationToken cancellationToken) {
+    public async Task<PackageState?> ReplaceAsync(string id, AddPackageGeometryRequest request, CancellationToken cancellationToken, string? actor = null) {
         if (request is null || string.IsNullOrWhiteSpace(request.Aoi) || (request.Points is null && request.Curves is null && request.Surfaces is null)) {
             throw new InvalidDataException("Supply Aoi and at least one of Points, Curves or Surfaces as Esri JSON strings.");
         }
@@ -103,7 +103,7 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
             try {
                 // These stores cannot share a transaction. Once ArcGIS commits, finish
                 // recording the references even if the HTTP client has disconnected.
-                var result = await commands.Handle(new PackagesCommands.ReplaceGeometry(id, references.Aoi, references.Details, requestHash), CancellationToken.None);
+                var result = await commands.Handle(new PackagesCommands.ReplaceGeometry(id, references.Aoi, references.Details, requestHash, actor), CancellationToken.None);
                 if (!result.Success) {
                     throw new InvalidOperationException($"Could not record geometry replacement for package '{id}'.");
                 }

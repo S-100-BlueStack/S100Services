@@ -48,10 +48,17 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<PackageResponse>> CreatePackage([FromBody] CreatePackageRequest request, CancellationToken cancellationToken) {
+        public Task<ActionResult<PackageResponse>> CreatePackage([FromBody] CreatePackageRequest request, CancellationToken cancellationToken)
+            => this.CreatePackageCore(request, cancellationToken, PackageHistoryActor.FromPrincipal(this.User));
+
+        // Initialization is a known internal operation, not an authenticated HTTP request.
+        internal Task<ActionResult<PackageResponse>> CreateSamplePackage(CreatePackageRequest request, CancellationToken cancellationToken)
+            => this.CreatePackageCore(request, cancellationToken, PackageHistoryActor.SystemActor);
+
+        private async Task<ActionResult<PackageResponse>> CreatePackageCore(CreatePackageRequest request, CancellationToken cancellationToken, string? actor) {
             if (request is null) { return this.Problem(title: "Invalid package request.", statusCode: StatusCodes.Status400BadRequest); }
 
-            // Sample initialization invokes this action directly, bypassing MVC model validation.
+            // Sample initialization bypasses MVC, so the shared creation path must validate.
             var validationErrors = new List<ValidationResult>();
             if (!Validator.TryValidateObject(request, new ValidationContext(request), validationErrors, validateAllProperties: true)
                 || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out _)) {
@@ -62,8 +69,8 @@ namespace DataCatalague.Api.Controllers
             }
 
             try {
-                var state = await creationService.CreateAsync(request, cancellationToken);
-                this._logger.LogInformation("Created package {PackageId}. ShortId: {ShortId}, Category: {Category}, User: {User}.", state.Id, state.MetaData?.ShortId, request.Category, this.User?.Identity?.Name);
+                var state = await creationService.CreateAsync(request, cancellationToken, actor);
+                this._logger.LogInformation("Created package {PackageId}. ShortId: {ShortId}, Category: {Category}, User: {User}.", state.Id, state.MetaData?.ShortId, request.Category, actor);
                 return this.CreatedAtRoute("GetPackage.V1", new { id = state.Id!.Value, version = ApiVersions.V1RouteValue }, Map(state));
             }
             catch (PackageCreationException exception) {
@@ -211,9 +218,10 @@ namespace DataCatalague.Api.Controllers
                 return this.ValidationProblem(this.ModelState);
             }
 
-            this._logger.LogInformation("Replacing package geometry. PackageId: {PackageId}, User: {User}, HasPoints: {HasPoints}, HasCurves: {HasCurves}, HasSurfaces: {HasSurfaces}.", id, this.User?.Identity?.Name, request?.Points is not null, request?.Curves is not null, request?.Surfaces is not null);
+            var actor = PackageHistoryActor.FromPrincipal(this.User);
+            this._logger.LogInformation("Replacing package geometry. PackageId: {PackageId}, User: {User}, HasPoints: {HasPoints}, HasCurves: {HasCurves}, HasSurfaces: {HasSurfaces}.", id, actor, request?.Points is not null, request?.Curves is not null, request?.Surfaces is not null);
             try {
-                var state = await this._geometryService.ReplaceAsync(id, request!, cancellationToken);
+                var state = await this._geometryService.ReplaceAsync(id, request!, cancellationToken, actor);
                 if (state is null) {
                     return this.Problem(title: "Package not found.", detail: $"No package exists with identifier {id}.", statusCode: StatusCodes.Status404NotFound);
                 }

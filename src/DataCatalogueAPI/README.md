@@ -47,14 +47,22 @@ events, including removed/restored Pipeline assignments, through the existing
 contains `packageId`, `items` and `nextBefore`; entries expose `id`, `eventType`,
 `occurredAtUtc`, nullable `actor`, `pipelineId`, `pipelineName` and `severity`.
 Severity is an exact decimal string for severity events. Pipeline names are
-current names, not historical names. Missing actors remain null. Unknown Package
-returns 404, invalid continuation/size returns 400. No raw event payloads,
-geometry, source file URLs or historical Workspace membership are exposed.
+current names, not historical names. The nullable `actor` field projects the
+account captured from the authenticated principal at mutation time; explicit
+sample initialization records `System`, and older events without attribution
+remain null. Automatic bindings inherit the initiating creation actor. Existing
+V1 event names and public mutation DTOs are retained; a nullable trailing
+`Actor` field is added to the stored Package and binding event records. Unknown
+Package returns 404, invalid continuation/size returns 400. No raw event
+payloads, geometry, source file URLs or historical Workspace membership are
+exposed. No directory lookup is required to capture an actor.
 
 `PackageHistoryService` reads a snapshot of committed streams from the current
 `InMemoryEventStore`; the existing append path indexes historical binding stream
-identities. No additional event writes are made. The store is process-local,
-so this endpoint is not a durable audit log. See
+identities. Attribution is included in the original event, not a separate
+write. The store is process-local; retention follows the planned future event
+store, and this read must be adapted during that migration. No separate durable
+history persistence is needed. See
 `src/DataCatalogue/docs/BACKEND_CONTRACTS.md` for the complete contract. Deploy
 this API before the matching frontend. ProductCatalogue is unaffected.
 

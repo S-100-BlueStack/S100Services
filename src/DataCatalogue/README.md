@@ -65,10 +65,14 @@ The accepted individual Package history layout below the actions and facts in
 left live Details now displays actual committed Package and binding events in
 DC-PACKAGE-TIMELINE-02. It loads on demand through the matching v1 API, with its
 own Refresh, Retry and Load older events controls. The right metadata overlay
-remains unchanged. The current event store is in-memory; actors are not recorded
-by existing events. Durable retention and actor attribution remain open, and
-mock status actions do not create history. See `docs/BACKEND_CONTRACTS.md` for
-wire semantics and deployment requirements.
+remains unchanged. TIMELINE-02 was accepted in `d453900f`. TIMELINE-03 records
+Windows accounts at mutation time and shows the account name/B-number in the
+history list, with the original domain-qualified identity in a tooltip. Legacy
+entries remain unattributed; sample initialization shows `System`. The current
+store is in-memory; retention follows the event store, not a separate history
+store. Optional AD profile enrichment is a follow-up. Mock status actions do not
+create history. See `docs/BACKEND_CONTRACTS.md` for wire semantics and deployment
+requirements.
 
 The accepted live Main Map labels display Workspace names at 1:5,000,000 or
 closer and Package Short IDs at 1:3,000,000 or closer. Labels reuse existing

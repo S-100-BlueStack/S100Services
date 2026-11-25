@@ -87,23 +87,24 @@ namespace DataCatalague.Api.Domain
         public async Task Create(
                     string BindingId,
                     string PackageId,
-                    string PipelineId                   
+                    string PipelineId,
+                    string? actor = null
             ) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.Binded(BindingId, PackageId, PipelineId, DateTime.UtcNow));
+            this.Apply(new V1.Binded(BindingId, PackageId, PipelineId, DateTime.UtcNow, actor));
         }
 
-        public Task Restore() {
+        public Task Restore(string? actor = null) {
             this.EnsureExists();
             if (this.State.IsActive) { throw new InvalidOperationException("Package is already assigned to this pipeline."); }
-            this.Apply(new V1.Binded(this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value, DateTimeOffset.UtcNow));
+            this.Apply(new V1.Binded(this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value, DateTimeOffset.UtcNow, actor));
             return Task.CompletedTask;
         }
 
-        public Task Remove() {
+        public Task Remove(string? actor = null) {
             this.EnsureExists();
             if (this.State.IsActive) {
-                this.Apply(new V1.Unbound(this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value, DateTimeOffset.UtcNow));
+                this.Apply(new V1.Unbound(this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value, DateTimeOffset.UtcNow, actor));
             }
             return Task.CompletedTask;
         }
@@ -148,11 +149,11 @@ namespace DataCatalague.Api.Domain.Commands
 
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
-        public record Bind(string BindingId, string PackageId, string PipelineId);
+        public record Bind(string BindingId, string PackageId, string PipelineId, string? Actor = null);
 
-        public record RestoreBinding(string BindingId);
+        public record RestoreBinding(string BindingId, string? Actor = null);
 
-        public record Unbind(string BindingId);
+        public record Unbind(string BindingId, string? Actor = null);
     }
 }
 
@@ -184,14 +185,15 @@ namespace DataCatalague.Api.Domain.Events
 
 
             [EventType("V1.Unbound")]
-            public record Unbound(string BindingId, string PackageId, string PipelineId, DateTimeOffset UTC);
+            public record Unbound(string BindingId, string PackageId, string PipelineId, DateTimeOffset UTC, string? Actor = null);
 
             [EventType("V1.Binded")]
             public record Binded(
                     string BindingId,
                     string PackageId,
                     string PipelineId,
-                    DateTimeOffset UTC
+                    DateTimeOffset UTC,
+                    string? Actor = null
                 );
         }
     }

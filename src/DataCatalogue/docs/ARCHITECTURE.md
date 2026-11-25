@@ -1,3 +1,24 @@
+## DC-PACKAGE-TIMELINE-03 - Actor capture at the mutation boundary (2026-11-25)
+
+The API captures authenticated account names in `PackageHistoryActor` at
+controller entry and passes a value explicitly through the owning application
+services, commands and aggregates. The direct atomic creation/binding path uses
+that same value. The optional event `Actor` is immutable history data, not
+aggregate state or an ambient request identity consulted during replay. Known
+startup initialization uses explicit internal controller entry points and the
+`System` marker, not a fabricated Windows principal. No new auth flow or writes
+are required. History maps actors from committed payloads only.
+
+The existing frontend normalizer preserves `actor`; `createPackageHistoryLoader`
+formats only its display label and keeps the original identity. The native
+history component renders it as text and sets the original name as a tooltip
+when shortened. The map, status actions, history request lifecycle and layout are
+unchanged. A future directory enrichment service must be optional, bounded and
+cached; it must not block writes or alter historical identity. Retention remains
+owned by the event store, not a parallel history repository.
+
+---
+
 ## DC-PACKAGE-TIMELINE-02 - Authorized Package history read (2026-11-25)
 
 The accepted timeline presentation in `features/jobs/ui/createPackageHistory.js`
@@ -29,8 +50,9 @@ time, stream revision and event ID, and returns a bounded page. It optionally
 resolves current Pipeline names through the existing projection, not as historical
 names. The response is scoped to the existing catalogue access policy and excludes
 raw payloads. The service intentionally targets the current in-memory store;
-replace its read implementation when a durable store is adopted. No new writes,
-actor attribution or persistence guarantees are introduced. See
+replace its read implementation when a durable store is adopted. TIMELINE-02
+introduced no new writes; TIMELINE-03 adds attribution to the existing writes
+without changing the store. See
 [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md) for the wire contract.
 
 ---

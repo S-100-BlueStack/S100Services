@@ -1,11 +1,13 @@
 # DataCatalogue first-look feedback and outstanding work
 
-> **Latest update (2026-11-24):** The user accepted the Package Details overlay
+> **Latest update (2026-11-25):** The user accepted the Package Details overlay
 > in commit `6342966632af3774d336b6f7e7d4e85ac0a51cf9`. The individual Package
 > history design preview was accepted in commit
-> `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`. The 2026-11-25 TIMELINE-02 candidate
-> replaces the left Details examples with committed Package and binding events
-> from the current in-memory store; durability and actor attribution remain open.
+> `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`. TIMELINE-02 was accepted and
+> committed at `d453900ffe342354aaf52a628f0b085fd905d6e7`; the left Details shows
+> committed Package/binding events. TIMELINE-03 adds Windows actor attribution
+> (candidate). History retention follows the event store; no separate durable
+> history task. Optional AD profile enrichment remains a follow-up.
 > The right panel
 > remains dedicated to metadata. `DC-MAP-LABEL` was accepted with scale limits
 > of 1:5,000,000 for Workspaces and 1:3,000,000 for Packages in user-reported
