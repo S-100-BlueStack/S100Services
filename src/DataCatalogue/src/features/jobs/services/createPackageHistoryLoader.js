@@ -1,4 +1,5 @@
 import { severityLabel } from "../../../shared/domain/severity.js";
+import { isDirectoryActor } from "../../../shared/api/actorProfile.js";
 
 const TITLES = Object.freeze({
   packageCreated: "Package created",
@@ -46,22 +47,78 @@ function initialState(packageId = null, available = false) {
 
 // Selection is supplied by the Details owner. Only this loader owns request
 // generation, continuation and history state; it never publishes Job/map state.
-export function createPackageHistoryLoader({ read, onChange = () => {} } = {}) {
+export function createPackageHistoryLoader({ read, readProfile, onChange = () => {} } = {}) {
   let state = initialState();
   let generation = 0;
   let pending = null;
   let alive = true;
   let failedBefore = null;
+  let profileRequest = null;
+  const profiles = new Map();
 
   function publish(patch) {
     state = { ...state, ...patch };
     onChange(state);
   }
 
+  const actorKey = (entry) =>
+    isDirectoryActor(entry.actorIdentity) ? entry.actorIdentity.toUpperCase() : null;
+
+  function withProfile(entry) {
+    const profile = profiles.get(actorKey(entry));
+    return profile ? { ...entry, profile } : entry;
+  }
+
+  // A separate best-effort read must never hold up the history page, mark it
+  // failed, or publish an older selection. Limit parallel profile requests.
+  async function enrich(owner, packageId) {
+    if (!alive || owner !== generation || typeof readProfile !== "function") return;
+    const unique = new Map();
+    for (const entry of state.entries) {
+      const key = actorKey(entry);
+      if (key && !profiles.has(key) && !unique.has(key)) unique.set(key, entry);
+    }
+    if (!unique.size) return;
+    const request = new AbortController();
+    profileRequest = request;
+    const queue = [...unique];
+    let index = 0;
+    const isCurrent = () => alive && owner === generation && !request.signal.aborted;
+    async function worker() {
+      while (isCurrent() && index < queue.length) {
+        const [key, entry] = queue[index++];
+        let profile = null;
+        try {
+          profile = await readProfile(packageId, entry.id, {
+            actor: entry.actorIdentity,
+            signal: request.signal,
+          });
+        } catch {
+          // Enrichment is optional, including older API deployments and AD outages.
+        }
+        if (!isCurrent()) return;
+        profiles.set(key, profile);
+        if (profile) {
+          publish({
+            entries: state.entries.map((item) =>
+              actorKey(item) === key ? withProfile(item) : item
+            ),
+          });
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+    if (profileRequest === request) profileRequest = null;
+  }
+
   async function load(before = null) {
     if (!alive || !state.packageId || pending || typeof read !== "function") return;
     const packageId = state.packageId;
     const owner = ++generation;
+    profileRequest?.abort();
+    profileRequest = null;
+    // Explicit Refresh permits retrying failed/expired directory reads.
+    if (!before) profiles.clear();
     const request = new AbortController();
     pending = request;
     failedBefore = before;
@@ -89,12 +146,13 @@ export function createPackageHistoryLoader({ read, onChange = () => {} } = {}) {
       }
       pending = null;
       publish({
-        entries: [...previous, ...entries],
+        entries: [...previous, ...entries].map(withProfile),
         nextBefore: result.nextBefore,
         isLoading: false,
         hasLoaded: true,
         error: null,
       });
+      void enrich(owner, packageId);
     } catch (error) {
       if (!alive || owner !== generation || request.signal.aborted) return;
       pending = null;
@@ -102,6 +160,7 @@ export function createPackageHistoryLoader({ read, onChange = () => {} } = {}) {
         isLoading: false,
         error: error?.message || "Package history could not be loaded.",
       });
+      void enrich(owner, packageId);
     }
   }
 
@@ -110,6 +169,9 @@ export function createPackageHistoryLoader({ read, onChange = () => {} } = {}) {
     generation++;
     pending?.abort();
     pending = null;
+    profileRequest?.abort();
+    profileRequest = null;
+    profiles.clear();
     failedBefore = null;
     state = initialState(packageId, typeof read === "function");
     if (packageId && typeof read === "function") void load();
@@ -127,6 +189,9 @@ export function createPackageHistoryLoader({ read, onChange = () => {} } = {}) {
       generation++;
       pending?.abort();
       pending = null;
+      profileRequest?.abort();
+      profileRequest = null;
+      profiles.clear();
       state = initialState();
     },
   };

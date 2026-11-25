@@ -1,3 +1,15 @@
+## DC-PACKAGE-TIMELINE-04 - Native history avatars (2026-11-25)
+
+Keep the accepted native read-only timeline. A fixed-size native `img` with
+empty alternative text and a public `calcite-icon` (`user`) fallback presents
+decorative profile imagery next to the accessible recorded actor/name text.
+Native image load/error events control the fallback; no custom element
+registration, private shadow DOM, or interactive avatar control is needed.
+The existing history scroll and focus ownership is unchanged. Theme tokens
+style the avatar border/background; no external image origin is introduced.
+
+---
+
 ## DC-PACKAGE-TIMELINE-02 - Native history controls (2026-11-25)
 
 The accepted native read-only timeline, scroll region and theme tokens are

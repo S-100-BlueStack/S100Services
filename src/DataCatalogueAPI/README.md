@@ -72,6 +72,36 @@ Focused tests on the existing Windows/.NET/ArcGIS Pro environment:
 dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~PackageHistory"
 ```
 
+## Read optional history actor profiles
+
+`GET /api/v1/packages/{id}/history/{eventId}/profile` uses the same access policy
+as Package history. The API resolves the original recorded actor from the
+requested Package/event, not a caller-provided username. Returns `200` with
+`actor`, nullable `displayName`, `photoMediaType` and `photoBase64`; `204` when
+no profile is available; `404` when the Package/event is not found. Photos are
+bounded JPEG/PNG thumbnails, not URLs. Responses are marked no-store. The
+original account is authoritative and current AD names/photos are presentation
+only. No profile writes, event changes or additional persistence.
+
+Requires the pinned `System.DirectoryServices` 10.0.13 NuGet package (included in
+DataCatalogueAPI.csproj). The service uses the API's Windows execution identity
+and default AD naming context; no credentials or separate directory configuration
+are supplied. It resolves a full qualified account to a SID and searches with
+signing/sealing, without referrals. Confirm the actual process/application pool
+can read `displayName` and `thumbnailPhoto` for recorded users. No LDAP call in
+startup, Package mutations or ordinary history reads. The dedicated cache has a
+256-entry limit, 30-minute positive and 2-minute negative TTLs, and at most four
+concurrent directory operations; each request waits at most five seconds for a
+lookup. A synchronous OS lookup can outlive a reader; its slot remains occupied
+until it exits. Directory failures return the normal missing-profile fallback.
+No names/photos or raw LDAP errors are logged. A deployment without the matching
+frontend/API still shows the recorded accounts; an unavailable profile is not a
+history error. See `src/DataCatalogue/docs/BACKEND_CONTRACTS.md`.
+
+```powershell
+dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~ActorProfile"
+```
+
 ## Geometry JSON format
 
 Package creation (`CreatePackageRequest`), severity areas (`AddSeverityAreaRequest`)

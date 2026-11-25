@@ -10,6 +10,7 @@ export function createJobsOverlay({
   jobStore,
   sourceMode = "mock",
   readPackageHistory,
+  readPackageHistoryProfile,
   onScopeChange = () => {},
   now = () => Date.now(),
 } = {}) {
@@ -18,6 +19,7 @@ export function createJobsOverlay({
     store: jobStore,
     sourceMode,
     readPackageHistory,
+    readPackageHistoryProfile,
   });
   const panelElement = document.createElement("aside");
   panelElement.id = "data-catalogue-jobs-panel";

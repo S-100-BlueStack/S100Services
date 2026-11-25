@@ -70,8 +70,11 @@ Windows accounts at mutation time and shows the account name/B-number in the
 history list, with the original domain-qualified identity in a tooltip. Legacy
 entries remain unattributed; sample initialization shows `System`. The current
 store is in-memory; retention follows the event store, not a separate history
-store. Optional AD profile enrichment is a follow-up. Mock status actions do not
-create history. See `docs/BACKEND_CONTRACTS.md` for wire semantics and deployment
+store. TIMELINE-03 was accepted at `c0e9497d`. TIMELINE-04 adds optional current
+AD display names and thumbnails through a separate, authorized event-scoped read;
+missing/failed profiles fall back to the recorded account and a neutral icon.
+API runtime directory access remains a local/deployment acceptance check. Mock
+status actions do not create history. See `docs/BACKEND_CONTRACTS.md` for wire semantics and deployment
 requirements.
 
 The accepted live Main Map labels display Workspace names at 1:5,000,000 or

@@ -5,9 +5,9 @@
 > history design preview was accepted in commit
 > `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`. TIMELINE-02 was accepted and
 > committed at `d453900ffe342354aaf52a628f0b085fd905d6e7`; the left Details shows
-> committed Package/binding events. TIMELINE-03 adds Windows actor attribution
-> (candidate). History retention follows the event store; no separate durable
-> history task. Optional AD profile enrichment remains a follow-up.
+> committed Package/binding events. TIMELINE-03 Windows actor attribution was
+> accepted in `c0e9497d`; TIMELINE-04 is the separate AD profile candidate.
+> History retention follows the event store; no separate durable history task.
 > The right panel
 > remains dedicated to metadata. `DC-MAP-LABEL` was accepted with scale limits
 > of 1:5,000,000 for Workspaces and 1:3,000,000 for Packages in user-reported

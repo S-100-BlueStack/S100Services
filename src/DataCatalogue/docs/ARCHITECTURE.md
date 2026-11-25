@@ -1,3 +1,27 @@
+## DC-PACKAGE-TIMELINE-04 - Optional directory enrichment (2026-11-25)
+
+`PackageHistoryController.GetProfile` authorizes the same read policy as History
+and resolves an event via `PackageHistoryService.FindEvent`, including historical
+binding streams. `ActorProfileService` owns a bounded, process-local cache and
+same-account single-flight, and limits synchronous Windows directory operations.
+`IActorProfileDirectory` isolates the AD implementation and permits deterministic
+tests. `ActiveDirectoryActorProfileDirectory` resolves the recorded qualified
+account to a SID and reads only `displayName`/`thumbnailPhoto`. No ambient request
+identity flows into the directory worker. No profile enrichment at startup, during
+history page reads, mutations or replay. No event changes or separate persistence.
+
+`createCatalogueService.packageHistoryProfile` uses the existing API transport;
+`actorProfile.js` validates the response. `createPackageHistoryLoader` owns both
+history and profile generations; the history snapshot is published first, and
+at most four asynchronous profile requests enrich distinct full accounts for
+that selection. Refresh/older pages and selection/disposal invalidate obsolete
+profile reads; profile updates do not publish Job/map state. `createPackageHistory`
+renders text and a native image with a public Calcite icon fallback, preserving
+its scroll region and existing keyboard controls. No external image origins or
+browser persistent cache are used. Profiles are current directory data only.
+
+---
+
 ## DC-PACKAGE-TIMELINE-03 - Actor capture at the mutation boundary (2026-11-25)
 
 The API captures authenticated account names in `PackageHistoryActor` at
@@ -13,8 +37,8 @@ The existing frontend normalizer preserves `actor`; `createPackageHistoryLoader`
 formats only its display label and keeps the original identity. The native
 history component renders it as text and sets the original name as a tooltip
 when shortened. The map, status actions, history request lifecycle and layout are
-unchanged. A future directory enrichment service must be optional, bounded and
-cached; it must not block writes or alter historical identity. Retention remains
+unchanged. The separate directory enrichment service introduced in TIMELINE-04 is optional,
+bounded and cached; it does not block writes or alter historical identity. Retention remains
 owned by the event store, not a parallel history repository.
 
 ---

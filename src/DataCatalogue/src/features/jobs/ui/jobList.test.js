@@ -1369,3 +1369,95 @@ test("History list renders supplied text and optional context safely", () => {
     assert.equal(findByClass(entries[1], "package-history__context").length, 1);
   });
 });
+
+test("History profiles preserve the recorded account and show an accessible avatar fallback", () => {
+  withDocument(() => {
+    const list = createPackageHistoryList(
+      [
+        {
+          dateTime: "2026-01-15T10:00:00Z",
+          timeLabel: "15 Jan 2026, 10:00 UTC",
+          title: "Package created",
+          actor: "B123456",
+          actorIdentity: "PROD\\B123456",
+          profile: {
+            displayName: "Example <name>",
+            photoSrc: "data:image/jpeg;base64,/9j/AA==",
+          },
+        },
+        { actor: "B654321", actorIdentity: "PROD\\B654321", title: "Workstream assigned" },
+        { actor: "System", actorIdentity: "System", title: "Package created" },
+        { actor: "Actor not recorded", actorIdentity: null, title: "Package created" },
+      ],
+      { label: "Package history" }
+    );
+    const actors = findByClass(list, "package-history__actor");
+    assert.equal(actors[0].textContent, "Example <name> (B123456)");
+    assert.equal(actors[0].title, "PROD\\B123456");
+    assert.equal(actors[1].textContent, "B654321");
+    assert.equal(actors[2].textContent, "System");
+    assert.equal(actors[3].textContent, "Actor not recorded");
+    const avatars = findByClass(list, "package-history__avatar");
+    assert.equal(avatars.length, 2);
+    assert.equal(avatars[0].attributes.get("aria-hidden"), "true");
+    assert.equal(findByTag(avatars[1], "calcite-icon")[0].icon, "user");
+    const image = findByTag(list, "img")[0];
+    assert.equal(image.alt, "");
+    assert.equal(image.hidden, true);
+    image.dispatchEvent({ type: "load" });
+    assert.equal(image.hidden, false);
+    image.dispatchEvent({ type: "error" });
+    assert.equal(image.hidden, true);
+  });
+});
+
+test("Profile enrichment updates only History and preserves the mounted scroll and focus", async () => {
+  await withAsyncDocument(async () => {
+    const { store, job } = fixture("live");
+    const calls = [];
+    let resolveProfile;
+    const overlay = createJobsOverlay({
+      jobStore: store,
+      sourceMode: "live",
+      async readPackageHistory() {
+        return {
+          items: [recordedHistoryEvent("event", { actor: "PROD\\B123456" })],
+          nextBefore: null,
+        };
+      },
+      readPackageHistoryProfile(id, eventId, options) {
+        calls.push({ id, eventId, options });
+        return new Promise((resolve) => {
+          resolveProfile = resolve;
+        });
+      },
+    });
+    try {
+      assert.equal(calls.length, 0);
+      await overlay.showJobDetails({ jobId: job.id });
+      await Promise.resolve();
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].id, job.packageId);
+      assert.equal(calls[0].eventId, "event");
+      const details = findByClass(overlay.element, "job-details")[0];
+      const history = findByClass(details, "package-history")[0];
+      const scroll = findByClass(history, "package-history__scroll")[0];
+      assert.equal(findByClass(history, "package-history__actor")[0].textContent, "B123456");
+      scroll.scrollTop = 32;
+      scroll.focus();
+      resolveProfile({ displayName: "Example user", photoSrc: null });
+      await Promise.resolve();
+      assert.equal(findByClass(overlay.element, "job-details")[0], details);
+      assert.equal(findByClass(history, "package-history__scroll")[0], scroll);
+      assert.equal(scroll.scrollTop, 32);
+      assert.equal(document.activeElement, scroll);
+      assert.equal(
+        findByClass(history, "package-history__actor")[0].textContent,
+        "Example user (B123456)"
+      );
+      assert.equal(findByClass(overlay.packageInformationElement, "package-history").length, 0);
+    } finally {
+      overlay.destroy();
+    }
+  });
+});

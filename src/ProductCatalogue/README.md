@@ -35,13 +35,12 @@ The main map route owns product correction management, popup actions, map filter
 
 The Analyze route owns analysis/report display for selected products. The Review route owns side-by-side product review for multiple selected products.
 
-## Development contract and demo preparation (2026-11-10)
+## Development contract and demo preparation
 
-This documentation reconciliation uses the explicitly supplied committed snapshot
-`63c89ff0d11899ef81a54dcd18b116de8c5dfdf4` (2026-11-10). The earlier
-`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` reference was the October
-planning baseline, not the current default for future tasks. Always use the **explicit
-commit supplied by the next task** rather than either documentation snapshot.
+The 2026-11-25 documentation reconciliation uses the verified committed snapshot
+`ff807a4923fcef01dccae85d2e8db5c594eb612a`, including the developer-accepted PC-UX-R10 implementation.
+Earlier October and November planning snapshots remain historical. Always use the **explicit
+commit supplied by the next task**, not this documentation snapshot.
 
 - [AI development rules](AGENTS.md) govern baseline validation, source access and delivery.
 - [Architecture invariants](docs/INVARIANTS.md) and [module map](docs/MODULE_MAP.md)
@@ -79,7 +78,8 @@ the list does not claim complete backend or browser/deployment acceptance:
 
 - Main-map AOI loading, ArcGIS Graphics, hover/overlap selection, modifier selection,
   refresh reconciliation, scale hiding and source-aware Product identity.
-- Permanent Main-map navbar Product search and independent, on-demand geographic Locator.
+- Separate, mutually exclusive Main-map navbar Search and Locator actions for Product lookup
+  and geographic navigation, respectively (PC-UX-R03B).
 - Source-aware Data sources, Filter facets, contextual counts and persisted preferences.
   ENC-package map colors and Package-status filters follow aggregate backend
   `Package.Status`, not S-101/S-57 candidate statuses. Mixed-status hatches are retired.
@@ -92,6 +92,9 @@ the list does not claim complete backend or browser/deployment acceptance:
 - Product Collection, Product History/Timeline and source-aware Analyze/Review workspaces.
 - Dashboard range/calendar, committed filtering, sorting, cursor pagination, operational
   reporting and route-local History, IC-ENC and Validation panels.
+- Shared read-only SevenCs validation report viewer across Main Map, Dashboard, Analyze and
+  Review; verified VLD files support preview and original download, while ZIP diagnostics
+  and other artifact formats remain download-only.
 - Shared navbar, Theme/Preferences, Basemap Gallery on Main Map and Analyze, route-specific
   onboarding, notices, light/dark interaction and reduced-motion behavior.
 - Initial Main-map and Analyze loading/readiness safeguards. Final acceptance still needs
@@ -247,8 +250,9 @@ Product popup attribute rendering is hardened so first-load popup details do not
 
 ### Main map Product search
 
-Main-map Product search is permanently mounted in the Main-map **navbar**, alongside
-its separate expandable Locator control (FI-027). It indexes currently committed
+Main-map Product search and Locator are separate icon-only actions in the **navbar**.
+Their on-demand surfaces are mutually exclusive with the other navbar panels (R03B,
+superseding the original FI-027 layout). Product search indexes currently committed
 active frontend Graphics and their source-aware Product contexts, not the Analyze/Review
 workspace catalog or backend place search.
 
@@ -301,15 +305,37 @@ resolution. Runtime Products come from the authoritative S-57 and S-101 registry
 metadata and validation artifact history. Review uses the same Product context to avoid cross-source
 History/report requests. Synthetic Paper Charts/S-102 fixtures are available only to explicit tests.
 
-Analyze owns product analysis/report display and does not own mutation actions. Review owns multi-product
-review; mixed workspaces isolate Product/provider failures and distinguish unavailable content from failed
-loads. Review tabs remain independent and should not reintroduce BroadcastChannel/session picker workflows
+Analyze owns Product analysis/report display. Its sidebar remains read-only; its map Product
+popup reuses verified backend-authorized Package actions within an Analyze-owned session, without
+Tools or Main Map popup lifetime. Review owns multi-Product review; mixed workspaces
+isolate Product/provider failures and distinguish unavailable content from failed loads. Review tabs remain independent and should not reintroduce BroadcastChannel/session picker workflows
 without a clear UX reason.
 
 Canonical public routes are `/Analyze?Datasets=ProductA,ProductB` and
-`/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique; source identity remains
+`/Review?Datasets=ProductA,ProductB`; empty workspaces use `/Analyze` and `/Review`
+without `Datasets=`. Dataset names are globally unique; source identity remains
 internal to the workspace runtime model. See [workspace routing](src/shared/routing/README.md)
 for serialization, picker synchronization, and temporary legacy-path compatibility.
+
+### Shared SevenCs validation report viewer
+
+The [validation viewer](src/features/validationViewer/README.md) owns the shared read-only modal,
+verified artifact-byte requests, Analyzer report parsing and presentation. It opens only on an
+eligible internal VLD artifact's **View report** action, using the exact Product/member and artifact
+identity from the existing download. Main Map uses compact member file rows; Dashboard uses
+responsive report tiles; Analyze and Review retain their existing report panels. No validation,
+workflow mutation or new report-discovery request is initiated by opening the viewer.
+
+Reported Critical/Error/Warning totals remain distinct from stored occurrences. Findings support
+severity filters, search, check grouping and occurrence inspection. Unsupported or malformed reports
+fall back to Raw file when readable bytes are available. Preview is limited to 16 MiB; original
+file downloads remain available. Closing or replacing the modal aborts its request and preserves
+focus without transferring ownership of the underlying workspace. The initial Analyzer 5.5.0
+Build 10 S-101 format is supported; general S-57 compatibility is not established.
+
+IC-ENC attachments, shapes ZIPs and other formats remain download-only. Geographic findings,
+shapes extraction/map integration, AI explanations and Encoding Guide integration are separate
+follow-ups, not requirements of the accepted viewer.
 
 ### Timeline and Product History
 
@@ -694,8 +720,12 @@ The last planned general UI polish is committed at `63c89ff0d11899ef81a54dcd18b1
 The subsequent Dashboard reporting backend (`dca718363ec901add42985e4da1755fecf409a31`) and
 R06 reporting frontend (`c382d760f2f137974eaade673e5029112b288cc4`) are developer-accepted;
 the frontend is merged at `c45a1255ea9a7138cc5045de0bc8ec90d39d48dd`.
-Next work is targeted real-usage feedback, production-style Main-map performance measurement and
-post-merge demo/deployment verification, not another general UI redesign.
+The shared SevenCs validation viewer (PC-UX-R10, including v2 presentation corrections)
+was reviewed and accepted by the developer and committed at
+`ff807a4923fcef01dccae85d2e8db5c594eb612a` on 2026-11-25.
+Remaining work includes targeted real-usage feedback, production-style Main-map performance
+measurement and demo/deployment verification. Viewer extensions require separate prioritization;
+this status record does not approve new functionality.
 For package aggregate status, navigation and accessibility changes since October, see the
 [hardening tracker](docs/frontend-hardening-tracker.md) and
 [UI/UX backlog](docs/ui-ux-design-backlog.md).

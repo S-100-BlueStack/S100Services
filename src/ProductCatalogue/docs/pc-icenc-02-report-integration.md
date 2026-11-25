@@ -1,5 +1,15 @@
 # PC-ICENC-02 - IC-ENC artifact integration
 
+> **Supersession note (2026-11-25):** This report preserves the original verified
+> PC-ICENC-02 integration scope. R06 subsequently added Dashboard report aggregates
+> and Product-level availability filtering (see the [frontend tracker](frontend-hardening-tracker.md)).
+> The R10 viewer accepted at `ff807a49` adds preview for eligible internal VLDs,
+> not IC-ENC attachments or shapes ZIPs. See the
+> [validation viewer contract](../src/features/validationViewer/README.md).
+> The original empty activity-projection observation below is historical; exact
+> event-to-artifact attribution, live IC-ENC verdict history and authorized retrieval
+> verification remain separate. No newer backend source was reviewed in PC-DOC-01.
+
 ## Source and authority
 
 - **Repository:** `S100Services`.

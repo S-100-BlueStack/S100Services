@@ -865,7 +865,22 @@ Analyze continues to perform one Product lookup per request.
 
 ## Reports
 
-Report implementation is blocked pending IC-ENC and internal validation process decisions.
+**Reconciliation note (2026-11-25):** The earlier planning text below predates the
+verified Product-scoped artifact history and download contract recorded in
+[PC-ICENC-02](docs/pc-icenc-02-report-integration.md). Dashboard report aggregates
+and Product-level filters were integrated in R06; PC-UX-R10 was accepted at
+`ff807a49` and adds a read-only VLD preview over the existing
+`GET electronicproducts/{datasetName}/artifacts/{artifactId}` route. The
+[validation viewer contract](src/features/validationViewer/README.md) describes the
+frontend identity and request safeguards. This is not a new backend review, API
+change or approval to build additional report persistence. Exact report-to-event
+attribution, IC-ENC decision history and live processing/download verification
+remain separate boundaries. Do not interpret the historical placeholder-only
+wording as a requirement to disable supported existing links or previews.
+
+### Historical report planning requirements
+
+Report implementation was blocked pending IC-ENC and internal validation process decisions at the earlier reviewed baseline.
 
 Do not build permanent report storage, report IDs, or report-content endpoints yet.
 

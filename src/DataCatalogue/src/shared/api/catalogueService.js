@@ -3,6 +3,7 @@ import { normalizePackageGeometry } from "./packageGeometry.js";
 import { normalizePackageAssignmentSummary } from "./packageAssignmentSummary.js";
 import { normalizePackageAoiItem } from "./packageAoiPage.js";
 import { normalizePackageHistoryPage, validateHistoryRequest } from "./packageHistory.js";
+import { normalizeActorProfile, validateProfileRequest } from "./actorProfile.js";
 
 export function requiredId(value) {
   if (typeof value !== "string" || !value.trim())
@@ -181,6 +182,15 @@ export function createCatalogueService(client) {
         id,
         pageSize,
         before
+      );
+    },
+    async packageHistoryProfile(id, eventId, { actor, signal } = {}) {
+      validateProfileRequest(eventId, actor);
+      return normalizeActorProfile(
+        await client.request(`/v1/packages/${segment(id)}/history/${segment(eventId)}/profile`, {
+          signal,
+        }),
+        actor
       );
     },
     async packageGeometry(id, { signal } = {}) {

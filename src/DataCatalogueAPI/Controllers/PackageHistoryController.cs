@@ -44,4 +44,25 @@ public sealed class PackageHistoryController(PackageHistoryService history) : Co
             return this.ValidationProblem(this.ModelState);
         }
     }
+
+    /// <summary>Resolves the current directory profile of the recorded actor of one history event.</summary>
+    /// <param name="id">Canonical package identifier.</param>
+    /// <param name="eventId">Recorded history event identifier.</param>
+    /// <param name="profiles">The optional directory enrichment service.</param>
+    /// <param name="cancellationToken">Cancels the reader's wait.</param>
+    /// <remarks>Best-effort enrichment only. The recorded actor remains authoritative. No caller-supplied directory identity is accepted.</remarks>
+    [HttpGet("{eventId:guid}/profile")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<ActorProfileResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ActorProfileResponse>> GetProfile(string id, Guid eventId, [FromServices] ActorProfileService profiles, CancellationToken cancellationToken) {
+        var entry = string.IsNullOrWhiteSpace(id) ? null : history.FindEvent(id, eventId, cancellationToken);
+        if (entry is null) { return this.Problem(title: "Package history event not found.", statusCode: StatusCodes.Status404NotFound); }
+        var profile = await profiles.GetAsync(entry.Actor, cancellationToken);
+        if (profile is null) { return this.NoContent(); }
+        return this.Ok(profile);
+    }
 }
