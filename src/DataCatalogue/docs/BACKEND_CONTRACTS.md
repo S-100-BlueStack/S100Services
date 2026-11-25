@@ -1,3 +1,19 @@
+# DataCatalogue Backend Contracts
+
+## Current live integration
+
+[Live scope](FEATURE_WORKSPACE_SCOPE.md) defines the frontend terminology.
+Use technical Pipeline identifiers in routes and payloads. A saved binding and
+AOI intersection determine Workspace membership. The [API README](../../DataCatalogueAPI/README.md)
+documents the v1 resources and hosting paths, including the combined Workspace
+overview and Package geometry reads.
+
+The authorized Package history and optional actor profile contracts are below.
+Persistent contextual Job status, functional Compilation/QC, archived Package
+discovery and prospective Workspace intersection remain separate
+[backend gaps](DC_API_BACKEND_GAPS.md). Dated integration and demo notes retain
+the semantics and limitations known at delivery.
+
 ## DC-PACKAGE-TIMELINE-04 - Actor profile enrichment (2026-11-25)
 
 `GET /v1/packages/{id}/history/{eventId}/profile` uses the canonical Package ID
@@ -29,7 +45,8 @@ System, unknown/unqualified actor, lookup failure, timeout or capacity limit);
 is non-cacheable by the browser (`Cache-Control: no-store`). No raw directory
 errors, arbitrary image URLs, SID values or directory records are returned.
 
-The lookup resolves the full qualified Windows account to a current SID and
+The API's Windows execution identity resolves the full qualified account to
+a current SID and
 searches the API's default directory naming context with integrated credentials,
 signing/sealing, and no referral chasing. Different domains are not guessed.
 This is a best-effort current display profile: AD rename/deletion/account reuse
@@ -395,8 +412,6 @@ both binding responses and Workspace package listing (Jobs). See
 Current Package geometry references do not expose generalized AOI coordinates or detailed
 Feature geometry to the browser (`GEO-01`, `GEO-04`). The frontend uses only verified
 Workspace Esri JSON geometry and does not require a published Feature Service.
-
-# DataCatalogue Backend Contracts
 
 ## DC-API-04 verified geometry reads (2026-10-29)
 

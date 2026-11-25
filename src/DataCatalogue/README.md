@@ -1,13 +1,3 @@
-## Package Assignment: automatic Workspace matches (2026-11-17)
-
-Live Workstream bindings remain editable and saved through the existing Pipeline
-API. Workspace names beneath each selected Workstream are read-only matches from
-the last saved binding response; new Workstream assignments calculate matches on Save.
-No manual Workspace include/exclude draft, extra Workspace catalogue read or
-Workspace mutation is offered. Mock Feature/Work stream assignment is unchanged.
-DC-ASSIGN-AUTOMATCH was accepted and committed as reported by the user.
-See `docs/PROJECT_TRACKER.md` for the acceptance record.
-
 # DataCatalogue frontend
 
 DataCatalogue is an ArcGIS/Vite frontend in `S100Services/src/DataCatalogue`.
@@ -37,7 +27,15 @@ the Package assignment list retains server paging/order.
 
 Live maps use the verified backend geometry contracts for Workspace coverage and
 Package AOIs. Workspace list and Package/Job access remain usable independently
-of map readiness. Demo geometry URLs must not be treated as live catalogue joins.
+of map readiness. Demo geometry URLs are reserved for mock mode.
+
+## Package Assignment
+
+Live Workstream bindings are saved through the existing Pipeline API. The
+Workspace list below each selected Workstream shows read-only matches from the
+last saved binding response. New bindings get their matches on Save. The
+historical mock Feature/Work stream assignment retains its separate draft and
+comment behavior. See [live assignment scope](docs/FEATURE_WORKSPACE_SCOPE.md#package-assignment-page).
 
 ## Main-map Packages presentation
 
@@ -60,22 +58,18 @@ the unchanged map and keep their shadows. Narrow windows use a lower-right overl
 so the upper map controls remain accessible. List Refresh and error-only Retry
 use the existing Packages read; the information panel adds no metadata requests. The existing selected-Package geometry read is unchanged.
 Assignment-specific editing and saved-binding inspection remain in Package
-Assignment. The user accepted this panel in commit `6342966632af3774d336b6f7e7d4e85ac0a51cf9`.
-The accepted individual Package history layout below the actions and facts in
-left live Details now displays actual committed Package and binding events in
-DC-PACKAGE-TIMELINE-02. It loads on demand through the matching v1 API, with its
-own Refresh, Retry and Load older events controls. The right metadata overlay
-remains unchanged. TIMELINE-02 was accepted in `d453900f`. TIMELINE-03 records
-Windows accounts at mutation time and shows the account name/B-number in the
-history list, with the original domain-qualified identity in a tooltip. Legacy
-entries remain unattributed; sample initialization shows `System`. The current
-store is in-memory; retention follows the event store, not a separate history
-store. TIMELINE-03 was accepted at `c0e9497d`. TIMELINE-04 adds optional current
-AD display names and thumbnails through a separate, authorized event-scoped read;
-missing/failed profiles fall back to the recorded account and a neutral icon.
-API runtime directory access remains a local/deployment acceptance check. Mock
-status actions do not create history. See `docs/BACKEND_CONTRACTS.md` for wire semantics and deployment
-requirements.
+Assignment. The left Details History section loads authorized committed Package and binding
+events on demand. Its Refresh, Retry and Load older events controls are separate
+from the Package list. Windows accounts are captured at mutation time. Explicit
+sample initialization shows `System` and older events without actors show
+`Actor not recorded`. Optional AD enrichment reads the current display name
+and thumbnail for a recorded event. Unavailable profiles fall back to the
+recorded account and neutral icon. The user confirmed local profile rendering
+and checks. Verify the deployed IIS execution identity and cross-account access
+when deploying. History follows the current in-memory event store's retention.
+Temporary `Done` and `No update` statuses create no events. See
+[backend contracts](docs/BACKEND_CONTRACTS.md#dc-package-timeline-04---actor-profile-enrichment-2026-11-25)
+and [acceptance records](docs/PROJECT_TRACKER.md).
 
 The accepted live Main Map labels display Workspace names at 1:5,000,000 or
 closer and Package Short IDs at 1:3,000,000 or closer. Labels reuse existing
@@ -88,31 +82,18 @@ See [DC-UX-03D validation](docs/DC_UX_03D_VALIDATION.md) for browser acceptance.
 
 ## Local development
 
-DC-SDK-01 declares matching exact 5.2.1 versions of ArcGIS Core, Map Components,
-and Calcite. The committed lockfile must be regenerated with npm **before** running
-`npm ci`, `npm run check`, or building the upgrade candidate. From
-`src/DataCatalogue`, run:
-
-```powershell
-npm install --save-exact @arcgis/core@5.2.1 @arcgis/map-components@5.2.1 @esri/calcite-components@5.2.1
-npm run format
-npm run check
-```
-
-Review and commit both `package.json` and the npm-generated `package-lock.json`
-only after the local check and browser tests pass. Do not hand-edit the lockfile.
-For the full verification matrix and 6.0 compatibility follow-ups, see
-[DC-SDK-01 validation](docs/DC_SDK_01_VALIDATION.md).
-
-For a fresh checkout _after_ the lockfile has been committed, from the repository root:
+The manifest and committed lockfile pin ArcGIS Core, Map Components and Calcite
+to 5.2.1. From the repository root, install the locked dependencies and create
+a local environment file if one does not already exist:
 
 ```powershell
 Set-Location src/DataCatalogue
 npm ci
-Copy-Item .env.example .env.local
-npm run check
-npm run dev
+if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
 ```
+
+See [DC-SDK-01 validation](docs/DC_SDK_01_VALIDATION.md) for the historical
+upgrade checks and later compatibility follow-ups.
 
 Edit `.env.local` before starting Vite. To test the live API, set `VITE_CATALOGUE_SOURCE=live`.
 `VITE_CATALOGUE_API_BASE_URL` specifies the **public API URL prefix**, not the controller
@@ -160,15 +141,16 @@ See [DC-SDK-02 validation](docs/DC_SDK_02_VALIDATION.md) for local checks.
 `VITE_*` configuration is public in the browser and read at build/start time. Never store
 private credentials, user access tokens or passwords there. The scoped browser-visible
 Basemap Styles API key above must have appropriate privileges and origin restrictions.
-Restart Vite after changing source mode.
+After configuring the environment, use `npm run check` and start Vite with
+`npm run dev`. Restart Vite after changing source mode.
 Windows Negotiate is configured in the backend source; actual SSO permissions, origin and
 CORS must be checked locally. Backend in-memory persistence is acceptable for integration
 testing only and may be lost at restart.
 
 `npm run check` runs format checking, lint, tests and build. If formatting adjustments are
 needed after extraction, review `npm run format` output before rerunning `npm run check`.
-This environment had no project dependencies; see the exact executed checks in the delivery
-report and [local verification instructions](docs/DC_API_LOCAL_VERIFICATION.md).
+Use [local verification instructions](docs/DC_API_LOCAL_VERIFICATION.md) for
+live API and browser checks, with current behavior described in the tracker.
 
 ## Main Map combined Workspace reads (DC-PERF-FE-01)
 
@@ -213,10 +195,11 @@ paths must not contain secrets or authentication tokens.
 
 ## Documentation
 
-- [Project tracker](docs/PROJECT_TRACKER.md): current candidate status and historical work.
+- [Project tracker](docs/PROJECT_TRACKER.md): current decisions, acceptance and historical work.
 - [Current Package, Workstream and Workspace scope](docs/FEATURE_WORKSPACE_SCOPE.md).
 - [Historical demo scope](docs/FEATURE_WORK_STREAM_SCOPE.md).
 - [Architecture](docs/ARCHITECTURE.md).
+- [ChatGPT workflow](docs/CHATGPT_PROJECT_INSTRUCTIONS.md).
 - [Backend contracts](docs/BACKEND_CONTRACTS.md).
 - [Backend gap register](docs/DC_API_BACKEND_GAPS.md).
 - [Local verification](docs/DC_API_LOCAL_VERIFICATION.md).

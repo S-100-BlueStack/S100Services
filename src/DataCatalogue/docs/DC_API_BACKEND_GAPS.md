@@ -1,3 +1,14 @@
+# DataCatalogue backend gaps
+
+Use the [tracker](PROJECT_TRACKER.md) for current priorities and acceptance,
+and [backend contracts](BACKEND_CONTRACTS.md) for source-verified resources.
+Current follow-ups include functional Compilation/QC, persistent contextual
+status and completion history, archived Package discovery, prospective
+Workspace matching, global Package search, binding comments and concurrency,
+and Workspace ownership. Earlier candidate notes preserve the gaps known at
+delivery. Later entries record the verified geometry and binding reads that
+superseded the original proposals.
+
 > Terminology (2026-11-24): the live frontend calls Pipeline a Workstream.
 > Pipeline remains the technical backend entity and API terminology throughout
 > this gap register. Workspace remains a distinct entity. No backend gap is
@@ -17,14 +28,14 @@ history reader or current locks.
   Eventuous store remains in-memory until the planned durable store is adopted.
   History retention follows that store. Adapt the history read to the future
   store and historical binding streams during that migration.
-- **`DC-PACKAGE-TIMELINE-04` (profile candidate):** authorized event-scoped AD
-  display names and thumbnails are implemented separately from history. Desktop
-  LDAP lookup confirmed for the user's account; API execution identity, default
-  naming context, other-user reads, photo visibility and browser CSP are still
-  unverified in the deployed environment. Test Kestrel and IIS; absent/failed
-  profiles fall back to recorded account and neutral icon. No AD calls during
-  mutations or history pages, no attributes/photos in events, no separate durable
-  history store. Current profile data is not an immutable historical identity.
+- **`DC-PACKAGE-TIMELINE-04` (deployment verification):** the user accepted the
+  separate authorized event-scoped AD name and photo read locally. See the
+  [TIMELINE-04 acceptance record](PROJECT_TRACKER.md#dc-package-timeline-04---active-directory-actor-profiles-2026-11-25).
+  Verify the deployed IIS process identity, default naming context,
+  cross-account reads, photo visibility and browser CSP. A missing or failed
+  profile falls back to the recorded account and neutral icon. Mutations and
+  history pages perform no AD reads. Names and photos are current directory
+  attributes and stay outside events and persistent browser storage.
 - Historical Workspace context and persistent Job status/history are not
   supplied by this read. `DC-PACKAGE-HISTORY-01`, `JOB-01`, `PAGE-01`, and functional
   QC remain separate. Do not turn current bindings, temporary Job status or QC
@@ -47,8 +58,8 @@ left Details presentation using explicitly fictional, fixed examples. It makes
 no history request and does not infer events from current metadata, bindings or
 temporary status. Real history is explicitly unavailable, not an empty result.
 No event types, field names or ordering contract are asserted by the example
-list. At that stage the history read remained open; see the current
-DC-PACKAGE-TIMELINE-03 entry above for the accepted read, accepted actor attribution, profile candidate and remaining gaps.
+list. At that stage the history read remained open. See the history entry above
+for the implemented read, actor attribution and profile deployment checks.
 
 `DC-ASSIGN-MATCH-PREVIEW-01` also remains deferred: an authorized, read-only pre-Save intersection calculation must be verified or agreed with the backend owner. Current saved matches are not preview results. No backend changes or invented routes are included in this documentation update.
 
@@ -329,9 +340,9 @@ response shapes before frontend work begins.
 
 ---
 
-# DC-API backend and integration gap register
+## Historical DC-API gap register (2026-10-29)
 
-## Current correction notes (2026-10-29)
+### Correction notes at delivery
 
 - **GEO-01 remains unresolved:** rendering all Workspaces cannot supply separate Package or
   Job AOI coordinates. A verified, read-only geometry contract is still required before

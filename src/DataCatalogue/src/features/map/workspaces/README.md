@@ -1,23 +1,26 @@
 # Live Workspace geometry
 
-The 2026-11-24 terminology change is presentation-only. Dated sections below
-retain earlier UI wording and technical Pipeline references; the historical
-visibility controls are superseded by unified Work Scope.
-
-DC-API-04 uses the existing catalogue Workspace detail read; no Feature Service is required.
-The live Main Map uses the Packages Work Scope to select Workstreams and
-Workspaces. Workstream is the UI label for the existing backend Pipeline;
-Workspace identity and all map layer/selection identifiers remain unchanged. The assignment map renders only the Workspaces from
-the selected Package's saved bindings. Neither map invents Package/Job AOIs.
+The live Main Map uses Packages Work Scope to select Workstreams and
+Workspaces. Workstream labels the backend Pipeline in the UI. Workspace
+identity and map layer identifiers keep their existing meaning. Main Map reuses
+the combined Workspace overview. Package Assignment reads Workspace geometry
+for the selected Package's saved binding matches. Both maps use backend Esri
+JSON. Their separate Package geometry overlays use the verified Package reads.
+See [live scope](../../../../docs/FEATURE_WORKSPACE_SCOPE.md) and
+[architecture](../../../../docs/ARCHITECTURE.md). Earlier visibility, panel
+and geometry limits below describe the original DC-API-04 integration.
 
 ## Data and lifecycle
 
-`catalogueService.workspace()` validates the returned Workspace ID and preserves `esriJSON`.
-`shared/api/workspaceGeometry` validates that wire string and creates a 2D horizontal polygon.
-`createWorkspaceGeometrySource` deduplicates each batch by the Pipeline/Workspace tuple and
-reads with four workers per map. Each read has a 20-second abort deadline. Individual errors
-are returned with Workspace context so other valid polygons remain usable. Parent aborts
-stop workers from starting further reads. Transport is the existing catalogue client.
+[Workspace geometry normalization](../../../../src/shared/api/workspaceGeometry.js)
+validates the backend Esri JSON string as a 2D horizontal polygon.
+`createWorkspaceGeometrySource` deduplicates each batch by the Pipeline/Workspace
+tuple. On Main Map it reuses matching Workspace geometry from the overview.
+Missing components fall back to `catalogueService.workspace()`. Package
+Assignment uses that detail read directly. Detail reads use four workers per
+map by default, with a 20-second abort deadline per read. Errors are scoped to
+the Workspace so other valid polygons remain usable. Parent abort stops new
+reads. Transport belongs to the existing catalogue client.
 
 `createWorkspaceOverlay` owns one current context generation, its AbortController, prepared
 entries and focus intent. SDK preparation never adds graphics. Old overlays are removed as
@@ -26,10 +29,10 @@ Late success, failure, projection and navigation continuations cannot publish af
 selection or destroy. Identical rerenders do not re-fetch or re-zoom. A distinct Package
 context reloads even when its relevant Workspace IDs happen to match the previous Package.
 
-There is no persistent/cross-selection cache, since v1 has no geometry revision or ETag.
-Only current graphics and SDK projection initialization are retained. An internal catalogue
-reload explicitly refreshes the Jobs map geometry without automatically zooming. Assignment Retry map
-recreates its view and re-reads the selected context. Explicit Focus actions do not re-read.
+Workspace geometry has no persistent or cross-selection detail cache. Main Map
+can reuse the current overview generation and refreshes it on catalogue reload
+without an automatic fit. Assignment Retry map recreates its view and re-reads
+the selected context. Explicit Focus actions use the current graphics.
 
 `createWorkspaceGraphics` owns a GraphicsLayer, real SDK Polygon conversion, client projection,
 finite extent/topology checks and instant `goTo` to an expanded union of displayed polygons.
@@ -52,15 +55,15 @@ Application composition and UI never create SDK geometries/layers or call endpoi
 - SDK default equation-based datum transformations are used; grid-based transformations are
   not supplied. Actual projected coverage alignment remains a local acceptance check.
 
-Map status reports coverage counts, a bounded summary of up to three scoped failures plus
-an additional-failure count, and the separate missing Package/Job AOI limitation. Working
-list/status/binding flows do not depend on map success. The mock assignment map factory and
+Workspace overlay failures are scoped to coverage. The assignment map reports
+Workspace failures separately from errors in the selected Package geometry.
+Working list/status/binding flows do not depend on map success. The mock assignment map factory and
 its Feature/Work stream behavior are unchanged; live errors never invoke that factory.
 
 See [browser verification](../../../../docs/DC_API_GEOMETRY_VERIFICATION.md) and
 [backend gaps](../../../../docs/DC_API_BACKEND_GAPS.md).
 
-## Main map default visibility (DC-API-04 correction)
+## Historical Main Map default visibility (DC-API-04 correction)
 
 The main map receives the complete Workspace catalogue, grouped under Pipelines and sorted
 independently from API order. Every Pipeline starts enabled. Toggling a Pipeline updates only
@@ -71,7 +74,7 @@ No Workspace selection or automatic all-coverage fit is required. The existing b
 is retained on initial load and when toggling. Individual Package/Job AOIs remain unavailable
 until a verified backend geometry read is provided.
 
-## Main map panel and basemap behavior (v5)
+## Historical Main Map panel and basemap behavior (DC-API-04 v5)
 
 The public Calcite Action Bar occupies a fixed left column. The mutually exclusive
 Jobs/Pipelines panel floats over the MapView, without shrinking its container. Zoom
@@ -112,10 +115,10 @@ polygon is retried via the existing Workspace detail endpoint. The map overlay
 continues to own stale-result rejection, SDK preparation and rendering.
 
 The Package assignment map continues using its independent per-Workspace
-geometry source and is not changed by this optimization. See
-`docs/DC_PERF_FE_01_VALIDATION.md` for failure and browser performance checks.
+geometry source. See [DC-PERF-FE-01 validation](../../../../docs/DC_PERF_FE_01_VALIDATION.md)
+for failure and browser performance checks.
 
-## DC-MAP-POLISH-01 — Map color and coverage legends (candidate, 2026-11-23)
+## DC-MAP-POLISH-01 — Map color and coverage legends (2026-11-23)
 
 The live Main Map's passive legend is attached directly to the map surface,
 not the hidden Pipelines overview. `createWorkspaceColorLegend.js` uses the exact
@@ -130,15 +133,15 @@ the main-map count palette and the Package AOI/detail geometry. Gray dashed
 outlines are reserved for **prospective unsaved** Workspace matches, which are
 not calculated or displayed by the current backend contract. Its native
 disclosure legend uses the same orange saved-match color and a visible
-`Map legend` summary, initially expanded and non-persistent. The Package AOI/detail symbol factories were not included
-in this export and remain unchanged; verify their visual parity in the browser
-before accepting the complete symbols task.
+`Map legend` summary, initially expanded and non-persistent. The user accepted these legend and
+saved-match updates. See the [tracker](../../../../docs/PROJECT_TRACKER.md)
+for acceptance and the remaining prospective-match task.
 
 ## DC-MAP-POPUP-05 - Workspace popup from the committed baseline
 
 The live Main Map-only Workspace GraphicsLayer has a native ArcGIS PopupTemplate.
 Its title and close button stay owned by the SDK. App-owned content consists of
-one flush, disabled lock action/status row and read-only Pipeline/Open packages
+one flush, disabled lock action/status row and read-only Workstream and Open packages
 facts, with no nested panel or additional header. The count-based header color
 uses the same configured Workspace palette as the map legend. The foreground
 for its native title and Close action is chosen from the background contrast,
@@ -148,10 +151,10 @@ Calcite action tokens.
 Missing/invalid Package counts are not converted to zero, and lock state is not
 read from the backend or mocked. A displayed `unlock` and `None` are placeholders.
 Closing/hiding or removing Workspace geometry does not close unrelated popup
-types. Assignment Map popups remain disabled. Verify the native chrome and theme
-in a real browser; Source-level tests do not establish SDK 5.2.1 rendering.
+types. Assignment Map popups remain disabled. The tracker records browser
+acceptance. Recheck the native header in both themes after SDK upgrades.
 
-## DC-MAP-LABEL - Main Map labels (candidate, 2026-11-24)
+## DC-MAP-LABEL - Main Map labels (2026-11-24)
 
 Workspace display names are labeled at 1:5,000,000 or closer on the live Main
 Map. `createWorkspaceGraphics` feeds its current visible prepared polygons to

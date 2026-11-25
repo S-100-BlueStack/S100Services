@@ -33,7 +33,7 @@ The request examples later in this document use public IIS paths. For direct
 Kestrel calls, remove the leading `/api` prefix. Route alignment changes only
 URL composition; controller behavior, Windows Negotiate and access policies stay
 unchanged. To verify the IIS deployment and local configuration, see
-`src/DataCatalogue/docs/DC_DEPLOY_01_VALIDATION.md`.
+[DC-DEPLOY-01 validation](../DataCatalogue/docs/DC_DEPLOY_01_VALIDATION.md).
 
 
 
@@ -63,8 +63,8 @@ identities. Attribution is included in the original event, not a separate
 write. The store is process-local; retention follows the planned future event
 store, and this read must be adapted during that migration. No separate durable
 history persistence is needed. See
-`src/DataCatalogue/docs/BACKEND_CONTRACTS.md` for the complete contract. Deploy
-this API before the matching frontend. ProductCatalogue is unaffected.
+[frontend backend contracts](../DataCatalogue/docs/BACKEND_CONTRACTS.md) for
+the complete history contract. Deploy this API before the matching frontend.
 
 Focused tests on the existing Windows/.NET/ArcGIS Pro environment:
 
@@ -93,10 +93,13 @@ startup, Package mutations or ordinary history reads. The dedicated cache has a
 256-entry limit, 30-minute positive and 2-minute negative TTLs, and at most four
 concurrent directory operations; each request waits at most five seconds for a
 lookup. A synchronous OS lookup can outlive a reader; its slot remains occupied
-until it exits. Directory failures return the normal missing-profile fallback.
-No names/photos or raw LDAP errors are logged. A deployment without the matching
-frontend/API still shows the recorded accounts; an unavailable profile is not a
-history error. See `src/DataCatalogue/docs/BACKEND_CONTRACTS.md`.
+until it exits. Directory failures use the normal missing-profile fallback.
+The API logs the directory exception type only. The matching frontend retains
+the recorded account and neutral icon when profile enrichment is unavailable.
+Verify the deployed IIS application pool's directory access, the result for
+a different permitted recorded account, and browser CSP for thumbnail display.
+See [profile wire semantics](../DataCatalogue/docs/BACKEND_CONTRACTS.md#dc-package-timeline-04---actor-profile-enrichment-2026-11-25)
+and [local acceptance status](../DataCatalogue/docs/PROJECT_TRACKER.md#dc-package-timeline-04---active-directory-actor-profiles-2026-11-25).
 
 ```powershell
 dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~ActorProfile"
@@ -314,7 +317,7 @@ persistent geometry cache, new endpoint or dependency is introduced. This is
 an implementation candidate, **not** a measured startup speedup. See
 [DC_PERF_BE_01_VALIDATION.md](docs/DC_PERF_BE_01_VALIDATION.md).
 
-### Bounded Workspace overview (DC-PERF-BE-02 candidate)
+### Bounded Workspace overview (DC-PERF-BE-02)
 
 `GET /v1/pipelines/{pipelineId}/workspaces/overview?page=1&pageSize=20`
 returns a `PagedResponse<WorkspaceOverviewResponse>` (workspace page size 1–20).
@@ -330,12 +333,14 @@ initialize a second CoreHost or persist geometry in a cache. A null `esriJSON`
 or `packages` means that component failed to load, **not** an empty geometry or
 zero matches. A client must retry the individual Workspace route; when
 `packages.totalCount > packages.items.length`, fetch additional pages with the
-existing per-Workspace `/packages` endpoint. Callers should not start using this
-new route until those fallbacks have been implemented and verified.
+existing per-Workspace `/packages` endpoint.
 
-The existing Workspace detail and membership endpoints remain supported. This
-backend-only candidate has not yet been measured with the frontend and is not
-a claim of faster UI readiness. See [DC_PERF_BE_02_VALIDATION.md](docs/DC_PERF_BE_02_VALIDATION.md).
+The live Main Map uses the combined read with these fallbacks. The existing
+Workspace detail and membership routes also support independent assignment map
+geometry and manual Packages refresh, respectively. See
+[backend validation](docs/DC_PERF_BE_02_VALIDATION.md) and
+[frontend validation](../DataCatalogue/docs/DC_PERF_FE_01_VALIDATION.md)
+for the original checks and local measurement instructions.
 
 ## Package search and pagination
 
@@ -344,11 +349,16 @@ a claim of faster UI readiness. See [DC_PERF_BE_02_VALIDATION.md](docs/DC_PERF_B
 | Query parameter | Meaning |
 | --- | --- |
 | `category` | Optional exact, case-sensitive category identifier. |
+| `hasPipeline` | `true` for Packages with any active Pipeline binding, `false` for unbound Packages, or omit for both. |
+| `pipelineId` | Optional exact Pipeline assignment filter. |
 | `geometry` | Optional URL-encoded Esri JSON envelope or polygon with `spatialReference.wkid` or `spatialReference.wkt`. Maximum 16,384 characters; hosting URL limits may be lower. |
 | `page` | One-based page number, default 1. |
 | `pageSize` | Page size from 1 to 200, default 20. |
 
-All filters are combined before pagination. Results are ordered by catalogue ID
+All filters are combined before pagination. The list supports structured
+filters; global text search is a separate
+[backend gap](../DataCatalogue/docs/DC_API_BACKEND_GAPS.md).
+Results are ordered by catalogue ID
 using ordinal string comparison. `totalCount` is the number of matching packages
 before pagination, not the number of coverage rows. A page beyond the last page
 returns `items: []` and the same total. Invalid geometry or paging values return

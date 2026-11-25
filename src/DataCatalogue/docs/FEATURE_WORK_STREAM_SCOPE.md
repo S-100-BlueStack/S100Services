@@ -8,9 +8,14 @@ For current live Package–Pipeline assignment, derived Workspaces, Workspace-ba
 scoped mock status and exact Severity, use [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md).
 No broad internal Work stream rename is part of DC-API.
 
-Status: Accepted scope; DC-001 runtime candidate implemented, pending local/browser acceptance and live-service verification.
+**Acceptance update (2026-11-25):** The user reported acceptance of the DC-001
+v5 prototype at `0d47a91feb49b910d611adb504b1a54d69dcd5da`, merged at
+`23297a55c31bb77d3240cbc45b31328d081a20d7`. The earlier candidate and pending
+acceptance wording describes the original delivery stage. Direct ArcGIS service
+availability still depends on the configured environment.
 
-This document records the accepted DataCatalogue scoping decisions. Implementation ownership is recorded in ARCHITECTURE.md; verification and operational limits are recorded in DC_001_VALIDATION.md.
+This document records the accepted DataCatalogue scoping decisions. See [architecture](ARCHITECTURE.md) for implementation ownership and
+[DC-001 validation](DC_001_VALIDATION.md) for the original checks and limits.
 
 Task status belongs in [PROJECT_TRACKER.md](PROJECT_TRACKER.md). Source boundaries and unresolved API questions belong in [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md).
 

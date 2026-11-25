@@ -1,8 +1,34 @@
+# DataCatalogue Project Tracker
+
+## Current status and next work
+
+The live scope is [Packages, Workstreams and Workspaces](FEATURE_WORKSPACE_SCOPE.md).
+Use the [architecture](ARCHITECTURE.md), [backend contracts](BACKEND_CONTRACTS.md)
+and [backend gap register](DC_API_BACKEND_GAPS.md) for implementation and
+integration details.
+
+- Package information, Main Map labels, the native Workspace popup and saved
+  automatic Workspace matches are accepted. The meeting entries below record
+  their acceptance and remaining follow-ups. Preserve the accepted performance
+  and legend work.
+- Individual Package history, Windows actor capture and optional AD profiles
+  are accepted locally. See the TIMELINE entries below for the user-reported
+  commits and checks. Deployed IIS and cross-account directory access still
+  need verification. Retention follows the event store.
+- Next, agree the authoritative Compilation/QC workflow and filter contract
+  with the backend owner. The accepted Main Map preview exposes mode selection
+  only. Keep persistent contextual status, archived Package discovery and
+  prospective Workspace matching as separate tasks.
+- Dated candidate and demo entries retain the state at delivery. Read newer
+  acceptance records above those entries for current status.
+
 ## DC-PACKAGE-TIMELINE-04 - Active Directory actor profiles (2026-11-25)
 
 **Authoritative baseline:** `c0e9497d81fc3e2b4acc70416e501117c401b3c3`.
-**Status:** implementation candidate; local .NET build/test, service-identity LDAP
-access and browser acceptance pending.
+**Status:** accepted locally and committed at `7408bd0bd4a24f767a7364fa975f0a08ac888464`
+as reported by the user. The user reports correct display name and thumbnail
+in the browser and passing frontend and backend checks. Deployed IIS execution
+identity and cross-account profile access remain unverified.
 
 - Retain the original recorded Windows account as authoritative. Show the current
   AD display name and 24 px thumbnail alongside the recorded account in live
@@ -23,8 +49,8 @@ access and browser acceptance pending.
 - Dependency: `System.DirectoryServices` 10.0.13 in DataCatalogueAPI only.
   No profile attributes/photos in the event store or browser persistent storage.
   Preserve ProductCatalogue, Work Scope, map, right metadata and status controls.
-- Verify API runtime access on local Kestrel and deployed IIS; desktop LDAP
-  success does not establish the application pool's directory permissions.
+- For deployment, verify directory access under the IIS application pool
+  identity with a permitted recorded account other than the history reader.
   See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md) and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
 
 ---
@@ -57,14 +83,11 @@ These are user-reported results, not new test executions.
   Eventuous store is adopted. No separate durable history persistence task.
   When changing stores, the history read must support the new store and retained
   related binding streams. No history retention beyond the current store is promised.
-- Follow-up: `DC-PACKAGE-TIMELINE-04` (previously proposed as `DC-PACKAGE-TIMELINE-PROFILE-01`) — optional profile
-  enrichment. The user verified a successful LDAP lookup of their own
-  `displayName` and `thumbnailPhoto` from their desktop Windows identity.
-  This does not establish API runtime account permissions or cross-account photo
-  access. TIMELINE-04 supplies the optional read; verify the actual
-  API execution identity locally before accepting it. Keep images/display names outside the events and
-  never make a Package mutation depend on AD. Username-only history is the
-  first implementation scope. No directory calls or dependencies here.
+- At this milestone the history view showed the recorded account without
+  directory calls. The user's desktop lookup confirmed access to their own
+  `displayName` and `thumbnailPhoto`. The subsequent event-scoped profile read
+  and local acceptance are recorded under TIMELINE-04 above. That acceptance
+  leaves IIS and cross-account validation open.
 - Contextual `Done` / `No update`, QC, Workspace ownership/history and archived
   Package discovery remain separate. See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md)
   and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
@@ -240,13 +263,13 @@ see the later DC-PACKAGE-TIMELINE-01 design preview entry.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
-| Suggested order | Task                                                                                                            | Status / dependency                                                                          |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                              |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                              |
-| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract       |
-| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design, live read and Windows actors accepted (`c0e9497d`); profile candidate in TIMELINE-04 |
-| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                             |
+| Suggested order | Task                                                                                                            | Status / dependency                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                        |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                        |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design, read, actor capture and profile enrichment accepted locally through `7408bd0b` |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                       |
 
 This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
 
@@ -268,7 +291,7 @@ This is a proposed next-work shortlist, not a complete audit of all historical t
 - The existing Jobs store already owns Package hydration through `loadLivePackageMetadata.js` and `catalogueService.normalizePackage`. The shared metadata projection and sanitized description renderer used by Package Assignment now also render the current selected Job's normalized Package metadata, using `packageTitle` rather than the contextual display title. No additional request, binding lookup, independently selected Package, or persistent cache is introduced. The saved-binding summary remains specific to Package Assignment; the Main Map's existing context remains in the left panel.
 - The information view reflects the existing load/refresh state. A pending or missing selection never displays another Package's fields. A failed refresh may retain the last loaded metadata for the same selection with a clear warning and Retry using the existing Packages refresh. Status-only updates do not replace the metadata DOM or reopen a dismissed panel.
 - **v2 browser-feedback correction (2026-11-24):** The user accepted the basic Package information presentation but requested a true overlay instead of docking/resizing the map, preservation of the Packages panel shadow, and removal of Refresh from Details. Both panels now overlay the existing MapView; the left grid and shadow are unchanged and the right panel has its own shadow and independent scroll region. The right map controls and Workspace legend move clear of the overlay using CSS, not MapView padding. At narrow widths the information panel uses a lower-right overlay. Opening or closing information must not change MapView dimensions or center. The stable header Refresh remains list-only in both source modes; Back restores it and error-only Retry remains available. Verify the updated layout, controls, focus and shadows in both themes locally.
-- No new endpoint, dependency, timeline, historical search, QC state or Workspace ownership behavior is introduced. Local `npm run format`, `npm run check` and browser acceptance are pending; see the candidate delivery report for executed checks.
+- This candidate introduced no endpoint, dependency, timeline, historical search, QC state or Workspace ownership behavior. Its delivery report records the checks available at that stage. The user subsequently accepted the overlay in `6342966632af3774d336b6f7e7d4e85ac0a51cf9`.
 
 ### DC-PACKAGE-TIMELINE-01 - History of an individual Package
 
@@ -1740,8 +1763,6 @@ requirements and candidate state; it does **not** claim browser acceptance.
 - Future browser settings follow-up: persist the last per-map extent/center/zoom in localStorage
   with validated spatial reference and a reset action. Only the basemap choice is implemented
   in this candidate. Respect explicit Focus actions and avoid stale map-state restoration.
-
-# DataCatalogue Project Tracker
 
 ## DC-API-04 correction candidate — browser feedback (2026-10-29)
 

@@ -1,3 +1,23 @@
+# DataCatalogue Architecture
+
+## Current ownership
+
+- The app shell composes the live Main Map and Package Assignment workflows
+  with explicit live and mock sources. Domain decisions and API normalization
+  belong to the owning adapters, services and shared API modules.
+- Main Map Work Scope connects Packages and Workspace visibility. The map
+  feature owns the existing ArcGIS views, layers, geometry and labels. Package
+  Assignment owns Workstream binding drafts and shows backend-derived saved
+  Workspace matches on its own map. See [live scope](FEATURE_WORKSPACE_SCOPE.md)
+  and the [Workspace map README](../src/features/map/workspaces/README.md).
+- In Main Map Package Details, the left panel owns contextual actions and
+  Package History. The right overlay shows the selected Package's read-only
+  metadata. The history loader owns independent read and profile lifecycles.
+  The backend owns event identity, actor capture and retention.
+- The [tracker](PROJECT_TRACKER.md) records acceptance and current priorities.
+  Dated notes below describe changes in their delivery context. The preserved
+  mock workflow retains its separate Feature/Work stream domain.
+
 ## DC-PACKAGE-TIMELINE-04 - Optional directory enrichment (2026-11-25)
 
 `PackageHistoryController.GetProfile` authorizes the same read policy as History
@@ -703,8 +723,6 @@ its existing source mode to the list so no mode is guessed from an empty result.
   attributes, unsafe URLs and arbitrary styles are never copied.
 - Manual Workspace assignment and Package/Feature AOI coordinate retrieval remain backend
   gaps `OVERRIDE-01`, `GEO-01` and `GEO-04`; no invented frontend persistence/geometry.
-
-# DataCatalogue Architecture
 
 ## DC-API-04 correction — default Pipeline coverage and navigation (2026-10-29)
 

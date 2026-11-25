@@ -1,3 +1,5 @@
+# Package, Workstream, Workspace and contextual Job scope
+
 ## Live Package geometry clarification (2026-11-05)
 
 A Package's rectangular `aoi` is not a Workspace polygon; detailed Feature
@@ -8,10 +10,6 @@ saved Pipeline bindings/intersections. `detailedGeometry: null` means no
 additional detailed geometry, not missing Package identity or failed bindings.
 Manual Workspace overrides were considered in an earlier prototype but are not
 part of the current 2026-11-12 auto-match-only requirement.
-
----
-
-# Package, Workstream, Workspace and contextual Job scope
 
 ## Current terminology (2026-11-24)
 
@@ -25,8 +23,8 @@ prototype uses historical Workspace-like terminology; its `Work stream` and
 
 The current Main Map uses one Work Scope for Workstream and optional Workspace
 selection, with `Show empty Workspaces`. The Compilation/QC design preview is
-accepted but does not filter data. See the latest `PROJECT_TRACKER.md` and
-`ARCHITECTURE.md` entries for current behavior. Older DC-001, DC-STAB-02E and
+accepted as presentation only. See the [tracker](PROJECT_TRACKER.md) and
+[architecture](ARCHITECTURE.md) for current behavior. Older DC-001, DC-STAB-02E and
 integration candidate descriptions are historical where superseded, including
 former map-only visibility controls and earlier geometry limitations.
 
@@ -44,7 +42,18 @@ without a new explicit decision and verified backend contract.
 A **Job** is a Package within one `(packageId, pipelineId, workspaceId)` context.
 That complete tuple is its internal identity. Package Severity is shared across
 contexts; Job workflow status is independent mock state per tuple and remains in
-browser memory only. Ownership/locks are distinct from Job progress.
+browser memory only. The terminal UI actions are `Done` and `No update`.
+Ownership and locks are distinct from Job progress, QC and binding state.
+
+Severity uses exact unsigned 64-bit ordering: `0` is highest priority,
+`18446744073709551615` is `Not prioritized`, and null or missing is
+`Unspecified`. Keep the exact value through normalization and sorting.
+
+The left live Package Details panel shows authorized committed Package and
+binding events. Windows actors come from the authenticated mutation principal.
+Current AD name/photo enrichment is optional. History retention follows the
+event store. See [backend contracts](BACKEND_CONTRACTS.md) for actor fallback,
+paging and profile behavior.
 
 ## Package assignment page
 
@@ -61,9 +70,11 @@ keyboard/Escape behavior and saved binding reconciliation:
    Workspaces are read-only and reflect the **saved** bindings. A Package switch
    retains the previous complete selection and disabled bindings while the new
    Package and saved records load; it publishes the replacement atomically.
-4. **Map:** the assignment map renders Workspace geography derived from saved
-   binding intersections only. A missing Package or Job AOI is not invented from
-   Workspace geography, metadata references or a hypothetical Feature Service.
+4. **Map:** the assignment map renders Workspace geography from saved binding
+   intersections and the selected Package's generalized AOI and available
+   detailed geometry from the verified Package geometry read. The Workspace
+   overlay represents saved matches only. Prospective matches require their
+   own verified read.
 
 Save performs a preflight read, independent add/remove mutations and authoritative
 reconciliation. Partial definitive errors preserve individual results. Binding

@@ -1,3 +1,10 @@
+# DataCatalogue Calcite Usage Log
+
+Use public components, documented tokens and native controls according to the
+owning feature's needs. The [Workspace popup header section](#dc-map-popup-05---native-header-compatibility-exception-2026-11-24)
+documents the existing compatibility exception. Dated entries and the original
+Jobs/AOI inventory record decisions in their delivery context.
+
 ## DC-PACKAGE-TIMELINE-04 - Native history avatars (2026-11-25)
 
 Keep the accepted native read-only timeline. A fixed-size native `img` with
@@ -376,7 +383,7 @@ shadow-DOM selectors or undocumented properties are introduced.
   relying on private shadow-DOM styling. Light/dark follows app tokens, and map navigation
   uses `animate: false` for explicit focus actions.
 
-# Calcite Usage Log
+## Earlier component decisions
 
 ## DC-API-04 correction — docked Calcite Action Bar (2026-10-29)
 
@@ -416,7 +423,7 @@ Default:
 - Use plain semantic HTML for layout and document structure.
 - Log active Calcite opt-outs with the reason and any feedback that may be useful to Esri.
 
-## Current Calcite usage
+## Original Jobs/AOI Calcite usage
 
 | Area                    | Calcite usage                                         | Notes                                                                                                        |
 | ----------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -428,7 +435,7 @@ Default:
 | Jobs panel close action | `calcite-action`                                      | Used instead of a native close button.                                                                       |
 | Assignment map Retry    | `calcite-icon`                                        | Public refresh icon inside the compact application-owned Retry map button.                                   |
 
-## Active Calcite opt-outs
+## Original Jobs/AOI Calcite opt-outs
 
 | Date       | Area                     | Calcite component considered | Decision                                | Reason                                                                                                                                                                                                                     | Esri feedback                                                                                                                                       |
 | ---------- | ------------------------ | ---------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |

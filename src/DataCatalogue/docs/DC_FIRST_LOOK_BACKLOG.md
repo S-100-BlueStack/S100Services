@@ -6,7 +6,10 @@
 > `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`. TIMELINE-02 was accepted and
 > committed at `d453900ffe342354aaf52a628f0b085fd905d6e7`; the left Details shows
 > committed Package/binding events. TIMELINE-03 Windows actor attribution was
-> accepted in `c0e9497d`; TIMELINE-04 is the separate AD profile candidate.
+> accepted in `c0e9497d`. The user also accepted TIMELINE-04 locally. See the
+> [acceptance record](PROJECT_TRACKER.md#dc-package-timeline-04---active-directory-actor-profiles-2026-11-25)
+> and the [gap register](DC_API_BACKEND_GAPS.md) for remaining IIS and
+> cross-account verification.
 > History retention follows the event store; no separate durable history task.
 > The right panel
 > remains dedicated to metadata. `DC-MAP-LABEL` was accepted with scale limits
@@ -24,15 +27,15 @@
 > previously accepted the map legend/saved-match changes. The popup candidate
 > status and earlier suggested execution order below are retained as historical
 > context, not the latest priority list. See the `DC-MEETING-02` section of
-> [PROJECT_TRACKER.md](PROJECT_TRACKER.md) for accepted status, the recommended
-> next Package Details panel, individual Package history, Compilation/QC, and
-> the remaining open preview and historical discovery work.
+> [project tracker](PROJECT_TRACKER.md#current-status-and-next-work) for
+> acceptance and current priorities.
 
 **Recorded:** 2026-11-23 (date of feedback capture; the internal demo date is not confirmed)  
 **Accepted frontend baseline reported by user:** `50b12afaee6d26e7fd0b58b06d31687cbaad6c8d`  
-**Status:** Planning source; `DC-MAP-POLISH-01` v3 adjusts saved Workspace
-symbols after browser feedback. The Assignment legend layout is accepted and
-Main Map legend is usable for now. Preview and history remain open.  
+**Status at capture:** The Assignment legend layout was accepted and the
+Main Map legend was usable. Later acceptance and remaining tasks are recorded
+in the updates above.
+
 **Application:** `src/DataCatalogue`
 
 ## Scope and confirmed decisions
@@ -226,21 +229,25 @@ backend-gap register. They must be revalidated against the source of the next
 implementation baseline before work begins; older candidate text is not an
 up-to-date implementation status claim.
 
-| ID / topic                             | Next action                                                                                               | Current planning classification                                       |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `DC-MAP-POPUP`                         | Design and implement useful Workspace popup context using existing public ArcGIS APIs and verified fields | Frontend investigation, then implementation                           |
-| `DC-MAP-LABEL`                         | Accepted label visibility and scales; revisit only on new feedback                                        | Accepted (`26472a59`); complete                                       |
-| `DC-PACKAGE-QC-01`                     | Agree authoritative workflow and filter contract before functional QC filtering                           | Preview accepted (`d038defa`); backend-dependent functional filtering |
-| `PAGE-01` global Package search        | Confirm server-side title/ID/details filtering across paginated results                                   | Backend contract gap                                                  |
-| `JOB-01` durable status/history        | Define persistence for contextual Job status and completion history; do not reuse temporary demo state    | Backend design gap                                                    |
-| `COMMENT-01` binding comments          | Agree authorized persistence/readback contract for Pipeline binding comments                              | Backend contract gap                                                  |
-| `BIND-02` assignment concurrency       | Define version/precondition or idempotent desired-set semantics for concurrent assignment updates         | Backend contract gap                                                  |
-| `OWNER-01` Workspace ownership/locking | Design ownership and authorization separately from Package workflow status                                | Deferred cross-stack work                                             |
-| `DC-CREATOR-EDITOR`                    | Separate Package creation/editing and AOI drawing workflow after verified mutation contracts              | Larger future phase                                                   |
-| `DC-INTEGRATIONS`                      | Define identifiers, authorization and target actions for Notice to Mariners and WorkZone                  | Larger future phase                                                   |
-| `DC-UX-LOADER-01`                      | Reassess startup-loader value after accepted performance work and real deployment measurements            | Low-priority reassessment; do not reopen performance work by default  |
+| ID / topic                             | Next action                                                                                            | Current planning classification                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `DC-MAP-POPUP`                         | Preserve the accepted native Workspace popup; track ownership separately under `OWNER-01`              | Accepted (`a7bd819d`)                                                 |
+| `DC-MAP-LABEL`                         | Accepted label visibility and scales; revisit only on new feedback                                     | Accepted (`26472a59`); complete                                       |
+| `DC-PACKAGE-QC-01`                     | Agree authoritative workflow and filter contract before functional QC filtering                        | Preview accepted (`d038defa`); backend-dependent functional filtering |
+| `PAGE-01` global Package search        | Confirm server-side title/ID/details filtering across paginated results                                | Backend contract gap                                                  |
+| `JOB-01` durable status/history        | Define persistence for contextual Job status and completion history; do not reuse temporary demo state | Backend design gap                                                    |
+| `COMMENT-01` binding comments          | Agree authorized persistence/readback contract for Pipeline binding comments                           | Backend contract gap                                                  |
+| `BIND-02` assignment concurrency       | Define version/precondition or idempotent desired-set semantics for concurrent assignment updates      | Backend contract gap                                                  |
+| `OWNER-01` Workspace ownership/locking | Design ownership and authorization separately from Package workflow status                             | Deferred cross-stack work                                             |
+| `DC-CREATOR-EDITOR`                    | Separate Package creation/editing and AOI drawing workflow after verified mutation contracts           | Larger future phase                                                   |
+| `DC-INTEGRATIONS`                      | Define identifiers, authorization and target actions for Notice to Mariners and WorkZone               | Larger future phase                                                   |
+| `DC-UX-LOADER-01`                      | Reassess startup-loader value after accepted performance work and real deployment measurements         | Low-priority reassessment; do not reopen performance work by default  |
 
-## Suggested execution sequence
+## Original suggested execution sequence (2026-11-23)
+
+This sequence records the priorities at capture. Use the
+[current tracker](PROJECT_TRACKER.md#current-status-and-next-work) to select
+new work.
 
 1. Implement `DC-ASSIGN-MAP-SYMBOLS-01`, then `DC-MAP-LEGEND-01` and
    `DC-ASSIGN-LEGEND-01`. A coordinated **map legend and symbology** candidate
