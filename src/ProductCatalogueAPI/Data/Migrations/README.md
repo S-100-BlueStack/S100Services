@@ -63,6 +63,10 @@ Apply `012_AddSimulationDelivery.sql` to the ProductCatalogue **System** databas
 
 Configure both `SendToIcEnc:Mode` and `ValidationEmail:Mode` to `Simulation` in API and Worker. Package Send now exercises candidate state/history and existing S-128 publication when both replies accept, while external transport and Graph polling remain unused. The standalone email simulation endpoint remains a read-only preview.
 
+## External product export operations (013)
+
+Apply `013_AddExternalExportOperation.sql` to the System database before deploying the bathymetric API and worker. It adds a nullable producer operation ID and a unique per-track index to `dbo.ProductRevision`. The fresh schema includes both. Existing revisions retain null operation IDs. See [Bathymetric surface workflow](../../docs/s102-change-detection.md) for the producer and delivery contracts.
+
 ## Development clearing and Hangfire metadata
 
 `Clear-All-Tables.sql` clears the existing dbo application allowlist and Hangfire job data. It preserves Hangfire's `Schema` table, including the installed version row, so the next startup does not try to reinstall existing tables as a fresh store. This metadata is configuration, not queue content. Other schemas and non-allowlisted dbo tables remain excluded. Stop API and Worker before running this destructive script.

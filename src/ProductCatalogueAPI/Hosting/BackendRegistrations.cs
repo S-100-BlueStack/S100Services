@@ -13,7 +13,7 @@ using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
-using ProductCatalogueAPI.Services.S102;
+using ProductCatalogueAPI.Services.BathymetricSurfaces;
 using ProductCatalogueAPI.Services.SevenCs;
 using ProductCatalogueAPI.Services.ValidationEmail;
 using Serilog;
@@ -53,6 +53,10 @@ public static class BackendRegistrations
         AddHangfire(services, configuration);
 
         services.AddSingleton<DbConnectionFactory>();
+        services.AddOptions<BathymetricSurfaceDeliveryOptions>()
+            .Bind(configuration.GetSection(BathymetricSurfaceDeliveryOptions.SectionName));
+        services.AddScoped<ProductExternalExportRepository>();
+        services.AddScoped<BathymetricSurfaceService>();
         services.AddScoped<ProductRepository>();
         services.AddScoped<IProductRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IDashboardReportingRepository, SqlDashboardReportingRepository>();
@@ -122,8 +126,9 @@ public static class BackendRegistrations
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<UploadSingularProductJob>();
         services.AddTransient<DetectProductChangesJob>();
-        services.AddScoped<IS102ChangeDetector, S102ChangeDetector>();
-        services.AddTransient<DetectS102ChangesJob>();
+        services.AddScoped<IBathymetricSurfaceChangeDetector, BathymetricSurfaceChangeDetector>();
+        services.AddTransient<DetectBathymetricSurfaceChangesJob>();
+        services.AddTransient<SendBathymetricSurfaceJob>();
 
         return services;
     }

@@ -132,6 +132,9 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
+            if (string.Equals(product.ProductSpecification, ProductSpecification.S102.ToString(), StringComparison.OrdinalIgnoreCase))
+                return JobProblem(StatusCodes.Status409Conflict, "BATHYMETRIC_SEND_REQUIRED", "Use the bathymetric surface send endpoint for this product.");
+
             if (isPackageMember)
                 return JobProblem(StatusCodes.Status409Conflict, "PACKAGE_SEND_REQUIRED", "Use package Send to deliver both ready ENC members together.");
 

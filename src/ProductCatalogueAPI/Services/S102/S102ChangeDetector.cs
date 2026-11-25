@@ -1,7 +1,7 @@
-namespace ProductCatalogueAPI.Services.S102;
+namespace ProductCatalogueAPI.Services.BathymetricSurfaces;
 
-/// <summary>Processes changes from the configured S-102 source for one bounded scan.</summary>
-public interface IS102ChangeDetector
+/// <summary>Processes changes from the configured bathymetric surface source for one bounded scan.</summary>
+public interface IBathymetricSurfaceChangeDetector
 {
     /// <summary>Completes only after the scan and any required processing through its upper bound are durable.</summary>
     /// <param name="lastSuccessfulRunUtc">The previous UTC checkpoint, or null when the source's first-run policy applies.</param>
@@ -11,14 +11,14 @@ public interface IS102ChangeDetector
     Task DetectAsync(DateTime? lastSuccessfulRunUtc, DateTime scanThroughUtc, CancellationToken cancellationToken);
 }
 
-/// <summary>Marks the implementation point for S-102 source access and change detection.</summary>
-internal sealed class S102ChangeDetector : IS102ChangeDetector
+/// <summary>Marks the implementation point for bathymetric surface source access and change detection.</summary>
+internal sealed class BathymetricSurfaceChangeDetector : IBathymetricSurfaceChangeDetector
 {
     /// <inheritdoc/>
     /// <exception cref="NotImplementedException">The source and its change tracking mechanism have yet to be integrated.</exception>
     public Task DetectAsync(DateTime? lastSuccessfulRunUtc, DateTime scanThroughUtc, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
         // Successful completion commits the upper bound, so the scaffold must fail until it can process that bound.
-        throw new NotImplementedException("S-102 source change detection is not implemented.");
+        throw new NotImplementedException("Bathymetric surface source change detection is not implemented.");
     }
 }

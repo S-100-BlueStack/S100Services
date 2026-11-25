@@ -47,6 +47,8 @@
     <Compile Include="..\TestProductCatalogue\DpcArchiveHistoryTests.cs" Link="Unit\Detection\DpcArchiveHistoryTests.cs" />
     <Compile Include="..\TestProductCatalogue\DpcRunAsyncTests.cs" Link="Unit\Detection\DpcRunAsyncTests.cs" />
     <Compile Include="..\TestProductCatalogue\DetectS102ChangesJobTests.cs" Link="Unit\Detection\DetectS102ChangesJobTests.cs" />
+    <Compile Include="..\TestProductCatalogue\BathymetricExchangeSetTests.cs" Link="Unit\Export\BathymetricExchangeSetTests.cs" />
+    <Compile Include="..\TestProductCatalogue\BathymetricExportContractTests.cs" Link="Unit\Export\BathymetricExportContractTests.cs" />
     <Compile Include="..\TestProductCatalogue\EncPackageFailureSqlTests.cs" Link="Integration\Sql\EncPackageFailureSqlTests.cs" />
     <Compile Include="..\TestProductCatalogue\DpcSqlTransactionTests.cs" Link="Integration\Sql\DpcSqlTransactionTests.cs" />
     <Compile Include="..\TestProductCatalogue\IcEncImmediateFinalizationTests.cs" Link="Unit\Detection\IcEncImmediateFinalizationTests.cs" />

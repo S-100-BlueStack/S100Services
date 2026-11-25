@@ -141,12 +141,17 @@ CREATE TABLE dbo.ProductRevision (
     change_summary_yaml nvarchar(max) NULL,
     created_by nvarchar(256) NULL,
     created_at_utc datetime2(7) NOT NULL,
+    external_operation_id uniqueidentifier NULL,
     CONSTRAINT FK_ProductRevision_ProductExportTrack FOREIGN KEY (product_export_track_id) REFERENCES dbo.ProductExportTrack(product_export_track_id),
     CONSTRAINT CK_ProductRevision_Type CHECK (revision_type IN ('NewEdition', 'Update')),
     CONSTRAINT CK_ProductRevision_Version CHECK (edition_number >= 0 AND update_number >= 0)
 );
 
 CREATE INDEX IX_ProductRevision_TrackVersionCreatedAt ON dbo.ProductRevision(product_export_track_id, edition_number, update_number, created_at_utc DESC);
+
+CREATE UNIQUE INDEX UX_ProductRevision_ExternalOperation
+    ON dbo.ProductRevision(product_export_track_id, external_operation_id)
+    WHERE external_operation_id IS NOT NULL;
 
 -- dbo.ProductArtifact
 CREATE TABLE dbo.ProductArtifact (

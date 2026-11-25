@@ -2427,7 +2427,7 @@ namespace S100FC.ProductCatalogue
 
                             rowsScanned++;
 
-                            var feature = (ArcGIS.Core.Data.Feature)cursor.Current;
+                            using var feature = (ArcGIS.Core.Data.Feature)cursor.Current;
 
                             var attributeReadStartedAt = Stopwatch.GetTimestamp();
                             var attrBindings =
@@ -2459,6 +2459,12 @@ namespace S100FC.ProductCatalogue
 
                                 var geometryReadStartedAt = Stopwatch.GetTimestamp();
                                 var boundary = feature.GetShape();
+                                if (boundary is null || boundary.IsEmpty || boundary.SpatialReference is null) {
+                                    rowsFailed++;
+                                    continue;
+                                }
+                                if (boundary.SpatialReference.Wkid != SpatialReferences.WGS84.Wkid)
+                                    boundary = GeometryEngine.Instance.Project(boundary, SpatialReferences.WGS84);
                                 var env = boundary.Extent;
                                 geometryReadStopwatchTicks +=
                                     Stopwatch.GetTimestamp() - geometryReadStartedAt;

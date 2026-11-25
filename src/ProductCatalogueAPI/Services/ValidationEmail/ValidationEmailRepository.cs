@@ -100,9 +100,10 @@ public sealed class ValidationEmailRepository(DbConnectionFactory connections, T
             JOIN dbo.Product p ON p.product_id = t.product_id
             JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
             LEFT JOIN dbo.ProductIcEncDeliveryFile f ON f.delivery_id = d.delivery_id AND f.file_name = @FileName
-            WHERE f.file_name = @FileName OR
+            WHERE t.product_specification IN ('S57', 'S101')
+              AND (f.file_name = @FileName OR
                 (NOT EXISTS (SELECT 1 FROM dbo.ProductIcEncDeliveryFile known WHERE known.delivery_id = d.delivery_id)
-                 AND p.dataset_name = @DatasetName AND r.update_number = @Update AND d.status <> 'NotDelivered');
+                 AND p.dataset_name = @DatasetName AND r.update_number = @Update AND d.status <> 'NotDelivered'));
             """, new { FileName = fileName, DatasetName = fileName[..^4], Update = int.Parse(fileName[^3..], System.Globalization.CultureInfo.InvariantCulture) }, cancellationToken: cancellationToken))).ToArray();
     }
 

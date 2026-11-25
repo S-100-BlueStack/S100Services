@@ -4,7 +4,10 @@ namespace ProductCatalogueAPI.Data.Models;
 public enum PackageLayer
 {
     /// <summary>One S-101 AOI and its mapped S-57 and S-101 products.</summary>
-    ENC = 1
+    ENC = 1,
+
+    /// <summary>One independently managed bathymetric dataset per S-128 AOI.</summary>
+    BathymetricSurface = 2
 }
 
 /// <summary>Represents the active, shared source snapshot and lifecycle of an ENC package.</summary>
