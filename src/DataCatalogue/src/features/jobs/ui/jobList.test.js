@@ -1083,46 +1083,74 @@ test("Mock Details does not mount a live Package information panel", () => {
   });
 });
 
-test("History is an explicitly fictional preview below live Package actions and facts", () => {
-  withDocument(() => {
+const recordedHistoryEvent = (id, overrides = {}) => ({
+  id,
+  eventType: "packageCreated",
+  occurredAtUtc: "2026-01-15T14:35:00Z",
+  actor: null,
+  pipelineId: null,
+  pipelineName: null,
+  severity: null,
+  ...overrides,
+});
+
+const recordedHistoryPage = (id = "event-a") => ({
+  items: [recordedHistoryEvent(id)],
+  nextBefore: null,
+});
+
+test("Live History reads only the canonical Package after opening Details", async () => {
+  await withAsyncDocument(async () => {
     const { store, job } = fixture("live");
-    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const calls = [];
+    let resolveRead;
+    const overlay = createJobsOverlay({
+      jobStore: store,
+      sourceMode: "live",
+      readPackageHistory(id, options) {
+        calls.push({ id, options });
+        return new Promise((resolve) => {
+          resolveRead = resolve;
+        });
+      },
+    });
     try {
+      assert.equal(calls.length, 0);
       assert.equal(findByClass(overlay.element, "package-history").length, 0);
-      void overlay.showJobDetails({ jobId: job.id });
+      await overlay.showJobDetails({ jobId: job.id });
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].id, job.packageId);
+      assert.equal(calls[0].options.before, null);
       const details = findByClass(overlay.element, "job-details")[0];
       const history = findByClass(details, "package-history")[0];
       assert.equal(details.children.at(-1), history);
       assert.ok(details.children[0].classList.contains("job-details__section--live-status"));
       assert.ok(details.children[1].classList.contains("job-details__section--live-facts"));
-      assert.equal(
-        findByClass(history, "package-history__preview-label")[0].textContent,
-        "Design preview"
-      );
-      assert.match(elementText(history), /Package history is not available yet/);
-      assert.match(elementText(history), /fictional examples are not events for this Package/);
+      assert.match(elementText(history), /Loading Package history/);
+      resolveRead({
+        items: [
+          recordedHistoryEvent("bind", {
+            eventType: "pipelineAssigned",
+            pipelineId: "enc",
+            pipelineName: "ENC",
+          }),
+          recordedHistoryEvent("created", { occurredAtUtc: "2026-01-14T10:00:00Z" }),
+        ],
+        nextBefore: null,
+      });
+      await Promise.resolve();
+      // History-only completion must not replace Details or reopen the metadata panel.
+      assert.equal(findByClass(overlay.element, "job-details")[0], details);
       const scroll = findByClass(history, "package-history__scroll")[0];
+      assert.equal(scroll.hidden, false);
       assert.equal(scroll.tabIndex, 0);
       assert.equal(scroll.attributes.get("role"), "region");
-      assert.equal(scroll.attributes.get("aria-label"), "Example Package history, newest first");
-      const dates = findByTag(history, "time").map((time) => Date.parse(time.dateTime));
-      assert.equal(dates.length, 6);
-      assert.ok(dates.every(Number.isFinite));
-      assert.deepEqual(
-        dates,
-        [...dates].sort((a, b) => b - a)
-      );
-      assert.equal(findByTag(history, "ol").length, 1);
-      assert.equal(findByTag(history, "li").length, dates.length);
-      assert.ok(
-        findByClass(history, "package-history__actor").every((item) =>
-          item.textContent.startsWith("Example user")
-        )
-      );
-      assert.match(elementText(history), /Workstream: Example ENC \/ Workspace: Example area/);
-      assert.ok(!elementText(history).includes(job.packageTitle));
-      assert.ok(!elementText(history).includes(job.workspaceName));
-      assert.ok(!elementText(history).includes(job.shortId));
+      assert.equal(scroll.attributes.get("aria-label"), "Package history, newest first");
+      assert.equal(findByTag(history, "li").length, 2);
+      assert.match(elementText(history), /Workstream assigned/);
+      assert.match(elementText(history), /Workstream: ENC/);
+      assert.match(elementText(history), /Actor not recorded/);
+      assert.doesNotMatch(elementText(history), /Design preview|fictional|Example user/);
       assert.equal(findByClass(overlay.packageInformationElement, "package-history").length, 0);
       overlay.clearSelectedJob();
       assert.equal(findByClass(overlay.element, "package-history").length, 0);
@@ -1132,11 +1160,12 @@ test("History is an explicitly fictional preview below live Package actions and 
   });
 });
 
-test("History scroll and keyboard focus survive a same-context store emission only", () => {
-  withDocument(() => {
+test("History scroll and keyboard focus survive a same-context store emission only", async () => {
+  await withAsyncDocument(async () => {
     const { job } = fixture("live");
     const otherContext = { ...job, id: '["package","enc","west"]', workspaceName: "West" };
     let publish;
+    let reads = 0;
     const store = {
       getSnapshot: () => ({ jobs: [job, otherContext], isLoading: false, error: null }),
       subscribe(listener) {
@@ -1145,10 +1174,18 @@ test("History scroll and keyboard focus survive a same-context store emission on
         return () => {};
       },
     };
-    const view = createJobList({ store, sourceMode: "live" });
+    const view = createJobList({
+      store,
+      sourceMode: "live",
+      async readPackageHistory() {
+        reads++;
+        return recordedHistoryPage();
+      },
+    });
     try {
-      void view.showJobDetails({ jobId: job.id });
+      await view.showJobDetails({ jobId: job.id });
       const first = findByClass(view.element, "package-history__scroll")[0];
+      assert.equal(first.hidden, false);
       first.scrollTop = 80;
       first.focus();
       view.element.dispatchEvent({ type: "keydown" });
@@ -1158,13 +1195,15 @@ test("History scroll and keyboard focus survive a same-context store emission on
       assert.equal(next.scrollTop, 80);
       assert.equal(globalThis.document.activeElement, next);
       assert.equal(next.dataset.jobFocus, "history");
-      void view.showJobDetails({ jobId: otherContext.id });
+      await view.showJobDetails({ jobId: otherContext.id });
+      assert.equal(reads, 1, "Same canonical Package must reuse the current history");
       assert.equal(findByClass(view.element, "package-history__scroll")[0].scrollTop, 0);
       assert.equal(globalThis.document.activeElement.dataset.jobDetailsId, otherContext.id);
       publish({ jobs: [job], isLoading: false, error: null });
       assert.equal(findByClass(view.element, "package-history").length, 0);
       assert.match(elementText(view.element), /Selected Package is unavailable/);
-      void view.showJobDetails({ jobId: job.id });
+      await view.showJobDetails({ jobId: job.id });
+      assert.equal(reads, 2);
       assert.equal(findByClass(view.element, "package-history__scroll")[0].scrollTop, 0);
       view.showJobListFromDetails();
       assert.equal(findByClass(view.element, "package-history").length, 0);
@@ -1175,10 +1214,11 @@ test("History scroll and keyboard focus survive a same-context store emission on
   });
 });
 
-test("History preview adds no reads or writes or status-derived events", async () => {
+test("Temporary status mutations add no history reads or status-derived events", async () => {
   await withAsyncDocument(async () => {
     const job = fixture("live").job;
     let reads = 0;
+    let historyReads = 0;
     let writes = 0;
     const store = createJobStore({
       service: {
@@ -1193,16 +1233,25 @@ test("History preview adds no reads or writes or status-derived events", async (
       },
     });
     await store.loadJobs();
-    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const overlay = createJobsOverlay({
+      jobStore: store,
+      sourceMode: "live",
+      async readPackageHistory() {
+        historyReads++;
+        return recordedHistoryPage();
+      },
+    });
     try {
       await overlay.showJobDetails({ jobId: job.id });
-      const previewText = elementText(findByClass(overlay.element, "package-history")[0]);
+      const historyText = elementText(findByClass(overlay.element, "package-history")[0]);
       assert.equal(reads, 1);
+      assert.equal(historyReads, 1);
       assert.equal(writes, 0);
       await store.updateJobStatus(job.id, "done");
-      assert.equal(elementText(findByClass(overlay.element, "package-history")[0]), previewText);
+      assert.equal(elementText(findByClass(overlay.element, "package-history")[0]), historyText);
       await overlay.showJobDetails({ jobId: job.id });
       assert.equal(reads, 1);
+      assert.equal(historyReads, 1);
       assert.equal(writes, 1);
       assert.equal(overlay.packageInformationElement.hidden, false);
     } finally {
@@ -1212,7 +1261,59 @@ test("History preview adds no reads or writes or status-derived events", async (
   });
 });
 
-test("History preview is absent for mock Details and missing live selections", () => {
+test("History failure, retry and older-page controls do not replace the Details view", async () => {
+  await withAsyncDocument(async () => {
+    const { job, store } = fixture("live");
+    const calls = [];
+    const view = createJobList({
+      store,
+      sourceMode: "live",
+      async readPackageHistory(id, { before }) {
+        calls.push([id, before]);
+        if (calls.length === 1) throw new Error("Access denied.");
+        if (before)
+          return {
+            items: [recordedHistoryEvent("older", { occurredAtUtc: "2026-01-14T10:00:00Z" })],
+            nextBefore: null,
+          };
+        return { items: [recordedHistoryEvent("first")], nextBefore: "first" };
+      },
+    });
+    try {
+      await view.showJobDetails({ jobId: job.id });
+      const history = findByClass(view.element, "package-history")[0];
+      const scroll = findByClass(history, "package-history__scroll")[0];
+      const action = findByClass(history, "package-history__more")[0];
+      assert.match(elementText(history), /Access denied/);
+      assert.equal(scroll.hidden, true);
+      assert.equal(action.textContent, "Retry");
+      action.dispatchEvent({ type: "click" });
+      action.dispatchEvent({ type: "click" });
+      await Promise.resolve();
+      assert.equal(calls.length, 2);
+      assert.equal(scroll.hidden, false);
+      assert.equal(action.textContent, "Load older events");
+      scroll.scrollTop = 30;
+      action.focus();
+      action.dispatchEvent({ type: "click" });
+      await Promise.resolve();
+      assert.deepEqual(calls, [
+        [job.packageId, null],
+        [job.packageId, null],
+        [job.packageId, "first"],
+      ]);
+      assert.equal(findByClass(view.element, "package-history")[0], history);
+      assert.equal(findByTag(scroll, "li").length, 2);
+      assert.equal(scroll.scrollTop, 30);
+      assert.equal(action.hidden, true);
+      assert.equal(globalThis.document.activeElement, scroll);
+    } finally {
+      view.destroy();
+    }
+  });
+});
+
+test("History is absent for mock Details and missing live selections", () => {
   withDocument(() => {
     const mock = fixture("mock");
     const mockView = createJobList({ store: mock.store });

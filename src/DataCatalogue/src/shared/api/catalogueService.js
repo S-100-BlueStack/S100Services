@@ -2,6 +2,7 @@ import { normalizeSeverity } from "../domain/severity.js";
 import { normalizePackageGeometry } from "./packageGeometry.js";
 import { normalizePackageAssignmentSummary } from "./packageAssignmentSummary.js";
 import { normalizePackageAoiItem } from "./packageAoiPage.js";
+import { normalizePackageHistoryPage, validateHistoryRequest } from "./packageHistory.js";
 
 export function requiredId(value) {
   if (typeof value !== "string" || !value.trim())
@@ -169,6 +170,18 @@ export function createCatalogueService(client) {
       );
       if (item.id !== id) throw new Error("API returned a different Package identity.");
       return item;
+    },
+    async packageHistory(id, { pageSize = 50, before = null, signal } = {}) {
+      validateHistoryRequest(pageSize, before);
+      return normalizePackageHistoryPage(
+        await client.request(`/v1/packages/${segment(id)}/history`, {
+          query: { pageSize, before },
+          signal,
+        }),
+        id,
+        pageSize,
+        before
+      );
     },
     async packageGeometry(id, { signal } = {}) {
       return normalizePackageGeometry(

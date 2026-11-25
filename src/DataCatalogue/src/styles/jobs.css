@@ -82,6 +82,7 @@
   border-radius: 0;
 }
 
+.package-history__refresh,
 .job-list__refresh-button {
   display: inline-flex;
   flex: 0 0 auto;
@@ -98,15 +99,18 @@
   cursor: pointer;
 }
 
+.package-history__refresh[hidden],
 .job-list__refresh-button[hidden] {
   display: none;
 }
 
+.package-history__refresh:hover:not([aria-disabled="true"]),
 .job-list__refresh-button:hover:not(:disabled) {
   color: var(--calcite-color-brand, #007ac2);
   background: transparent;
 }
 
+.package-history__refresh:focus-visible,
 .job-list__refresh-button:focus-visible {
   outline: 2px solid var(--calcite-color-brand);
   outline-offset: 2px;
@@ -117,6 +121,7 @@
   cursor: default;
 }
 
+.package-history__refresh calcite-icon,
 .job-list__refresh-button calcite-icon {
   flex: 0 0 auto;
 }
@@ -894,7 +899,7 @@
 
 .package-history__header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.25rem 0.5rem;
@@ -904,10 +909,12 @@
   font-weight: 600;
 }
 
-.package-history__preview-label {
-  color: var(--dc-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+.package-history__more {
+  justify-self: start;
+}
+
+.package-history__refresh[aria-disabled="true"] {
+  opacity: 0.5;
 }
 
 .package-history__notice {

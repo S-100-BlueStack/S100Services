@@ -1,3 +1,4 @@
+using DataCatalague.Api.Domain.Events;
 using Eventuous;
 using Eventuous.Subscriptions;
 using Eventuous.Subscriptions.Checkpoints;
@@ -16,6 +17,7 @@ namespace DataCatalague.Api.Repositories
         private readonly object _gate = new();
         private readonly ConcurrentDictionary<StreamName, InMemoryStream> _storage = new();
         private readonly List<InMemoryAllStreamEvent> _global = [];
+        private readonly Dictionary<string, HashSet<StreamName>> _packageBindingStreams = new(StringComparer.Ordinal);
 
         public InMemoryEventStore() {
             ;
@@ -50,7 +52,7 @@ namespace DataCatalague.Api.Repositories
 
                 foreach (var streamEvent in appendedEvents) {
                     var globalPosition = (ulong)this._global.Count;
-                    this._global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
+                    this.RecordCommittedEvent(stream, streamName, streamEvent, globalPosition);
                 }
 
                 return Task.FromResult(
@@ -102,7 +104,7 @@ namespace DataCatalague.Api.Repositories
 
                     foreach (var streamEvent in appendedEvents) {
                         var globalPosition = (ulong)this._global.Count;
-                        this._global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
+                        this.RecordCommittedEvent(append.StreamName, streamName, streamEvent, globalPosition);
                     }
 
                     results[index++] = new AppendEventsResult(
@@ -111,6 +113,47 @@ namespace DataCatalague.Api.Repositories
                 }
 
                 return Task.FromResult(results);
+            }
+        }
+
+        private void RecordCommittedEvent(StreamName stream, string streamName, StreamEvent streamEvent, ulong globalPosition) {
+            this._global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
+            var packageId = streamEvent.Payload switch {
+                DispatcherEvents.V1.Binded bound => bound.PackageId,
+                DispatcherEvents.V1.Unbound unbound => unbound.PackageId,
+                _ => null,
+            };
+            if (packageId is null) { return; }
+            // Historical bindings remain discoverable after unbinding. Index stream identities,
+            // not a second copy of the events, under the same lock as the committed append.
+            if (!this._packageBindingStreams.TryGetValue(packageId, out var streams)) {
+                streams = new HashSet<StreamName>();
+                this._packageBindingStreams.Add(packageId, streams);
+            }
+            streams.Add(stream);
+        }
+
+        /// <summary>Captures the existing package and all its historical binding streams together.</summary>
+        internal IReadOnlyList<StreamEvent>? ReadPackageEvents(string packageId, StreamName packageStream, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (this._gate) {
+                if (!this._storage.TryGetValue(packageStream, out var package)) { return null; }
+                var events = new List<StreamEvent>(package.GetEvents(new StreamReadPosition(0), 0));
+                if (this._packageBindingStreams.TryGetValue(packageId, out var streams)) {
+                    foreach (var stream in streams) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (this._storage.TryGetValue(stream, out var binding)) {
+                            // Only this package's binding events belong in the read snapshot.
+                            events.AddRange(binding.GetEvents(new StreamReadPosition(0), 0).Where(item => item.Payload switch {
+                                DispatcherEvents.V1.Binded bound => bound.PackageId == packageId,
+                                DispatcherEvents.V1.Unbound unbound => unbound.PackageId == packageId,
+                                _ => false,
+                            }));
+                        }
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                return events;
             }
         }
 

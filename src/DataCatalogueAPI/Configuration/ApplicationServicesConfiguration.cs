@@ -34,6 +34,7 @@ public static class ApplicationServicesConfiguration
         services.AddHealthChecks();
         services.AddCatalogueMcp();
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
+        services.AddTransient<DataCatalague.Api.Services.PackageHistoryService>();
         services.AddTransient<DataCatalague.Api.Services.PackageCreationService>();
         services.AddTransient<DataCatalague.Api.Services.DispatcherResourceService>();
         services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();

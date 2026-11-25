@@ -37,6 +37,33 @@ unchanged. To verify the IIS deployment and local configuration, see
 
 
 
+## Read individual Package history
+
+`GET /api/v1/packages/{id}/history` returns actual committed Package and binding
+events, including removed/restored Pipeline assignments, through the existing
+`datacatalogue:access` policy. Use the canonical Package ID. Optional `pageSize`
+(default 50, range 1-100) bounds the page; pass the previous response's
+`nextBefore` GUID as `before` for older events. `null` means the end. The response
+contains `packageId`, `items` and `nextBefore`; entries expose `id`, `eventType`,
+`occurredAtUtc`, nullable `actor`, `pipelineId`, `pipelineName` and `severity`.
+Severity is an exact decimal string for severity events. Pipeline names are
+current names, not historical names. Missing actors remain null. Unknown Package
+returns 404, invalid continuation/size returns 400. No raw event payloads,
+geometry, source file URLs or historical Workspace membership are exposed.
+
+`PackageHistoryService` reads a snapshot of committed streams from the current
+`InMemoryEventStore`; the existing append path indexes historical binding stream
+identities. No additional event writes are made. The store is process-local,
+so this endpoint is not a durable audit log. See
+`src/DataCatalogue/docs/BACKEND_CONTRACTS.md` for the complete contract. Deploy
+this API before the matching frontend. ProductCatalogue is unaffected.
+
+Focused tests on the existing Windows/.NET/ArcGIS Pro environment:
+
+```powershell
+dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~PackageHistory"
+```
+
 ## Geometry JSON format
 
 Package creation (`CreatePackageRequest`), severity areas (`AddSeverityAreaRequest`)

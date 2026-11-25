@@ -1,8 +1,46 @@
+## DC-PACKAGE-TIMELINE-02 - Read committed Package history (2026-11-25)
+
+**Authoritative baseline:** `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`.
+**Status:** backend and frontend implementation candidate; local .NET tests,
+full frontend check and browser acceptance pending.
+
+- The accepted individual Package history preview is replaced by an authorized,
+  paged, read-only history of actual committed Package and binding events.
+  The canonical Package ID identifies history independently of the selected
+  contextual Job. Workstream binding events include removed and restored
+  assignments. The current in-memory event store indexes related stream identities
+  during existing commits; reads snapshot the relevant streams together.
+- The new v1 history read projects event IDs, UTC domain timestamps, known event
+  types, optional current Pipeline name/ID and exact decimal severity. Raw event
+  payloads and geometry are not exposed. The existing access policy applies.
+  Actors are not recorded by existing events; do not infer them from the requester,
+  logs, or current locks. In-memory retention is limited to the current process.
+- Keep the accepted left-panel placement, medium-weight heading and scroll region.
+  Load only when live Details opens; history has its own refresh, retry and older
+  page controls. Selection replacement/Back abort obsolete reads. Same-Package
+  contextual changes reuse the mounted request lifecycle. Loading, empty and
+  failure are distinct; failed refresh can retain labeled previous events. No
+  history fixtures, status-derived events, map reads or new mutations.
+- ProductCatalogue's history read and safe projection are references only. No
+  ProductCatalogue changes, dependency changes or new persistence technology.
+- Remaining gaps: durable event-store configuration and retention, write-time actor
+  attribution, persistent Job status/history, QC and archive discovery. These are
+  not resolved by the current read. See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md)
+  and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
+- Acceptance: deploy matching API first, create and bind/unbind a Package, replace
+  its geometry, and inspect real events. Check exact severity, actor fallback,
+  independent history refresh/paging, unauthorized/failed requests, rapid selection
+  and Back, keyboard scrolling, both themes, and unchanged map/status behavior.
+  See the delivery report for executed checks and remaining local verification.
+
+---
+
 ## DC-PACKAGE-TIMELINE-01 - Individual Package history design preview (2026-11-24)
 
 **Authoritative baseline:** `5f17bad52469ea464477796c7232751ada99ae10` (explicitly
-accepted newer repository commit). **Status:** frontend design-preview candidate;
-local full check and browser acceptance pending. Real history integration is open.
+accepted newer repository commit). **Status:** accepted. The user accepted the corrected heading and reported commit
+`c4c1dfcbebdb7dd689cf8edf560ddab971786a62` on 2026-11-25. The following section
+records the historical preview; DC-PACKAGE-TIMELINE-02 supersedes it with live reads.
 
 - Live Main Map Package Details displays a compact read-only `History` section
   below status actions and facts. The right Package information overlay remains
@@ -18,7 +56,7 @@ local full check and browser acceptance pending. Real history integration is ope
 - Browser feedback (2026-11-25): the overall preview layout was well received.
   The History heading was too heavy; the correction uses a scoped medium-bold
   weight (600) and preserves the existing in-flow layout and scroll behavior.
-  Final visual acceptance and the local full check remain pending.
+  The user subsequently accepted the correction and committed the preview.
 - The history list has a bounded native scroll region with keyboard focus.
   Same-context rerenders restore its scroll position and use existing contextual
   focus recovery. Switching contextual Jobs, leaving Details or losing the
@@ -125,13 +163,13 @@ see the later DC-PACKAGE-TIMELINE-01 design preview entry.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
-| Suggested order | Task                                                                                                            | Status / dependency                                                                    |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                        |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                        |
-| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract |
-| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design preview candidate; real data awaits a verified backend contract                 |
-| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                       |
+| Suggested order | Task                                                                                                            | Status / dependency                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                            |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                            |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract     |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design accepted; live read candidate in DC-PACKAGE-TIMELINE-02; durable audit remains open |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                           |
 
 This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
 
@@ -157,7 +195,7 @@ This is a proposed next-work shortlist, not a complete audit of all historical t
 
 ### DC-PACKAGE-TIMELINE-01 - History of an individual Package
 
-**Observed:** Users want to inspect what has happened to a Package. There is no confirmed backend history feed yet. The user accepted the new Main Map Package information overlay but found that long metadata descriptions can fill it. The confirmed initial location for history is the **left Packages detail view**, beneath the contextual actions and facts. Keep the right information overlay reserved for Package metadata. A secondary history entry in Package Assignment may be considered later; placement there remains undecided.
+**Observed:** Users want to inspect what has happened to a Package. At the initial meeting there was no confirmed backend history feed; see DC-PACKAGE-TIMELINE-02 for the subsequent read implementation. The user accepted the new Main Map Package information overlay but found that long metadata descriptions can fill it. The confirmed initial location for history is the **left Packages detail view**, beneath the contextual actions and facts. Keep the right information overlay reserved for Package metadata. A secondary history entry in Package Assignment may be considered later; placement there remains undecided.
 
 **Requirements / acceptance criteria:**
 

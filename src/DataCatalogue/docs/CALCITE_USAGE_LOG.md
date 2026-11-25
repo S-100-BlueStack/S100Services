@@ -1,3 +1,17 @@
+## DC-PACKAGE-TIMELINE-02 - Native history controls (2026-11-25)
+
+The accepted native read-only timeline, scroll region and theme tokens are
+retained. A native icon-only history Refresh uses the existing public
+`calcite-icon`; a `calcite-button` exposes Load older events or Retry. The
+application owns request availability, focus and loading/error announcements.
+Controls remain mounted while requests settle, with `aria-disabled` and guarded
+handlers; when the final page removes the focused continuation control, focus
+returns to the history scroll region (or Refresh when empty). No private Calcite
+DOM or new component registration is required. This separate history refresh
+is not a return of the Packages header Refresh in Details.
+
+---
+
 ## DC-PACKAGE-TIMELINE-01 - Native read-only history list (2026-11-24)
 
 The design preview uses application-owned native `section`, `ol`, `li` and

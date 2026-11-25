@@ -1,4 +1,41 @@
-## DC-PACKAGE-TIMELINE-01 - Read-only history design preview (2026-11-24)
+## DC-PACKAGE-TIMELINE-02 - Authorized Package history read (2026-11-25)
+
+The accepted timeline presentation in `features/jobs/ui/createPackageHistory.js`
+now renders committed history, not the historical preview fixture. The existing
+`jobList.js` Details owner supplies the canonical Package ID from its contextual
+Job. `createApp.js` wires `catalogueService.packageHistory` only into the live
+workflow through `createJobsOverlay.js`. The historical mock workflow is unchanged.
+`shared/api/packageHistory.js` validates and normalizes the paged wire contract.
+`features/jobs/services/createPackageHistoryLoader.js` owns history selection,
+request generation, cancellation, single-flight loading, pagination and display
+mapping. A same-Package contextual selection reuses the mounted history state.
+Back, replacement of the Package, missing selection and teardown invalidate
+obsolete reads. History responses update the history component only; they do
+not emit Details/map changes or reload the metadata/assignment services.
+
+The component uses a native read-only timeline, the accepted medium-weight
+heading and bounded scroll area. An independent refresh and continuation/retry
+control expose loading, empty, unavailable and failed states without inventing
+entries. Loaded events can be retained with an explicit warning after failure.
+The right information overlay, Package Assignment, mock status actions and
+Compilation/QC preview remain unchanged.
+
+The API `PackageHistoryController` delegates to `PackageHistoryService`.
+`InMemoryEventStore` indexes historical Package-to-binding stream identities
+under the existing append lock and snapshots the Package stream and related
+binding events atomically. This is an index, not a separate event log or a scan
+of all catalogue events. The service projects known events, orders by UTC domain
+time, stream revision and event ID, and returns a bounded page. It optionally
+resolves current Pipeline names through the existing projection, not as historical
+names. The response is scoped to the existing catalogue access policy and excludes
+raw payloads. The service intentionally targets the current in-memory store;
+replace its read implementation when a durable store is adopted. No new writes,
+actor attribution or persistence guarantees are introduced. See
+[BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md) for the wire contract.
+
+---
+
+## DC-PACKAGE-TIMELINE-01 - Historical history design preview (2026-11-24; superseded by TIMELINE-02)
 
 `features/jobs/ui/jobList.js` mounts `createPackageHistoryPreview` only in
 live contextual Details, below the existing status actions and facts. The

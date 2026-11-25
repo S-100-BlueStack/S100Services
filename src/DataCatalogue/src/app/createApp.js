@@ -113,6 +113,7 @@ export async function createApp(rootElement) {
     sourceMode: runtimeConfig.sourceMode,
     jobFilterStore,
     jobStore,
+    readPackageHistory: live ? catalogue.packageHistory : undefined,
     onScopeChange(scope) {
       currentWorkScope = scope;
       applyWorkScopeToMap();

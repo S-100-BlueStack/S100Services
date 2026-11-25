@@ -1,3 +1,68 @@
+## DC-PACKAGE-TIMELINE-02 - Individual Package history (2026-11-25)
+
+Implemented in the candidate for both DataCatalogueAPI and DataCatalogue frontend.
+Deploy the matching API before enabling the live frontend.
+
+`GET /v1/packages/{id}/history?pageSize=50&before={eventId}` reads one canonical
+Package ID (not Short ID, Job key or Workspace ID). Use the configured API base;
+IIS may mount the application at `/api`. The existing `datacatalogue:access` policy
+and credentials apply. `pageSize` defaults to 50 and must be between 1 and 100;
+`before` is omitted on the first page. Pass `nextBefore` from the previous page
+unchanged to request older events. `null` means no more events.
+
+Illustrative wire shape (not actual Package data):
+
+```json
+{
+  "packageId": "canonical-package-id",
+  "items": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "eventType": "pipelineAssigned",
+      "occurredAtUtc": "2026-11-25T09:00:00+00:00",
+      "actor": null,
+      "pipelineId": "pipeline-id",
+      "pipelineName": "ENC",
+      "severity": null
+    }
+  ],
+  "nextBefore": null
+}
+```
+
+| Wire event type         | Existing stored event   | Context                                                                |
+| ----------------------- | ----------------------- | ---------------------------------------------------------------------- |
+| `packageCreated`        | `PackageCreated`        | None                                                                   |
+| `severityUpdated`       | `SeverityUpdated`       | Exact decimal uint64 string, including the initial severity            |
+| `detailedGeometryAdded` | `DetailedGeometryAdded` | None                                                                   |
+| `geometryReplaced`      | `GeometryReplaced`      | None                                                                   |
+| `pipelineAssigned`      | `Binded`                | `pipelineId`, optional current `pipelineName`; also covers restoration |
+| `pipelineUnassigned`    | `Unbound`               | `pipelineId`, optional current `pipelineName`                          |
+
+Every entry has the stored event GUID and domain UTC timestamp. Existing events
+have no actor; `actor` is null. No Workspace identity, previous severity, source
+file URI, raw geometry, metadata payload or inferred progress is returned.
+Pipeline names are current projection values; they can be absent. Workstream is
+the frontend label for Pipeline, not a different wire entity.
+
+The service takes a snapshot of relevant committed streams, including inactive
+bindings, then orders by timestamp descending, stream revision descending and
+GUID descending. Paging bounds the returned payload; the server currently sorts
+all relevant events per request, not the entire catalogue. It is not a frozen
+snapshot across multiple requests. Refresh starts at the newest events; cursors
+are valid only for the current retained history. Unknown event types are not
+projected. Unknown Package returns 404, invalid size/cursor returns 400, access
+uses existing 401/403 behavior, and server failures remain errors. An empty
+successful page is distinct from unavailable API or a failed read. Existing
+created Packages normally include at least the creation and initial severity.
+
+The active store is in-memory; no durability across restarts is promised.
+This read is not an archive search or a persistent audit log. Current temporary
+Job statuses and QC do not produce events. No new write endpoint or event schema
+is introduced.
+
+---
+
 ## Frontend terminology boundary (2026-11-24)
 
 Workstream / Workstreams is a presentation-only name for the existing Pipeline

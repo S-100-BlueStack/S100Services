@@ -26,7 +26,8 @@ import {
 import { getJobsForAoiFromJobs } from "../../relations/services/relationService.js";
 import { createJobStore } from "../state/jobStore.js";
 import { getLiveJobPresentation } from "./liveJobPresentation.js";
-import { createPackageHistoryPreview } from "./createPackageHistory.js";
+import { createPackageHistory } from "./createPackageHistory.js";
+import { createPackageHistoryLoader } from "../services/createPackageHistoryLoader.js";
 import { createJobsFocusRecovery } from "./createJobsFocusRecovery.js";
 import { filterJobsByPackageScope, groupJobsByPackage } from "../domain/packageScopeFilter.js";
 
@@ -43,6 +44,7 @@ export function createJobList({
   jobFilterStore,
   store = createJobStore(),
   sourceMode = "mock",
+  readPackageHistory,
 } = {}) {
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
@@ -62,6 +64,13 @@ export function createJobList({
   const visibleCompletedJobIds = new Set();
   const pendingMutationJobIds = new Set();
   const collapsedPackageIds = new Set();
+  let historyView = null;
+  const history = createPackageHistoryLoader({
+    read: readPackageHistory,
+    onChange(snapshot) {
+      if (historyView?.packageId === snapshot.packageId) historyView.update(snapshot);
+    },
+  });
 
   async function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
     const result = await loadJobs(store, visibleCompletedJobIds, {
@@ -169,8 +178,15 @@ export function createJobList({
     rootElement.classList.toggle("job-list--details", viewMode === JOB_LIST_VIEW_MODE.DETAILS);
 
     const focusTarget = focusRecovery.capture();
-    renderJobList({
+    const selectedJob =
+      viewMode === JOB_LIST_VIEW_MODE.DETAILS ? getJobById(currentState.jobs, selectedJobId) : null;
+    historyView = null;
+    history.select(
+      selectedJob?.source === "live" && selectedJob.packageId ? selectedJob.packageId : null
+    );
+    historyView = renderJobList({
       rootElement,
+      history,
       state: currentState,
       store,
       sourceMode,
@@ -318,6 +334,8 @@ export function createJobList({
     },
     destroy() {
       alive = false;
+      history.destroy();
+      historyView = null;
       focusRecovery.destroy();
       unsubscribeJobs();
       unsubscribeFilters();
@@ -343,6 +361,7 @@ async function loadJobs(store, visibleCompletedJobIds, { showErrorNoticeOnFailur
 
 function renderJobList({
   rootElement,
+  history,
   state,
   store,
   sourceMode,
@@ -365,8 +384,9 @@ function renderJobList({
   clearJobMapFocus,
 }) {
   if (viewMode === JOB_LIST_VIEW_MODE.DETAILS) {
-    renderJobDetailsView({
+    return renderJobDetailsView({
       rootElement,
+      history,
       state,
       store,
       selectedJobId,
@@ -378,8 +398,6 @@ function renderJobList({
       requestJobMapFocus,
       clearJobMapFocus,
     });
-
-    return;
   }
 
   const scopedJobs = getScopedJobs(state.jobs, aoiFilter, packageScope);
@@ -498,6 +516,7 @@ function renderJobList({
 
 function renderJobDetailsView({
   rootElement,
+  history,
   state,
   store,
   selectedJobId,
@@ -584,9 +603,17 @@ function renderJobDetailsView({
     createJobDetailsFactSection(selectedJob),
     ...(selectedJob.source === "live" ? [] : [createJobDetailsAoiSection(selectedJob)])
   );
-  const history = selectedJob.source === "live" ? createPackageHistoryPreview() : null;
+  const historySection =
+    selectedJob.source === "live" && history.getSnapshot().packageId
+      ? createPackageHistory({
+          snapshot: history.getSnapshot(),
+          onRefresh: history.refresh,
+          onLoadOlder: history.loadOlder,
+          onRetry: history.retry,
+        })
+      : null;
   let historyScrollTop = 0;
-  if (history) {
+  if (historySection) {
     // Reuse the existing contextual focus identity and restore scroll only for the
     // same Details selection when a store emission replaces the DOM.
     const previousDetails = [...rootElement.querySelectorAll("[data-job-details-id]")].find(
@@ -598,13 +625,13 @@ function renderJobDetailsView({
         )
       : null;
     historyScrollTop = previousHistory?.scrollTop ?? 0;
-    history.scrollElement.dataset.jobFocus = "history";
-    detailsElement.append(history.element);
+    detailsElement.append(historySection.element);
   }
 
   contentElements.push(detailsElement);
   rootElement.replaceChildren(...contentElements);
-  if (history) history.scrollElement.scrollTop = historyScrollTop;
+  if (historySection) historySection.scrollElement.scrollTop = historyScrollTop;
+  return historySection;
 }
 
 function createJobDetailsHeader({ job, requestJobMapFocus, clearJobMapFocus }) {

@@ -2,9 +2,11 @@
 
 > **Latest update (2026-11-24):** The user accepted the Package Details overlay
 > in commit `6342966632af3774d336b6f7e7d4e85ac0a51cf9`. The individual Package
-> history design-preview candidate now occupies the left Packages detail view
-> below actions and facts, with explicitly fictional example entries; real
-> history remains unavailable pending the backend contract. The right panel
+> history design preview was accepted in commit
+> `c4c1dfcbebdb7dd689cf8edf560ddab971786a62`. The 2026-11-25 TIMELINE-02 candidate
+> replaces the left Details examples with committed Package and binding events
+> from the current in-memory store; durability and actor attribution remain open.
+> The right panel
 > remains dedicated to metadata. `DC-MAP-LABEL` was accepted with scale limits
 > of 1:5,000,000 for Workspaces and 1:3,000,000 for Packages in user-reported
 > commit `26472a59188f61eed632c59abc0e59d2a06e64e9`. `DC-PACKAGE-QC-01` now

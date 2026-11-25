@@ -1,32 +1,86 @@
-import { PACKAGE_HISTORY_PREVIEW_ENTRIES } from "../mock/packageHistoryPreviewData.js";
-
-export function createPackageHistoryPreview() {
+export function createPackageHistory({ snapshot, onRefresh, onLoadOlder, onRetry }) {
   const element = document.createElement("section");
   element.className = "job-details__section package-history";
-  element.setAttribute("aria-label", "History design preview");
+  element.setAttribute("aria-label", "Package history");
 
   const header = document.createElement("div");
   header.className = "package-history__header";
-  header.append(
-    createTextElement("h4", "job-details__section-title", "History"),
-    createTextElement("span", "package-history__preview-label", "Design preview")
-  );
-
-  const notice = createTextElement(
-    "p",
-    "package-history__notice",
-    "Package history is not available yet. These fictional examples are not events for this Package."
-  );
-  const scrollElement = createPackageHistoryList(PACKAGE_HISTORY_PREVIEW_ENTRIES, {
-    label: "Example Package history, newest first",
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.className = "package-history__refresh";
+  refresh.dataset.jobFocus = "history-refresh";
+  refresh.title = "Refresh history";
+  refresh.setAttribute("aria-label", "Refresh history");
+  const icon = document.createElement("calcite-icon");
+  icon.icon = "refresh";
+  icon.scale = "s";
+  icon.setAttribute("aria-hidden", "true");
+  refresh.append(icon);
+  refresh.addEventListener("click", () => {
+    if (!current.isLoading) onRefresh();
   });
+  header.append(createTextElement("h4", "job-details__section-title", "History"), refresh);
 
-  element.append(header, notice, scrollElement);
-  return { element, scrollElement };
+  const status = createTextElement("p", "package-history__notice", "");
+  status.setAttribute("role", "status");
+  const scrollElement = createPackageHistoryList([], { label: "Package history, newest first" });
+  scrollElement.dataset.jobFocus = "history";
+  const action = document.createElement("calcite-button");
+  action.scale = "s";
+  action.kind = "neutral";
+  action.appearance = "outline";
+  action.className = "package-history__more";
+  action.dataset.jobFocus = "history-more";
+  let current = snapshot;
+  let renderedEntries = null;
+  action.addEventListener("click", () => {
+    if (current.isLoading) return;
+    if (current.error) onRetry();
+    else if (current.nextBefore) onLoadOlder();
+  });
+  element.append(header, status, scrollElement, action);
+
+  function update(next) {
+    current = next;
+    const hasEntries = next.entries.length > 0;
+    if (renderedEntries !== next.entries) {
+      const scrollTop = scrollElement.scrollTop ?? 0;
+      scrollElement.replaceChildren(createHistoryEntries(next.entries));
+      scrollElement.scrollTop = scrollTop;
+      renderedEntries = next.entries;
+    }
+    const message = next.isLoading
+      ? "Loading Package history..."
+      : next.error
+        ? `Could not load Package history. ${next.error}${hasEntries ? " Showing previously loaded events." : ""}`
+        : next.hasLoaded && !hasEntries
+          ? "No history recorded for this Package."
+          : "";
+    status.textContent = message;
+    status.hidden = !message;
+    scrollElement.hidden = !hasEntries;
+    scrollElement.setAttribute("aria-busy", String(next.isLoading));
+    // Keep focused controls mounted while a request runs; do not move focus
+    // to the map when the final page removes the continuation control.
+    const showAction = next.available && Boolean(next.error || next.nextBefore);
+    refresh.hidden = !next.available;
+    if (hasEntries) scrollElement.dataset.jobFocus = "history";
+    else delete scrollElement.dataset.jobFocus;
+    if (showAction) action.dataset.jobFocus = "history-more";
+    else delete action.dataset.jobFocus;
+    if (!showAction && document.activeElement === action) {
+      (hasEntries ? scrollElement : refresh).focus({ preventScroll: true });
+    }
+    action.hidden = !showAction;
+    action.setAttribute("aria-disabled", String(next.isLoading));
+    action.textContent = next.error ? "Retry" : "Load older events";
+    refresh.setAttribute("aria-disabled", String(next.isLoading));
+  }
+  update(snapshot);
+  return { element, scrollElement, update, packageId: snapshot.packageId };
 }
 
-// A read-only presentation component: a future history adapter supplies already
-// ordered, formatted entries. These fields are not an API contract.
+// Display-ready entries are provided by the owning service, never raw event payloads.
 export function createPackageHistoryList(entries, { label }) {
   const scrollElement = document.createElement("div");
   scrollElement.className = "package-history__scroll";
@@ -34,6 +88,11 @@ export function createPackageHistoryList(entries, { label }) {
   scrollElement.setAttribute("role", "region");
   scrollElement.setAttribute("aria-label", label);
 
+  scrollElement.append(createHistoryEntries(entries));
+  return scrollElement;
+}
+
+function createHistoryEntries(entries) {
   const list = document.createElement("ol");
   list.className = "package-history__list";
   for (const entry of entries) {
@@ -53,8 +112,7 @@ export function createPackageHistoryList(entries, { label }) {
     list.append(item);
   }
 
-  scrollElement.append(list);
-  return scrollElement;
+  return list;
 }
 
 function createTextElement(tagName, className, text) {
