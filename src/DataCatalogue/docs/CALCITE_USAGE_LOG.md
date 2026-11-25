@@ -289,6 +289,14 @@ private Calcite selectors or a copied ProductCatalogue stylesheet.
 
 ---
 
+## COMMENT-01 - Retained binding comments
+
+The existing native speech-bubble editor keeps its Calcite icon, textarea and
+dismissal behavior. Saved text uses a native list in a bounded scroll region.
+Retry and Show older comments are native buttons for keyboard support and
+stable focus within the same anchored editor. Theme colors use the existing
+assignment tokens.
+
 ## DC-UX-01 v4 — Map UI ownership and icon emphasis (2026-11-06)
 
 The application retains public Calcite `save`, `refresh` and `speech-bubble`

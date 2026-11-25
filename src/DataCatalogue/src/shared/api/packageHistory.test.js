@@ -95,3 +95,26 @@ test("History normalization preserves recorded actor identities and does not inv
   }
   assert.throws(() => normalizePackageHistoryPage(page([event({ actor: " " })]), PKG, 50));
 });
+
+test("Committed binding comments retain plain text, recorded actor and Workstream context", () => {
+  const comment = event({
+    eventType: "bindingCommentAdded",
+    pipelineId: "enc",
+    pipelineName: "ENC",
+    severity: null,
+    actor: "PROD\\B123456",
+    commentText: "First line\n<img src=x onerror=alert(1)>",
+  });
+  const history = normalizePackageHistoryPage(page([comment]), PKG, 50);
+  assert.equal(history.items[0].commentText, comment.commentText);
+  assert.equal(history.items[0].actor, comment.actor);
+  assert.equal(history.items[0].pipelineId, comment.pipelineId);
+  for (const invalid of [
+    { ...comment, commentText: null },
+    { ...comment, pipelineId: null },
+    { ...comment, actor: null },
+    event({ commentText: "not a binding comment" }),
+  ]) {
+    assert.throws(() => normalizePackageHistoryPage(page([invalid]), PKG, 50));
+  }
+});

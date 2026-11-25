@@ -58,8 +58,8 @@ public sealed class PackageHistoryService(InMemoryEventStore store, StreamNameMa
     private static PackageHistoryEventResponse? Map(StreamEvent item, string packageId) {
         // The original committed event is authoritative; the current request identity
         // and current Workspace ownership must never be used to fill missing actors.
-        PackageHistoryEventResponse Entry(string type, DateTimeOffset utc, string? actor, string? pipelineId = null, string? severity = null)
-            => new(item.Id, type, utc.ToUniversalTime(), actor, pipelineId, null, severity);
+        PackageHistoryEventResponse Entry(string type, DateTimeOffset utc, string? actor, string? pipelineId = null, string? severity = null, string? commentText = null)
+            => new(item.Id, type, utc.ToUniversalTime(), actor, pipelineId, null, severity, commentText);
 
         return item.Payload switch {
             PackagesEvents.V1.PackageCreated created when created.PackageId == packageId => Entry("packageCreated", created.UTC, created.Actor),
@@ -68,6 +68,8 @@ public sealed class PackageHistoryService(InMemoryEventStore store, StreamNameMa
             PackagesEvents.V1.GeometryReplaced replaced => Entry("geometryReplaced", replaced.UTC, replaced.Actor),
             DispatcherEvents.V1.Binded bound when bound.PackageId == packageId => Entry("pipelineAssigned", bound.UTC, bound.Actor, bound.PipelineId),
             DispatcherEvents.V1.Unbound unbound when unbound.PackageId == packageId => Entry("pipelineUnassigned", unbound.UTC, unbound.Actor, unbound.PipelineId),
+            DispatcherEvents.V1.BindingCommentAdded comment when comment.PackageId == packageId
+                => Entry("bindingCommentAdded", comment.UTC, comment.Actor, comment.PipelineId, commentText: comment.Text),
             _ => null,
         };
     }

@@ -764,3 +764,28 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
   display: block;
   margin: 5px 0 0 auto;
 }
+
+.dc-pipeline-comment__popover [hidden] {
+  display: none;
+}
+.dc-pipeline-comment__status {
+  margin: 4px 0 0;
+}
+.dc-pipeline-comment__history {
+  max-height: 10rem;
+  overflow: auto;
+}
+.dc-pipeline-comment__history ol {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.dc-pipeline-comment__history li {
+  padding: 4px 0;
+  border-top: 1px solid var(--dc-border);
+}
+.dc-pipeline-comment__text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -139,6 +139,9 @@ function createHistoryEntries(entries) {
     if (entry.context) {
       item.append(createTextElement("p", "package-history__context", entry.context));
     }
+    if (entry.commentText) {
+      item.append(createTextElement("p", "package-history__comment", entry.commentText));
+    }
     list.append(item);
   }
 

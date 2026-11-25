@@ -101,6 +101,15 @@ namespace DataCatalague.Api.Domain
             return Task.CompletedTask;
         }
 
+        public Task AddComment(Guid operationId, string text, string actor) {
+            this.EnsureExists();
+            if (!this.State.IsActive) { throw new InvalidOperationException("The binding is inactive."); }
+            this.Apply(new V1.BindingCommentAdded(
+                this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value,
+                operationId, text, DateTimeOffset.UtcNow, actor));
+            return Task.CompletedTask;
+        }
+
         public Task Remove(string? actor = null) {
             this.EnsureExists();
             if (this.State.IsActive) {
@@ -125,6 +134,8 @@ namespace DataCatalague.Api.Domain
         public BindingState() {
             this.On<V1.Binded>(Binded);
             this.On<V1.Unbound>((state, e) => state with { IsActive = false, LastUpdatedUtc = e.UTC });
+            // Comments advance the stream version without changing assignment state.
+            this.On<V1.BindingCommentAdded>((state, _) => state);
         }
 
         static BindingState Binded(BindingState state, V1.Binded e)
@@ -154,6 +165,8 @@ namespace DataCatalague.Api.Domain.Commands
         public record RestoreBinding(string BindingId, string? Actor = null);
 
         public record Unbind(string BindingId, string? Actor = null);
+
+        public record AddBindingComment(string BindingId, Guid OperationId, string Text, string Actor);
     }
 }
 
@@ -183,6 +196,11 @@ namespace DataCatalague.Api.Domain.Events
                     DateTimeOffset UTC
                 );
 
+
+            [EventType("V1.BindingCommentAdded")]
+            public record BindingCommentAdded(
+                string BindingId, string PackageId, string PipelineId, Guid OperationId,
+                string Text, DateTimeOffset UTC, string Actor);
 
             [EventType("V1.Unbound")]
             public record Unbound(string BindingId, string PackageId, string PipelineId, DateTimeOffset UTC, string? Actor = null);

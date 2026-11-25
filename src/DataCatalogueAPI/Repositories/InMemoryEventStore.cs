@@ -19,6 +19,8 @@ namespace DataCatalague.Api.Repositories
         private readonly List<InMemoryAllStreamEvent> _global = [];
         private readonly Dictionary<string, HashSet<StreamName>> _packageBindingStreams = new(StringComparer.Ordinal);
 
+        private readonly Dictionary<Guid, StreamName> _bindingCommentStreams = [];
+
         public InMemoryEventStore() {
             ;
         }
@@ -118,6 +120,10 @@ namespace DataCatalague.Api.Repositories
 
         private void RecordCommittedEvent(StreamName stream, string streamName, StreamEvent streamEvent, ulong globalPosition) {
             this._global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
+            if (streamEvent.Payload is DispatcherEvents.V1.BindingCommentAdded comment) {
+                // Index the stream identity, so lookup follows event-store retention.
+                this._bindingCommentStreams[comment.OperationId] = stream;
+            }
             var packageId = streamEvent.Payload switch {
                 DispatcherEvents.V1.Binded bound => bound.PackageId,
                 DispatcherEvents.V1.Unbound unbound => unbound.PackageId,
@@ -131,6 +137,16 @@ namespace DataCatalague.Api.Repositories
                 this._packageBindingStreams.Add(packageId, streams);
             }
             streams.Add(stream);
+        }
+
+        internal DispatcherEvents.V1.BindingCommentAdded? ReadBindingComment(Guid operationId, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (this._gate) {
+                if (!this._bindingCommentStreams.TryGetValue(operationId, out var name) ||
+                    !this._storage.TryGetValue(name, out var stream)) { return null; }
+
+                return stream.FindBindingComment(operationId);
+            }
         }
 
         /// <summary>Captures the existing package and all its historical binding streams together.</summary>
@@ -147,6 +163,7 @@ namespace DataCatalague.Api.Repositories
                             events.AddRange(binding.GetEvents(new StreamReadPosition(0), 0).Where(item => item.Payload switch {
                                 DispatcherEvents.V1.Binded bound => bound.PackageId == packageId,
                                 DispatcherEvents.V1.Unbound unbound => unbound.PackageId == packageId,
+                                DispatcherEvents.V1.BindingCommentAdded comment => comment.PackageId == packageId,
                                 _ => false,
                             }));
                         }
@@ -307,6 +324,10 @@ namespace DataCatalague.Api.Repositories
 
             return appendedEvents;
         }
+
+        public DispatcherEvents.V1.BindingCommentAdded? FindBindingComment(Guid operationId)
+            => this._events.Select(item => item.Event.Payload).OfType<DispatcherEvents.V1.BindingCommentAdded>()
+                .FirstOrDefault(comment => comment.OperationId == operationId);
 
         public IReadOnlyList<StreamEvent> GetEvents(StreamReadPosition from, int count) {
             IEnumerable<StoredEvent> selected = this._events

@@ -1,5 +1,14 @@
-// Saved Package-Pipeline bindings own automatic Workspace membership. Only the
-// Pipeline checkbox and local comment are editable; Workspace matches are read-only.
+import {
+  MAX_BINDING_COMMENT_LENGTH,
+  trimBindingComment,
+} from "../../../shared/api/bindingComments.js";
+import { historyActorLabel, historyTimeLabel } from "../../../shared/domain/historyPresentation.js";
+
+const VISIBLE_COMMENTS = 20;
+const EMPTY_COMMENTS = Object.freeze([]);
+
+// The saved binding owns Workspace membership. Comment reads and draft edits
+// belong to the assignment session, independent of the map and its geometry.
 export function createPipelineRow(pipeline, session) {
   const element = document.createElement("article");
   element.className = "dc-work-stream-row dc-pipeline-binding-row";
@@ -16,8 +25,8 @@ export function createPipelineRow(pipeline, session) {
   const comment = document.createElement("button");
   comment.type = "button";
   comment.className = "dc-pipeline-comment__trigger";
-  comment.title = `Edit comment for ${pipeline.name}`;
-  comment.setAttribute("aria-label", `Edit comment for ${pipeline.name}`);
+  comment.title = `Comments for ${pipeline.name}`;
+  comment.setAttribute("aria-label", comment.title);
   comment.setAttribute("aria-expanded", "false");
   const icon = document.createElement("calcite-icon");
   icon.icon = "speech-bubble";
@@ -30,15 +39,39 @@ export function createPipelineRow(pipeline, session) {
   commentEditor.className = "dc-pipeline-comment__popover";
   commentEditor.hidden = true;
   commentEditor.setAttribute("role", "dialog");
-  commentEditor.setAttribute("aria-label", `Binding comment for ${pipeline.name}`);
+  commentEditor.setAttribute("aria-label", `Binding comments for ${pipeline.name}`);
   const commentInput = document.createElement("textarea");
   commentInput.rows = 3;
-  commentInput.placeholder = "Comment";
-  commentInput.setAttribute("aria-label", `Binding comment for ${pipeline.name}`);
+  commentInput.maxLength = MAX_BINDING_COMMENT_LENGTH;
+  commentInput.placeholder = "New comment";
+  commentInput.setAttribute("aria-label", `Unsaved comment for ${pipeline.name}`);
   const closeComment = document.createElement("button");
   closeComment.type = "button";
   closeComment.textContent = "OK";
-  commentEditor.append(commentInput, closeComment);
+  const status = document.createElement("p");
+  status.className = "dc-assignment-muted dc-pipeline-comment__status";
+  status.setAttribute("role", "status");
+  const history = document.createElement("div");
+  history.className = "dc-pipeline-comment__history";
+  history.tabIndex = 0;
+  history.setAttribute("role", "region");
+  history.setAttribute("aria-label", "Saved binding comments, newest first");
+  const historyList = document.createElement("ol");
+  const loadOlder = document.createElement("button");
+  loadOlder.type = "button";
+  loadOlder.textContent = "Show older comments";
+  history.append(historyList, loadOlder);
+
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "Retry comments";
+  const draftNotice = document.createElement("p");
+  draftNotice.className = "dc-assignment-muted dc-pipeline-comment__status";
+  const discard = document.createElement("button");
+  discard.type = "button";
+  discard.textContent = "Discard draft";
+  // Keep the textarea mounted when status, history or draft validation changes.
+  commentEditor.append(commentInput, closeComment, draftNotice, discard, status, retry, history);
 
   const matches = document.createElement("section");
   matches.className = "dc-auto-workspaces";
@@ -53,6 +86,8 @@ export function createPipelineRow(pipeline, session) {
   element.append(heading, commentEditor, matches);
 
   let currentState = null;
+  let renderedHistory = null;
+  let visibleCount = VISIBLE_COMMENTS;
   let renderedMatchesKey = null;
   let destroyed = false;
   const commentListeners = new AbortController();
@@ -62,9 +97,72 @@ export function createPipelineRow(pipeline, session) {
     isActive() &&
     !currentState.loading &&
     !currentState.saving &&
-    !currentState.reconciliationRequired;
+    !currentState.reconciliationRequired &&
+    !draftComment()?.awaitingConfirmation;
   const draftComment = () =>
     currentState?.draft?.comments?.find((item) => item.workStreamId === pipeline.id);
+
+  const savedComments = () => {
+    const groups = currentState?.commentHistory?.byPipeline;
+    return groups && Object.hasOwn(groups, pipeline.id) ? groups[pipeline.id] : EMPTY_COMMENTS;
+  };
+  const canOpen = () =>
+    currentState?.feature &&
+    !currentState.loading &&
+    !currentState.saving &&
+    (isActive() ||
+      draftComment() ||
+      savedComments().length ||
+      currentState.commentHistory?.error ||
+      currentState.commentHistory?.loading);
+
+  function renderHistory() {
+    const items = savedComments();
+    const readState = currentState?.commentHistory;
+    status.textContent = !readState
+      ? ""
+      : readState.loading
+        ? "Loading saved comments…"
+        : readState.error
+          ? items.length
+            ? "Could not reload comments. Showing previously loaded comments."
+            : "Could not load saved comments."
+          : items.length
+            ? ""
+            : "No saved comments.";
+    status.hidden = !status.textContent;
+    retry.hidden = !readState?.error;
+    history.hidden = items.length === 0;
+    if (renderedHistory === items) return;
+    renderedHistory = items;
+    historyList.replaceChildren();
+    history.scrollTop = 0;
+    appendHistory(0, Math.min(visibleCount, items.length));
+  }
+
+  function appendHistory(from, to) {
+    const items = savedComments();
+    const rows = items.slice(from, to).map((item) => {
+      const row = document.createElement("li");
+      const header = document.createElement("div");
+      header.className = "dc-assignment-muted";
+      header.title = item.actor;
+      const time = document.createElement("time");
+      time.dateTime = item.occurredAtUtc;
+      time.textContent = historyTimeLabel(item.occurredAtUtc);
+      const actor = document.createElement("span");
+      actor.textContent = `${historyActorLabel(item.actor)} · `;
+      header.append(actor, time);
+      const text = document.createElement("p");
+      text.className = "dc-pipeline-comment__text";
+      text.textContent = item.text;
+      row.append(header, text);
+      return row;
+    });
+    historyList.append(...rows);
+    loadOlder.hidden = to >= items.length;
+    if (loadOlder.hidden && document.activeElement === loadOlder) history.focus?.();
+  }
 
   function closePopup({ restoreFocus = false } = {}) {
     if (commentEditor.hidden) return;
@@ -116,31 +214,48 @@ export function createPipelineRow(pipeline, session) {
   function updateControls() {
     checkbox.checked = isActive();
     checkbox.disabled = !currentState?.feature || currentState.loading || currentState.saving;
-    comment.disabled = !canEdit();
-    comment.classList.toggle("has-comment", Boolean(draftComment()?.text.trim()));
-    if (!canEdit()) closePopup();
-    const currentComment = draftComment()?.text ?? "";
+    const draft = draftComment();
+    comment.disabled = !canOpen();
+    comment.classList.toggle(
+      "has-comment",
+      Boolean(trimBindingComment(draft?.text ?? "") || savedComments().length)
+    );
+    if (!canOpen()) closePopup();
+    const currentComment = draft?.text ?? "";
     if (document.activeElement !== commentInput) commentInput.value = currentComment;
-    commentInput.disabled = !canEdit();
+    commentInput.hidden = !isActive() && !draft;
+    commentInput.readOnly = !canEdit();
+    draftNotice.textContent = draft?.awaitingConfirmation
+      ? "Unconfirmed draft. Retry Save with the same text or discard the draft."
+      : draft && !isActive()
+        ? "Reassign this Workstream to save the draft, or discard it."
+        : draft
+          ? "Unsaved draft"
+          : "";
+    draftNotice.hidden = !draftNotice.textContent;
+    discard.hidden = !draft;
+    discard.disabled = !draft || currentState.saving || currentState.reconciliationRequired;
+    if (!commentEditor.hidden) renderHistory();
     renderMatches();
   }
 
   checkbox.addEventListener("change", () => session.setAssigned(pipeline.id, checkbox.checked));
   comment.addEventListener("click", () => {
-    if (!canEdit()) return;
+    if (!canOpen()) return;
     const opening = commentEditor.hidden;
     commentEditor.hidden = !opening;
     comment.setAttribute("aria-expanded", String(opening));
     if (opening) {
       commentInput.value = draftComment()?.text ?? "";
-      commentInput.focus?.({ preventScroll: true });
+      renderHistory();
+      (canEdit() ? commentInput : closeComment).focus?.({ preventScroll: true });
     }
   });
   commentInput.addEventListener("input", () => {
     if (!canEdit()) return;
     const nextText = commentInput.value;
     let existing = draftComment();
-    if (!nextText.trim()) {
+    if (!trimBindingComment(nextText)) {
       if (existing) session.removeComment(existing.id);
       return;
     }
@@ -151,6 +266,22 @@ export function createPipelineRow(pipeline, session) {
         .draft.comments.find((item) => item.workStreamId === pipeline.id);
     }
     if (existing) session.editComment(existing.id, nextText);
+  });
+  retry.addEventListener("click", () => {
+    closeComment.focus?.({ preventScroll: true });
+    void session.refreshComments();
+  });
+  discard.addEventListener("click", () => {
+    const draft = draftComment();
+    if (draft && !discard.disabled) {
+      closeComment.focus?.({ preventScroll: true });
+      session.removeComment(draft.id);
+    }
+  });
+  loadOlder.addEventListener("click", () => {
+    const from = visibleCount;
+    visibleCount = Math.min(from + VISIBLE_COMMENTS, savedComments().length);
+    appendHistory(from, visibleCount);
   });
   closeComment.addEventListener("click", () => closePopup({ restoreFocus: true }));
   commentEditor.addEventListener("keydown", (event) => {
@@ -171,6 +302,11 @@ export function createPipelineRow(pipeline, session) {
     element,
     update(state) {
       if (destroyed) return;
+      if (state.feature?.id !== currentState?.feature?.id) {
+        closePopup();
+        renderedHistory = null;
+        visibleCount = VISIBLE_COMMENTS;
+      }
       currentState = state;
       updateControls();
     },

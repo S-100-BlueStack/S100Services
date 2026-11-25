@@ -259,3 +259,36 @@ test("Profile requests are limited to four concurrent reads and Refresh retries 
   loader.destroy();
   for (const call of calls.slice(5)) call.resolve(null);
 });
+
+test("Committed comments use the existing history event profile lookup", async () => {
+  const profiles = [];
+  const actor = "PROD\\B123456";
+  const commentText = "First line\n<script>plain text</script>";
+  const loader = createPackageHistoryLoader({
+    read: async () =>
+      result([
+        event("comment", "2026-11-25T13:00:00Z", {
+          eventType: "bindingCommentAdded",
+          actor,
+          pipelineId: "enc",
+          pipelineName: "ENC",
+          commentText,
+        }),
+      ]),
+    readProfile: async (id, eventId, options) => {
+      profiles.push([id, eventId, options.actor]);
+      return { displayName: "Example user" };
+    },
+  });
+  loader.select("package");
+  await Promise.resolve();
+  await Promise.resolve();
+  const [entry] = loader.getSnapshot().entries;
+  assert.equal(entry.title, "Binding comment added");
+  assert.equal(entry.context, "Workstream: ENC");
+  assert.equal(entry.actor, "B123456");
+  assert.equal(entry.commentText, commentText);
+  assert.deepEqual(profiles, [["package", "comment", actor]]);
+  assert.equal(entry.profile.displayName, "Example user");
+  loader.destroy();
+});

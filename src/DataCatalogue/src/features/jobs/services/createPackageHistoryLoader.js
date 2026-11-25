@@ -1,5 +1,6 @@
 import { severityLabel } from "../../../shared/domain/severity.js";
 import { isDirectoryActor } from "../../../shared/api/actorProfile.js";
+import { historyActorLabel, historyTimeLabel } from "../../../shared/domain/historyPresentation.js";
 
 const TITLES = Object.freeze({
   packageCreated: "Package created",
@@ -8,23 +9,18 @@ const TITLES = Object.freeze({
   geometryReplaced: "Package geometry replaced",
   pipelineAssigned: "Workstream assigned",
   pipelineUnassigned: "Workstream unassigned",
-});
-const TIME = new Intl.DateTimeFormat("en-GB", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "UTC",
+  bindingCommentAdded: "Binding comment added",
 });
 
 function presentEvent(event) {
-  // The committed identity retains its domain; only the visible label is shortened.
-  const actor = event.actor?.match(/^[^\\]+\\([^\\]+)$/)?.[1] ?? event.actor;
   return {
     id: event.id,
     dateTime: event.occurredAtUtc,
-    timeLabel: `${TIME.format(new Date(event.occurredAtUtc))} UTC`,
+    timeLabel: historyTimeLabel(event.occurredAtUtc),
     title: TITLES[event.eventType],
-    actor: actor ?? "Actor not recorded",
+    actor: historyActorLabel(event.actor),
     actorIdentity: event.actor,
+    ...(event.commentText ? { commentText: event.commentText } : {}),
     context: event.pipelineId
       ? `Workstream: ${event.pipelineName ?? event.pipelineId}`
       : event.severity !== null

@@ -570,13 +570,26 @@ export function createAssignmentPage({
     get("reconcile").disabled = state.saving || state.loading || resetting;
     get("abandon").hidden = !state.reconciliationRequired;
     get("abandon").disabled = state.saving || state.loading || resetting;
+    const hasCommentDrafts = live && state.draft?.comments.length > 0;
     get("reconcile").textContent =
-      state.saving && state.reconciliationRequired ? "Checking…" : "Check saved bindings";
-    get("save").title = state.saving ? "Saving bindings" : "Save bindings";
+      state.saving && state.reconciliationRequired
+        ? "Checking…"
+        : hasCommentDrafts
+          ? "Check saved changes"
+          : "Check saved bindings";
+    get("save").title = hasCommentDrafts
+      ? state.saving
+        ? "Saving assignment changes"
+        : "Save assignment changes"
+      : state.saving
+        ? "Saving bindings"
+        : "Save bindings";
     get("save").setAttribute("aria-label", get("save").title);
     get("draft-status").textContent = state.feature
       ? state.reconciliationRequired
-        ? "Verify saved bindings"
+        ? hasCommentDrafts
+          ? "Verify saved changes"
+          : "Verify saved bindings"
         : state.validationError
           ? "Draft needs attention"
           : state.dirty

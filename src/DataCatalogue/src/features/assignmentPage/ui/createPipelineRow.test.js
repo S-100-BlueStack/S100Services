@@ -260,3 +260,38 @@ test("Pipeline comment editor preserves local draft and blocks unsupported live 
     restore();
   }
 });
+
+test("An inactive Workstream exposes immutable plain-text comments in the existing editor", () => {
+  const restore = fakeDom();
+  const row = createPipelineRow({ id: "p", name: "ENC" }, {});
+  try {
+    const text = "<img src=x onerror=alert(1)>\nPlain text";
+    row.update({
+      feature: { id: "package" },
+      record: { relations: {} },
+      draft: { activeIds: [], comments: [] },
+      commentHistory: {
+        byPipeline: {
+          p: [
+            { id: "comment", text, actor: "PROD\\B123456", occurredAtUtc: "2026-11-25T13:00:00Z" },
+          ],
+        },
+      },
+    });
+    const { comment, commentEditor, commentInput } = nodes(row);
+    assert.equal(comment.disabled, false);
+    comment.dispatch("click");
+    assert.equal(commentInput.hidden, true);
+    assert.equal(commentInput.readOnly, true);
+    const [list] = commentEditor.children.at(-1).children;
+    const [header, savedText] = list.children[0].children;
+    assert.match(header.children[1].textContent, /UTC$/);
+    assert.equal(savedText.textContent, text);
+    assert.equal(savedText.children.length, 0);
+    commentEditor.dispatch("keydown", { key: "Escape" });
+    assert.equal(commentEditor.hidden, true);
+  } finally {
+    row.destroy();
+    restore();
+  }
+});

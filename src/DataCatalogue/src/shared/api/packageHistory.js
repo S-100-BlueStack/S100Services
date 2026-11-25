@@ -1,4 +1,5 @@
 import { normalizeSeverity } from "../domain/severity.js";
+import { hasBindingCommentText } from "./bindingComments.js";
 
 const EVENT_TYPES = new Set([
   "packageCreated",
@@ -7,6 +8,7 @@ const EVENT_TYPES = new Set([
   "geometryReplaced",
   "pipelineAssigned",
   "pipelineUnassigned",
+  "bindingCommentAdded",
 ]);
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$/;
@@ -49,9 +51,14 @@ export function normalizePackageHistoryPage(value, packageId, pageSize, before) 
     seen.add(id.toLowerCase());
     const pipelineId = optionalText(item.pipelineId);
     const pipelineName = optionalText(item.pipelineName);
-    const isBinding = ["pipelineAssigned", "pipelineUnassigned"].includes(item.eventType);
+    const isComment = item.eventType === "bindingCommentAdded";
+    const isBinding =
+      isComment || ["pipelineAssigned", "pipelineUnassigned"].includes(item.eventType);
+    const commentText = item.commentText ?? null;
+    const actor = optionalText(item.actor);
     const severity = normalizeSeverity(item.severity);
     if (
+      (isComment ? !hasBindingCommentText(commentText) || !actor : commentText !== null) ||
       isBinding !== Boolean(pipelineId) ||
       (!pipelineId && pipelineName) ||
       (item.eventType === "severityUpdated") !== (severity !== null)
@@ -62,10 +69,11 @@ export function normalizePackageHistoryPage(value, packageId, pageSize, before) 
       id: id.toLowerCase(),
       eventType: item.eventType,
       occurredAtUtc: item.occurredAtUtc,
-      actor: optionalText(item.actor),
+      actor,
       pipelineId,
       pipelineName,
       severity,
+      ...(isComment ? { commentText } : {}),
     };
   });
   const nextBefore = value.nextBefore?.toLowerCase() ?? null;

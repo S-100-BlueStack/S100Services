@@ -33,9 +33,13 @@ of map readiness. Demo geometry URLs are reserved for mock mode.
 
 Live Workstream bindings are saved through the existing Pipeline API. The
 Workspace list below each selected Workstream shows read-only matches from the
-last saved binding response. New bindings get their matches on Save. The
-historical mock Feature/Work stream assignment retains its separate draft and
-comment behavior. See [live assignment scope](docs/FEATURE_WORKSPACE_SCOPE.md#package-assignment-page).
+last saved binding response. New bindings get their matches on Save. Use the
+speech-bubble editor to draft a Workstream binding comment and the toolbar
+Save to commit it. Read immutable comments in the same editor, including for
+inactive Workstreams in **Show all**. Committed comments also appear in Package
+History. The historical mock Feature/Work stream workflow retains its own
+draft and comment behavior. See the
+[live assignment scope](docs/FEATURE_WORKSPACE_SCOPE.md#package-assignment-page).
 
 ## Main-map Packages presentation
 

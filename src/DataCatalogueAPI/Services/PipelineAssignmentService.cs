@@ -1,5 +1,7 @@
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
+using DataCatalague.Api.Domain.Events;
+using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 
@@ -8,8 +10,12 @@ namespace DataCatalague.Api.Services;
 public sealed class PipelineAssignmentConflictException(string message) : Exception(message);
 
 /// <summary>Changes package routing while retaining assignment event history.</summary>
-public sealed class PipelineAssignmentService(IEventStore store, StreamNameMap streams, ICommandService<BindingState> commands, PipelineAssignmentIndex assignments)
+public sealed class PipelineAssignmentService(InMemoryEventStore store, StreamNameMap streams, ICommandService<BindingState> commands, PipelineAssignmentIndex assignments)
 {
+    public const int MaximumCommentLength = 4000;
+    public const int DefaultCommentPageSize = 50;
+    public const int MaximumCommentPageSize = 100;
+
     private static readonly SemaphoreSlim MutationGate = new(1, 1);
 
     /// <summary>Validates category defaults against saved pipeline streams and normalizes them to a distinct, sorted list.</summary>
@@ -65,6 +71,81 @@ public sealed class PipelineAssignmentService(IEventStore store, StreamNameMap s
             assignments.Update(current.PackageId!.Value, current.PipelineId!.Value, false, result.Get()!.GlobalPosition);
         }
         finally { MutationGate.Release(); }
+    }
+
+    public async Task<BindingCommentResponse> AddCommentAsync(
+        string packageId, string pipelineId, Guid operationId, string? text, string actor, CancellationToken cancellationToken) {
+        ValidateCommentScopeId(packageId);
+        ValidateCommentScopeId(pipelineId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actor);
+        var trimmed = text?.Trim();
+        if (operationId == Guid.Empty || text is null || text.Length > MaximumCommentLength || string.IsNullOrEmpty(trimmed)) {
+            throw new InvalidDataException($"Supply a nonempty operation ID and comment of 1 to {MaximumCommentLength} characters.");
+        }
+
+        await MutationGate.WaitAsync(cancellationToken);
+        try {
+            if (!await store.StreamExists(streams.GetStreamName(new PackageId(packageId)), cancellationToken)) {
+                throw new KeyNotFoundException("Package not found.");
+            }
+            var bindingId = $"{packageId}::{pipelineId}";
+            var binding = await GetAsync(bindingId, cancellationToken);
+            if (binding.PackageId?.Value != packageId || binding.PipelineId?.Value != pipelineId) {
+                throw new KeyNotFoundException("Binding not found.");
+            }
+
+            // The same gate coordinates assign, unbind and append. Resolve a retry before
+            // testing activity so a recorded operation can be acknowledged after unbinding.
+            var previous = store.ReadBindingComment(operationId, cancellationToken);
+            if (previous is not null) {
+                if (previous.PackageId != packageId || previous.PipelineId != pipelineId || previous.Text != trimmed ||
+                    !string.Equals(previous.Actor, actor, StringComparison.OrdinalIgnoreCase)) {
+                    throw new PipelineAssignmentConflictException("The comment operation ID is already in use.");
+                }
+                return MapComment(previous);
+            }
+
+            if (!binding.IsActive) { throw new PipelineAssignmentConflictException("The binding is inactive."); }
+
+            // The existing-state command also checks activity and appends with its expected stream version.
+            var result = await commands.Handle(new DispatcherCommands.AddBindingComment(bindingId, operationId, trimmed, actor), cancellationToken);
+            if (result.Exception is WrongVersion) {
+                throw new PipelineAssignmentConflictException("Assignment changed; check saved comments before retrying.");
+            }
+            result.ThrowIfError();
+            var committed = store.ReadBindingComment(operationId, cancellationToken)
+                ?? throw new InvalidOperationException("The committed binding comment could not be read.");
+            return MapComment(committed);
+        }
+        finally { MutationGate.Release(); }
+    }
+
+    public BindingCommentPageResponse ListComments(string packageId, Guid? before, int pageSize, CancellationToken cancellationToken) {
+        ValidateCommentScopeId(packageId);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumCommentPageSize);
+        var events = store.ReadPackageEvents(packageId, streams.GetStreamName(new PackageId(packageId)), cancellationToken)
+            ?? throw new KeyNotFoundException("Package not found.");
+        var ordered = events.Select(item => item.Payload).OfType<DispatcherEvents.V1.BindingCommentAdded>()
+            .Where(comment => comment.PackageId == packageId)
+            .OrderByDescending(comment => comment.UTC).ThenByDescending(comment => comment.OperationId).ToArray();
+        var offset = 0;
+        if (before.HasValue) {
+            offset = Array.FindIndex(ordered, comment => comment.OperationId == before.Value) + 1;
+            if (offset == 0) { throw new InvalidDataException("Comment continuation does not belong to this Package. Reload comments."); }
+        }
+        var page = ordered.Skip(offset).Take(pageSize).Select(MapComment).ToArray();
+        cancellationToken.ThrowIfCancellationRequested();
+        return new BindingCommentPageResponse(packageId, page, offset + page.Length < ordered.Length ? page[^1].Id : null);
+    }
+
+    private static BindingCommentResponse MapComment(DispatcherEvents.V1.BindingCommentAdded comment)
+        => new(comment.OperationId, comment.PipelineId, comment.Text, comment.Actor, comment.UTC.ToUniversalTime());
+
+    private static void ValidateCommentScopeId(string id) {
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 200 || id != id.Trim() || id.Contains("::") || id.Any(char.IsControl)) {
+            throw new InvalidDataException("Supply valid package and pipeline identifiers.");
+        }
     }
 
     public async Task<BindingState> GetAsync(string bindingId, CancellationToken cancellationToken) {

@@ -4,6 +4,13 @@ import { normalizePackageAssignmentSummary } from "./packageAssignmentSummary.js
 import { normalizePackageAoiItem } from "./packageAoiPage.js";
 import { normalizePackageHistoryPage, validateHistoryRequest } from "./packageHistory.js";
 import { normalizeActorProfile, validateProfileRequest } from "./actorProfile.js";
+import {
+  BINDING_COMMENT_PAGE_SIZE,
+  normalizeBindingComment,
+  normalizeBindingCommentPage,
+  toBindingCommentRequest,
+  trimBindingComment,
+} from "./bindingComments.js";
 
 export function requiredId(value) {
   if (typeof value !== "string" || !value.trim())
@@ -288,6 +295,30 @@ export function createCatalogueService(client) {
           workspaces: item.workspaces.map((workspace) => normalizeWorkspace(workspace, pipelineId)),
         };
       });
+    },
+    async bindingComments(packageId, { before = null, signal } = {}) {
+      const value = await client.request(`/v1/packages/${segment(packageId)}/binding-comments`, {
+        query: { pageSize: BINDING_COMMENT_PAGE_SIZE, before },
+        signal,
+      });
+      return normalizeBindingCommentPage(value, packageId, before);
+    },
+    async addBindingComment(packageId, draft, { signal } = {}) {
+      const body = toBindingCommentRequest(draft);
+      const value = await client.request(`/v1/packages/${segment(packageId)}/binding-comments`, {
+        method: "POST",
+        body,
+        signal,
+      });
+      const comment = normalizeBindingComment(value);
+      if (
+        comment.id !== body.operationId.toLowerCase() ||
+        comment.pipelineId !== body.pipelineId ||
+        comment.text !== trimBindingComment(body.text)
+      ) {
+        throw new Error("API returned a different binding comment.");
+      }
+      return comment;
     },
     bind(packageId, pipelineId, { signal } = {}) {
       return client.request("/v1/dispatcher/bindings", {

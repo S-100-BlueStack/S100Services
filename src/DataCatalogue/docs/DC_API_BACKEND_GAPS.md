@@ -4,8 +4,9 @@ Use the [tracker](PROJECT_TRACKER.md) for current priorities and acceptance,
 and [backend contracts](BACKEND_CONTRACTS.md) for source-verified resources.
 Current follow-ups include functional Compilation/QC, persistent contextual
 status and completion history, archived Package discovery, prospective
-Workspace matching, global Package search, binding comments and concurrency,
-and Workspace ownership. Earlier candidate notes preserve the gaps known at
+Workspace matching, global Package search, broader binding concurrency and
+Workspace ownership. COMMENT-01 has a contract in the current candidate and
+awaits local acceptance. Earlier candidate notes preserve the gaps known at
 delivery. Later entries record the verified geometry and binding reads that
 superseded the original proposals.
 
@@ -13,6 +14,14 @@ superseded the original proposals.
 > Pipeline remains the technical backend entity and API terminology throughout
 > this gap register. Workspace remains a distinct entity. No backend gap is
 > resolved by the display terminology change.
+
+## COMMENT-01 - Binding comments
+
+The current candidate adds the [authorized read/append and history contract](BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments).
+Local Windows, API and browser acceptance remain pending. The current store
+retains comments across unbind/restore for the lifetime of its events.
+Future store migration must retain the binding history and the retry identity
+lookup. BIND-02 still covers stronger concurrency for multi-binding updates.
 
 ## DC-PACKAGE-TIMELINE-03 - Package history actor attribution (2026-11-25)
 
@@ -377,7 +386,7 @@ Backend projects were read only. Confirmed product decisions are not reopened he
 | BIND-02     | Deferred concurrency extension                    | Binding responses expose update time but no ETag/precondition or atomic desired-set update.                                                                                                                                                                        | Re-read before every save/retry, avoid duplicate local Save, reconcile after writes. Concurrent users can still change bindings between reads; no lost-update guarantee is claimed. Require agreed version/precondition semantics for stronger concurrency.                                             |
 | PAGE-01     | Deferred search extension                         | Package GET supports category, geometry, hasPipeline, pipelineId and paging, not name search or Severity sort.                                                                                                                                                     | Package list uses server filters and paging; name search disabled. No page-only filter masquerades as global search. Jobs sort complete membership across all discovered Workspaces, independent of map visibility.                                                                                     |
 | PAGE-02     | Performance / snapshot follow-up                  | Workspace membership is paged, Package details require individual reads, and no snapshot token or batch Package read is documented.                                                                                                                                | Six concurrent hydrations; no partial success list. Duplicate identities, changing totals or premature empty pages fail and request reload. Concurrent changes preserving totals cannot always be detected; large Workspaces need local performance tests and potentially a backend batch/snapshot API. |
-| COMMENT-01  | Deferred backend extension                        | No comment persistence endpoint in verified v1.                                                                                                                                                                                                                    | Comments and saved history remain demo-only; no live comment editor or persistence claims.                                                                                                                                                                                                              |
+| COMMENT-01  | Candidate; local acceptance pending               | Authorized Package-scoped read and append use retained binding events.                                                                                                                                                                                             | Verify Save, retries, inactive history and the Windows actor locally. Current store retention and BIND-02 remain separate.                                                                                                                                                                              |
 | STORE-01    | Accepted for testing only                         | Source uses temporary in-memory event storage.                                                                                                                                                                                                                     | Integration tests may lose API data on restart. No claim of durable binding/Package/Workspace storage. Production persistence remains backend-owned.                                                                                                                                                    |
 | OWNER-01    | Out of current scope                              | Workspace owner/lockedAtUtc and claim/release routes exist; they describe responsibility, not progress.                                                                                                                                                            | Fields retained in normalized Workspace values, never mapped to Job status. Claim/release mutations are not implemented.                                                                                                                                                                                |
 | OVERRIDE-01 | Confirmed requirement; backend contract missing   | Manual Workspace inclusions and exclusions per bound Package/Pipeline must coexist with automatic AOI overlap. Current BindRequest has only PackageId/PipelineId; GET bindings and Workspace package queries calculate intersections without override persistence. | No misleading manual Workspace editor until an authorized read/write/reconciliation contract is agreed and implemented by backend owners. See proposal below.                                                                                                                                           |

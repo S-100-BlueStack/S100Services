@@ -8,11 +8,59 @@ AOI intersection determine Workspace membership. The [API README](../../DataCata
 documents the v1 resources and hosting paths, including the combined Workspace
 overview and Package geometry reads.
 
-The authorized Package history and optional actor profile contracts are below.
+The authorized binding comments, Package history and optional actor profile
+contracts are below.
 Persistent contextual Job status, functional Compilation/QC, archived Package
 discovery and prospective Workspace intersection remain separate
 [backend gaps](DC_API_BACKEND_GAPS.md). Dated integration and demo notes retain
 the semantics and limitations known at delivery.
+
+## COMMENT-01 - Workstream binding comments
+
+Both methods on `/v1/packages/{id}/binding-comments` use the canonical Package
+ID and existing Windows SSO and `datacatalogue:access` policy. On IIS, prepend
+the configured application base. Responses use `Cache-Control: no-store`.
+
+| Method | Input                                                                      | Successful response                                               |
+| ------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| GET    | Optional `pageSize` (1–100, default 50) and `before` from the same Package | `200` with `{ packageId, items, nextBefore }`                     |
+| POST   | JSON `{ pipelineId, operationId, text }`                                   | `200` with the committed comment, including on an identical retry |
+
+Each comment exposes `id` (the operation UUID), `pipelineId`, `text`, `actor`
+(the full recorded Windows account), and `occurredAtUtc` (server UTC timestamp).
+POST accepts at most 4,000 UTF-16 code units of plain text before trimming.
+Leading and trailing whitespace is trimmed and internal line breaks are stored.
+The request limit is 32 KiB. Package and Pipeline identifiers are bounded to
+200 characters and use the same canonical identities as the binding. POST
+uses the authenticated principal and the server clock. Incoming actor and time
+properties have no effect.
+
+GET includes active and inactive bindings and sorts newest first by UTC and
+then UUID descending. Pass each `nextBefore` as the next `before`. A null
+value marks the end. An existing Package with no retained comments returns empty
+`items`. Reload the first page to see newer writes that arrived while paging.
+The read uses the binding history streams and performs no Workspace
+intersection. The active-only Dispatcher binding reads keep their existing
+semantics. The frontend reads the selected Package's pages as one cancellable
+operation with its existing 30-second deadline, grouping them by Workstream.
+
+A new append requires an existing active binding. A matching retry on the same
+Package, Pipeline, UUID, normalized text and Windows account returns the
+original record even after unbind. Account comparison is case-insensitive.
+The invariant applies across bindings in the current event store. Reusing a
+UUID for different content, actor or valid binding scope returns `409`. An
+inactive binding or expected-version conflict also returns `409`. Missing
+Package or binding returns `404`. Malformed IDs, text, or pagination return
+`400`. Oversized bodies may return `413`. Existing authentication and
+authorization produce `401`/`403`. There are no edit or delete operations.
+
+The `V1.BindingCommentAdded` event is appended to the existing
+`packageId::pipelineId` binding stream. Package History projects it as
+`bindingCommentAdded` with the Workstream context and `commentText`.
+History uses its own stored event GUID for paging and profile lookup.
+Old events have no comment text. Comment persistence, history and retry
+identities follow the in-memory event store's retention, including loss on
+process restart. No atomic multi-binding Save is provided.
 
 ## DC-PACKAGE-TIMELINE-04 - Actor profile enrichment (2026-11-25)
 
@@ -100,6 +148,8 @@ there was no directory lookup; TIMELINE-04 adds only a separate read resource.
 Accepted by the user in `d453900ffe342354aaf52a628f0b085fd905d6e7`.
 Deploy the matching API before enabling the live frontend. TIMELINE-03 adds
 write-time actor attribution without changing the public response shape.
+[COMMENT-01](#comment-01---workstream-binding-comments) extends this projection
+with the committed binding comment event and optional `commentText`.
 
 `GET /v1/packages/{id}/history?pageSize=50&before={eventId}` reads one canonical
 Package ID (not Short ID, Job key or Workspace ID). Use the configured API base;
@@ -304,6 +354,8 @@ verified persistence contracts; the UI must not send invented writes.
 ---
 
 ## DC-UX-01 v3 — Binding comment and Workspace draft UI (2026-11-06)
+
+This historical draft-only behavior was superseded for comments by [COMMENT-01](#comment-01---workstream-binding-comments).
 
 The frontend now exposes Pipeline comment drafts and always-visible nested
 Workspace selection previews, but the **v1 executable backend remains unchanged**.

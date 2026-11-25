@@ -37,6 +37,27 @@ unchanged. To verify the IIS deployment and local configuration, see
 
 
 
+## Read and append Workstream binding comments
+
+`GET /api/v1/packages/{id}/binding-comments` returns retained comments for a
+canonical Package across active and inactive Pipeline bindings. Optional
+`pageSize` (1–100, default 50) and `before` page the result via `nextBefore`.
+`POST` to the same route with `pipelineId`, a client-generated `operationId`
+UUID and `text` (at most 4,000 UTF-16 code units). New comments require an
+active binding. The API trims outer whitespace and records the authenticated
+Windows actor and server UTC time. Both methods use the existing catalogue
+policy and non-cacheable responses.
+
+POST returns the committed comment with `200`. A matching retry returns that
+same record, and conflicting UUID reuse returns `409`. Comments are immutable
+and survive unbind/restore for the lifetime of the existing in-memory store.
+The binding comment event also appears in Package History and uses its existing
+profile route. See the full [wire contract](../DataCatalogue/docs/BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments).
+
+```powershell
+dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~BindingComment"
+```
+
 ## Read individual Package history
 
 `GET /api/v1/packages/{id}/history` returns actual committed Package and binding
@@ -45,7 +66,8 @@ events, including removed/restored Pipeline assignments, through the existing
 (default 50, range 1-100) bounds the page; pass the previous response's
 `nextBefore` GUID as `before` for older events. `null` means the end. The response
 contains `packageId`, `items` and `nextBefore`; entries expose `id`, `eventType`,
-`occurredAtUtc`, nullable `actor`, `pipelineId`, `pipelineName` and `severity`.
+`occurredAtUtc`, nullable `actor`, `pipelineId`, `pipelineName`, `severity`,
+and `commentText` for committed binding comment events.
 Severity is an exact decimal string for severity events. Pipeline names are
 current names, not historical names. The nullable `actor` field projects the
 account captured from the authenticated principal at mutation time; explicit

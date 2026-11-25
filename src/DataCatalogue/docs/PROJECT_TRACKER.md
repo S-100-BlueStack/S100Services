@@ -15,12 +15,33 @@ integration details.
   are accepted locally. See the TIMELINE entries below for the user-reported
   commits and checks. Deployed IIS and cross-account directory access still
   need verification. Retention follows the event store.
-- Next, agree the authoritative Compilation/QC workflow and filter contract
-  with the backend owner. The accepted Main Map preview exposes mode selection
-  only. Keep persistent contextual status, archived Package discovery and
-  prospective Workspace matching as separate tasks.
+- DC-DOC-01 was accepted and committed at
+  `fa944f3af61c4a98fac0a8cc790a9aa53afbff5b` as reported by the user.
+- COMMENT-01 is the current implementation candidate. Verify live comment Save,
+  readback and Package History locally before marking it accepted. Once accepted,
+  agree the Compilation/QC workflow and filter contract with the backend owner.
+  The accepted Main Map preview exposes mode selection only. Keep persistent
+  contextual status, archived Package discovery and prospective Workspace
+  matching as separate tasks.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
+
+## COMMENT-01 - Workstream binding comments (2026-11-25)
+
+The candidate uses baseline `fa944f3af61c4a98fac0a8cc790a9aa53afbff5b`.
+Local Windows API and browser acceptance are pending.
+
+- The binding event stream records append-only comments with a stable operation
+  UUID, authenticated Windows account and server UTC time. Comments survive
+  unbind/restore while the event store retains the binding stream. The existing
+  Package History includes the actual comment events and optional actor profiles.
+- In Package Assignment, the speech-bubble editor shows saved comments and one
+  local draft per row. Explicit Save handles newly checked Workstreams first.
+  Independent failures preserve unconfirmed drafts. Use **Check saved changes**
+  for read-only reconciliation after an uncertain append.
+- The in-memory store still loses events and retry identities on process restart.
+  Broader binding concurrency (BIND-02), functional QC and persistent contextual
+  status remain separate. See the [binding comments contract](BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments).
 
 ## DC-PACKAGE-TIMELINE-04 - Active Directory actor profiles (2026-11-25)
 

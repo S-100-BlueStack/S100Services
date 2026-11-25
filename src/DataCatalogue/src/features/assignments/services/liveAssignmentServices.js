@@ -4,6 +4,9 @@ import {
   withBindingRequestDeadline,
 } from "./withBindingRequestDeadline.js";
 
+import { assignmentDraftError, rebaseDraftBindings } from "../domain/assignmentDraft.js";
+import { confirmedBindingCommentIds } from "../domain/confirmedBindingComments.js";
+
 const DEFAULT_BINDING_REQUEST_TIMEOUT_MS = 30_000;
 
 function bindingRecord(bindings) {
@@ -23,11 +26,24 @@ function bindingRecord(bindings) {
 }
 
 export class BindingSaveError extends Error {
-  constructor(message, { record = null, outcomes = [], requiresReconciliation = false } = {}) {
+  constructor(
+    message,
+    {
+      record = null,
+      outcomes = [],
+      requiresReconciliation = false,
+      commentHistory,
+      confirmedCommentIds = [],
+      pendingCommentIds = [],
+    } = {}
+  ) {
     super(message);
     this.name = "BindingSaveError";
     this.record = record;
     this.outcomes = outcomes;
+    this.commentHistory = commentHistory;
+    this.confirmedCommentIds = confirmedCommentIds;
+    this.pendingCommentIds = pendingCommentIds;
     this.requiresReconciliation = requiresReconciliation;
   }
 }
@@ -46,6 +62,7 @@ export function createLiveAssignmentServices(
   { bindingRequestTimeoutMs = DEFAULT_BINDING_REQUEST_TIMEOUT_MS } = {}
 ) {
   const pending = new Map();
+  const pendingCommentReads = new Map();
   const request = (stage, operation, signal) =>
     withBindingRequestDeadline(operation, {
       stage,
@@ -59,34 +76,93 @@ export function createLiveAssignmentServices(
       signal
     );
 
+  const supportsComments =
+    typeof catalogue.bindingComments === "function" &&
+    typeof catalogue.addBindingComment === "function";
+
+  function readComments(id, signal) {
+    if (pendingCommentReads.has(id)) return pendingCommentReads.get(id);
+    const reading = request(
+      "Binding comment history read",
+      async ({ signal: requestSignal }) => {
+        const comments = [];
+        const seen = new Set();
+        let before = null;
+        do {
+          requestSignal.throwIfAborted();
+          const page = await catalogue.bindingComments(id, { before, signal: requestSignal });
+          for (const item of page.items) {
+            if (seen.has(item.id)) throw new Error("Duplicate binding comment. Reload comments.");
+            seen.add(item.id);
+            comments.push(item);
+          }
+          before = page.nextBefore;
+        } while (before);
+        return comments;
+      },
+      signal
+    ).finally(() => pendingCommentReads.delete(id));
+    pendingCommentReads.set(id, reading);
+    return reading;
+  }
+
   const assignments = {
+    ...(supportsComments
+      ? { loadComments: (id, { signal } = {}) => readComments(id, signal) }
+      : {}),
     async load(id, { signal } = {}) {
       return bindingRecord(await readBindings(id, signal));
     },
     // Recovery is read-only. It must not repeat an unconfirmed POST or DELETE.
-    async reconcile(id) {
-      return bindingRecord(await readBindings(id));
+    async reconcile(id, { includeComments = false } = {}) {
+      if (!includeComments) return bindingRecord(await readBindings(id));
+      const [bindings, commentHistory] = await Promise.all([readBindings(id), readComments(id)]);
+      return { ...bindingRecord(bindings), commentHistory };
     },
-    save(id, draft) {
+    save(id, draft, { baselineActiveIds } = {}) {
       // Reject old/foreign Workspace edit payloads before any binding reads or writes.
-      // The only supported mutation changes Package-Pipeline bindings.
       if (Object.hasOwn(draft, "workspaceOverrides"))
         return Promise.reject(
           new Error("Manual Workspace assignments are not supported by this API.")
         );
       if (pending.has(id)) return pending.get(id);
       const desired = [...new Set(draft.activeIds)];
-      const operation = saveBindings(id, desired, draft.comments).finally(() => pending.delete(id));
+      const operation = saveBindings(id, desired, draft.comments, baselineActiveIds).finally(() =>
+        pending.delete(id)
+      );
       pending.set(id, operation);
       return operation;
     },
   };
 
-  async function saveBindings(id, desired, comments = []) {
-    if (comments.length) throw new Error("Binding comments cannot be saved by this API.");
+  async function saveBindings(id, intendedIds, comments = [], baselineActiveIds) {
+    if (comments.length && !supportsComments)
+      throw new Error("Binding comments cannot be saved by this API.");
+    if (comments.length && !Array.isArray(baselineActiveIds))
+      throw new Error("Reload the saved Workstream assignments before adding comments.");
+    const validationError = assignmentDraftError(
+      { activeIds: intendedIds, comments },
+      { validateCommentText: true }
+    );
+    if (validationError) throw new Error(validationError);
     // Preflight is always authoritative. A previous unsuccessful response may have committed.
-    const existing = await readBindings(id);
-    const current = new Set(existing.map((binding) => binding.pipelineId));
+    const [existing, priorComments] = await Promise.all([
+      readBindings(id),
+      comments.length ? readComments(id) : [],
+    ]);
+    const alreadyConfirmed = confirmedBindingCommentIds(
+      comments.filter((comment) => comment.awaitingConfirmation),
+      priorComments
+    );
+    const priorConfirmation = alreadyConfirmed.length
+      ? { commentHistory: priorComments, confirmedCommentIds: alreadyConfirmed }
+      : {};
+    const toAppend = comments.filter((comment) => !alreadyConfirmed.includes(comment.id));
+    const currentIds = existing.map((binding) => binding.pipelineId);
+    const current = new Set(currentIds);
+    const desired = comments.length
+      ? rebaseDraftBindings(currentIds, intendedIds, baselineActiveIds)
+      : intendedIds;
     const changes = [
       ...desired
         .filter((pipelineId) => !current.has(pipelineId))
@@ -123,25 +199,100 @@ export function createLiveAssignmentServices(
         if (hasUncertainOutcome(error)) {
           throw new BindingSaveError(
             `${change.action} ${change.pipelineId}: ${error.message} The server outcome is unknown. Check saved bindings before another Save. No remaining changes were sent.`,
-            { outcomes, requiresReconciliation: true }
+            { outcomes, requiresReconciliation: true, ...priorConfirmation }
           );
         }
       }
     }
 
+    const accepted = [];
+    if (toAppend.length) {
+      let active;
+      try {
+        const bindings = successfulWrites ? await readBindings(id) : existing;
+        active = new Set(bindings.map((binding) => binding.pipelineId));
+      } catch (error) {
+        throw new BindingSaveError(
+          `Could not verify active bindings before adding comments. ${error.message}`,
+          { outcomes, requiresReconciliation: true, ...priorConfirmation }
+        );
+      }
+      for (const comment of toAppend) {
+        const outcome = { pipelineId: comment.workStreamId, action: "Comment", ok: false };
+        outcomes.push(outcome);
+        if (!active.has(comment.workStreamId)) {
+          outcome.message = "The binding is not confirmed active.";
+          continue;
+        }
+        try {
+          await request("Binding comment append", ({ signal }) =>
+            catalogue.addBindingComment(id, comment, { signal })
+          );
+          successfulWrites++;
+          accepted.push(comment);
+          outcome.ok = true;
+        } catch (error) {
+          outcome.message = error.message;
+          // An invalid or interrupted success response also leaves the append uncertain.
+          const rejected = error.status >= 400 && error.status < 500 && error.status !== 408;
+          if (hasUncertainOutcome(error) || !rejected) {
+            throw new BindingSaveError(
+              `Comment ${comment.workStreamId}: ${error.message} Check saved changes before another Save. No remaining changes were sent.`,
+              {
+                outcomes,
+                requiresReconciliation: true,
+                ...priorConfirmation,
+                pendingCommentIds: [...accepted, comment].map((draft) => draft.id),
+              }
+            );
+          }
+        }
+      }
+    }
+
     const summary = outcomes
-      .map(
-        (item) =>
-          `${item.action} ${item.pipelineId}: ${item.ok ? "succeeded" : `failed (${item.message})`}`
-      )
+      .map((item) => {
+        const status = item.ok
+          ? item.action === "Comment"
+            ? "accepted by the API"
+            : "succeeded"
+          : `failed (${item.message})`;
+        return `${item.action} ${item.pipelineId}: ${status}`;
+      })
       .join("; ");
     let record;
     try {
-      record = await assignments.reconcile(id);
+      record = await assignments.reconcile(id, { includeComments: comments.length > 0 });
     } catch (error) {
       throw new BindingSaveError(
-        `${summary ? `${summary}. ` : ""}Authoritative reload failed: ${error.message} ${successfulWrites ? "Check saved bindings before another Save." : "Retry Save to read the current bindings."}`,
-        { outcomes, requiresReconciliation: successfulWrites > 0 }
+        `${summary ? `${summary}. ` : ""}Authoritative reload failed: ${error.message} ${successfulWrites ? "Check saved changes before another Save." : "Retry Save to read the current state."}`,
+        {
+          outcomes,
+          requiresReconciliation: successfulWrites > 0,
+          ...priorConfirmation,
+          pendingCommentIds: accepted.map((draft) => draft.id),
+        }
+      );
+    }
+    const { commentHistory, ...bindingState } = record;
+    const confirmedCommentIds = [
+      ...alreadyConfirmed,
+      ...confirmedBindingCommentIds(accepted, commentHistory ?? []),
+    ];
+    const pendingCommentIds = accepted
+      .map((draft) => draft.id)
+      .filter((draftId) => !confirmedCommentIds.includes(draftId));
+    if (pendingCommentIds.length) {
+      throw new BindingSaveError(
+        `${summary}. Could not verify every comment in saved history. Check saved changes before another Save.`,
+        {
+          record: bindingState,
+          commentHistory,
+          outcomes,
+          confirmedCommentIds,
+          pendingCommentIds,
+          requiresReconciliation: true,
+        }
       );
     }
     const actual = Object.keys(record.relations).sort();
@@ -149,7 +300,7 @@ export function createLiveAssignmentServices(
     if (outcomes.some((item) => !item.ok) || !matches) {
       throw new BindingSaveError(
         `${summary}. Bindings reloaded.${matches ? " Requested bindings are now present." : " Requested changes remain in the draft; review and retry."}`,
-        { record, outcomes }
+        { record: bindingState, commentHistory, outcomes, confirmedCommentIds }
       );
     }
     return { ...record, saveMessage: summary || "Bindings reloaded; no changes required." };

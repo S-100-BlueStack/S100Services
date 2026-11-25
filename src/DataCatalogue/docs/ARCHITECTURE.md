@@ -18,6 +18,29 @@
   Dated notes below describe changes in their delivery context. The preserved
   mock workflow retains its separate Feature/Work stream domain.
 
+## COMMENT-01 - Binding comment ownership
+
+`BindingCommentsController` uses the existing catalogue policy and captures the
+actor through `PackageHistoryActor`. `PipelineAssignmentService` shares the
+existing assignment mutation gate with bind/unbind and routes new comments
+through `BindingCommandService`. The aggregate checks activity and uses
+its expected stream version. Replay advances the version without changing
+binding activity, membership or assignment timestamps. The in-memory store
+indexes operation UUIDs to their binding streams for retries. The existing
+Package history snapshot reads comment events alongside binding history and
+supports the same event-scoped profile lookup.
+
+`catalogueService` validates the wire payload. `liveAssignmentServices` owns
+paged comment reads and independent binding/comment writes. The session owns
+the Package selection, request lifetime, saved comments and draft state.
+On a comment Save, explicit checkbox edits rebase onto current bindings so a
+remote unbind cannot be reversed by typing a comment. New comments go only to
+confirmed active bindings. Uncertain appends stop the batch and retain the
+original UUID and text until read-only reconciliation or an explicit retry.
+The row renders saved text through native text nodes and keeps its draft
+textarea mounted. The comment state stays outside the binding record consumed
+by the map and does not affect the Main Map startup lifecycle.
+
 ## DC-PACKAGE-TIMELINE-04 - Optional directory enrichment (2026-11-25)
 
 `PackageHistoryController.GetProfile` authorizes the same read policy as History
@@ -489,9 +512,9 @@ The empty center-top grid cell is not a new workflow or API surface.
 Pipeline is selected; `createAssignmentSession` still owns all local draft
 changes. Both automatic overlap and saved coverage come only from authoritative
 binding records; checkbox drafts do not alter map graphics or backend.
-A lightweight, icon-triggered binding comment uses `draft.comments` in the same
-session. Because live comment writes are unverified, the session validates and
-blocks Save with pending comments, rather than issuing a fake or unrelated write.
+At this milestone, a lightweight binding comment used `draft.comments` in the
+same session and live Save was blocked with pending comments. See
+[COMMENT-01](#comment-01---binding-comment-ownership) for current behavior.
 
 Map actions use the public `MapView.ui.move("zoom", "top-right")` API and the
 shared `arcgis-expand` basemap selector; no MapView re-creation or shadow DOM

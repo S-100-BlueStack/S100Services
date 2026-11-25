@@ -80,9 +80,20 @@ Save performs a preflight read, independent add/remove mutations and authoritati
 reconciliation. Partial definitive errors preserve individual results. Binding
 requests and response-body reads have a 30-second frontend deadline. A timed-out
 or otherwise uncertain mutation stops remaining writes and preserves the desired
-draft until **Check saved bindings** runs a read-only reconciliation. **Discard
-local draft** is an explicit local-only action, not a backend rollback. A server
-write may still complete late; version/idempotency semantics are backend-owned.
+draft for read-only reconciliation via **Check saved bindings** or **Check saved
+changes**. **Discard local draft** clears the browser draft. A server write
+may still complete late.
+
+The speech bubble opens saved binding comments and the current row's draft.
+Type a draft for an active or newly checked Workstream, then use the toolbar
+Save. **OK**, Escape and clicking outside only close the editor. Use **Show all**
+to read retained comments on an inactive Workstream. There is no edit/delete
+action for saved comments. Reassign the Workstream or discard its local draft
+if it is unchecked before Save. A partial Save clears only confirmed comments.
+An uncertain comment retry retains the same operation UUID and text. Comments
+belong to the canonical Package and Workstream pair and appear in Package
+History with their recorded actor and UTC time. See the
+[binding comments contract](BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments).
 
 ## Historical Main Map behavior (DC-STAB-02E, 2026-11-04)
 
