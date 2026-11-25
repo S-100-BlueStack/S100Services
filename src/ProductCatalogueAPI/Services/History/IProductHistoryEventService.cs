@@ -1,4 +1,5 @@
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Records;
 
 namespace ProductCatalogueAPI.Services.History;
 

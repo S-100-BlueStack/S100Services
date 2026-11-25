@@ -2,6 +2,10 @@
 
 The SQL scripts in this folder are database-owner executed. They are not startup migrations. The System database is distinct from the S-128 geodatabase and Hangfire database. Existing scripts 001 through 007 remain unchanged; there is no script numbered 005 in this committed baseline.
 
+`Create-All-Tables.sql` is the fresh System schema. For an existing System database, apply only the upgrades it requires in dependency order. The `*_Verify*.sql` scripts are read-only gates. Start with the numbered workflow scripts and use [Product History audit deployment](ProductHistory.md) for `BE108A_001`, which depends on the normalized workflow created by migration 001.
+
+The application does not discover or embed these scripts. Hangfire configures its own storage through its SQL Server provider.
+
 ## B1-lite (migration 008)
 
 1. Verify that the normalized Product workflow and existing ENC package schema are present (in particular `dbo.EncPackage` and `dbo.EncPackageReplay`). Review the actual database rather than assuming a reset produced an identical schema.

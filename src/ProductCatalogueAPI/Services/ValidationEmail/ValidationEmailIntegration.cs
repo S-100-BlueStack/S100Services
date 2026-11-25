@@ -1,9 +1,10 @@
-using ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc;
 using Hangfire;
 using Microsoft.Extensions.Options;
+using ProductCatalogueAPI.BackgroundProcessing.Scheduling;
 using ProductCatalogueAPI.Data.Models;
-using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Options;
+using ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc;
 
 namespace ProductCatalogueAPI.Services.ValidationEmail;
 
@@ -70,29 +71,7 @@ public sealed class ValidationEmailService(ValidationEmailRepository repository,
     private void LogResult(Guid id, ValidationEmailProcessingResult result) => logger.LogInformation("External validation inbound result. MessageId: {MessageId}. DatasetFileName: {DatasetFileName}. CandidateId: {CandidateId}. TransmissionId: {TransmissionId}. Outcome: {Outcome}. Result: {Result}. Reason: {Reason}", id, result.Parsed.FileName, result.Match?.RevisionId, result.Match?.DeliveryId, result.Parsed.Outcome, result.Status, result.Reason);
 }
 
-/// <summary>Worker Hangfire entry point. Failed polls retry on the next tick using the same durable cursor.</summary>
-public sealed class ProcessValidationMailboxJob(ValidationEmailService service)
-{
-    /// <summary>Polls once; the service's shared distributed lock also excludes API review operations.</summary>
-    [AutomaticRetry(Attempts = 0)]
-    [DisableConcurrentExecution(5)]
-    public Task RunAsync(CancellationToken cancellationToken) => service.PollAsync(cancellationToken);
-}
-
-/// <summary>Registers the mailbox schedule only in the Worker process, independently of DPC enablement.</summary>
-public sealed class ValidationEmailSchedule(IRecurringJobManager jobs, IOptions<ValidationEmailOptions> options) : IHostedService
-{
-    /// <summary>Reconciles enabled/disabled state when the Worker starts.</summary>
-    public Task StartAsync(CancellationToken cancellationToken) {
-        if (options.Value.Mode != ValidationEmailMode.Disabled) jobs.AddOrUpdate<ProcessValidationMailboxJob>("process-icenc-mailbox", job => job.RunAsync(CancellationToken.None), Cron.Minutely());
-        else jobs.RemoveIfExists("process-icenc-mailbox");
-        return Task.CompletedTask;
-    }
-    /// <summary>The schedule remains durable; the next Worker start reconciles it.</summary>
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
-
-/// <summary>Registers the new adapter without activating the legacy mail-import scaffolding.</summary>
+/// <summary>Registers mailbox adapters, processing services and Worker schedule activation.</summary>
 public static class ValidationEmailRegistrations
 {
     /// <summary>Shares audit/review services with the API and starts scheduling only on Worker hosts.</summary>
@@ -120,7 +99,6 @@ public static class ValidationEmailRegistrations
             provider.GetRequiredService<IValidationResponseGenerator>(), () => provider.GetRequiredService<IOptions<ValidationEmailOptions>>().Value.Mode, provider.GetRequiredService<TimeProvider>()));
         if (worker) {
             services.AddTransient<ProcessValidationMailboxJob>();
-            services.AddTransient<ProductCatalogueAPI.Services.IcEncEmail.ProcessIcEncMailboxJob>();
             services.AddHostedService<ValidationEmailSchedule>();
         }
         return services;

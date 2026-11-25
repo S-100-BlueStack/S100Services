@@ -1,48 +1,20 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const productManagerApiRoot = new URL("../../../../../ProductCatalogueAPI/", import.meta.url);
+const apiRoot = new URL("../../../../../ProductCatalogueAPI/", import.meta.url);
 
-async function readApiFile(relativePath) {
-  return readFile(new URL(relativePath, productManagerApiRoot), "utf8");
-}
+test("ProductCatalogueAPI does not expose synthetic data sources", async () => {
+  const program = await readFile(new URL("Program.cs", apiRoot), "utf8");
 
-test("ProductCatalogueAPI registers only the retained source mocks behind the environment/configuration gate", async () => {
-  const program = await readApiFile("Program.cs");
-  const mockGateStart = program.indexOf("MockDataSourcesConfiguration.IsEnabled(");
-  const genericProductRoute = program.indexOf('app.MapGet("/mock/products"');
-  const paperRoute = program.indexOf('app.MapGet("/mock/paper-charts"');
-  const s102Route = program.indexOf('app.MapGet("/mock/s102"');
-  const appRun = program.indexOf("app.Run();");
-
-  assert.ok(mockGateStart >= 0);
-  assert.equal(genericProductRoute, -1);
-  assert.ok(paperRoute > mockGateStart && paperRoute < appRun);
-  assert.ok(s102Route > mockGateStart && s102Route < appRun);
-  assert.match(program, /GetMockGeoJson\("paper-charts\.geojson"\)/);
-  assert.match(program, /GetMockGeoJson\("s102\.geojson"\)/);
-  assert.match(program, /GetManifestResourceStream\(resourceName\)/);
-  assert.equal(program.includes("environment.ContentRootPath"), false);
-
-  const configuration = await readApiFile("MockDataSourcesConfiguration.cs");
-  assert.match(configuration, /MockDataSources:Enabled/);
-  assert.match(configuration, /if \(isDevelopment\)/);
-  assert.match(configuration, /bool\.TryParse/);
+  assert.doesNotMatch(program, /MockDataSources|GetMockGeoJson|["']\/mock\//);
 });
 
-test("ProductCatalogueAPI embeds only the retained source-specific mock fixtures", async () => {
-  const projectFile = await readApiFile("ProductCatalogueAPI.csproj");
+test("ProductCatalogueAPI does not ship the retired source fixtures", async () => {
+  const projectFile = await readFile(new URL("ProductCatalogueAPI.csproj", apiRoot), "utf8");
 
-  assert.match(
-    projectFile,
-    /EmbeddedResource Include="mock\\paper-charts\.geojson" LogicalName="ProductCatalogueAPI\.mock\.paper-charts\.geojson"/
-  );
-  assert.match(
-    projectFile,
-    /EmbeddedResource Include="mock\\s102\.geojson" LogicalName="ProductCatalogueAPI\.mock\.s102\.geojson"/
-  );
-  assert.equal(projectFile.includes("mock\\products.geojson"), false);
-  assert.equal(projectFile.includes("mock\\some_products.geojson"), false);
-  assert.equal(projectFile.includes("enc-products"), false);
+  assert.doesNotMatch(projectFile, /ProductCatalogueAPI\.mock\./);
+  for (const file of ["mock/paper-charts.geojson", "mock/s102.geojson"]) {
+    await assert.rejects(access(new URL(file, apiRoot)), { code: "ENOENT" });
+  }
 });

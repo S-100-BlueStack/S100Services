@@ -3,26 +3,14 @@ using ProductCatalogueAPI.Services.History;
 
 namespace ProductCatalogueAPI.Jobs;
 
+/// <summary>Runs one recovery pass for incomplete product history events on the Worker.</summary>
+/// <param name="reconciliation">Reconciles durable export receipts against their history records.</param>
 public sealed class ProductHistoryReconciliationJob(ProductHistoryReconciliation reconciliation)
 {
+    /// <summary>Runs the pass on the existing default queue. The next recurring tick handles remaining events.</summary>
+    /// <param name="cancellationToken">Stops the pass during Worker shutdown.</param>
+    /// <returns>A task that completes when this pass is finished.</returns>
     [Queue("default")]
     [AutomaticRetry(Attempts = 0)]
     public Task RunAsync(CancellationToken cancellationToken) => reconciliation.RunAsync(cancellationToken);
-}
-
-/// <summary>The existing Worker owns registration and execution; the API never starts a maintenance server.</summary>
-public sealed class ProductHistoryReconciliationRegistration(IRecurringJobManager jobs) : IHostedService
-{
-    public Task StartAsync(CancellationToken cancellationToken) {
-        // The existing single Worker consumes the default queue. A separate maintenance
-        // queue would have no consumer and an extra server would change process isolation.
-        jobs.AddOrUpdate<ProductHistoryReconciliationJob>(
-            "product-history-reconciliation", "default",
-            job => job.RunAsync(CancellationToken.None),
-            "*/15 * * * *",
-            new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

@@ -1,6 +1,7 @@
 using Dapper;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Records;
 
 namespace ProductCatalogueAPI.Data.Repositories;
 

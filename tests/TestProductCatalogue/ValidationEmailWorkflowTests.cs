@@ -4,9 +4,9 @@ using Microsoft.Extensions.Options;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Options;
-using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.ValidationEmail;
 using ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc;
+using ProductCatalogueAPI.Services.Distribution;
 
 namespace TestProductCatalogue;
 

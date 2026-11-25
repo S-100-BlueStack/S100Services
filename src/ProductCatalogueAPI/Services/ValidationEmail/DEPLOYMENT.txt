@@ -28,9 +28,9 @@ for every existing email action, including replay, simulation, list and review.
 Existing SQL names, migration 011, notice/error codes, protected-header default,
 checkpoint keys, synthetic message identities and distributed lock identities
 are preserved. No new SQL migration, backfill, data clearing or mailbox re-read
-is required. The old recurring-job ID is retained to update the existing schedule;
-a tiny compatibility job at the original CLR name forwards already queued jobs
-to the same neutral service. It is not a second processing workflow.
+is required. The Worker re-registers the mailbox schedule with the recurring ID
+`process-icenc-mailbox`. The pre-refactor mailbox invocation type was removed.
+Use the replacement Hangfire storage described in the architecture README.
 
 The BAT installs complete replacement/new files and removes only the explicitly
 listed renamed paths. It stages those exact changes on the current branch,

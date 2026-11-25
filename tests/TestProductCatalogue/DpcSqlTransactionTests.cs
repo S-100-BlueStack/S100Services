@@ -6,10 +6,10 @@ using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Services.Jobs;
 using S100FC.ProductCatalogue;
 using System.Data;
 using System.Text.RegularExpressions;
+using ProductCatalogueAPI.Services.Detection;
 
 namespace TestProductCatalogueAPI;
 

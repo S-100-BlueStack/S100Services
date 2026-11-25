@@ -1,11 +1,12 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using ProductCatalogueAPI.Contracts;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.ValidationEmail;
-using System.Security.Cryptography;
-using System.Text;
-using static ProductCatalogueAPI.Models.ResponseTypes;
+using static ProductCatalogueAPI.Contracts.ResponseTypes;
 
 namespace ProductCatalogueAPI.Controllers;
 

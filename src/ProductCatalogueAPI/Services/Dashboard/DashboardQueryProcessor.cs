@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
-using static ProductCatalogueAPI.Models.ResponseTypes;
+using ProductCatalogueAPI.Contracts;
+using static ProductCatalogueAPI.Contracts.ResponseTypes;
 
 namespace ProductCatalogueAPI.Services.Dashboard;
 

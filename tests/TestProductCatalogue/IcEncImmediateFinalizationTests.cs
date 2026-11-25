@@ -5,7 +5,6 @@ using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Options;
-using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.ValidationEmail;
 using System.Reflection;
 

@@ -1,13 +1,14 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
+using ProductCatalogueAPI.BackgroundProcessing;
+using ProductCatalogueAPI.Contracts;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Export;
-using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
-using System.Diagnostics;
 
 namespace ProductCatalogueAPI.Controllers;
 

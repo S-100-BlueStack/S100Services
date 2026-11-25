@@ -1,4 +1,5 @@
 using S100FC.ProductCatalogue;
+using TestProductCatalogueAPI.Unit.Detection;
 using Xunit;
 
 namespace TestProductCatalogueAPI;

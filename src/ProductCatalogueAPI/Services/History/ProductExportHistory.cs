@@ -1,4 +1,6 @@
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Records;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Operations;

@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
-const detector = read('src/ProductCatalogueAPI/Jobs/EncPackageDetectionService.cs');
-const recovery = read('src/ProductCatalogueAPI/Jobs/EncPackageInterruptedExportRecovery.cs');
+const detector = read('src/ProductCatalogueAPI/Services/Detection/EncPackageDetectionService.cs');
+const recovery = read('src/ProductCatalogueAPI/Services/Detection/EncPackageInterruptedExportRecovery.cs');
 const repository = read('src/ProductCatalogueAPI/Data/Repositories/ProductRepository.cs');
 
 // Supplemental source-contract checks; they do not replace the .NET/SQL integration tests.
@@ -51,7 +51,11 @@ test('conditional SQL guards package, track and candidate and retains replay', (
 });
 
 test('automatic recovery does not change the existing new-edit requirement', () => {
-  assert.match(detector, /if \(!HasNewEdits\(changes, packageArchiveEditUtc\)\)/);
-  assert.match(detector, /if \(!await CanRefreshAsync\(existing, cancellationToken\)\)/);
+  const refresh = detector.indexOf("if (!await CanRefreshAsync(existing, cancellationToken)");
+  const scan = detector.indexOf("snapshotChanges = await ScanSourceAsync(existing.DetectedAtUtc, sourceName);", refresh);
+  const newChanges = detector.indexOf("if (!snapshotChanges.Values.Any(", scan);
+  const recover = detector.indexOf("await RecoverIncompletePackageAsync(existing, cancellationToken);", newChanges);
+  const replacement = detector.indexOf("previous = existing;", recover);
+  assert.ok(refresh >= 0 && scan > refresh && newChanges > scan && recover > newChanges && replacement > recover);
   assert.match(detector, /await packages\.MarkReplayAsync\(sourceName, packageScanFromUtc, cancellationToken\)/);
 });

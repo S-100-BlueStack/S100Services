@@ -34,8 +34,6 @@
 		<Content Include="101_Feature_Catalogue_2.0.0.xml">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
-		<EmbeddedResource Include="mock\paper-charts.geojson" LogicalName="ProductCatalogueAPI.mock.paper-charts.geojson" />
-		<EmbeddedResource Include="mock\s102.geojson" LogicalName="ProductCatalogueAPI.mock.s102.geojson" />
 	</ItemGroup>
 
 	<ItemGroup>
