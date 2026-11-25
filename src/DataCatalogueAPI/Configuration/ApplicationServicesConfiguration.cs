@@ -35,6 +35,8 @@ public static class ApplicationServicesConfiguration
         services.AddCatalogueMcp();
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
         services.AddTransient<DataCatalague.Api.Services.PackageHistoryService>();
+        services.AddSingleton<DataCatalague.Api.Services.IActorProfileDirectory, DataCatalague.Api.Services.ActiveDirectoryActorProfileDirectory>();
+        services.AddSingleton<DataCatalague.Api.Services.ActorProfileService>();
         services.AddTransient<DataCatalague.Api.Services.PackageCreationService>();
         services.AddTransient<DataCatalague.Api.Services.DispatcherResourceService>();
         services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();

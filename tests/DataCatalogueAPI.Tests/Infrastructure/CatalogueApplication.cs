@@ -29,7 +29,7 @@ public sealed class CatalogueApplication : IAsyncDisposable
         this.Client.DefaultRequestHeaders.Add(TestAuthentication.UserHeader, "PROD\\alice");
     }
 
-    public static async Task<CatalogueApplication> CreateAsync(CatalogueFixture runtime, string pathBase = "") {
+    public static async Task<CatalogueApplication> CreateAsync(CatalogueFixture runtime, string pathBase = "", Action<IServiceCollection>? configureServices = null) {
         var directory = Path.Combine(Path.GetTempPath(), "DataCatalogueTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         WebApplication? host = null;
@@ -61,6 +61,7 @@ public sealed class CatalogueApplication : IAsyncDisposable
                 options.DefaultPolicy = options.GetPolicy("datacatalogue:access")!;
                 options.FallbackPolicy = options.DefaultPolicy;
             });
+            configureServices?.Invoke(builder.Services);
             host = builder.Build();
             if (pathBase.Length > 0) {
                 // Simulate the PathBase supplied by ANCM for an IIS sub-application.

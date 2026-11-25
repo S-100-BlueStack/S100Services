@@ -1,8 +1,41 @@
+## DC-PACKAGE-TIMELINE-04 - Active Directory actor profiles (2026-11-25)
+
+**Authoritative baseline:** `c0e9497d81fc3e2b4acc70416e501117c401b3c3`.
+**Status:** implementation candidate; local .NET build/test, service-identity LDAP
+access and browser acceptance pending.
+
+- Retain the original recorded Windows account as authoritative. Show the current
+  AD display name and 24 px thumbnail alongside the recorded account in live
+  History when available; fall back to the account and a neutral user icon.
+  System and legacy unattributed entries remain unchanged. Profiles are current
+  directory information, not a historical identity/name snapshot.
+- Read a separate authorized profile resource identified by Package and event
+  GUID after the history page has rendered. No caller-supplied account search,
+  new auth flow, changes to events or writes. Validate identity and image type/size.
+- Resolve full domain-qualified accounts by SID within the API's default AD
+  naming context; use integrated Windows credentials with signing/sealing and
+  no referral chasing. Missing names/photos, other domains, invalid images,
+  timeouts or AD errors must not block History or Package mutations.
+- Backend cache: 256 entries, positive 30 min / negative 2 min, four concurrent
+  lookups with same-account coalescing and a five-second reader timeout. Frontend
+  requests up to four unique accounts in parallel for the selected Package;
+  abort superseded reads, retry on History Refresh, preserve scrolling/focus.
+- Dependency: `System.DirectoryServices` 10.0.13 in DataCatalogueAPI only.
+  No profile attributes/photos in the event store or browser persistent storage.
+  Preserve ProductCatalogue, Work Scope, map, right metadata and status controls.
+- Verify API runtime access on local Kestrel and deployed IIS; desktop LDAP
+  success does not establish the application pool's directory permissions.
+  See [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md) and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md).
+
+---
+
 ## DC-PACKAGE-TIMELINE-03 - Attribute history to Windows accounts (2026-11-25)
 
 **Authoritative baseline:** `d453900ffe342354aaf52a628f0b085fd905d6e7`.
-**Status:** implementation candidate; local backend build/test and Windows SSO
-browser acceptance pending.
+**Status:** accepted and committed at `c0e9497d81fc3e2b4acc70416e501117c401b3c3`.
+The user reports successful frontend and backend checks after the v2 test
+correction, and browser verification of System and Windows account labels.
+These are user-reported results, not new test executions.
 
 - Preserve the accepted Package history read, pagination, layout, and request
   lifecycle. No change to authentication, authorization, public mutation DTOs,
@@ -24,12 +57,12 @@ browser acceptance pending.
   Eventuous store is adopted. No separate durable history persistence task.
   When changing stores, the history read must support the new store and retained
   related binding streams. No history retention beyond the current store is promised.
-- Follow-up: `DC-PACKAGE-TIMELINE-PROFILE-01` (proposed ID) — optional profile
+- Follow-up: `DC-PACKAGE-TIMELINE-04` (previously proposed as `DC-PACKAGE-TIMELINE-PROFILE-01`) — optional profile
   enrichment. The user verified a successful LDAP lookup of their own
   `displayName` and `thumbnailPhoto` from their desktop Windows identity.
   This does not establish API runtime account permissions or cross-account photo
-  access. Verify those before implementing an authorized, cached, best-effort
-  backend directory lookup. Keep images/display names outside the events and
+  access. TIMELINE-04 supplies the optional read; verify the actual
+  API execution identity locally before accepting it. Keep images/display names outside the events and
   never make a Package mutation depend on AD. Username-only history is the
   first implementation scope. No directory calls or dependencies here.
 - Contextual `Done` / `No update`, QC, Workspace ownership/history and archived
@@ -207,13 +240,13 @@ see the later DC-PACKAGE-TIMELINE-01 design preview entry.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
-| Suggested order | Task                                                                                                            | Status / dependency                                                                    |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                        |
-| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                        |
-| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract |
-| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design and live read accepted (`d453900f`); Windows actor candidate in TIMELINE-03     |
-| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                       |
+| Suggested order | Task                                                                                                            | Status / dependency                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1               | `DC-PACKAGE-DETAILS-PANEL-01` - read full Package details on Main Map without navigation                        | Accepted (`63429666`); complete                                                              |
+| 2               | `DC-MAP-LABEL` - Workspace and Package map labels                                                               | Accepted (`26472a59`); complete                                                              |
+| 3               | `DC-PACKAGE-QC-01` - Compilation/QC work mode                                                                   | Design preview accepted (`d038defa`); functional filtering depends on backend contract       |
+| 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design, live read and Windows actors accepted (`c0e9497d`); profile candidate in TIMELINE-04 |
+| Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                             |
 
 This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
 

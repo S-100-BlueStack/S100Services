@@ -997,3 +997,38 @@
   font-weight: 600;
   line-height: 1.35;
 }
+
+.package-history__actor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.package-history__avatar {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: 50%;
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+}
+
+.package-history__avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--dc-surface);
+  object-fit: cover;
+}
+
+.package-history__avatar img[hidden] {
+  display: none;
+}

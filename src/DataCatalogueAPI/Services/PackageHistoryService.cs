@@ -44,6 +44,17 @@ public sealed class PackageHistoryService(InMemoryEventStore store, StreamNameMa
         return new PackageHistoryResponse(packageId, page, offset + page.Length < ordered.Length ? page[^1].Id : null);
     }
 
+    /// <summary>Resolves the actor of an actual history event; no caller-provided account is trusted.</summary>
+    public PackageHistoryEventResponse? FindEvent(string packageId, Guid eventId, CancellationToken cancellationToken) {
+        var events = store.ReadPackageEvents(packageId, streams.GetStreamName(new PackageId(packageId)), cancellationToken);
+        if (events is null || !events.Any(item => item.Payload is PackagesEvents.V1.PackageCreated created && created.PackageId == packageId)) { return null; }
+        foreach (var item in events) {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (item.Id == eventId) { return Map(item, packageId); }
+        }
+        return null;
+    }
+
     private static PackageHistoryEventResponse? Map(StreamEvent item, string packageId) {
         // The original committed event is authoritative; the current request identity
         // and current Workspace ownership must never be used to fill missing actors.

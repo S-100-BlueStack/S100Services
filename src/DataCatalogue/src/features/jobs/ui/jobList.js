@@ -45,6 +45,7 @@ export function createJobList({
   store = createJobStore(),
   sourceMode = "mock",
   readPackageHistory,
+  readPackageHistoryProfile,
 } = {}) {
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
@@ -67,6 +68,7 @@ export function createJobList({
   let historyView = null;
   const history = createPackageHistoryLoader({
     read: readPackageHistory,
+    readProfile: readPackageHistoryProfile,
     onChange(snapshot) {
       if (historyView?.packageId === snapshot.packageId) historyView.update(snapshot);
     },

@@ -141,3 +141,121 @@ test("History displays the recorded Windows account, preserves its full identity
     ]
   );
 });
+
+const flushProfiles = () => new Promise((resolve) => setImmediate(resolve));
+
+test("History displays immediately and enriches each full Windows account only once per selection", async () => {
+  const calls = [];
+  const request = deferred();
+  const loader = createPackageHistoryLoader({
+    async read(_id, { before }) {
+      if (before) {
+        return result([event("older", "2026-01-14T10:00:00Z", { actor: "PROD\\B123456" })]);
+      }
+      return result(
+        [
+          event("first", undefined, { actor: "PROD\\B123456" }),
+          event("second", undefined, { actor: "prod\\b123456" }),
+          event("other", undefined, { actor: "OTHER\\B123456" }),
+          event("system", undefined, { actor: "System" }),
+          event("legacy"),
+          event("unqualified", undefined, { actor: "B123456" }),
+        ],
+        "unqualified"
+      );
+    },
+    readProfile(id, eventId, options) {
+      calls.push({ id, eventId, options });
+      if (eventId === "other") return Promise.reject(new Error("Unavailable"));
+      return request.promise;
+    },
+  });
+  loader.select("package");
+  await flushProfiles();
+  assert.equal(loader.getSnapshot().hasLoaded, true);
+  assert.equal(loader.getSnapshot().isLoading, false);
+  assert.equal(loader.getSnapshot().entries[0].actor, "B123456");
+  assert.equal(loader.getSnapshot().entries[0].profile, undefined);
+  assert.deepEqual(
+    calls.map(({ eventId }) => eventId),
+    ["first", "other"]
+  );
+  request.resolve({ displayName: "Example user", photoSrc: null });
+  await flushProfiles();
+  assert.equal(loader.getSnapshot().entries[0].profile.displayName, "Example user");
+  assert.equal(loader.getSnapshot().entries[1].profile.displayName, "Example user");
+  assert.equal(loader.getSnapshot().entries[2].profile, undefined);
+  assert.equal(loader.getSnapshot().error, null);
+  await loader.loadOlder();
+  assert.equal(loader.getSnapshot().entries.at(-1).profile.displayName, "Example user");
+  assert.equal(calls.length, 2);
+  loader.destroy();
+});
+
+test("Profile completions after selection, refresh or disposal cannot publish stale actors", async () => {
+  const calls = [];
+  const published = [];
+  const loader = createPackageHistoryLoader({
+    async read(id) {
+      return result([event(id, undefined, { actor: "PROD\\B123456" })]);
+    },
+    readProfile(id, eventId, options) {
+      const request = deferred();
+      calls.push({ id, eventId, options, ...request });
+      return request.promise;
+    },
+    onChange: (snapshot) => published.push(snapshot),
+  });
+  loader.select("A");
+  await flushProfiles();
+  loader.select("B");
+  await flushProfiles();
+  assert.equal(calls[0].options.signal.aborted, true);
+  calls[0].resolve({ displayName: "Stale A" });
+  await flushProfiles();
+  assert.equal(loader.getSnapshot().entries[0].profile, undefined);
+  await loader.refresh();
+  assert.equal(calls[1].options.signal.aborted, true);
+  calls[1].resolve({ displayName: "Stale B" });
+  calls[2].resolve({ displayName: "Current B" });
+  await flushProfiles();
+  assert.equal(loader.getSnapshot().entries[0].profile.displayName, "Current B");
+  await loader.refresh();
+  loader.destroy();
+  assert.equal(calls[3].options.signal.aborted, true);
+  const count = published.length;
+  calls[3].resolve({ displayName: "Disposed" });
+  await flushProfiles();
+  assert.equal(published.length, count);
+});
+
+test("Profile requests are limited to four concurrent reads and Refresh retries unavailable profiles", async () => {
+  const calls = [];
+  const loader = createPackageHistoryLoader({
+    async read() {
+      return result(
+        Array.from({ length: 5 }, (_, index) =>
+          event(`event-${index}`, undefined, { actor: `PROD\\B${index}` })
+        )
+      );
+    },
+    readProfile(_id, eventId) {
+      const request = deferred();
+      calls.push({ eventId, ...request });
+      return request.promise;
+    },
+  });
+  loader.select("package");
+  await flushProfiles();
+  assert.equal(calls.length, 4);
+  calls[0].resolve(null);
+  await flushProfiles();
+  assert.equal(calls.length, 5);
+  for (const call of calls.slice(1)) call.resolve(null);
+  await flushProfiles();
+  assert.equal(loader.getSnapshot().error, null);
+  await loader.refresh();
+  assert.equal(calls.length, 9);
+  loader.destroy();
+  for (const call of calls.slice(5)) call.resolve(null);
+});

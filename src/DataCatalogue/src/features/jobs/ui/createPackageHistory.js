@@ -101,11 +101,41 @@ function createHistoryEntries(entries) {
 
     const time = createTextElement("time", "package-history__time", entry.timeLabel);
     time.dateTime = entry.dateTime;
-    const actor = createTextElement("p", "package-history__actor", entry.actor);
+    const actorRow = document.createElement("div");
+    actorRow.className = "package-history__actor-row";
+    const actor = createTextElement(
+      "p",
+      "package-history__actor",
+      entry.profile?.displayName ? `${entry.profile.displayName} (${entry.actor})` : entry.actor
+    );
     if (entry.actorIdentity && entry.actorIdentity !== entry.actor) {
       actor.title = entry.actorIdentity;
     }
-    item.append(time, createTextElement("p", "package-history__event", entry.title), actor);
+    if (entry.actorIdentity && entry.actorIdentity !== "System") {
+      const avatar = document.createElement("span");
+      avatar.className = "package-history__avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      const fallback = document.createElement("calcite-icon");
+      fallback.icon = "user";
+      fallback.scale = "s";
+      avatar.append(fallback);
+      if (entry.profile?.photoSrc) {
+        const image = document.createElement("img");
+        image.alt = "";
+        image.hidden = true;
+        image.addEventListener("load", () => {
+          image.hidden = false;
+        });
+        image.addEventListener("error", () => {
+          image.hidden = true;
+        });
+        image.src = entry.profile.photoSrc;
+        avatar.append(image);
+      }
+      actorRow.append(avatar);
+    }
+    actorRow.append(actor);
+    item.append(time, createTextElement("p", "package-history__event", entry.title), actorRow);
     if (entry.context) {
       item.append(createTextElement("p", "package-history__context", entry.context));
     }

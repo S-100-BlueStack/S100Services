@@ -1,3 +1,55 @@
+## DC-PACKAGE-TIMELINE-04 - Actor profile enrichment (2026-11-25)
+
+`GET /v1/packages/{id}/history/{eventId}/profile` uses the canonical Package ID
+and the GUID of a recognized history event. The existing `datacatalogue:access`
+policy, Windows authentication, credential handling and configured API base
+apply; on IIS the public path includes `/api` when configured as its application
+base. The server verifies the event belongs to the selected Package and resolves
+only its original recorded actor. There is no account search endpoint and no
+client-supplied username parameter. The history and mutation contracts are unchanged.
+
+A `200` response contains current AD attributes, not a historical profile:
+
+```json
+{
+  "actor": "PROD\\B123456",
+  "displayName": "Example user",
+  "photoMediaType": "image/jpeg",
+  "photoBase64": "..."
+}
+```
+
+`actor` exactly matches the committed event's account. `displayName` is nullable
+and limited to 256 characters; `photoMediaType` and `photoBase64` are both null
+when no accepted thumbnail is available. Only JPEG/PNG with a recognized file
+signature and at most 102,400 decoded bytes are returned. A name-only or
+photo-only profile is valid. `204` means no profile is available (including
+System, unknown/unqualified actor, lookup failure, timeout or capacity limit);
+`404` means unknown Package or event, and existing `401`/`403` apply. The response
+is non-cacheable by the browser (`Cache-Control: no-store`). No raw directory
+errors, arbitrary image URLs, SID values or directory records are returned.
+
+The lookup resolves the full qualified Windows account to a current SID and
+searches the API's default directory naming context with integrated credentials,
+signing/sealing, and no referral chasing. Different domains are not guessed.
+This is a best-effort current display profile: AD rename/deletion/account reuse
+can change or remove the enrichment, not the event's recorded actor. The
+original account remains visible and the domain-qualified value remains in a
+tooltip. Profile reads are separate from history paging and all writes.
+
+The frontend normalizer checks exact actor identity, size and image signature,
+then constructs a bounded `data:image/...;base64,...` source. Native image decode
+failure or hosting CSP rejection leaves the neutral icon. A failed profile read
+never marks history failed. No profile lookup occurs in mock mode or for System
+and unknown/unqualified accounts. History Refresh retries enrichment (subject to
+backend TTL). The API caches up to 256 entries by full account (case insensitive),
+30 min for successful profiles / 2 min for missing or failed directory results.
+At most four directory operations run concurrently; same-account readers share
+one lookup. Reader cancellation or five-second timeout does not prematurely free
+a slot for a synchronous directory call that has not finished.
+
+---
+
 ## DC-PACKAGE-TIMELINE-03 - Windows actor attribution (2026-11-25)
 
 The existing nullable `actor` response field is populated from the original
@@ -21,8 +73,8 @@ existing Windows authentication and catalogue access policy are unchanged.
 `Binded`, and `Unbound` retain their existing Eventuous type names and gain an
 optional trailing `Actor` string (serialized as `actor`). No separate attribution
 write, replay side effect or actor-dependent geometry fingerprint is introduced.
-Existing retries must not change prior actors. Profiles are not yet resolved;
-no LDAP dependency, lookup endpoint, or photo payload is part of this contract.
+Existing retries must not change prior actors. At the TIMELINE-03 milestone
+there was no directory lookup; TIMELINE-04 adds only a separate read resource.
 
 ---
 

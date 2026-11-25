@@ -102,6 +102,7 @@
 
 		<!-- Logging. Console, Debug and File sinks come along transitively. -->
 		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="System.DirectoryServices" Version="10.0.13" />
 		<PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
 	</ItemGroup>
 

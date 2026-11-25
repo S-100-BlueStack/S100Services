@@ -7,8 +7,8 @@
 
 TIMELINE-02's authorized paged read was accepted and committed at
 `d453900ffe342354aaf52a628f0b085fd905d6e7`. TIMELINE-03 adds write-time Windows
-actor attribution to the existing Package and binding events; local API tests
-and SSO browser acceptance remain pending. Legacy events remain unattributed;
+actor attribution to the existing Package and binding events; the user reports
+passing local checks and browser acceptance at `c0e9497d81fc3e2b4acc70416e501117c401b3c3`. Legacy events remain unattributed;
 explicit startup sample operations record `System`. Request-triggered automatic
 assignments inherit the initiating principal. Never infer an actor from the
 history reader or current locks.
@@ -17,12 +17,14 @@ history reader or current locks.
   Eventuous store remains in-memory until the planned durable store is adopted.
   History retention follows that store. Adapt the history read to the future
   store and historical binding streams during that migration.
-- **`DC-PACKAGE-TIMELINE-PROFILE-01` (proposed):** optional AD display names and
-  profile photos. Desktop LDAP lookup confirmed for the user's own account;
-  verify backend runtime identity, allowed directory scope and other-user reads
-  before adding an authorized, cached, best-effort profile lookup. No AD calls
-  during mutations and no profile images in events. Fall back to recorded
-  account names for absent or failed lookups. Username attribution is independent.
+- **`DC-PACKAGE-TIMELINE-04` (profile candidate):** authorized event-scoped AD
+  display names and thumbnails are implemented separately from history. Desktop
+  LDAP lookup confirmed for the user's account; API execution identity, default
+  naming context, other-user reads, photo visibility and browser CSP are still
+  unverified in the deployed environment. Test Kestrel and IIS; absent/failed
+  profiles fall back to recorded account and neutral icon. No AD calls during
+  mutations or history pages, no attributes/photos in events, no separate durable
+  history store. Current profile data is not an immutable historical identity.
 - Historical Workspace context and persistent Job status/history are not
   supplied by this read. `DC-PACKAGE-HISTORY-01`, `JOB-01`, `PAGE-01`, and functional
   QC remain separate. Do not turn current bindings, temporary Job status or QC
@@ -46,7 +48,7 @@ no history request and does not infer events from current metadata, bindings or
 temporary status. Real history is explicitly unavailable, not an empty result.
 No event types, field names or ordering contract are asserted by the example
 list. At that stage the history read remained open; see the current
-DC-PACKAGE-TIMELINE-03 entry above for the accepted read, actor candidate and remaining gaps.
+DC-PACKAGE-TIMELINE-03 entry above for the accepted read, accepted actor attribution, profile candidate and remaining gaps.
 
 `DC-ASSIGN-MATCH-PREVIEW-01` also remains deferred: an authorized, read-only pre-Save intersection calculation must be verified or agreed with the backend owner. Current saved matches are not preview results. No backend changes or invented routes are included in this documentation update.
 
