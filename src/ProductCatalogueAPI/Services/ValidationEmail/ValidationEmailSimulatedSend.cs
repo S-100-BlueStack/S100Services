@@ -1,8 +1,8 @@
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Options;
 using Microsoft.Extensions.Options;
+using ProductCatalogueAPI.Services.Distribution;
 
 namespace ProductCatalogueAPI.Services.ValidationEmail;
 

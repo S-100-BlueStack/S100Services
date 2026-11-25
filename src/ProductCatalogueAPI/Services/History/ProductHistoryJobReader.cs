@@ -1,5 +1,6 @@
-using Hangfire;
 using Hangfire.Common;
+using Hangfire;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
 using ProductCatalogueAPI.Jobs;
 
 namespace ProductCatalogueAPI.Services.History;

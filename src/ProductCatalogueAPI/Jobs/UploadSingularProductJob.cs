@@ -1,14 +1,23 @@
-using Hangfire;
 using Hangfire.Server;
+using Hangfire;
 using Microsoft.Extensions.Options;
-using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
-using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.ValidationEmail;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
+using ProductCatalogueAPI.Services.Distribution;
 
 namespace ProductCatalogueAPI.Jobs
 {
+    /// <summary>Processes the exact S-57 or S-101 candidate selected by an IC-ENC upload request.</summary>
+    /// <param name="productRepository">Reads the current candidate for the standalone simulation path.</param>
+    /// <param name="options">Checks that the configured delivery mode still matches the queued request.</param>
+    /// <param name="logger">Records delivery decisions and failure diagnostics.</param>
+    /// <param name="deliveryRepository">Persists live delivery reservations and outcomes.</param>
+    /// <param name="transport">Transfers artifacts for live delivery.</param>
+    /// <param name="simulationEmails">Generates acknowledgements for the standalone simulation path.</param>
+    /// <param name="simulatedSend">Commits and processes simulated deliveries when integrated simulation is enabled.</param>
     public sealed class UploadSingularProductJob(
         IProductRepository productRepository,
         IOptionsMonitor<SendToIcEncOptions> options,
@@ -25,6 +34,11 @@ namespace ProductCatalogueAPI.Jobs
         private readonly IIcEncDeliveryRepository? _deliveryRepository = deliveryRepository;
         private readonly IIcEncTransport? _transport = transport;
 
+        /// <summary>Uses the durable Hangfire job ID to run the requested upload without an automatic resend.</summary>
+        /// <param name="request">Queued dataset identity, version and delivery mode.</param>
+        /// <param name="performContext">Hangfire context used to write status for the polling API.</param>
+        /// <param name="cancellationToken">Worker shutdown or job cancellation.</param>
+        /// <returns>A task that completes when the upload attempt finishes.</returns>
         [AutomaticRetry(Attempts = 0)]
         public Task RunAsync(
             SendToIcEncJobRequest request,
@@ -34,7 +48,7 @@ namespace ProductCatalogueAPI.Jobs
             ArgumentNullException.ThrowIfNull(performContext);
             return ExecuteAsync(
                 request,
-                new HangfireSendJobExecutionContext(performContext),
+                new HangfireExportJobExecutionContext(performContext),
                 cancellationToken
             );
         }
@@ -247,25 +261,5 @@ namespace ProductCatalogueAPI.Jobs
             context.SetJobParameter(ExportJobParameterNames.ErrorMessage, message);
             return new SendToIcEncJobException(code, message);
         }
-
-        private sealed class HangfireSendJobExecutionContext(PerformContext context)
-            : IExportJobExecutionContext
-        {
-            private readonly PerformContext _context = context;
-
-            public string JobId => _context.BackgroundJob.Id;
-
-            public T? GetJobParameter<T>(string name) =>
-                _context.GetJobParameter<T>(name);
-
-            public void SetJobParameter(string name, object? value) =>
-                _context.SetJobParameter(name, value!);
-        }
-    }
-
-    public sealed class SendToIcEncJobException(string code, string message)
-        : Exception($"{code}: {message}")
-    {
-        public string Code { get; } = code;
     }
 }

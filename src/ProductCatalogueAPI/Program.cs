@@ -1,17 +1,19 @@
+using System.Reflection;
+using System.Security.Claims;
+using System.Text.Json;
+using Asp.Versioning;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.Negotiate;
-using Asp.Versioning;
 using Microsoft.Extensions.Hosting;
+using ProductCatalogueAPI.BackgroundProcessing.Scheduling;
 using ProductCatalogueAPI.Filters;
 using ProductCatalogueAPI.Hosting;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.OpenApi;
+using ProductCatalogueAPI.Options;
 using S100FC.S128;
-using Serilog;
 using Serilog.Events;
-using System.Reflection;
-using System.Security.Claims;
-using System.Text.Json;
+using Serilog;
 
 namespace ProductCatalogueAPI
 {
@@ -44,7 +46,6 @@ namespace ProductCatalogueAPI
                 }
             }
 
-            var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
             var central_logpath = Environment.GetEnvironmentVariable("log_path");
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
@@ -108,7 +109,6 @@ namespace ProductCatalogueAPI
                  o.AppendTypeInfoResolver();
              });
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
 
             builder.Services.AddSwaggerGen(options => {
                 // Include XML comments if generated
@@ -151,11 +151,7 @@ namespace ProductCatalogueAPI
 
 
             // Configure ArcGIS and ProductCatalogue services
-            await builder.Services.AddS100ProductCatalogue(
-                builder.Configuration,
-                processProfile.ArcGisExecutionLane
-            );
-            builder.Services.AddProductCatalogueBackend(builder.Configuration, processProfile);
+            await builder.Services.AddProductCatalogueServicesAsync(builder.Configuration, processProfile);
             var app = builder.Build();
             CheckJavaToolOptions();
             DetectProductChangesRecurringJob.Reconcile(
@@ -190,25 +186,6 @@ namespace ProductCatalogueAPI
                 }
                 await next();
             });
-            var mockDataSourcesEnabled = MockDataSourcesConfiguration.IsEnabled(
-                builder.Configuration,
-                app.Environment.IsDevelopment()
-            );
-            if (mockDataSourcesEnabled) {
-                app.MapGet("/mock/paper-charts", () => {
-                    return GetMockGeoJson("paper-charts.geojson");
-                })
-                .Produces(StatusCodes.Status200OK)
-                .Produces(StatusCodes.Status404NotFound)
-                .RequireAuthorization("productmanager:access");
-
-                app.MapGet("/mock/s102", () => {
-                    return GetMockGeoJson("s102.geojson");
-                })
-                .Produces(StatusCodes.Status200OK)
-                .Produces(StatusCodes.Status404NotFound)
-                .RequireAuthorization("productmanager:access");
-            }
             app.Run();
         }
 
@@ -304,11 +281,7 @@ namespace ProductCatalogueAPI
 
             var detectionState = DetectProductChangesState.FromConfiguration(builder.Configuration);
             builder.Services.AddSingleton(detectionState);
-            await builder.Services.AddS100ProductCatalogue(
-                builder.Configuration,
-                processProfile.ArcGisExecutionLane
-            );
-            builder.Services.AddProductCatalogueBackend(builder.Configuration, processProfile);
+            await builder.Services.AddProductCatalogueServicesAsync(builder.Configuration, processProfile);
 
             using var host = builder.Build();
             Log.Information(
@@ -350,15 +323,5 @@ namespace ProductCatalogueAPI
             Args = args,
             ContentRootPath = contentRootPath
         });
-
-        private static IResult GetMockGeoJson(string fileName) {
-            var resourceName = $"ProductCatalogueAPI.mock.{fileName}";
-            var stream = typeof(Program).Assembly.GetManifestResourceStream(resourceName);
-
-            if (stream is null)
-                return Results.NotFound();
-
-            return Results.Stream(stream, "application/geo+json");
-        }
     }
 }

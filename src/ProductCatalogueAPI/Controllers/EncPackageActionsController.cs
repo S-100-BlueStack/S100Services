@@ -1,8 +1,9 @@
-using Hangfire;
 using Hangfire.Storage;
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Records;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Operations;
 

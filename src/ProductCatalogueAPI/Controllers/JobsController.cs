@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductCatalogueAPI.BackgroundProcessing;
+using ProductCatalogueAPI.Contracts;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Models;
-using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
 
 namespace ProductCatalogueAPI.Controllers
 {

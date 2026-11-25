@@ -1,12 +1,13 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using ProductCatalogueAPI.Contracts;
+using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.Export;
-using ProductCatalogueAPI.Data.Models;
-using System.Text.RegularExpressions;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
 
 namespace ProductCatalogueAPI.Controllers
 {

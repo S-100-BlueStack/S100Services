@@ -20,9 +20,9 @@
     <Compile Include="EncPackageFailureRulesTests.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Data/Models/EncPackageFailureAcknowledgement.cs" Link="Production/EncPackageFailureAcknowledgement.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Services/Operations/EncPackageFailureRules.cs" Link="Production/EncPackageFailureRules.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Services/Jobs/EncPackageSendUnavailableException.cs" Link="Production/EncPackageSendUnavailableException.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Jobs/EncPackageSendMember.cs" Link="Production/EncPackageSendMember.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Services/Jobs/EncPackageSendEligibility.cs" Link="Production/EncPackageSendEligibility.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Distribution/EncPackageSendUnavailableException.cs" Link="Production/EncPackageSendUnavailableException.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/BackgroundProcessing/Execution/EncPackageSendMember.cs" Link="Production/EncPackageSendMember.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Distribution/EncPackageSendEligibility.cs" Link="Production/EncPackageSendEligibility.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Data/Models/EncPackage.cs" Link="Production/EncPackage.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Services/ValidationEmail/ValidationEmailSimulatedSend.cs" Link="Production/ValidationEmailSimulatedSend.cs" />
     <Compile Include="ValidationEmailProviderBoundaryTests.cs" />
@@ -31,10 +31,11 @@
     <Compile Include="ValidationEmailSimulationTests.cs" />
     <Compile Include="ValidationEmailSendSimulationTests.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Jobs/UploadSingularProductJob.cs" Link="Production/UploadSingularProductJob.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Jobs/SendToIcEncJobRequest.cs" Link="Production/SendToIcEncJobRequest.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Jobs/IExportJobExecutionContext.cs" Link="Production/IExportJobExecutionContext.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Jobs/ExportJobParameterNames.cs" Link="Production/ExportJobParameterNames.cs" />
-    <Compile Include="../../src/ProductCatalogueAPI/Services/Jobs/IcEncDeliveryContracts.cs" Link="Production/IcEncDeliveryContracts.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/BackgroundProcessing/Execution/SendToIcEncJobException.cs" Link="Production/SendToIcEncJobException.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/BackgroundProcessing/Execution/SendToIcEncJobRequest.cs" Link="Production/SendToIcEncJobRequest.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/BackgroundProcessing/Execution/IExportJobExecutionContext.cs" Link="Production/IExportJobExecutionContext.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/BackgroundProcessing/Execution/ExportJobParameterNames.cs" Link="Production/ExportJobParameterNames.cs" />
+    <Compile Include="../../src/ProductCatalogueAPI/Services/Distribution/IcEncDeliveryContracts.cs" Link="Production/IcEncDeliveryContracts.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Services/Export/S100CompilerConfiguration.cs" Link="Production/S100CompilerConfiguration.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Configuration/SendToIcEncOptions.cs" Link="Production/SendToIcEncOptions.cs" />
     <Compile Include="../../src/ProductCatalogueAPI/Data/Repositories/IProductRepository.cs" Link="Production/IProductRepository.cs" />

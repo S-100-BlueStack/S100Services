@@ -12,7 +12,9 @@ using S100FC.ProductCatalogue;
 using S100FC.Topology;
 using S100FC.YAML;
 using System.Reflection;
+using TestProductCatalogueAPI.Unit.Detection;
 using YamlDataset = S100FC.YAML.Dataset;
+using ProductCatalogueAPI.Services.Detection;
 
 namespace TestProductCatalogueAPI;
 

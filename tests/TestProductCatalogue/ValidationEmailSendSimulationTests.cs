@@ -6,8 +6,9 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.ValidationEmail;
-using ProductCatalogueAPI.Services.Jobs;
 using System.Reflection;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
+using ProductCatalogueAPI.Services.Distribution;
 
 namespace TestProductCatalogue;
 

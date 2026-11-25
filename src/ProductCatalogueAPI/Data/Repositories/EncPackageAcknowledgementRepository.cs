@@ -1,7 +1,7 @@
+using ProductCatalogueAPI.Services.Distribution;
 using Dapper;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
-using ProductCatalogueAPI.Services.Jobs;
 using S100FC.ProductCatalogue;
 using System.Data;
 

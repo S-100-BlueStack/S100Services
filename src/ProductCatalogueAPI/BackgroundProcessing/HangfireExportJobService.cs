@@ -1,0 +1,57 @@
+using Hangfire;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
+using ProductCatalogueAPI.Contracts;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Operations;
+
+namespace ProductCatalogueAPI.BackgroundProcessing
+{
+    public sealed class HangfireExportJobService(
+        IBackgroundJobClient backgroundJobClient,
+        ILogger<HangfireExportJobService> logger
+    ) : IExportJobService
+    {
+        private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;
+        private readonly ILogger<HangfireExportJobService> _logger = logger;
+
+        public ExportJobStartResponse Enqueue(ExportOperationJobRequest request) {
+            try {
+                if (request.OperationId == Guid.Empty)
+                    request = request with { OperationId = Guid.NewGuid() };
+                var jobId = _backgroundJobClient.Enqueue<ExportOperationJob>(job =>
+                    job.RunAsync(request, null!, CancellationToken.None)
+                );
+
+                if (string.IsNullOrWhiteSpace(jobId))
+                    throw new JobEnqueueException("Hangfire did not return a job identifier.");
+
+                var statusUrl = $"/jobs/{Uri.EscapeDataString(jobId)}";
+                _logger.LogInformation(
+                    "Product Manager job enqueued. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    jobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+
+                return new ExportJobStartResponse {
+                    JobId = jobId,
+                    DatasetName = request.DatasetName,
+                    OperationType = request.BuildPackage ? "NewExport" : ExportOperationContract.ToPublicValue(request.OperationType),
+                    // The specification is resolved from the S-128 catalogue before the job is queued.
+                    ExportTarget = request.BuildPackage ? "S101/S57" : request.ProductSpecification,
+                    Status = ExportJobContract.QueuedStatus,
+                    CreatedAt = request.CreatedAtUtc.ToUniversalTime(),
+                    CorrelationId = request.CorrelationId,
+                    StatusUrl = statusUrl
+                };
+            }
+            catch (JobEnqueueException) {
+                throw;
+            }
+            catch (Exception ex) {
+                throw new JobEnqueueException("The Product Manager job could not be created.", ex);
+            }
+        }
+    }
+}

@@ -1,5 +1,5 @@
 using ProductCatalogueAPI.Data.Models;
-using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Services.Distribution;
 using ProductCatalogueAPI.Services.ValidationEmail;
 
 namespace ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc;

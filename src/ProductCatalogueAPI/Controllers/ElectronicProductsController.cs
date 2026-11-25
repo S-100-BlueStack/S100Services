@@ -1,9 +1,15 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
+using ProductCatalogueAPI.Contracts;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Models;
@@ -14,12 +20,8 @@ using ProductCatalogueAPI.Services.History;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
-using System.Diagnostics;
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using static ProductCatalogueAPI.Models.ResponseTypes;
+using static ProductCatalogueAPI.Contracts.ResponseTypes;
+using static ProductCatalogueAPI.Services.Dashboard.DashboardTime;
 
 namespace ProductCatalogueAPI.Controllers
 {
@@ -383,9 +385,7 @@ namespace ProductCatalogueAPI.Controllers
             }
 
             var current = await _repository.GetCurrentByNameAsync(electronicProduct.datasetName!);
-            // var s57current = await _repository.GetCurrentByNameAsync(s57product.datasetName);
             var s128Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString());
-            // var s57Status = Enum.Parse((s57current?.State ?? Data.Models.ProductState.Idle).ToString());
 
             var tracks = await GetRelatedExportTracksAsync(electronicProduct, cancellationToken);
             var exports = new List<ProductExport>();
@@ -1184,224 +1184,6 @@ namespace ProductCatalogueAPI.Controllers
                     TreatDatabaseTimeAsUtc(record.Date_From).ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
                     record.State)
                 .Replace(" ", "-", StringComparison.Ordinal);
-        }
-
-        private const string DashboardTimeZoneId = "Europe/Copenhagen";
-        private static readonly Lazy<TimeZoneInfo> DashboardTimeZone = new(ResolveDashboardTimeZone);
-
-        private static bool TryCreateDashboardRange(
-            string? from,
-            string? to,
-            out DateTimeOffset fromDanishTime,
-            out DateTimeOffset toDanishTime,
-            out DateTime fromDatabaseTime,
-            out DateTime toDatabaseTime,
-            out string? validationMessage)
-        {
-            fromDanishTime = default;
-            toDanishTime = default;
-            fromDatabaseTime = default;
-            toDatabaseTime = default;
-            validationMessage = null;
-
-            if (string.IsNullOrWhiteSpace(from))
-            {
-                validationMessage = "The 'from' query parameter is required.";
-                return false;
-            }
-
-            if (!TryParseDashboardDate(from, isRangeEnd: false, out fromDanishTime, out validationMessage))
-            {
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(to))
-            {
-                toDanishTime = GetDashboardNow();
-            }
-            else if (!TryParseDashboardDate(to, isRangeEnd: true, out toDanishTime, out validationMessage))
-            {
-                return false;
-            }
-
-            // ProductStateHistory stores UTC instants; Copenhagen conversion is an API-boundary concern.
-            // The API boundary remains Danish time, while the repository boundary uses the persisted instant for correct filtering.
-            fromDatabaseTime = fromDanishTime.UtcDateTime;
-            toDatabaseTime = toDanishTime.UtcDateTime;
-
-            if (toDatabaseTime <= fromDatabaseTime)
-            {
-                validationMessage = "The 'to' query parameter must be later than 'from'.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool TryParseDashboardDate(
-            string value,
-            bool isRangeEnd,
-            out DateTimeOffset danishValue,
-            out string? validationMessage)
-        {
-            var trimmedValue = value.Trim();
-            danishValue = default;
-            validationMessage = null;
-
-            if (DateOnly.TryParseExact(
-                trimmedValue,
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var dateOnly))
-            {
-                var localDateTime = dateOnly.ToDateTime(TimeOnly.MinValue);
-
-                if (isRangeEnd)
-                {
-                    localDateTime = localDateTime.AddDays(1);
-                }
-
-                return TryCreateDanishDateTimeOffset(localDateTime, value, out danishValue, out validationMessage);
-            }
-
-            if (HasExplicitTimeZoneOffset(trimmedValue))
-            {
-                if (DateTimeOffset.TryParse(
-                    trimmedValue,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AllowWhiteSpaces,
-                    out var dateTimeOffset))
-                {
-                    danishValue = TimeZoneInfo.ConvertTime(dateTimeOffset, DashboardTimeZone.Value);
-                    return true;
-                }
-
-                validationMessage = $"The date value '{value}' is invalid. Use yyyy-MM-dd, a Danish local date-time, or an ISO 8601 date-time with offset.";
-                return false;
-            }
-
-            if (DateTime.TryParse(
-                trimmedValue,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces,
-                out var localDateTimeValue))
-            {
-                return TryCreateDanishDateTimeOffset(localDateTimeValue, value, out danishValue, out validationMessage);
-            }
-
-            validationMessage = $"The date value '{value}' is invalid. Use yyyy-MM-dd, a Danish local date-time, or an ISO 8601 date-time with offset.";
-            return false;
-        }
-
-        private static bool TryCreateDanishDateTimeOffset(
-            DateTime localDateTime,
-            string originalValue,
-            out DateTimeOffset danishValue,
-            out string? validationMessage)
-        {
-            var unspecifiedLocalTime = DateTime.SpecifyKind(localDateTime, DateTimeKind.Unspecified);
-            var timeZone = DashboardTimeZone.Value;
-            danishValue = default;
-            validationMessage = null;
-
-            if (timeZone.IsInvalidTime(unspecifiedLocalTime))
-            {
-                validationMessage = $"The date value '{originalValue}' does not exist in {DashboardTimeZoneId} because of daylight saving time.";
-                return false;
-            }
-
-            danishValue = new DateTimeOffset(unspecifiedLocalTime, timeZone.GetUtcOffset(unspecifiedLocalTime));
-            return true;
-        }
-
-        private static DateTimeOffset ConvertDatabaseTimeToDashboardTime(DateTime databaseDateTime)
-        {
-            var utcDateTime = TreatDatabaseTimeAsUtc(databaseDateTime);
-            return TimeZoneInfo.ConvertTime(new DateTimeOffset(utcDateTime), DashboardTimeZone.Value);
-        }
-
-        private static DateTime TreatDatabaseTimeAsUtc(DateTime dateTime)
-        {
-            return dateTime.Kind switch
-            {
-                DateTimeKind.Utc => dateTime,
-                DateTimeKind.Local => dateTime.ToUniversalTime(),
-                _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
-            };
-        }
-
-        private static DateTimeOffset GetDashboardNow()
-        {
-            return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, DashboardTimeZone.Value);
-        }
-
-        private static TimeZoneInfo ResolveDashboardTimeZone()
-        {
-            try
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById(DashboardTimeZoneId);
-            }
-            catch (TimeZoneNotFoundException)
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time");
-            }
-            catch (InvalidTimeZoneException)
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time");
-            }
-        }
-
-        private static bool HasExplicitTimeZoneOffset(string value)
-        {
-            if (value.EndsWith("Z", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var timeSeparatorIndex = value.IndexOf('T');
-
-            if (timeSeparatorIndex < 0)
-            {
-                timeSeparatorIndex = value.IndexOf(' ');
-            }
-
-            if (timeSeparatorIndex < 0)
-            {
-                return false;
-            }
-
-            return HasOffsetSuffix(value, suffixLength: 6) || HasOffsetSuffix(value, suffixLength: 5);
-        }
-
-        private static bool HasOffsetSuffix(string value, int suffixLength)
-        {
-            if (value.Length < suffixLength)
-            {
-                return false;
-            }
-
-            var signIndex = value.Length - suffixLength;
-            var sign = value[signIndex];
-
-            if (sign is not ('+' or '-'))
-            {
-                return false;
-            }
-
-            if (suffixLength == 6)
-            {
-                return char.IsDigit(value[signIndex + 1])
-                    && char.IsDigit(value[signIndex + 2])
-                    && value[signIndex + 3] == ':'
-                    && char.IsDigit(value[signIndex + 4])
-                    && char.IsDigit(value[signIndex + 5]);
-            }
-
-            return char.IsDigit(value[signIndex + 1])
-                && char.IsDigit(value[signIndex + 2])
-                && char.IsDigit(value[signIndex + 3])
-                && char.IsDigit(value[signIndex + 4]);
         }
 
         private static string? TrimUsername(string? username) => username?.ToUpper().Replace("PROD\\", "");

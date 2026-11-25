@@ -7,6 +7,7 @@ using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using System.Diagnostics;
 using System.Text;
+using ProductCatalogueAPI.BackgroundProcessing.Execution;
 
 namespace ProductCatalogueAPI.Services.Operations;
 

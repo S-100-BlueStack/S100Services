@@ -1,8 +1,8 @@
 using Hangfire;
 using ProductCatalogueAPI.Data.Repositories;
-using ProductCatalogueAPI.Services.Jobs;
 using Hangfire.Server;
 using ProductCatalogueAPI.Services.ValidationEmail;
+using ProductCatalogueAPI.Services.Distribution;
 
 namespace ProductCatalogueAPI.Jobs;
 

@@ -8,7 +8,7 @@ const read = (name) => readFileSync(resolve(repo, name), 'utf8');
 const normalizer = read('src/ProductManagerCore/EncMetadataCoverageNormalizer.cs');
 const manager = read('src/ProductManagerCore/ProductManagerGDB.cs');
 const interfaceFile = read('src/ProductManagerCore/IProductManager.cs');
-const service = read('src/ProductCatalogueAPI/Jobs/EncPackageDetectionService.cs');
+const service = read('src/ProductCatalogueAPI/Services/Detection/EncPackageDetectionService.cs');
 const cleanup = read('src/ProductManagerCore/EncMetadataSurfaceYamlCleanup.cs');
 
 test('suppression plan carries exact geometry references from removed metadata features', () => {
@@ -21,9 +21,9 @@ test('verified DPC snapshot transfers suppression plan before YAML persistence',
   assert.match(manager, /suppressedMetadataSurfaces:\s*suppressedSurfaces/);
   assert.match(manager, /SuppressedMetadataSurfaces\s*=\s*suppressedSurfaces\.ToArray\(\)/);
   assert.match(interfaceFile, /public IReadOnlyList<string> SuppressedMetadataSurfaces/);
-  const serialize = service.indexOf('var yaml = snapshot.Dataset.Serialize();');
-  const prune = service.indexOf('EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(');
-  const persist = service.indexOf('packages.TryCreateAsync(package, cancellationToken)');
+  const serialize = service.indexOf('yaml = snapshot.Dataset.Serialize();', service.indexOf('public async Task RunAsync('));
+  const prune = service.indexOf('EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(', serialize);
+  const persist = service.indexOf('packages.TryCreatePendingAsync(package, cancellationToken)', prune);
   assert.ok(serialize !== -1 && prune > serialize && persist > prune);
 });
 

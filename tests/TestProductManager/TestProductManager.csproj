@@ -41,22 +41,30 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\TestProductCatalogue\ArchiveBindingOwnerResolverTests.cs" Link="DpcRegression\ArchiveBindingOwnerResolverTests.cs" />
-    <Compile Include="..\TestProductCatalogue\AttributeBindingCompatibilityTests.cs" Link="CatalogueRegression\AttributeBindingCompatibilityTests.cs" />
-    <Compile Include="..\TestProductCatalogue\SourceSnapshotFreshnessTests.cs" Link="DpcRegression\SourceSnapshotFreshnessTests.cs" />
-    <Compile Include="..\TestProductCatalogue\DpcArchiveHistoryTests.cs" Link="DpcRegression\DpcArchiveHistoryTests.cs" />
-    <Compile Include="..\TestProductCatalogue\DpcRunAsyncTests.cs" Link="DpcRegression\DpcRunAsyncTests.cs" />
-    <Compile Include="..\TestProductCatalogue\DetectS102ChangesJobTests.cs" Link="S102\DetectS102ChangesJobTests.cs" />
-    <Compile Include="..\TestProductCatalogue\EncPackageFailureSqlTests.cs" Link="DpcRegression\EncPackageFailureSqlTests.cs" />
-    <Compile Include="..\TestProductCatalogue\DpcSqlTransactionTests.cs" Link="DpcRegression\DpcSqlTransactionTests.cs" />
-    <Compile Include="..\TestProductCatalogue\IcEncImmediateFinalizationTests.cs" Link="DpcRegression\IcEncImmediateFinalizationTests.cs" />
-    <Compile Include="..\TestProductCatalogue\EncPackageFailureRulesTests.cs" Link="DpcRegression\EncPackageFailureRulesTests.cs" />
-    <Compile Include="..\TestProductCatalogue\EncPackagePauseStatusTests.cs" Link="DpcRegression\EncPackagePauseStatusTests.cs" />
+    <Compile Include="..\TestProductCatalogue\ArchiveBindingOwnerResolverTests.cs" Link="Unit\Detection\ArchiveBindingOwnerResolverTests.cs" />
+    <Compile Include="..\TestProductCatalogue\AttributeBindingCompatibilityTests.cs" Link="Unit\Catalogue\AttributeBindingCompatibilityTests.cs" />
+    <Compile Include="..\TestProductCatalogue\SourceSnapshotFreshnessTests.cs" Link="Unit\Detection\SourceSnapshotFreshnessTests.cs" />
+    <Compile Include="..\TestProductCatalogue\DpcArchiveHistoryTests.cs" Link="Unit\Detection\DpcArchiveHistoryTests.cs" />
+    <Compile Include="..\TestProductCatalogue\DpcRunAsyncTests.cs" Link="Unit\Detection\DpcRunAsyncTests.cs" />
+    <Compile Include="..\TestProductCatalogue\DetectS102ChangesJobTests.cs" Link="Unit\Detection\DetectS102ChangesJobTests.cs" />
+    <Compile Include="..\TestProductCatalogue\EncPackageFailureSqlTests.cs" Link="Integration\Sql\EncPackageFailureSqlTests.cs" />
+    <Compile Include="..\TestProductCatalogue\DpcSqlTransactionTests.cs" Link="Integration\Sql\DpcSqlTransactionTests.cs" />
+    <Compile Include="..\TestProductCatalogue\IcEncImmediateFinalizationTests.cs" Link="Unit\Detection\IcEncImmediateFinalizationTests.cs" />
+    <Compile Include="..\TestProductCatalogue\EncPackageFailureRulesTests.cs" Link="Unit\Detection\EncPackageFailureRulesTests.cs" />
+    <Compile Include="..\TestProductCatalogue\EncPackagePauseStatusTests.cs" Link="Unit\Detection\EncPackagePauseStatusTests.cs" />
     <None Include="..\..\src\ProductCatalogueAPI\Data\Migrations\*.sql" Link="DpcMigrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="TestProductCatalogueAPI.Support" />
+    <Using Include="S100FC.ProductCatalogue.Archive" />
+    <Using Include="S100FC.ProductCatalogue.ExportSnapshots" />
+    <Using Include="ProductCatalogueAPI.Data.Records" />
+    <Using Include="ProductCatalogueAPI.Services.Detection" />
+    <Using Include="ProductCatalogueAPI.Services.Distribution" />
+    <Using Include="ProductCatalogueAPI.Services.Export" />
+    <Using Include="ProductCatalogueAPI.Services.Operations" />
   </ItemGroup>
 
 </Project>

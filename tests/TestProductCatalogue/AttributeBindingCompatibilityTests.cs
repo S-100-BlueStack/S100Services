@@ -1,11 +1,13 @@
 using S100BlueStack.Settings;
 using S100FC;
 using S100FC.ProductCatalogue;
+using S100FC.ProductCatalogue.CatalogueMapping;
 using S100FC.S100;
 using S100FC.S101.FeatureTypes;
 using S100FC.S101.InformationTypes;
 using S100FC.S128.FeatureAssociation;
 using S100FC.S128.FeatureTypes;
+using TestProductCatalogueAPI.Unit.Detection;
 using Xunit;
 
 namespace TestProductCatalogueAPI;

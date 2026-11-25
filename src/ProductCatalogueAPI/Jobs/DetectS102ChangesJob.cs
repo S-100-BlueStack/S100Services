@@ -9,7 +9,7 @@ namespace ProductCatalogueAPI.Jobs;
 /// <param name="detector">Processes changes from the S-102 source.</param>
 /// <param name="clock">Provides the UTC upper bound captured before reading source changes.</param>
 /// <param name="logger">Reports the scan bounds without exposing source connection details.</param>
-public sealed class DetectS102ChangesJob(IProductRepository repository, IS102ChangeDetector detector, TimeProvider clock, ILogger<DetectS102ChangesJob> logger) : IBackgroundJob
+public sealed class DetectS102ChangesJob(IProductRepository repository, IS102ChangeDetector detector, TimeProvider clock, ILogger<DetectS102ChangesJob> logger)
 {
     /// <summary>The persisted key must stay stable across job type renames.</summary>
     private const string JobRunStateKey = "DetectS102ChangesJob";
