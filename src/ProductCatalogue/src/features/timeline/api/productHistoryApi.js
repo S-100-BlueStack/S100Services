@@ -5,6 +5,10 @@ import {
   isCompatibilityProductContext,
 } from "../../products/domain/productContext.js";
 import {
+  getIcEncHistorySpecification,
+  normalizeIcEncDeliveryHistory,
+} from "../model/icEncDeliveryHistory.js";
+import {
   PRODUCT_HISTORY_EVENT_TYPE,
   PRODUCT_HISTORY_SOURCE,
   normalizeProductHistoryResponse,
@@ -80,18 +84,39 @@ export async function fetchProductHistory(datasetName, options = {}) {
   return fetchCompatibilityProductHistory(
     normalizedDatasetName,
     get,
-    options.validateOwnership === true
+    options.validateOwnership === true,
+    options.includeIcEncDeliveries === true &&
+      historyConfiguration.loaderId === "electronic-history"
+      ? getIcEncHistorySpecification(productContext, options.registry)
+      : null
   );
 }
 
-async function fetchCompatibilityProductHistory(datasetName, get, validateOwnership = false) {
+async function fetchCompatibilityProductHistory(
+  datasetName,
+  get,
+  validateOwnership = false,
+  specification = null
+) {
+  const query = specification ? `?includeIcEncDeliveries=true&specification=${specification}` : "";
   const payload = await get(
-    `${PRODUCT_HISTORY_ENDPOINT}/${encodeURIComponent(datasetName)}/history`,
+    `${PRODUCT_HISTORY_ENDPOINT}/${encodeURIComponent(datasetName)}/history${query}`,
     `Product history request failed for ${datasetName}`
   );
 
   if (validateOwnership) validateBackendHistoryOwnership(payload, datasetName);
-  return normalizeProductHistoryResponse(normalizeBackendProductHistory(payload, datasetName));
+  const history = normalizeProductHistoryResponse(
+    normalizeBackendProductHistory(payload, datasetName)
+  );
+  if (specification) {
+    const matchesTimelineOwner = history.datasetName?.toUpperCase() === datasetName.toUpperCase();
+    history.icEncDeliveries = normalizeIcEncDeliveryHistory(
+      matchesTimelineOwner ? payload?.IcEncDeliveries : null,
+      datasetName,
+      specification
+    );
+  }
+  return history;
 }
 
 function normalizeBackendProductHistory(payload, requestedDatasetName) {

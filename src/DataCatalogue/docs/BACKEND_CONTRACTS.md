@@ -15,6 +15,28 @@ discovery and prospective Workspace intersection remain separate
 [backend gaps](DC_API_BACKEND_GAPS.md). Dated integration and demo notes retain
 the semantics and limitations known at delivery.
 
+## COMMENT-03 - Package discard decisions and reasons
+
+| Route                             | Contract                                                                                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/packages/{id}/comments`  | Returns saved discard reasons only. Each item includes operation `id`, actual `historyEventId`, `kind: discardReason`, text, actor and UTC time. Newest-first operation cursor, default 50, allowed 1–100.    |
+| `PUT /v1/packages/{id}/discarded` | Accepts `{ operationId, discarded, reason }`. A new Discard requires a fresh, nonempty reason. Reopen accepts a null or omitted reason. Returns the committed operation receipt and current effective status. |
+| `GET /v1/packages`                | Optional `assignmentStatus` (`assigned`, `notAssigned`, or `discarded`), applied before count and paging. The status intersects with category, geometry, `hasPipeline`, and `pipelineId`.                     |
+| `GET /v1/packages/{id}/history`   | Adds `packageDiscarded` and `packageReopened` with operation UUIDs distinct from History event UUIDs. The discard reason appears on its single decision entry.                                                |
+
+Trimmed reason text is required for every new Discard and is bounded to 4000
+UTF-16 code units before trimming. Requests are limited to 32 KiB. Actor and
+UTC come from the server. No standalone Package comment write route exists.
+Invalid input or cursor returns 400, missing Package returns 404, and
+incompatible state or UUID reuse returns 409. Matching retries acknowledge
+their original event without reapplying it. Binding and Package decision UUIDs
+are checked in both directions. Bind/restore for a discarded Package returns
+409 until it is reopened.
+
+The legacy `hasPipeline=false` still includes both Not assigned and Discarded.
+The COMMENT-02 binding views and the event-authorized History profile endpoint
+retain their existing scope.
+
 ## COMMENT-02 - Main Map binding-comment reads
 
 `POST /v1/packages/binding-comments/availability` is an authorized read with

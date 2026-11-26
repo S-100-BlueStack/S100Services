@@ -174,7 +174,8 @@ test("live Package pages expose authoritative Pipeline assignment summaries", as
           hasPipeline: true,
           pipelineBindings: [{ id: "p1::ENC", pipelineId: "ENC" }],
         },
-        { id: "p2", hasPipeline: false, pipelineBindings: [] },
+        { id: "p2", hasPipeline: false, pipelineBindings: [], assignmentStatus: "notAssigned" },
+        { id: "p4", hasPipeline: false, pipelineBindings: [], assignmentStatus: "discarded" },
         { id: "p3" },
       ]),
   });
@@ -184,6 +185,7 @@ test("live Package pages expose authoritative Pipeline assignment summaries", as
     [
       ["Assigned", ["ENC"]],
       ["Not assigned", []],
+      ["Discarded", []],
       [null, null],
     ]
   );

@@ -66,6 +66,8 @@ public sealed class PackageHistoryService(InMemoryEventStore store, StreamNameMa
             PackagesEvents.V1.SeverityUpdated updated => Entry("severityUpdated", updated.UTC, updated.Actor, severity: updated.Severity.ToString(CultureInfo.InvariantCulture)),
             PackagesEvents.V1.DetailedGeometryAdded added => Entry("detailedGeometryAdded", added.UTC, added.Actor),
             PackagesEvents.V1.GeometryReplaced replaced => Entry("geometryReplaced", replaced.UTC, replaced.Actor),
+            PackagesEvents.V1.PackageDiscarded discarded => Entry("packageDiscarded", discarded.UTC, discarded.Actor, commentText: discarded.Reason) with { OperationId = discarded.OperationId },
+            PackagesEvents.V1.PackageReopened reopened => Entry("packageReopened", reopened.UTC, reopened.Actor) with { OperationId = reopened.OperationId },
             DispatcherEvents.V1.Binded bound when bound.PackageId == packageId => Entry("pipelineAssigned", bound.UTC, bound.Actor, bound.PipelineId),
             DispatcherEvents.V1.Unbound unbound when unbound.PackageId == packageId => Entry("pipelineUnassigned", unbound.UTC, unbound.Actor, unbound.PipelineId),
             DispatcherEvents.V1.BindingCommentAdded comment when comment.PackageId == packageId

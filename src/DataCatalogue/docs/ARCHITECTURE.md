@@ -44,6 +44,27 @@ binding mutation may still land later. Use Assignment's saved-change recovery
 and the Main Map Refresh action to check again. Package History retains its
 separate Refresh action when the same Package's Details stay mounted.
 
+## COMMENT-03 - Direct Package decisions
+
+The Package stream records Discard with its reason in one event and Reopen in
+its own event. History and the read-only reasons popup use actual event IDs
+for optional AD profiles. A Package decision and a Workstream binding comment
+cannot reuse the same operation UUID. Both paths check the other kind under
+the shared mutation gate. Expected-version writes and the retained-binding
+guard protect the Discard decision even during concurrent bind attempts.
+
+Assignment owns direct Discard/Reopen, binding Save and read-only recovery
+through one session mutation slot. A clean, authoritatively unbound Package
+can be discarded from its reason popup. Explicit Reopen is a direct action.
+Selecting a Workstream for a Discarded Package still makes regular Save
+verify Reopen before binding. Direct decisions confirm exact history evidence
+and current status, update the list, and leave binding membership and
+availability untouched. Uncertain decisions preserve the submitted reason and
+operation UUID until readback or retry.
+
+Synchronous, version-aware decision projection provides the status used by
+filter, count and page. Active bindings still determine Main Map membership.
+
 ## COMMENT-02 - Main Map binding-comment reads
 
 Live Packages uses an independent availability owner keyed by exact

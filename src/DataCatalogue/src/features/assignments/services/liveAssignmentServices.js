@@ -1,3 +1,6 @@
+import { hasBindingCommentText } from "../../../shared/api/bindingComments.js";
+import { PACKAGE_STATUS_LABELS } from "../../../shared/api/packageComments.js";
+import { readConfirmedPackageOperations } from "./packageOperationConfirmation.js";
 import { collectPages } from "../../../shared/api/catalogueService.js";
 import {
   BindingRequestTimeoutError,
@@ -140,6 +143,216 @@ export function createLiveAssignmentServices(
     return { commentHistory, confirmedIds };
   }
 
+  const supportsPackageOperations =
+    typeof catalogue.packageComments === "function" &&
+    typeof catalogue.savePackageOperation === "function" &&
+    typeof catalogue.packageHistory === "function";
+
+  // Recovery is read-only. It must not repeat an unconfirmed write.
+  async function reconcileBindings(
+    id,
+    { includeComments = false, baselineActiveIds, awaitingComments = [] } = {}
+  ) {
+    const bindingsRead = readBindings(id, undefined, baselineActiveIds);
+    if (!includeComments) return bindingRecord(await bindingsRead);
+    const [bindings, { commentHistory }] = await Promise.all([
+      bindingsRead,
+      readCommentsWithConfirmation(id, awaitingComments),
+    ]);
+    return { ...bindingRecord(bindings), commentHistory };
+  }
+
+  function readPackage(id) {
+    return request("Package assignment status read", ({ signal }) =>
+      catalogue.package(id, { signal })
+    );
+  }
+
+  async function readStatus(id, record) {
+    const current = await readPackage(id);
+    const bound = Object.keys(record.relations);
+    if (
+      current.assignmentStatus &&
+      (!Array.isArray(current.pipelineIds) ||
+        current.pipelineIds.length !== bound.length ||
+        !bound.every((pipelineId) => current.pipelineIds.includes(pipelineId)))
+    ) {
+      throw new Error(
+        "Package status and Workstream bindings changed during readback. Reload saved changes."
+      );
+    }
+    return current.assignmentStatus ?? null;
+  }
+
+  function confirmPackageOperations(id, operations) {
+    return operations.length
+      ? request("Package history readback", ({ signal }) =>
+          readConfirmedPackageOperations(catalogue, id, operations, signal)
+        )
+      : Promise.resolve([]);
+  }
+
+  async function savePackageDraft(id, draft, baselineActiveIds) {
+    const { activeIds, decision } = draft;
+    if (decision && decision.kind !== "reopen") throw new Error("Use the direct Discard action.");
+    const validation = assignmentDraftError(draft, { validateCommentText: true });
+    if (validation) throw new Error(validation);
+    const initial = await readPackage(id);
+    const operations = decision ? [decision] : [];
+    if (!initial.assignmentStatus) {
+      if (operations.length) throw new Error("The API does not provide Package assignment status.");
+      return saveBindings(id, activeIds, draft.comments, baselineActiveIds);
+    }
+    const baseline = baselineActiveIds ?? initial.pipelineIds;
+    const expected = rebaseDraftBindings(initial.pipelineIds, activeIds, baseline);
+    if (
+      expected.length &&
+      initial.assignmentStatus === "discarded" &&
+      decision?.kind !== "reopen"
+    ) {
+      throw new Error("Reopen the Package before assigning a Workstream.");
+    }
+
+    const attempted = operations.filter((operation) => operation.awaitingConfirmation);
+    const confirmed = new Set(await confirmPackageOperations(id, attempted));
+    let record = null;
+    async function submit(operation) {
+      if (!operation || confirmed.has(operation.id)) return;
+      try {
+        await request("Package change", ({ signal }) =>
+          catalogue.savePackageOperation(id, operation, { signal })
+        );
+        if (!attempted.includes(operation)) attempted.push(operation);
+      } catch (error) {
+        if (!isDefiniteClientRejection(error) && !attempted.includes(operation))
+          attempted.push(operation);
+        throw error;
+      }
+    }
+
+    try {
+      if (decision?.kind === "reopen") {
+        await submit(decision);
+        for (const operationId of await confirmPackageOperations(id, [decision]))
+          confirmed.add(operationId);
+        const reopenedStatus = (await readPackage(id)).assignmentStatus;
+        if (!confirmed.has(decision.id) || !["notAssigned", "assigned"].includes(reopenedStatus)) {
+          throw new Error("Reopen could not be confirmed. No Workstream was assigned.");
+        }
+      }
+
+      const editsBindings =
+        draft.comments.length ||
+        baseline.length !== activeIds.length ||
+        activeIds.some((pipelineId) => !baseline.includes(pipelineId));
+      if (editsBindings) {
+        record = await saveBindings(id, activeIds, draft.comments, baseline, true);
+      } else {
+        record = await reconcileBindings(id, { baselineActiveIds: baseline });
+      }
+      for (const operationId of await confirmPackageOperations(id, attempted))
+        confirmed.add(operationId);
+      record.assignmentStatus = await readStatus(id, record);
+      const finalBindings = Object.keys(record.relations);
+      const expectedStatus = finalBindings.length
+        ? "assigned"
+        : decision?.kind === "reopen" || initial.assignmentStatus !== "discarded"
+          ? "notAssigned"
+          : "discarded";
+      if (
+        record.assignmentStatus !== expectedStatus ||
+        operations.some((operation) => !confirmed.has(operation.id))
+      ) {
+        throw new Error(
+          "The requested Package changes could not be confirmed in the current saved state."
+        );
+      }
+      return { ...record, confirmedPackageIds: [...confirmed] };
+    } catch (error) {
+      let current = error.record ?? record;
+      let failedReadback = false;
+      // If bindings are uncertain, keep their established read-only recovery barrier.
+      if (!error.requiresReconciliation) {
+        try {
+          current ??= await reconcileBindings(id, { baselineActiveIds: baseline });
+          current.assignmentStatus = await readStatus(id, current);
+          for (const operationId of await confirmPackageOperations(id, attempted))
+            confirmed.add(operationId);
+        } catch {
+          failedReadback = true;
+        }
+      }
+      throw Object.assign(error, {
+        record: current,
+        confirmedPackageIds: [...confirmed],
+        pendingPackageIds: attempted.map(({ id: operationId }) => operationId),
+        requiresReconciliation: Boolean(
+          error.requiresReconciliation ||
+          failedReadback ||
+          attempted.some((operation) => !confirmed.has(operation.id))
+        ),
+      });
+    }
+  }
+
+  async function changeDecision(id, operation) {
+    const isDiscard = operation.kind === "discardReason";
+    const initial = await readPackage(id);
+    const expected = isDiscard ? "notAssigned" : "discarded";
+    const target = isDiscard ? "discarded" : "notAssigned";
+    if (initial.assignmentStatus !== expected || initial.pipelineIds?.length !== 0) {
+      const record = await reconcileBindings(id, { baselineActiveIds: [] });
+      record.assignmentStatus = await readStatus(id, record);
+      throw Object.assign(
+        new Error("The Package status or bindings changed. Review the saved state."),
+        { record }
+      );
+    }
+
+    try {
+      await request("Package decision", ({ signal }) =>
+        catalogue.savePackageOperation(id, operation, { signal })
+      );
+    } catch (error) {
+      if (!isDefiniteClientRejection(error)) {
+        throw new BindingSaveError("Check saved changes before retrying the decision.", {
+          requiresReconciliation: true,
+        });
+      }
+      const record = await reconcileBindings(id, { baselineActiveIds: [] });
+      record.assignmentStatus = await readStatus(id, record);
+      throw Object.assign(error, { record });
+    }
+
+    let record;
+    let confirmed;
+    try {
+      confirmed = await confirmPackageOperations(id, [operation]);
+      record = await reconcileBindings(id, { baselineActiveIds: [] });
+      record.assignmentStatus = await readStatus(id, record);
+    } catch {
+      throw new BindingSaveError("Check saved changes before retrying the decision.", {
+        requiresReconciliation: true,
+      });
+    }
+    if (!confirmed.includes(operation.id)) {
+      throw new BindingSaveError("The decision is not yet visible. Check saved changes.", {
+        record,
+        requiresReconciliation: true,
+      });
+    }
+    if (record.assignmentStatus !== target) {
+      throw Object.assign(
+        new Error("The decision was recorded, but the Package status has since changed."),
+        {
+          record,
+          confirmedPackageIds: confirmed,
+        }
+      );
+    }
+    return { record, confirmedPackageIds: confirmed };
+  }
+
   const assignments = {
     ...(supportsComments
       ? { loadComments: (id, { signal } = {}) => readComments(id, signal) }
@@ -147,18 +360,37 @@ export function createLiveAssignmentServices(
     async load(id, { signal } = {}) {
       return bindingRecord(await readBindings(id, signal));
     },
-    // Recovery is read-only. It must not repeat an unconfirmed POST or DELETE.
-    async reconcile(
-      id,
-      { includeComments = false, baselineActiveIds, awaitingComments = [] } = {}
-    ) {
-      const bindingsRead = readBindings(id, undefined, baselineActiveIds);
-      if (!includeComments) return bindingRecord(await bindingsRead);
-      const [bindings, { commentHistory }] = await Promise.all([
-        bindingsRead,
-        readCommentsWithConfirmation(id, awaitingComments),
+    ...(supportsPackageOperations
+      ? {
+          packageComments: catalogue.packageComments,
+          packageProfile: catalogue.packageHistoryProfile,
+          changeDecision(id, operation) {
+            if (
+              !["discardReason", "reopen"].includes(operation.kind) ||
+              (operation.kind === "discardReason" && !hasBindingCommentText(operation.text))
+            ) {
+              return Promise.reject(new Error("Enter a valid discard reason."));
+            }
+            if (pending.has(id))
+              return Promise.reject(new Error("A Package mutation is already running."));
+            const running = changeDecision(id, operation).finally(() => pending.delete(id));
+            pending.set(id, running);
+            return running;
+          },
+        }
+      : {}),
+    async reconcile(id, options = {}) {
+      if (!supportsPackageOperations) return reconcileBindings(id, options);
+      const { awaitingPackageOperations = [] } = options;
+      const [record, confirmedPackageIds] = await Promise.all([
+        reconcileBindings(id, options),
+        confirmPackageOperations(id, awaitingPackageOperations),
       ]);
-      return { ...bindingRecord(bindings), commentHistory };
+      return {
+        ...record,
+        assignmentStatus: await readStatus(id, record),
+        confirmedPackageIds,
+      };
     },
     save(id, draft, { baselineActiveIds } = {}) {
       // Reject old/foreign Workspace edit payloads before any binding reads or writes.
@@ -168,15 +400,17 @@ export function createLiveAssignmentServices(
         );
       if (pending.has(id)) return pending.get(id);
       const desired = [...new Set(draft.activeIds)];
-      const operation = saveBindings(id, desired, draft.comments, baselineActiveIds).finally(() =>
-        pending.delete(id)
-      );
+      const operation = (
+        supportsPackageOperations
+          ? savePackageDraft(id, { ...draft, activeIds: desired }, baselineActiveIds)
+          : saveBindings(id, desired, draft.comments, baselineActiveIds)
+      ).finally(() => pending.delete(id));
       pending.set(id, operation);
       return operation;
     },
   };
 
-  async function saveBindings(id, intendedIds, comments = [], baselineActiveIds) {
+  async function saveBindings(id, intendedIds, comments = [], baselineActiveIds, rebase = false) {
     if (comments.length && !supportsComments)
       throw new Error("Binding comments cannot be saved by this API.");
     if (comments.length && !Array.isArray(baselineActiveIds))
@@ -203,9 +437,10 @@ export function createLiveAssignmentServices(
     const toAppend = comments.filter((comment) => !alreadyConfirmed.includes(comment.id));
     const currentIds = existing.map((binding) => binding.pipelineId);
     const current = new Set(currentIds);
-    const desired = comments.length
-      ? rebaseDraftBindings(currentIds, intendedIds, baselineActiveIds)
-      : intendedIds;
+    const desired =
+      comments.length || rebase
+        ? rebaseDraftBindings(currentIds, intendedIds, baselineActiveIds)
+        : intendedIds;
     const changes = [
       ...desired
         .filter((pipelineId) => !current.has(pipelineId))
@@ -311,7 +546,7 @@ export function createLiveAssignmentServices(
       .join("; ");
     let record;
     try {
-      record = await assignments.reconcile(id, {
+      record = await reconcileBindings(id, {
         includeComments: comments.length > 0,
         baselineActiveIds: currentIds,
       });
@@ -368,9 +603,22 @@ export function createLiveAssignmentServices(
           page,
           pageSize,
           category: type,
-          hasPipeline: status ? status === "Assigned" : undefined,
+          ...(supportsPackageOperations
+            ? {
+                assignmentStatus: Object.keys(PACKAGE_STATUS_LABELS).find(
+                  (key) => PACKAGE_STATUS_LABELS[key] === status
+                ),
+              }
+            : { hasPipeline: status ? status === "Assigned" : undefined }),
           signal,
         });
+        if (
+          supportsPackageOperations &&
+          status &&
+          result.items.some((item) => !item.assignmentStatus || item.status !== status)
+        ) {
+          throw new Error("The API did not return the requested Package assignment status.");
+        }
         return {
           ...result,
           items: result.items.map((item) => ({

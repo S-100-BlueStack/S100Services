@@ -1,11 +1,14 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Options;
+using ProductCatalogueAPI.Services.ValidationEmail;
 using S100FC.ProductCatalogue;
 using System.Data;
 using System.Text.RegularExpressions;
@@ -557,6 +560,17 @@ internal sealed class DpcSqlDatabase : IAsyncDisposable
         Acknowledgements = new(factory);
         Mailbox = new(factory, TimeProvider.System, new ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc.IcEncReportParser());
     }
+    internal ServiceProvider BuildDeliveryHistoryOptions(IConfiguration configuration) {
+        var services = new ServiceCollection();
+        services.AddSingleton<DbConnectionFactory>(new Factory(_connection));
+        services.AddSingleton<Microsoft.Extensions.Logging.ILogger<ProductIcEncDeliveryHistoryRepository>>(
+            NullLogger<ProductIcEncDeliveryHistoryRepository>.Instance);
+        services.AddOptions<SendToIcEncOptions>().Bind(configuration.GetSection(SendToIcEncOptions.SectionName));
+        services.AddOptions<ValidationEmailOptions>().Configure(value => ValidationEmailOptions.BindSettings(configuration, value));
+        services.AddTransient<ProductIcEncDeliveryHistoryRepository>();
+        return services.BuildServiceProvider();
+    }
+
     internal static async Task<DpcSqlDatabase> CreateAsync() {
         var db = new DpcSqlDatabase(Environment.GetEnvironmentVariable(ConnectionVariable)!);
         using (var connection = new SqlConnection(db._master))

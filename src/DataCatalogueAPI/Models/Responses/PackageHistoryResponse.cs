@@ -11,5 +11,9 @@ public sealed record PackageHistoryResponse(string PackageId, IReadOnlyList<Pack
 /// <param name="PipelineId">The related pipeline identifier for binding events only.</param>
 /// <param name="PipelineName">The current pipeline display name when available; not a historical name.</param>
 /// <param name="Severity">The exact unsigned decimal severity for severity events only.</param>
-/// <param name="CommentText">The committed plain text for binding comment events only.</param>
-public sealed record PackageHistoryEventResponse(Guid Id, string EventType, DateTimeOffset OccurredAtUtc, string? Actor, string? PipelineId, string? PipelineName, string? Severity, string? CommentText = null);
+/// <param name="CommentText">The committed plain text for comment and discard events.</param>
+public sealed record PackageHistoryEventResponse(Guid Id, string EventType, DateTimeOffset OccurredAtUtc, string? Actor, string? PipelineId, string? PipelineName, string? Severity, string? CommentText = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? OperationId { get; init; }
+}

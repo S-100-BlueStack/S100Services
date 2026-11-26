@@ -1,3 +1,4 @@
+import { mountPackageCommentControls } from "./createPackageCommentControls.js";
 import { assignmentMapLegendMarkup } from "./assignmentMapLegend.js";
 import { formatLastRefreshedTime } from "./formatLastRefreshedTime.js";
 import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
@@ -109,6 +110,7 @@ export function createAssignmentPage({
     get("type").setAttribute("aria-label", "Package category");
     get("status").previousSibling.textContent = "";
     get("status").setAttribute("aria-label", "Package assignment status");
+    get("status").append(new Option("Discarded", "Discarded"));
     get("type").replaceChildren(new Option("All categories", ""));
     get("map-empty").textContent = "Select a Package to view geography.";
     get("work-stream-mode").hidden = true;
@@ -121,6 +123,16 @@ export function createAssignmentPage({
   const listen = (node, name, handler) =>
     node.addEventListener(name, handler, { signal: abort.signal });
   const session = createAssignmentSession({ services });
+  const packageControls = mountPackageCommentControls({
+    live,
+    firstExistingControl: get("active-count"),
+    session,
+    read: services.assignments?.packageComments,
+    readProfile: services.assignments?.packageProfile,
+    onDecisionSettled: () => {
+      if (alive) void loadFeatures();
+    },
+  });
   const mapRetryControl = get("map-retry");
   let alive = true;
   const categoryRequests = createQueryLifecycle();
@@ -302,7 +314,7 @@ export function createAssignmentPage({
       .filter(([, binding]) => binding?.active)
       .map(([pipelineId]) => pipelineId);
     packageSummaries.set(state.feature.id, {
-      status: pipelineIds.length ? "Assigned" : "Not assigned",
+      status: assignmentStatus(state.record),
       pipelineIds,
     });
   }
@@ -315,7 +327,7 @@ export function createAssignmentPage({
     if (badge) {
       badge.textContent = status;
       badge.hidden = !status;
-      badge.className = `dc-assignment-status ${status === "Assigned" ? "is-assigned" : status === "Not assigned" ? "is-unassigned" : ""}`;
+      badge.className = `dc-assignment-status ${status === "Assigned" ? "is-assigned" : status === "Not assigned" ? "is-unassigned" : status === "Discarded" ? "is-discarded" : ""}`;
     }
     if (!live) return;
     const pipelineSummary = button.children[0]?.children[0]?.children[1];
@@ -558,6 +570,7 @@ export function createAssignmentPage({
   }
 
   const unsubscribe = session.subscribe((state) => {
+    packageControls?.update(state);
     const save = get("save");
     const saveIcon = get("save-icon");
     const saved = live && state.saveConfirmed;
@@ -566,17 +579,20 @@ export function createAssignmentPage({
       state.loading ||
       state.saving ||
       state.reconciliationRequired ||
+      state.pendingDecision ||
       resetting ||
       Boolean(state.validationError);
     save.classList.toggle("is-actionable", !save.disabled);
     save.classList.toggle("is-saved", saved);
     const icon = saved ? "check" : "save";
     if (saveIcon.getAttribute("icon") !== icon) saveIcon.setAttribute("icon", icon);
-    get("reconcile").hidden = !state.reconciliationRequired;
+    get("reconcile").hidden = !state.reconciliationRequired && !state.pendingDecision;
     get("reconcile").disabled = state.saving || state.loading || resetting;
-    get("abandon").hidden = !state.reconciliationRequired;
+    get("abandon").hidden = !state.reconciliationRequired && !state.pendingDecision;
     get("abandon").disabled = state.saving || state.loading || resetting;
-    const hasCommentDrafts = live && state.draft?.comments.length > 0;
+    const hasCommentDrafts =
+      live &&
+      Boolean(state.draft?.comments.length || state.draft?.decision || state.pendingDecision);
     get("reconcile").textContent =
       state.saving && state.reconciliationRequired
         ? "Checking…"
@@ -772,7 +788,11 @@ export function createAssignmentPage({
 
   listen(get("work-stream-retry"), "click", () => void loadWorkStreams());
   listen(get("abandon"), "click", () => {
-    if (busy() || !session.snapshot().reconciliationRequired) return;
+    if (
+      busy() ||
+      (!session.snapshot().reconciliationRequired && !session.snapshot().pendingDecision)
+    )
+      return;
     if (
       window.confirm(
         "Discard this local draft and clear the Package selection? A timed-out Save may still complete on the server. This will not undo server changes."
@@ -835,7 +855,8 @@ export function createAssignmentPage({
     if (
       session.snapshot().dirty ||
       session.snapshot().saving ||
-      session.snapshot().reconciliationRequired
+      session.snapshot().reconciliationRequired ||
+      session.snapshot().pendingDecision
     ) {
       event.preventDefault();
       event.returnValue = "";
@@ -871,6 +892,7 @@ export function createAssignmentPage({
       if (!map) makeMap();
     },
     deactivate() {
+      packageControls?.close();
       session.clearSaveConfirmation();
     },
     selectPackage(id, { notify = true } = {}) {
@@ -898,6 +920,7 @@ export function createAssignmentPage({
       clearTimeout(searchTimer);
       abort.abort();
       guard.destroy();
+      packageControls?.destroy();
       unsubscribe();
       for (const row of workStreamRows.values()) row.destroy?.();
       workStreamRows.clear();

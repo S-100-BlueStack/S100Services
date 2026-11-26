@@ -89,10 +89,11 @@ namespace DataCatalague.Api.Repositories
         /// <param name="pageSize">Page size between 1 and <see cref="MaximumPageSize"/>.</param>
         /// <param name="hasPipeline">True for packages bound to at least one pipeline; false for unbound packages; null for both.</param>
         /// <param name="pipelineId">Optional exact pipeline assignment.</param>
+        /// <param name="assignmentStatus">Optional exact effective status applied before pagination.</param>
         /// <returns>A page in ordinal catalogue identifier order and its total matching count.</returns>
         /// <exception cref="ArgumentOutOfRangeException">A paging argument is outside the supported range.</exception>
         /// <exception cref="InvalidDataException">The supplied query geometry is invalid or cannot be projected.</exception>
-        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20, bool? hasPipeline = null, string? pipelineId = null) {
+        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20, bool? hasPipeline = null, string? pipelineId = null, string? assignmentStatus = null) {
             ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
             ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
@@ -119,15 +120,17 @@ namespace DataCatalague.Api.Repositories
             cancellationToken.ThrowIfCancellationRequested();
             // Count and page use the same captured states; no event-store reads or geometry hydration.
             var matching = candidates
-                .Where(item => (category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
-                    && (hasPipeline is null || this._assignments.HasAssignments(item.Key) == hasPipeline.Value)
-                    && (pipelineId is null || this._assignments.Contains(item.Key, pipelineId)))
+                .Where(item => category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
+                .Select(item => (item.Key, State: item.Value, Assignment: this._assignments.GetSnapshot(item.Key)))
+                .Where(item => (hasPipeline is null || (item.Assignment.PipelineIds.Length > 0) == hasPipeline.Value)
+                    && (pipelineId is null || item.Assignment.PipelineIds.Contains(pipelineId, StringComparer.Ordinal))
+                    && (assignmentStatus is null || item.Assignment.Status == assignmentStatus))
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToArray();
             var offset = ((long)page - 1) * pageSize;
             IReadOnlyList<PackageState> items = offset >= matching.Length
                 ? []
-                : matching.Skip((int)offset).Take(pageSize).Select(item => item.Value).ToArray();
+                : matching.Skip((int)offset).Take(pageSize).Select(item => item.State with { AssignmentSnapshot = item.Assignment }).ToArray();
             cancellationToken.ThrowIfCancellationRequested();
             return (items, matching.Length);
         }
@@ -478,6 +481,8 @@ namespace DataCatalague.Api.Repositories
                 PackagesEvents.V1.SeverityUpdated evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.DetailedGeometryAdded evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.GeometryReplaced evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
+                PackagesEvents.V1.PackageDiscarded => this.HandleDecision(context.Stream.GetId(), true, context.GlobalPosition),
+                PackagesEvents.V1.PackageReopened => this.HandleDecision(context.Stream.GetId(), false, context.GlobalPosition),
                 DispatcherEvents.V1.Binded evt => this.HandleAssignment(evt.PackageId, evt.PipelineId, true, context.GlobalPosition),
                 DispatcherEvents.V1.Unbound evt => this.HandleAssignment(evt.PackageId, evt.PipelineId, false, context.GlobalPosition),
                 _ => EventHandlingStatus.Ignored,
@@ -487,6 +492,11 @@ namespace DataCatalague.Api.Repositories
 
         private EventHandlingStatus Handle_PackageCreated(PackagesEvents.V1.PackageCreated evt) {
             this._packages.TryAdd(evt.PackageId, new PackageState().When(evt));
+            return EventHandlingStatus.Handled;
+        }
+
+        private EventHandlingStatus HandleDecision(string packageId, bool discarded, ulong position) {
+            this._assignments.UpdateDecision(packageId, discarded, position);
             return EventHandlingStatus.Handled;
         }
 

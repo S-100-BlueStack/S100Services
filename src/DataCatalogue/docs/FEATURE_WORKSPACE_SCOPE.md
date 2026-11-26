@@ -71,6 +71,16 @@ binding's availability when the list is visible. Existing binding
 synchronization applies when bindings also change. Package-level comments
 and editable Discarded status remain COMMENT-03.
 
+## Discard reasons and editable Discarded
+
+The Workstreams Save toolbar starts with read-only Discard reasons and
+Discard/Reopen. Enter a fresh reason and submit from the Discard popup.
+Use the existing binding Save to remove any Workstreams first. Discard
+records the reason with the decision. Reopen is direct from the toolbar,
+or confirmed by the regular binding Save before assigning a newly selected
+Workstream. A Discarded Package remains editable. The Main Map remains
+membership-driven and its comment viewer stays binding-scoped.
+
 ## Package assignment page
 
 The four-panel page retains independent scrolling, draft navigation decisions,

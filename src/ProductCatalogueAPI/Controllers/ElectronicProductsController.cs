@@ -29,7 +29,7 @@ namespace ProductCatalogueAPI.Controllers
     [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!, IEncPackageRepository? packageRepository = null, IDashboardReportingRepository? dashboardReportingRepository = null) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!, IEncPackageRepository? packageRepository = null, IDashboardReportingRepository? dashboardReportingRepository = null, IProductIcEncDeliveryHistoryRepository? deliveryHistoryRepository = null) : ControllerBase
     {
         private const string AoiCacheKeyPrefix = "electronic-products-aoi";
         private static readonly TimeSpan AoiCacheLifetime = TimeSpan.FromHours(24);
@@ -743,14 +743,31 @@ namespace ProductCatalogueAPI.Controllers
         /// Get the history of a specific electronic product.
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
+        /// <param name="includeIcEncDeliveries">Whether to include IC-ENC delivery history for the configured workflow.</param>
+        /// <param name="specification">Exact electronic Product specification required when delivery history is requested.</param>
+        /// <param name="cancellationToken">Cancellation for the optional delivery history read.</param>
         /// <returns>The product.</returns>
         [ProducesResponseType(typeof(ProductHistoryEnvelope), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("{name}/history", Name = "GetElectronicProductHistory")]
-        public async Task<IActionResult> GetElectronicProductHistory(string name)
+        public async Task<IActionResult> GetElectronicProductHistory(string name,
+            [FromQuery] string? includeIcEncDeliveries = null, [FromQuery] string? specification = null,
+            CancellationToken cancellationToken = default)
         {
             var sw = Stopwatch.StartNew();
             var response = new ProductHistoryEnvelope();
+            var includeDeliveries = false;
+            var query = HttpContext?.Request.Query;
+            if ((query?.TryGetValue(nameof(includeIcEncDeliveries), out var rawOptIn) == true && rawOptIn.Count != 1)
+                || ((includeIcEncDeliveries is not null || query?.ContainsKey(nameof(includeIcEncDeliveries)) == true)
+                    && !bool.TryParse(includeIcEncDeliveries, out includeDeliveries)))
+                return BadRequest(new ApiResponse { Success = false, Message = "Invalid IC-ENC History option." });
+
+            if (includeDeliveries && (specification is not ("S57" or "S101")
+                || (query?.TryGetValue(nameof(specification), out var rawSpecification) == true && rawSpecification.Count != 1)))
+                return BadRequest(new ApiResponse { Success = false, Message = "IC-ENC History requires S57 or S101." });
+
+            if (includeDeliveries) cancellationToken.ThrowIfCancellationRequested();
             var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
 
             if (electronicProduct == null)
@@ -799,9 +816,41 @@ namespace ProductCatalogueAPI.Controllers
                     .Select(ProductHistoryEventResponse.FromRecord).ToArray();
                 response.EventTotalHits = response.Events.Length;
             }
+            if (includeDeliveries)
+                response.IcEncDeliveries = await ReadIcEncDeliveryHistoryAsync(name,
+                    electronicProduct.datasetName ?? name, specification!, cancellationToken);
+
             response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);
+        }
+
+        private async Task<ProductIcEncDeliveryHistoryResponse> ReadIcEncDeliveryHistoryAsync(
+            string requestedName, string resolvedName, string specification, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var exactProduct = _electronicProductManager.ElectronicProduct(requestedName, specification);
+                var owner = exactProduct?.datasetName?.Trim();
+                if (deliveryHistoryRepository is not null && owner is { Length: > 0 and <= 64 }
+                    && string.Equals(owner, requestedName.Trim(), StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(exactProduct?.productSpecification?.name?.Replace("-", string.Empty).Trim().ToUpperInvariant(),
+                        specification, StringComparison.Ordinal))
+                {
+                    var history = await deliveryHistoryRepository.GetAsync(owner, specification,
+                        artifactId => Url?.Action(nameof(DownloadValidationArtifact), new { name = owner, artifactId })
+                            ?? $"/electronicproducts/{Uri.EscapeDataString(owner)}/artifacts/{artifactId:D}", cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return history;
+                }
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _logger.LogWarning("IC-ENC delivery History could not be loaded ({FailureType}).", error.GetType().Name);
+            }
+            return ProductIcEncDeliveryHistoryResponse.Unavailable(resolvedName, specification);
         }
 
         private static DashboardActivityResponse ToDashboardActivity(ProductRecord record)

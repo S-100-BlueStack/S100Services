@@ -1,3 +1,4 @@
+import { isPackageOperationId } from "./packageComments.js";
 import { normalizeSeverity } from "../domain/severity.js";
 import { hasBindingCommentText } from "./bindingComments.js";
 
@@ -9,6 +10,8 @@ const EVENT_TYPES = new Set([
   "pipelineAssigned",
   "pipelineUnassigned",
   "bindingCommentAdded",
+  "packageDiscarded",
+  "packageReopened",
 ]);
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$/;
@@ -51,14 +54,20 @@ export function normalizePackageHistoryPage(value, packageId, pageSize, before) 
     seen.add(id.toLowerCase());
     const pipelineId = optionalText(item.pipelineId);
     const pipelineName = optionalText(item.pipelineName);
-    const isComment = item.eventType === "bindingCommentAdded";
-    const isBinding =
-      isComment || ["pipelineAssigned", "pipelineUnassigned"].includes(item.eventType);
+    const isComment = ["bindingCommentAdded", "packageDiscarded"].includes(item.eventType);
+    const isOperation = ["packageDiscarded", "packageReopened"].includes(item.eventType);
+    const isBinding = ["bindingCommentAdded", "pipelineAssigned", "pipelineUnassigned"].includes(
+      item.eventType
+    );
     const commentText = item.commentText ?? null;
     const actor = optionalText(item.actor);
     const severity = normalizeSeverity(item.severity);
     if (
       (isComment ? !hasBindingCommentText(commentText) || !actor : commentText !== null) ||
+      (isOperation &&
+        (!actor ||
+          !isPackageOperationId(item.operationId) ||
+          item.operationId.toLowerCase() === id.toLowerCase())) ||
       isBinding !== Boolean(pipelineId) ||
       (!pipelineId && pipelineName) ||
       (item.eventType === "severityUpdated") !== (severity !== null)
@@ -74,6 +83,7 @@ export function normalizePackageHistoryPage(value, packageId, pageSize, before) 
       pipelineName,
       severity,
       ...(isComment ? { commentText } : {}),
+      ...(isOperation ? { operationId: item.operationId.toLowerCase() } : {}),
     };
   });
   const nextBefore = value.nextBefore?.toLowerCase() ?? null;

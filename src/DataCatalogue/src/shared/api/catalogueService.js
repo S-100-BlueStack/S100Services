@@ -1,3 +1,10 @@
+import {
+  isPackageOperationId,
+  normalizePackageCommentPage,
+  normalizePackageOperation,
+  operationText,
+  PACKAGE_STATUS_LABELS,
+} from "./packageComments.js";
 import { normalizeSeverity } from "../domain/severity.js";
 import { normalizePackageGeometry } from "./packageGeometry.js";
 import { normalizePackageAssignmentSummary } from "./packageAssignmentSummary.js";
@@ -6,6 +13,7 @@ import { normalizePackageHistoryPage, validateHistoryRequest } from "./packageHi
 import { normalizeActorProfile, validateProfileRequest } from "./actorProfile.js";
 import {
   BINDING_COMMENT_PAGE_SIZE,
+  hasBindingCommentText,
   normalizeBindingComment,
   normalizeBindingCommentAvailability,
   normalizeBindingCommentPage,
@@ -151,10 +159,24 @@ export function createCatalogueService(client) {
   const workspacePath = (pipelineId, workspaceId) =>
     `/v1/pipelines/${segment(pipelineId)}/workspaces/${segment(workspaceId)}`;
   return {
-    async packages({ page, pageSize, category, hasPipeline, pipelineId, signal } = {}) {
+    async packages({
+      page,
+      pageSize,
+      category,
+      hasPipeline,
+      pipelineId,
+      assignmentStatus,
+      signal,
+    } = {}) {
       return normalizePage(
         await client.request("/v1/packages", {
-          query: { ...paging({ page, pageSize }), category, hasPipeline, pipelineId },
+          query: {
+            ...paging({ page, pageSize }),
+            category,
+            hasPipeline,
+            pipelineId,
+            ...(assignmentStatus ? { assignmentStatus } : {}),
+          },
           signal,
         }),
         normalizePackage
@@ -188,6 +210,44 @@ export function createCatalogueService(client) {
       );
       if (item.id !== id) throw new Error("API returned a different Package identity.");
       return item;
+    },
+    async packageComments(id, { pageSize = 50, before = null, signal } = {}) {
+      validateHistoryRequest(pageSize, before);
+      return normalizePackageCommentPage(
+        await client.request(`/v1/packages/${segment(id)}/comments`, {
+          query: { pageSize, before },
+          signal,
+        }),
+        id,
+        pageSize,
+        before
+      );
+    },
+    async savePackageOperation(id, operation, { signal } = {}) {
+      const { kind, id: operationId } = operation;
+      if (!isPackageOperationId(operationId) || !["discardReason", "reopen"].includes(kind)) {
+        throw new Error("Invalid Package operation.");
+      }
+      if (kind !== "reopen" && !hasBindingCommentText(operation.text)) {
+        throw new Error("Supply a new Package comment of 1 to 4000 characters.");
+      }
+      const text = operationText(operation);
+      const result = normalizePackageOperation(
+        await client.request(`/v1/packages/${segment(id)}/discarded`, {
+          method: "PUT",
+          body: { operationId, discarded: kind === "discardReason", reason: text },
+          signal,
+        })
+      );
+      if (
+        result.id !== operationId.toLowerCase() ||
+        result.kind !== kind ||
+        result.text !== text ||
+        !Object.hasOwn(PACKAGE_STATUS_LABELS, result.assignmentStatus)
+      ) {
+        throw new Error("API acknowledged a different Package operation.");
+      }
+      return result;
     },
     async packageHistory(id, { pageSize = 50, before = null, signal } = {}) {
       validateHistoryRequest(pageSize, before);

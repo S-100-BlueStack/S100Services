@@ -90,15 +90,21 @@ namespace DataCatalague.Api.Controllers
         /// <param name="page">One-based page number, default 1.</param>
         /// <param name="pageSize">Number of packages per page, from 1 to 200; default 20.</param>
         /// <param name="pipelineId">Optional exact pipeline ID; combined with the other filters.</param>
-        /// <param name="hasPipeline">Optional: true for assigned packages, false for unassigned, or omitted for both.</param>
+        /// <param name="hasPipeline">Optional: true for packages with active bindings, false for packages without active bindings.</param>
+        /// <param name="assignmentStatus">Optional exact effective assignment status, intersected with the other filters.</param>
         /// <param name="cancellationToken">Cancels the spatial query and metadata listing.</param>
         /// <returns>Matching packages in ordinal catalogue identifier order and the total count before pagination.</returns>
         [HttpGet]
         [ProducesResponseType<PagedResponse<PackageResponse>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null, [FromQuery, StringLength(16384)] string? geometry = null, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize, [FromQuery] bool? hasPipeline = null, [FromQuery] string? pipelineId = null) {
+        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null, [FromQuery, StringLength(16384)] string? geometry = null, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize, [FromQuery] bool? hasPipeline = null, [FromQuery] string? pipelineId = null, [FromQuery] string? assignmentStatus = null) {
+            if (this.Request.Query.TryGetValue(nameof(assignmentStatus), out var statusFilter) &&
+                (statusFilter.Count != 1 || assignmentStatus is not ("assigned" or "notAssigned" or "discarded"))) {
+                this.ModelState.AddModelError(nameof(assignmentStatus), "Supply assigned, notAssigned or discarded.");
+                return this.ValidationProblem(this.ModelState);
+            }
             try {
-                var result = await this._packageRepository.GetPackagesAsync(category, cancellationToken, geometry, page, pageSize, hasPipeline, pipelineId);
+                var result = await this._packageRepository.GetPackagesAsync(category, cancellationToken, geometry, page, pageSize, hasPipeline, pipelineId, assignmentStatus);
                 return this.Ok(new PagedResponse<PackageResponse> {
                     Items = [.. result.Items.Select(Map)],
                     Page = page,
@@ -261,19 +267,23 @@ namespace DataCatalague.Api.Controllers
             });
         }
 
-        private PackageResponse Map(Domain.PackageState state) => new() {
-            Id = state.Id,
-            Category = state.Category,
-            FileName = state.FileName,
-            AbsoluteUri = state.AbsoluteUri?.Scheme == "database" ? state.AbsoluteUri.GetLeftPart(UriPartial.Authority) : state.AbsoluteUri?.AbsolutePath,
-            Severity = state.Severity,
-            MetaData = state.MetaData,
-            Descriptions = state.Descriptions,
-            Charts = state.Charts,
-            DisplayScale = state.DisplayScale,
-            LastUpdatedUtc = state.LastUpdatedUtc,
-            PipelineBindings = assignments.GetPipelines(state.Id!.Value).Select(pipelineId => new PackagePipelineBindingResponse($"{state.Id.Value}::{pipelineId}", pipelineId)).ToArray(),
-        };
+        private PackageResponse Map(Domain.PackageState state) {
+            var assignment = state.AssignmentSnapshot ?? assignments.GetSnapshot(state.Id!.Value);
+            return new() {
+                Id = state.Id,
+                Category = state.Category,
+                FileName = state.FileName,
+                AbsoluteUri = state.AbsoluteUri?.Scheme == "database" ? state.AbsoluteUri.GetLeftPart(UriPartial.Authority) : state.AbsoluteUri?.AbsolutePath,
+                Severity = state.Severity,
+                MetaData = state.MetaData,
+                Descriptions = state.Descriptions,
+                Charts = state.Charts,
+                DisplayScale = state.DisplayScale,
+                LastUpdatedUtc = state.LastUpdatedUtc,
+                AssignmentStatus = assignment.Status,
+                PipelineBindings = assignment.PipelineIds.Select(pipelineId => new PackagePipelineBindingResponse($"{state.Id.Value}::{pipelineId}", pipelineId)).ToArray(),
+            };
+        }
 
     }
 }

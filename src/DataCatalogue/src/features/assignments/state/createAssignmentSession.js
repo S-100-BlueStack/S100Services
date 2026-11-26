@@ -1,9 +1,11 @@
 import {
   assignmentDraftError,
+  directDecisionBlock,
   createDraft,
   isDirty,
   rebaseDraftBindings,
 } from "../domain/assignmentDraft.js";
+import { hasBindingCommentText, trimBindingComment } from "../../../shared/api/bindingComments.js";
 import { confirmedBindingCommentIds } from "../domain/confirmedBindingComments.js";
 
 export function createAssignmentSession({ services }) {
@@ -15,6 +17,9 @@ export function createAssignmentSession({ services }) {
   let commentRequest = null;
   let savedPackageId = null;
   const supportsComments = typeof services.assignments?.loadComments === "function";
+  const supportsPackageOperations = typeof services.assignments?.packageComments === "function";
+  let pendingDecision = null;
+  let packageCommentRevision = 0;
   let commentHistory = null;
   let state = {
     feature: null,
@@ -34,6 +39,8 @@ export function createAssignmentSession({ services }) {
     return {
       ...structuredClone(state),
       commentHistory,
+      packageCommentRevision,
+      pendingDecision: pendingDecision && { ...pendingDecision },
       saveConfirmed: savedPackageId !== null && savedPackageId === state.feature?.id,
     };
   }
@@ -96,9 +103,14 @@ export function createAssignmentSession({ services }) {
     commentHistory: comments,
     confirmedCommentIds = [],
     pendingCommentIds = [],
+    confirmedPackageIds = [],
+    pendingPackageIds = [],
   }) {
     if (record) {
-      if (supportsComments && state.draft.comments.length) {
+      if (pendingDecision) {
+        // A direct decision owns a clean draft. Concurrent bindings become saved context, not removals.
+        state.draft.activeIds = createDraft(record).activeIds;
+      } else if (state.draft.comments.length || state.draft.decision) {
         state.draft.activeIds = rebaseDraftBindings(
           createDraft(record).activeIds,
           state.draft.activeIds,
@@ -108,6 +120,16 @@ export function createAssignmentSession({ services }) {
       state.record = record;
     }
     if (comments) publishCommentHistory(comments);
+    if (pendingDecision && confirmedPackageIds.includes(pendingDecision.id)) {
+      if (pendingDecision.kind === "discardReason") packageCommentRevision++;
+      pendingDecision = null;
+    }
+    const decision = state.draft.decision;
+    if (decision && confirmedPackageIds.includes(decision.id)) {
+      delete state.draft.decision;
+    } else if (decision && pendingPackageIds.includes(decision.id)) {
+      decision.awaitingConfirmation = true;
+    }
     state.draft.comments = state.draft.comments
       .filter((comment) => !confirmedCommentIds.includes(comment.id))
       .map((comment) =>
@@ -122,7 +144,7 @@ export function createAssignmentSession({ services }) {
   }
 
   function select(id) {
-    if (!alive || state.saving || state.dirty || state.reconciliationRequired)
+    if (!alive || state.saving || state.dirty || state.reconciliationRequired || pendingDecision)
       return Promise.resolve(false);
     if (pendingSelection?.id === id) return pendingSelection.promise;
 
@@ -142,6 +164,19 @@ export function createAssignmentSession({ services }) {
     ])
       .then(([feature, record]) => {
         if (!alive || current !== generation) return false;
+        if (supportsPackageOperations) {
+          const bound = Object.keys(record.relations);
+          if (
+            feature.assignmentStatus &&
+            (feature.pipelineIds.length !== bound.length ||
+              !bound.every((pipelineId) => feature.pipelineIds.includes(pipelineId)))
+          ) {
+            throw new Error(
+              "Package status or Workstream bindings changed during selection. Reload the Package."
+            );
+          }
+          record.assignmentStatus = feature.assignmentStatus ?? null;
+        }
         state = {
           feature,
           record,
@@ -179,6 +214,7 @@ export function createAssignmentSession({ services }) {
   }
 
   function save() {
+    if (pendingDecision) return Promise.resolve(false);
     if (pendingSave) return pendingSave;
     if (!editable() || state.reconciliationRequired) return Promise.resolve(false);
     if (!state.dirty) return Promise.resolve(!state.error);
@@ -198,8 +234,8 @@ export function createAssignmentSession({ services }) {
       .then(() => services.assignments.save(id, payload, { baselineActiveIds }))
       .then((record) => {
         if (!alive || generation !== current) return false;
-        const { commentHistory: comments, ...bindingState } = record;
-        updateSavedState({ record: bindingState, commentHistory: comments });
+        const { commentHistory: comments, confirmedPackageIds, ...bindingState } = record;
+        updateSavedState({ record: bindingState, commentHistory: comments, confirmedPackageIds });
         state.draft = createDraft(bindingState);
         state.reconciliationRequired = false;
         if (!comments && supportsComments) void refreshComments();
@@ -228,14 +264,68 @@ export function createAssignmentSession({ services }) {
     return pendingSave;
   }
 
+  function changePackageDecision(kind, text = "") {
+    if (
+      pendingSave ||
+      !alive ||
+      !services.assignments.changeDecision ||
+      directDecisionBlock(state) ||
+      kind !== (state.record.assignmentStatus === "discarded" ? "reopen" : "discardReason") ||
+      (kind === "discardReason" && !hasBindingCommentText(text)) ||
+      (pendingDecision && pendingDecision.kind !== kind)
+    )
+      return Promise.resolve(false);
+
+    const operation = pendingDecision ?? {
+      id: crypto.randomUUID(),
+      kind,
+      text: kind === "discardReason" ? trimBindingComment(text) : "",
+    };
+    pendingDecision = operation;
+    const current = generation;
+    const packageId = state.feature.id;
+    savedPackageId = null;
+    state.saving = true;
+    state.error = "";
+
+    pendingSave = Promise.resolve()
+      .then(() => services.assignments.changeDecision(packageId, operation))
+      .then((result) => {
+        if (!alive || generation !== current) return false;
+        updateSavedState(result);
+        return true;
+      })
+      .catch((error) => {
+        if (!alive || generation !== current) return false;
+        updateSavedState(error);
+        state.reconciliationRequired = Boolean(error.requiresReconciliation);
+        if (state.reconciliationRequired) operation.awaitingConfirmation = true;
+        else pendingDecision = null;
+        state.error = error.message;
+        return false;
+      })
+      .finally(() => {
+        pendingSave = null;
+        if (alive && generation === current) {
+          state.saving = false;
+          emit();
+        }
+      });
+    emit();
+    return pendingSave;
+  }
+
   function reconcile() {
     if (pendingSave) return pendingSave;
-    if (!editable() || !state.reconciliationRequired || !state.feature)
+    if (!editable() || (!state.reconciliationRequired && !pendingDecision) || !state.feature)
       return Promise.resolve(false);
 
     const current = generation;
     const id = state.feature.id;
     const awaiting = state.draft.comments.filter((comment) => comment.awaitingConfirmation);
+    const awaitingPackageOperations = [pendingDecision, state.draft.decision].filter(
+      (operation) => operation?.awaitingConfirmation
+    );
     const baselineActiveIds = createDraft(state.record).activeIds;
     state.saving = true;
     state.error = "";
@@ -246,20 +336,26 @@ export function createAssignmentSession({ services }) {
         (services.assignments.reconcile ?? services.assignments.load)(id, {
           includeComments: awaiting.length > 0,
           awaitingComments: awaiting,
+          ...(awaitingPackageOperations.length ? { awaitingPackageOperations } : {}),
           baselineActiveIds,
         })
       )
-      .then(({ commentHistory: comments, ...record }) => {
+      .then(({ commentHistory: comments, confirmedPackageIds, ...record }) => {
         if (!alive || generation !== current) return false;
         updateSavedState({
           record,
           commentHistory: comments,
           confirmedCommentIds: confirmedBindingCommentIds(awaiting, comments ?? []),
+          confirmedPackageIds,
         });
         state.reconciliationRequired = false;
-        state.error = comments
-          ? "Saved bindings and comments reloaded. Review any remaining drafts before another Save."
-          : "Saved bindings reloaded. Review your draft before another Save. A timed-out request may still complete on the server.";
+        state.error = awaitingPackageOperations.length
+          ? pendingDecision
+            ? "No matching decision found. Retry the same decision or check again."
+            : "Saved Package status and decisions reloaded."
+          : comments
+            ? "Saved bindings and comments reloaded. Review any remaining drafts before another Save."
+            : "Saved bindings reloaded. Review your draft before another Save. A timed-out request may still complete on the server.";
         return true;
       })
       .catch((error) => {
@@ -283,11 +379,14 @@ export function createAssignmentSession({ services }) {
     select,
     save,
     reconcile,
+    changePackageDecision,
     refreshComments,
     abandonUncertainDraft() {
-      if (!alive || state.saving || !state.reconciliationRequired) return false;
+      if (!alive || state.saving || (!state.reconciliationRequired && !pendingDecision))
+        return false;
       // This discards only the browser draft. A timed-out server mutation may still complete.
       generation++;
+      pendingDecision = null;
       cancelCommentRead();
       commentHistory = null;
       savedPackageId = null;
@@ -312,13 +411,23 @@ export function createAssignmentSession({ services }) {
       return () => listeners.delete(listener);
     },
     setAssigned(id, active) {
-      if (!editable()) return;
+      if (!editable() || pendingDecision) return;
+      if (active && state.record.assignmentStatus === "discarded" && !state.draft.decision) {
+        state.draft.decision = { id: crypto.randomUUID(), kind: "reopen", text: "" };
+      }
       state.draft.activeIds = state.draft.activeIds.filter((value) => value !== id);
       if (active) state.draft.activeIds.push(id);
+      if (
+        !state.draft.activeIds.length &&
+        state.draft.decision?.kind === "reopen" &&
+        !state.draft.decision.awaitingConfirmation
+      )
+        delete state.draft.decision;
       emit();
     },
     addComment(workStreamId) {
-      if (!editable() || !state.draft.activeIds.includes(workStreamId)) return false;
+      if (!editable() || pendingDecision || !state.draft.activeIds.includes(workStreamId))
+        return false;
       state.draft.comments.push({
         id: crypto.randomUUID(),
         workStreamId,
@@ -349,7 +458,8 @@ export function createAssignmentSession({ services }) {
       }
     },
     clear() {
-      if (!alive || state.saving || state.dirty || state.reconciliationRequired) return false;
+      if (!alive || state.saving || state.dirty || state.reconciliationRequired || pendingDecision)
+        return false;
       generation++;
       pendingSelection = null;
       cancelCommentRead();

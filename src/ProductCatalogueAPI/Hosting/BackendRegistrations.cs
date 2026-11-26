@@ -68,6 +68,7 @@ public static class BackendRegistrations
         services.AddScoped<IcEncAcknowledgementService>();
         services.AddValidationEmailProcessing(configuration, processProfile.RunsHangfireServer);
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
+        services.AddScoped<IProductIcEncDeliveryHistoryRepository, ProductIcEncDeliveryHistoryRepository>();
         services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
         services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
 
