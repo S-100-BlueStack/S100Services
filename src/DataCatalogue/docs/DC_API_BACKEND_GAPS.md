@@ -17,13 +17,13 @@ proposals.
 
 ## COMMENT-02 - Binding-scoped Main Map read contracts
 
-Candidate v2 supplies binding-pair availability and filtered comment pages
+Accepted COMMENT-02 v2 supplies binding-pair availability and filtered comment pages
 with the actual History event UUID. An older API without the pair contract or
 the scoped response cannot establish presence or absence for Main Map. A
 scoped comment page without the optional event UUID can still show text and
-the recorded account. Local Windows API, browser and directory acceptance are
-pending. COMMENT-03 still requires Package-level comments and editable
-Discarded contracts. Durable retention remains an event-store concern.
+the recorded account. COMMENT-03 v2 adds editable Discarded and read-only
+reason history in its candidate. The new runtime paths require local
+Windows and browser acceptance. Durable retention remains an event-store concern.
 
 ## COMMENT-01 - Binding comments
 

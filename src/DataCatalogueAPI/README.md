@@ -73,6 +73,15 @@ Comment GET items retain the committed `historyEventId` for the Profile route.
 Comment `id`, the cursor and POST acknowledgment retain their original operation
 UUID behavior. See the [COMMENT-02 contract](../DataCatalogue/docs/BACKEND_CONTRACTS.md#comment-02---main-map-binding-comment-reads).
 
+## Discard reasons and editable Discarded
+
+Use `GET /api/v1/packages/{id}/comments` to read retained Discard reasons and
+`PUT /api/v1/packages/{id}/discarded` to discard or reopen. One event records
+each Discard with its fresh required reason. Active bindings prevent Discard.
+A discarded Package must be reopened before bind/restore. List
+`assignmentStatus` composes with legacy `hasPipeline`.
+See the [wire contract](../DataCatalogue/docs/BACKEND_CONTRACTS.md#comment-03---package-discard-decisions-and-reasons).
+
 ## Read individual Package history
 
 `GET /api/v1/packages/{id}/history` returns actual committed Package and binding

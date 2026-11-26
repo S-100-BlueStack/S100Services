@@ -289,6 +289,19 @@ private Calcite selectors or a copied ProductCatalogue stylesheet.
 
 ---
 
+## COMMENT-03 - Discard reasons and actions
+
+Native controls at the left of the existing Assignment Save toolbar open
+read-only reasons or an anchored Discard popup with Cancel and Discard.
+The speech bubble uses a public Calcite icon. The native top layer avoids
+the panel clip and keeps the textarea and focus handling local to the popup.
+Existing binding Save and binding comment editors keep their interaction.
+The read-only popup uses one heading and no action row. Its rows show browser
+local time in fixed English format, then the recorded actor with an optional
+profile photo and the reason text. Only the outer popup scrolls when the
+available anchored space is too small. The heading receives focus on open,
+and when a focused Retry or Load older control disappears.
+
 ## COMMENT-02 - Binding comment popup
 
 The live card uses a native button with the public Calcite `speech-bubble`

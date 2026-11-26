@@ -27,9 +27,15 @@ integration details.
 - DC-MAIN-MAP-SYNC-01 was accepted at
   `7e82018e7f2608af86f3c1c27fde78d8135b0cee` and merged at
   `4b2e7b73f16140d25b99767032301d0e73bfcb5e`, as reported by the user.
-- COMMENT-02 v1 was rejected during local browser acceptance. V2 is a
-  binding-scoped candidate awaiting local frontend and backend acceptance.
-  COMMENT-03 and functional Compilation/QC remain deferred.
+- COMMENT-02 v2 passed local testing and was committed at
+  `7678ace5a49df95da19a37f7738ce85be53b4cdb`, as reported by the user.
+- COMMENT-03 v1 was rejected. The user reported functional browser acceptance
+  of v2 on 2026-11-26. V3 is a presentation candidate for the Discard reasons
+  viewer. V3 browser acceptance, the full post-format frontend gate, and the
+  Windows/ArcGIS backend gate are pending. No v2 commit was reported.
+- Next: DC-DETAILED-POINT-LABELS-01, sequential point labels 1..n in Detailed
+  View in authoritative source coordinate order. Verify series and reset
+  semantics before implementation. Functional Compilation/QC remains deferred.
   The accepted Main Map preview exposes mode selection only. Persistent contextual
   status, archived Package discovery and prospective Workspace matching remain
   separate tasks.
@@ -97,21 +103,15 @@ The verification notes below describe the original candidate delivery.
 
 ## Package comment and assignment status follow-ups (2026-11-25)
 
-- **COMMENT-02:** v2 candidate at baseline
-  `4b2e7b73f16140d25b99767032301d0e73bfcb5e`. V1 was rejected for opening an
-  in-flow card and aggregating availability and text across Workstreams. V2
-  anchors the popup to its initiating button and scopes text and availability
-  to the exact Package–Pipeline binding. Optional profiles still use the actual
-  History event UUID. Local Windows/ArcGIS and browser acceptance are pending.
-- **COMMENT-03 - Package comments and third assignment status:** support Package-level
-  comments independent of Workstream bindings. Add an assignment-level
-  decision labeled **Discarded** beside **Assigned** and **Not assigned** for
-  a Package that needs no chart work. Persist the decision and comment or reason
-  through the backend once the contract is agreed. A **Discarded** Package
-  remains editable and can later be commented on or assigned. Existing
-  contextual **Done** and **No update** actions remain separate. Coexistence with
-  active bindings, status precedence, allowed transitions, Main Map inclusion
-  and filter behavior are pending agreement.
+- **COMMENT-02:** locally accepted at
+  `7678ace5a49df95da19a37f7738ce85be53b4cdb`. V1 was rejected for opening an
+  in-flow card and aggregating across Workstreams. The accepted V2 popup
+  anchors to its button and uses exact Package–Pipeline binding scope.
+- **COMMENT-03:** v2 passed functional browser acceptance on the COMMENT-02
+  baseline. Discard submits from its popup with a fresh required reason. Reopen
+  is direct or confirmed before a regular binding Save. V1's standalone
+  writing and staged Discard were rejected. V3 keeps the read-only viewer
+  compact and displays its timestamps in the browser's local time zone.
 
 ## COMMENT-01 - Workstream binding comments (2026-11-25)
 

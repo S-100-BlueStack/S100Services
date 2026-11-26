@@ -213,7 +213,11 @@ export function createPipelineRow(pipeline, session) {
 
   function updateControls() {
     checkbox.checked = isActive();
-    checkbox.disabled = !currentState?.feature || currentState.loading || currentState.saving;
+    checkbox.disabled =
+      !currentState?.feature ||
+      currentState.loading ||
+      currentState.saving ||
+      Boolean(currentState.pendingDecision);
     const draft = draftComment();
     comment.disabled = !canOpen();
     comment.classList.toggle(

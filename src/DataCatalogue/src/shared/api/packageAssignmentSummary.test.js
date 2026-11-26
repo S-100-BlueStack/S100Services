@@ -18,16 +18,32 @@ test("active Pipeline bindings produce assigned status without Workspace interse
   );
 });
 
-test("explicitly empty bindings mean Not assigned", () => {
+test("empty bindings require authoritative status to distinguish Not assigned from Discarded", () => {
   assert.deepEqual(
     normalizePackageAssignmentSummary({ hasPipeline: false, pipelineBindings: [] }),
-    { status: "Not assigned", pipelineIds: [] }
+    { status: null, pipelineIds: [] }
   );
+  for (const [assignmentStatus, status] of [
+    ["notAssigned", "Not assigned"],
+    ["discarded", "Discarded"],
+  ]) {
+    assert.deepEqual(
+      normalizePackageAssignmentSummary({
+        hasPipeline: false,
+        pipelineBindings: [],
+        assignmentStatus,
+      }),
+      { status, pipelineIds: [], assignmentStatus }
+    );
+  }
 });
 
 test("partial or contradictory binding summaries fail closed", () => {
   const bad = [
     { hasPipeline: true },
+    { hasPipeline: true, pipelineBindings: [binding("a")], assignmentStatus: "discarded" },
+    { hasPipeline: false, pipelineBindings: [], assignmentStatus: "assigned" },
+    { hasPipeline: false, pipelineBindings: [], assignmentStatus: "closed" },
     { pipelineBindings: [] },
     { hasPipeline: null, pipelineBindings: [] },
     { hasPipeline: false, pipelineBindings: [binding("a")] },

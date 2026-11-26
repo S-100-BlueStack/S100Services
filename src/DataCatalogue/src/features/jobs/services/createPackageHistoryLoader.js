@@ -10,6 +10,8 @@ const TITLES = Object.freeze({
   pipelineAssigned: "Workstream assigned",
   pipelineUnassigned: "Workstream unassigned",
   bindingCommentAdded: "Binding comment added",
+  packageDiscarded: "Package discarded",
+  packageReopened: "Package reopened",
 });
 
 function presentEvent(event) {

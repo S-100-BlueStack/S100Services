@@ -65,6 +65,17 @@ namespace DataCatalague.Api.Domain
             return Task.CompletedTask;
         }
 
+        public Task ChangeDiscarded(Guid operationId, bool discarded, string? reason, string actor) {
+            this.EnsureExists();
+            if (discarded) {
+                this.Apply(new V1.PackageDiscarded(operationId, reason!, actor, DateTimeOffset.UtcNow));
+            }
+            else {
+                this.Apply(new V1.PackageReopened(operationId, actor, DateTimeOffset.UtcNow));
+            }
+            return Task.CompletedTask;
+        }
+
         public async Task UpdateSeverity(
                     ulong Severity,
                     string? actor = null
@@ -72,6 +83,11 @@ namespace DataCatalague.Api.Domain
             this.EnsureExists();
             this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow, actor));
         }
+    }
+
+    internal sealed record PackageAssignmentSnapshot(string[] PipelineIds, bool Discarded)
+    {
+        public string Status => PipelineIds.Length > 0 ? "assigned" : Discarded ? "discarded" : "notAssigned";
     }
 
     public record PackageId(string Value) : Id(Value);
@@ -108,7 +124,14 @@ namespace DataCatalague.Api.Domain
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
+        public bool IsDiscarded { get; init; }
+
+        // Listing captures status and binding IDs once, before filtering and paging.
+        internal PackageAssignmentSnapshot? AssignmentSnapshot { get; init; }
+
         public PackageState() {
+            this.On<V1.PackageDiscarded>((state, _) => state with { IsDiscarded = true });
+            this.On<V1.PackageReopened>((state, _) => state with { IsDiscarded = false });
             this.On<V1.PackageCreated>(PackageCreated);
             this.On<V1.GeometryReplaced>((state, e) => state with { GeometryRef = e.Aoi, DetailedGeometry = e.Details, GeometryRequestHash = e.RequestHash, LastUpdatedUtc = e.UTC });
             this.On<V1.SeverityUpdated>((state, e) => state with { Severity = e.Severity, LastUpdatedUtc = e.UTC });
@@ -143,6 +166,8 @@ namespace DataCatalague.Api.Domain.Commands
         /// <summary>Replaces the complete geometry reference set of an existing package.</summary>
         public record ReplaceGeometry(string PackageId, string Aoi, DetailedGeometry Details, string? RequestHash = null, string? Actor = null);
 
+        public record ChangeDiscarded(string PackageId, Guid OperationId, bool Discarded, string? Reason, string Actor);
+
         public record UpdateSeverity(string PackageId, ulong Severity, string? Actor = null);
     }
 }
@@ -172,6 +197,19 @@ namespace DataCatalague.Api.Domain.Events
             /// <summary>The complete geometry reference set committed by a replacement request.</summary>
             [EventType("V1.GeometryReplaced")]
             public record GeometryReplaced(string Aoi, DetailedGeometry Details, DateTimeOffset UTC, string? RequestHash = null, string? Actor = null);
+
+            public interface IPackageOperation
+            {
+                Guid OperationId { get; }
+                string Actor { get; }
+                DateTimeOffset UTC { get; }
+            }
+
+            [EventType("V1.PackageDiscarded")]
+            public record PackageDiscarded(Guid OperationId, string Reason, string Actor, DateTimeOffset UTC) : IPackageOperation;
+
+            [EventType("V1.PackageReopened")]
+            public record PackageReopened(Guid OperationId, string Actor, DateTimeOffset UTC) : IPackageOperation;
 
             [EventType("V1.SeverityUpdated")]
             public record SeverityUpdated(

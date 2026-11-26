@@ -1,10 +1,14 @@
+import { PACKAGE_STATUS_LABELS } from "./packageComments.js";
+
 // The list response contains direct Pipeline bindings, not derived Workspace membership.
 export function normalizePackageAssignmentSummary(value) {
   const hasStatus = Object.hasOwn(value, "hasPipeline");
   const hasBindings = Object.hasOwn(value, "pipelineBindings");
 
   // Older servers must not silently turn unknown assignment state into Not assigned.
-  if (!hasStatus && !hasBindings) return { status: null, pipelineIds: null };
+  if (!hasStatus && !hasBindings && !Object.hasOwn(value, "assignmentStatus")) {
+    return { status: null, pipelineIds: null };
+  }
   if (typeof value.hasPipeline !== "boolean" || !Array.isArray(value.pipelineBindings)) {
     throw new Error("API returned an incomplete Package assignment summary.");
   }
@@ -28,8 +32,21 @@ export function normalizePackageAssignmentSummary(value) {
   if (value.hasPipeline !== pipelineIds.length > 0) {
     throw new Error("API returned inconsistent Package assignment status.");
   }
+  const assignmentStatus = Object.hasOwn(value, "assignmentStatus") ? value.assignmentStatus : null;
+  if (
+    Object.hasOwn(value, "assignmentStatus") &&
+    (!Object.hasOwn(PACKAGE_STATUS_LABELS, assignmentStatus) ||
+      (assignmentStatus === "assigned") !== value.hasPipeline)
+  ) {
+    throw new Error("API returned inconsistent Package assignment status.");
+  }
   return {
-    status: value.hasPipeline ? "Assigned" : "Not assigned",
+    status: assignmentStatus
+      ? PACKAGE_STATUS_LABELS[assignmentStatus]
+      : value.hasPipeline
+        ? "Assigned"
+        : null,
+    ...(assignmentStatus ? { assignmentStatus } : {}),
     pipelineIds,
   };
 }

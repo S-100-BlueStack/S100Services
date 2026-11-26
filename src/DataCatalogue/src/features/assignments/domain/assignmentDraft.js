@@ -1,9 +1,16 @@
+import { PACKAGE_STATUS_LABELS } from "../../../shared/api/packageComments.js";
 import {
   hasBindingCommentText,
   MAX_BINDING_COMMENT_LENGTH,
 } from "../../../shared/api/bindingComments.js";
 
 export function assignmentStatus(record) {
+  if (Object.hasOwn(record ?? {}, "assignmentStatus")) {
+    return (
+      PACKAGE_STATUS_LABELS[record.assignmentStatus] ??
+      (Object.keys(record.relations).length > 0 ? "Assigned" : "Unknown")
+    );
+  }
   return Object.values(record?.relations ?? {}).some((relation) => relation.active)
     ? "Assigned"
     : "Not assigned";
@@ -32,7 +39,8 @@ export function isDirty(record, draft) {
   const original = createDraft(record).activeIds.sort();
   return (
     JSON.stringify(original) !== JSON.stringify([...draft.activeIds].sort()) ||
-    draft.comments.length > 0
+    draft.comments.length > 0 ||
+    Boolean(draft.decision)
   );
 }
 
@@ -87,4 +95,20 @@ export function applyDraft(record, draft, { author, createdAt, createId }) {
   }
 
   return next;
+}
+
+export function directDecisionBlock(state) {
+  if (!state.feature || state.loading || state.selectionError) return "Select a loaded Package.";
+  if (state.saving || state.reconciliationRequired) return "Check saved changes first.";
+  if (state.dirty) return "Save or discard the Workstream draft first.";
+  if (!["assigned", "notAssigned", "discarded"].includes(state.record?.assignmentStatus)) {
+    return "Package assignment status is unavailable.";
+  }
+  if (
+    state.record.assignmentStatus === "assigned" ||
+    Object.values(state.record.relations ?? {}).some((relation) => relation.active)
+  ) {
+    return "Remove all Workstreams and save those changes first.";
+  }
+  return "";
 }

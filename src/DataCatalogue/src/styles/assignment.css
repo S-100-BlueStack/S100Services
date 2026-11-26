@@ -793,3 +793,80 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.dc-package-comment-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.dc-pipeline-comment__popover.dc-package-comment-popover {
+  position: fixed;
+  inset: auto;
+  width: min(19rem, calc(100vw - 1rem));
+  margin: 0;
+  overflow: auto;
+  color: var(--dc-text);
+}
+
+.dc-package-comment-popover h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+
+.dc-package-comment-popover .dc-package-comment-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.dc-package-comment-popover[data-mode="comments"] {
+  box-sizing: border-box;
+}
+
+.dc-package-comment-popover .dc-package-comment-controls[hidden] {
+  display: none;
+}
+
+.dc-package-comment-popover[data-mode="comments"] .dc-pipeline-comment__history {
+  max-height: none;
+  overflow: visible;
+}
+
+.dc-package-comment-popover[data-mode="comments"] ol {
+  margin: 0;
+}
+
+.dc-package-comment-popover[data-mode="comments"] li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dc-package-comment-popover[data-mode="comments"] p {
+  margin: 0;
+}
+
+.dc-package-comment-popover[data-mode="comments"] time {
+  display: block;
+  color: var(--dc-text-muted);
+}
+
+.dc-package-comment-attribution {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--dc-text-muted);
+}
+
+.dc-package-comment-attribution img {
+  width: 1.3rem;
+  height: 1.3rem;
+  object-fit: cover;
+}
+
+.dc-assignment-status.is-discarded {
+  color: var(--dc-text-muted);
+  border-color: var(--dc-border);
+}

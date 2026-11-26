@@ -19,6 +19,7 @@ namespace DataCatalague.Api.Repositories
         private readonly List<InMemoryAllStreamEvent> _global = [];
         private readonly Dictionary<string, HashSet<StreamName>> _packageBindingStreams = new(StringComparer.Ordinal);
 
+        private readonly Dictionary<Guid, StreamName> _packageOperationStreams = [];
         private readonly Dictionary<Guid, StreamName> _bindingCommentStreams = [];
 
         public InMemoryEventStore() {
@@ -124,6 +125,9 @@ namespace DataCatalague.Api.Repositories
                 // Index the stream identity, so lookup follows event-store retention.
                 this._bindingCommentStreams[comment.OperationId] = stream;
             }
+            if (streamEvent.Payload is PackagesEvents.V1.IPackageOperation operation) {
+                this._packageOperationStreams[operation.OperationId] = stream;
+            }
             var packageId = streamEvent.Payload switch {
                 DispatcherEvents.V1.Binded bound => bound.PackageId,
                 DispatcherEvents.V1.Unbound unbound => unbound.PackageId,
@@ -137,6 +141,35 @@ namespace DataCatalague.Api.Repositories
                 this._packageBindingStreams.Add(packageId, streams);
             }
             streams.Add(stream);
+        }
+
+        internal (StreamName Stream, StreamEvent Event)? ReadPackageOperation(Guid id, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (this._gate) {
+                if (!this._packageOperationStreams.TryGetValue(id, out var name) ||
+                    !this._storage.TryGetValue(name, out var stream)) { return null; }
+                var found = stream.FindPackageOperation(id);
+                return found is { } retained ? (name, retained) : null;
+            }
+        }
+
+        internal IReadOnlyList<StreamEvent>? ReadPackageStream(StreamName name, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (this._gate) {
+                return this._storage.TryGetValue(name, out var stream)
+                    ? stream.GetEvents(new StreamReadPosition(0), 0) : null;
+            }
+        }
+
+        internal bool HasActiveBinding(string packageId, CancellationToken cancellationToken) {
+            lock (this._gate) {
+                if (!this._packageBindingStreams.TryGetValue(packageId, out var names)) { return false; }
+                foreach (var name in names) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (this._storage.TryGetValue(name, out var stream) && stream.IsActiveBinding(packageId, cancellationToken)) { return true; }
+                }
+                return false;
+            }
         }
 
         internal DispatcherEvents.V1.BindingCommentAdded? ReadBindingComment(Guid operationId, CancellationToken cancellationToken) {
@@ -353,6 +386,25 @@ namespace DataCatalague.Api.Repositories
             }
 
             return appendedEvents;
+        }
+
+        public StreamEvent? FindPackageOperation(Guid id) {
+            for (var index = this._events.Count - 1; index >= 0; index--) {
+                var item = this._events[index].Event;
+                if (item.Payload is PackagesEvents.V1.IPackageOperation operation && operation.OperationId == id) { return item; }
+            }
+            return null;
+        }
+
+        public bool IsActiveBinding(string packageId, CancellationToken cancellationToken) {
+            for (var index = this._events.Count - 1; index >= 0; index--) {
+                cancellationToken.ThrowIfCancellationRequested();
+                switch (this._events[index].Event.Payload) {
+                    case DispatcherEvents.V1.Binded bound when bound.PackageId == packageId: return true;
+                    case DispatcherEvents.V1.Unbound unbound when unbound.PackageId == packageId: return false;
+                }
+            }
+            return false;
         }
 
         public DispatcherEvents.V1.BindingCommentAdded? FindBindingComment(Guid operationId)

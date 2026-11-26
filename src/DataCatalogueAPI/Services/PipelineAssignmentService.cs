@@ -50,7 +50,7 @@ public sealed class PipelineAssignmentService(InMemoryEventStore store, StreamNa
             streams.GetStreamName(new BindingId(bindingId)));
     }
 
-    private static readonly SemaphoreSlim MutationGate = new(1, 1);
+    internal static readonly SemaphoreSlim MutationGate = new(1, 1);
 
     /// <summary>Validates category defaults against saved pipeline streams and normalizes them to a distinct, sorted list.</summary>
     public async Task<string[]> ValidateAutomaticPipelineIdsAsync(IEnumerable<string> pipelineIds, CancellationToken cancellationToken) {
@@ -73,6 +73,8 @@ public sealed class PipelineAssignmentService(InMemoryEventStore store, StreamNa
         await MutationGate.WaitAsync(cancellationToken);
         try {
             if (!await store.StreamExists(streams.GetStreamName(new PackageId(packageId)), cancellationToken)) { throw new KeyNotFoundException("Package not found."); }
+            var package = await store.LoadState<PackageState, PackageId>(streams, new(packageId), true, cancellationToken);
+            if (package.State.IsDiscarded) { throw new PipelineAssignmentConflictException("Reopen the Package before assigning a Workstream."); }
             if (!await store.StreamExists(streams.GetStreamName(new PipelineId(pipelineId)), cancellationToken)) { throw new KeyNotFoundException("Pipeline not found."); }
             var id = $"{packageId}::{pipelineId}";
             var exists = await store.StreamExists(streams.GetStreamName(new BindingId(id)), cancellationToken);
@@ -140,6 +142,10 @@ public sealed class PipelineAssignmentService(InMemoryEventStore store, StreamNa
             }
 
             if (!binding.IsActive) { throw new PipelineAssignmentConflictException("The binding is inactive."); }
+
+            if (store.ReadPackageOperation(operationId, cancellationToken) is not null) {
+                throw new PipelineAssignmentConflictException("The operation ID belongs to a Package decision.");
+            }
 
             // The existing-state command also checks activity and appends with its expected stream version.
             var result = await commands.Handle(new DispatcherCommands.AddBindingComment(bindingId, operationId, trimmed, actor), cancellationToken);

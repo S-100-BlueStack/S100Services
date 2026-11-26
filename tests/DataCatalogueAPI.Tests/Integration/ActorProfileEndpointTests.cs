@@ -79,7 +79,11 @@ public sealed class ActorProfileEndpointTests(CatalogueFixture runtime)
         await app.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
         var commentsPath = $"/v1/packages/{package.Id}/binding-comments";
         var operationId = Guid.NewGuid();
-        await app.CreateAsync<BindingCommentResponse>(commentsPath, new { operationId, pipelineId = pipeline.Id, text = "Review" });
+        using var posted = await client.PostAsJsonAsync(commentsPath, new { operationId, pipelineId = pipeline.Id, text = "Review" });
+        Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
+        var receipt = await posted.Content.ReadFromJsonAsync<BindingCommentResponse>();
+        Assert.NotNull(receipt);
+        Assert.Equal(operationId, receipt.Id);
 
         var comment = Assert.Single((await client.GetFromJsonAsync<BindingCommentPageResponse>($"{commentsPath}?pipelineId={pipeline.Id}"))!.Items);
         Assert.NotNull(comment.HistoryEventId);

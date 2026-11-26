@@ -52,6 +52,8 @@ function fixture(pipelines, packages = ["shared"]) {
     intercept: null,
     continuation: new Map(),
     bindingComments: new Map(),
+    packageOperations: null,
+    discarded: new Set(),
   };
   const catalogue = createCatalogueService(
     createCatalogueClient({
@@ -61,6 +63,60 @@ function fixture(pipelines, packages = ["shared"]) {
         const number = Number(searchParams.get("page") ?? 1);
         const size = Number(searchParams.get("pageSize") ?? 200);
         const [, , , path, id, subresource, workspaceId, membership] = pathname.split("/");
+        if (
+          path === "packages" &&
+          state.packageOperations &&
+          ["comments", "discarded", "history"].includes(subresource)
+        ) {
+          const items = state.packageOperations.get(id) ?? [];
+          calls.push({ kind: `package-${subresource}`, method });
+          if (method === "GET") {
+            if (subresource === "history") {
+              return Response.json({
+                packageId: id,
+                items: items.map(
+                  ({
+                    id: operationId,
+                    historyEventId: id,
+                    eventType,
+                    actor,
+                    text,
+                    occurredAtUtc,
+                  }) => ({ id, operationId, eventType, actor, commentText: text, occurredAtUtc })
+                ),
+                nextBefore: null,
+              });
+            }
+            return Response.json({
+              packageId: id,
+              items: items.filter((item) => item.kind !== "reopen"),
+              nextBefore: null,
+            });
+          }
+          const value = JSON.parse(body);
+          assert.equal(subresource, "discarded");
+          assert.equal(method, "PUT");
+          if (state.decisionFailure === "reject")
+            return Response.json({ title: "Rejected" }, { status: 409 });
+          if (state.decisionFailure === "uncertain") throw new Error("Lost decision response");
+          const kind = value.discarded ? "discardReason" : "reopen";
+          if (kind === "discardReason") state.discarded.add(id);
+          else if (kind === "reopen") state.discarded.delete(id);
+          const item = {
+            id: value.operationId,
+            historyEventId: crypto.randomUUID(),
+            kind,
+            text: value.reason ?? null,
+            actor: "PROD\\reader",
+            occurredAtUtc: "2026-11-26T08:00:00Z",
+            eventType: value.discarded ? "packageDiscarded" : "packageReopened",
+          };
+          state.packageOperations.set(id, [item, ...items]);
+          return Response.json({
+            ...item,
+            assignmentStatus: state.discarded.has(id) ? "discarded" : "notAssigned",
+          });
+        }
         if (path === "packages" && id === "binding-comments" && subresource === "availability") {
           assert.equal(method, "POST");
           const { bindings } = JSON.parse(body);
@@ -178,7 +234,22 @@ function fixture(pipelines, packages = ["shared"]) {
         if (kind === "geometry") {
           return Response.json(page(state.packages.map(member), number, size));
         }
-        const detail = (id) => ({ id, metaData: { title: id }, severity: "9007199254740993" });
+        const detail = (id) => {
+          const item = { id, metaData: { title: id }, severity: "9007199254740993" };
+          if (!state.packageOperations) return item;
+          const pipelineBindings = Object.entries(state.pipelines)
+            .filter(([, rows]) =>
+              rows.some((row) => row.packages.items.some((entry) => entry.packageId === id))
+            )
+            .map(([pipelineId]) => ({ id: `${id}::${pipelineId}`, pipelineId }));
+          const hasPipeline = Boolean(pipelineBindings.length);
+          const assignmentStatus = hasPipeline
+            ? "assigned"
+            : state.discarded.has(id)
+              ? "discarded"
+              : "notAssigned";
+          return { ...item, pipelineBindings, hasPipeline, assignmentStatus };
+        };
         if (kind === "metadataList") {
           return Response.json(
             page(state.packages.slice(0, size).map(detail), number, size, state.packages.length)
@@ -733,4 +804,114 @@ test("COMMENT-02 transport counts preserve 29-Workspace startup, comment-only re
     unsubscribe();
     availability.destroy();
   }
+});
+
+test("COMMENT-03 direct decisions are quiet and actual binding changes use the existing Overview generation", async (t) => {
+  const f = fixture({ enc: [workspace("east", ["shared"])] }, ["shared", "unbound"]);
+  f.state.packageOperations = new Map();
+  const availability = createPackageCommentAvailability({
+    read: f.catalogue.bindingCommentAvailability,
+    onChange() {},
+  });
+  const unsubscribe = f.store.subscribe((snapshot) => {
+    if (snapshot.lastChange.type === JOB_STORE_CHANGE_TYPE.JOBS_LOADED && !snapshot.isLoading) {
+      availability.acceptJobs(snapshot.lastChange.sequence, snapshot.jobs);
+    }
+    availability.setContext({ visible: true, busy: snapshot.isLoading });
+  });
+  const session = f.newAssignmentSession(() =>
+    assert.fail("Package comments cannot invalidate binding availability")
+  );
+  const returnMainMap = async () => {
+    if (f.store.hasPendingMembershipRefresh()) {
+      const first = f.store.loadJobs({ cancelOnLeave: true });
+      assert.equal(f.store.loadJobs({ cancelOnLeave: true }), first);
+      assert.equal((await first).ok, true);
+    }
+  };
+
+  await f.store.loadJobs();
+  await session.select("unbound");
+  t.after(() => {
+    unsubscribe();
+    availability.destroy();
+    session.destroy();
+    f.store.destroy();
+  });
+  const checkQuietReturn = async (name) => {
+    await nextTurn();
+    f.calls.length = 0;
+    await returnMainMap();
+    assert.deepEqual(f.calls, []);
+    t.diagnostic(
+      `${name}: 0 Overview/membership/metadata/geometry/binding availability/Package API requests on return.`
+    );
+  };
+  function decisionTraffic(name) {
+    const counts = Object.fromEntries(
+      ["metadataDetail", "binding", "package-discarded", "package-history", "package-comments"].map(
+        (kind) => [kind, f.calls.filter((call) => call.kind === kind).length]
+      )
+    );
+    t.diagnostic(`${name} assignment window: ${JSON.stringify(counts)}.`);
+    return counts;
+  }
+
+  await checkQuietReturn("Unchanged");
+  assert.equal(await session.changePackageDecision("discardReason", "Fresh reason"), true);
+  assert.equal(session.snapshot().record.assignmentStatus, "discarded");
+  assert.equal(decisionTraffic("Direct unbound Discard")["package-discarded"], 1);
+  await checkQuietReturn("Discard unbound");
+  assert.equal(await session.changePackageDecision("reopen"), true);
+  assert.equal(decisionTraffic("Direct unbound Reopen")["package-discarded"], 1);
+  await checkQuietReturn("Reopen unbound");
+
+  f.state.decisionFailure = "reject";
+  assert.equal(await session.changePackageDecision("discardReason", "Rejected reason"), false);
+  decisionTraffic("Rejected Discard");
+  await checkQuietReturn("Rejected Discard");
+  f.state.decisionFailure = "uncertain";
+  assert.equal(await session.changePackageDecision("discardReason", "Uncertain reason"), false);
+  assert.equal(session.snapshot().reconciliationRequired, true);
+  assert.equal(await session.reconcile(), true);
+  assert.equal(decisionTraffic("Uncertain Discard and read-only check")["package-discarded"], 1);
+  await checkQuietReturn("Uncertain Discard and read-only check");
+  f.state.decisionFailure = null;
+  assert.equal(await session.changePackageDecision("discardReason", "Uncertain reason"), true);
+  decisionTraffic("Same-operation retry");
+  await checkQuietReturn("Same-operation retry");
+
+  async function checkBindingReturn(name, expectedPairs) {
+    f.calls.length = 0;
+    await returnMainMap();
+    await nextTurn();
+    const counts = summarize(f.calls);
+    assert.equal(counts.overview, 1);
+    assert.equal(counts.membership, 0);
+    assert.equal(
+      f.calls.some(({ kind }) => kind.startsWith("package-")),
+      false
+    );
+    const batch = f.calls.filter(({ kind }) => kind === "availability");
+    assert.equal(batch.length, 1);
+    assert.equal(batch[0].bindings.length, expectedPairs);
+    t.diagnostic(`${name}: ${JSON.stringify(counts)}, 1 binding availability batch.`);
+  }
+
+  session.setAssigned("enc", true);
+  assert.equal(await session.save(), true);
+  decisionTraffic("Reopen before binding Save");
+  await checkBindingReturn("Reopen plus binding Save", 2);
+
+  session.setAssigned("enc", false);
+  // The fixture's unbind response updates its active membership.
+  assert.equal(await session.save(), true);
+  assert.equal(
+    await session.changePackageDecision("discardReason", "After separate unbind Save"),
+    true
+  );
+  decisionTraffic("Binding unbind Save then direct Discard");
+  // The fixture removes all members of the unbound pipeline.
+  f.state.pipelines.enc = [workspace("east", ["shared"])];
+  await checkBindingReturn("Binding unbind Save then direct Discard", 1);
 });

@@ -34,6 +34,8 @@ namespace DataCatalague.Api.Models.V1
 
         /// <summary>True when the package has at least one active pipeline assignment.</summary>
         public bool HasPipeline => this.PipelineBindings.Count > 0;
+
+        public string AssignmentStatus { get; init; } = "notAssigned";
     }
 
     /// <summary>An active package-to-pipeline assignment without spatially derived workspace matches.</summary>

@@ -26,6 +26,11 @@ namespace DataCatalague.Api.Services.Commands
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details, cmd.RequestHash, cmd.Actor));
 
+            this.On<PackagesCommands.ChangeDiscarded>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.PackageId))
+                .ActAsync((package, cmd, _) => package.ChangeDiscarded(cmd.OperationId, cmd.Discarded, cmd.Reason, cmd.Actor));
+
             this.On<PackagesCommands.UpdateSeverity>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
