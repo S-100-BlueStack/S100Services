@@ -1,4 +1,5 @@
-import { getStatusName } from "../../data/stores/statusStore.js";
+import { getStatusIdByName, getStatusName } from "../../data/stores/statusStore.js";
+import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
 import { getUsageName } from "../../data/stores/usageStore.js";
 
 const EMPTY_LABEL = "(empty)";
@@ -28,6 +29,21 @@ export function formatStatusDisplayValue(status) {
   const statusName = getStatusName(lookupValue);
 
   return String(statusName ?? status);
+}
+
+// Source-owned display only: keep generic source values and the lookup store intact.
+export function resolveElectronicProductDisplayStatus(value) {
+  return (
+    normalizeElectronicProductStatus(value) ??
+    (typeof value === "string"
+      ? normalizeElectronicProductStatus(getStatusIdByName(value))
+      : undefined)
+  );
+}
+
+export function formatElectronicProductStatus(value) {
+  const id = resolveElectronicProductDisplayStatus(value);
+  return id === undefined ? "Unknown" : String(getStatusName(id));
 }
 
 export function formatUsageBandDisplayValue(usageBand) {

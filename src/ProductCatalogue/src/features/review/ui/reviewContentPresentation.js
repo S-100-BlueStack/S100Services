@@ -87,7 +87,7 @@ export function getReviewValidationPresentation(product = {}) {
     return createPresentation(
       REVIEW_CONTENT_PRESENTATION_STATE.UNAVAILABLE,
       "Unavailable",
-      "No validation reports found for this product."
+      "Validation reports are not available for this Product source."
     );
   }
 

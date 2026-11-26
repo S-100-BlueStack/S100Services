@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 import * as filters from "../domain/dashboardFilters.js";
 import * as query from "../domain/dashboardQuery.js";
 import * as range from "../domain/dashboardRange.js";
+import { normalizeDashboardPayload } from "../domain/dashboardActivity.js";
 
 function createEventTarget() {
   const handlers = new Map();
@@ -35,7 +36,7 @@ function payload(id, nextCursor = null) {
   };
 }
 
-async function createHarness() {
+async function createHarness(initialPayload = payload("initial", "next-page")) {
   const source = await readFile(new URL("initDashboardPage.js", import.meta.url), "utf8");
   const requests = [];
   const renders = [];
@@ -91,7 +92,7 @@ async function createHarness() {
     }
   );
   const initializing = init();
-  requests[0].resolve(payload("initial", "next-page"));
+  requests[0].resolve(initialPayload);
   const controller = await initializing;
   return {
     requests,
@@ -213,5 +214,24 @@ test("normal search typing coalesces; an older read cannot replace the immediate
   await older;
   assert.equal(h.latest().dashboard.activities[0].id, "search");
   assert.equal(h.latest().error, null);
+  h.controller.destroy();
+});
+
+test("a failed request retains the last good Activity rows and their filter options", async () => {
+  const initial = normalizeDashboardPayload({
+    Activities: [
+      { Id: "unclassified", Severity: "critical" },
+      { Id: "valid", Status: "failed" },
+    ],
+    FilterOptions: { Statuses: [{ Value: "failed", Label: "Failed" }] },
+  });
+  const h = await createHarness(initial);
+  h.emit("filter-change", { filters: { status: "failed" } });
+  assert.equal(h.requests.at(-1).state.filters.status, "failed");
+  h.requests.at(-1).reject(new Error("Dashboard offline"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.latest().dashboard, initial);
+  assert.equal(h.latest().dashboard.activities[0].status, null);
+  assert.match(h.latest().error, /Dashboard offline/);
   h.controller.destroy();
 });

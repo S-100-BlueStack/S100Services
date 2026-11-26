@@ -476,11 +476,11 @@ The Main-map package popup renders a dedicated **Package status** row from the c
 Graphic's normalized `workUnitStatus.packageStatus` (backend `Attributes.Package.Status`).
 `Ready` is the aggregate status, distinct from the S-101/S-57 Export Candidate state
 `ReadyForDistribution`. The two-member Product metadata table remains in registry order; its
-Status row contains the ProductState label and, when backend provides an error message,
-the same application-owned hover/focus/click detail trigger previously placed in an additional
-**Error message** row. The additional row is removed. Package-status Error shows the aggregate
-`Attributes.ErrorMessage` using the same trigger. Each member diagnostic uses that member's
-current `Package.S101` or `Package.S57` AOI observation.
+Status row contains the ProductState label, with `Unknown` for missing or unsupported electronic
+Product status. Each member diagnostic uses the same member's current `Package.S101` or
+`Package.S57` AOI observation. A verified Product Error or Rejected state keeps the error
+disclosure; other public messages open `Status details` through the same hover, focus and
+activation controls. The aggregate row uses the Package status domain and aggregate message.
 
 Only the source AOI/targeted-status refresh updates the map-owned aggregate, members, symbols and
 filters. Product-detail freshness does not rewrite map-owned status. An absent or unsupported

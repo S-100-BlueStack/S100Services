@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { createPopupProductMetadataColumns } from "./popupProductMetadata.js";
+import {
+  formatElectronicProductStatus,
+  resolveElectronicProductDisplayStatus,
+} from "../attributes/attributeDisplay.js";
 
 class TestNode {
   constructor(tagName = "div") {
@@ -54,6 +58,8 @@ async function loadPopupWithReadOnlyDependencies(graphicContext, actionCapture =
   const namespace = `__analyzeReadOnlyPopupTest${Math.random().toString(36).slice(2)}`;
   globalThis[namespace] = {
     createPopupProductMetadataColumns,
+    formatElectronicProductStatus,
+    resolveElectronicProductDisplayStatus,
     resolveProductContext: () => graphicContext,
     createPopupErrorDetails: () => ({
       createTrigger: () => null,

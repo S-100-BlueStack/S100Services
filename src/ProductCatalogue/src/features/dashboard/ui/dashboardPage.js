@@ -1501,8 +1501,10 @@ function createActivityDetails(activity) {
 
 function createStatusPill(status, severity) {
   const pill = document.createElement("span");
-  pill.className = `pc-dashboard-status-pill is-${status} is-${severity}`;
-  pill.textContent = toTitleCase(status);
+  pill.className = status
+    ? `pc-dashboard-status-pill is-${status} is-${severity}`
+    : "pc-dashboard-status-pill";
+  pill.textContent = status ? toTitleCase(status) : "Unknown";
   return pill;
 }
 
@@ -1938,7 +1940,7 @@ function createDashboardHistoryActivitySnapshot(activity, datasetName) {
     timestamp: activity?.timestamp ?? null,
     title: activity?.title ?? "Activity",
     description: activity?.description ?? "",
-    status: activity?.status ?? "unknown",
+    status: activity?.status ?? null,
     severity: activity?.severity ?? "info",
     type: activity?.type ?? "status",
     actor: activity?.actor ?? "",

@@ -120,8 +120,8 @@ exist in the backend contract and any historical audit records. The Refresh,
 Open all and Collapse all controls align to the right-hand inset of the panel. When a
 Product reports an error message, the status chip exposes the exact backend message on
 hover and through its accessible label, without hiding the existing Message row.
-An ENC Package heading is a grouping label, not a ProductState or aggregate Package
-status: it remains neutral, and each verified S-101/S-57 member is colored independently.
+The outer ENC Package heading includes a separate `Package status` indicator. Each verified
+S-101/S-57 member keeps its own ProductState chip and public message.
 
 ## Shared workspace Product picker
 
@@ -277,8 +277,10 @@ failed resolution instead of overlapping package items. Unproven failures remain
 
 One outer model contains `workUnit` and ordered `members`. Each member retains its own exact
 ProductContext, identity, metadata, Product status, validation availability and read-only History.
-The sidebar reuses the ordinary Product card renderer for compact S-101/S-57 sections. Its outer
-label says `ENC package`. Each member's chip and Message row use the exact nested Product detail
+The sidebar reuses the ordinary Product card renderer for compact S-101/S-57 sections. The
+outer indicator uses the verified canonical Product-detail `Package.Status` already loaded for the
+same package. A missing or unsupported canonical status, or a conflicting known observation from
+the other member detail, displays as `Unknown`. Each member's chip and Message row use the exact nested Product detail
 observation (`Package.S101` or `Package.S57`) after matching the resolved member key and dataset.
 Missing or unsupported member status displays as neutral `Unknown`. The same observation owns the
 public message. The top-level compatibility status and published version metadata keep their

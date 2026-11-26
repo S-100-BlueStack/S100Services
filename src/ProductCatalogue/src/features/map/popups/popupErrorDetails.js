@@ -1,6 +1,6 @@
 let nextId = 0;
 
-/** Owns one popup session's error overlay, outside the table's layout and clipping. */
+/** Owns one popup session's diagnostic overlay, outside the table's layout and clipping. */
 export function createPopupErrorDetails({ document: doc = document, window: win = window } = {}) {
   let overlay = null;
   let anchor = null;
@@ -57,7 +57,7 @@ export function createPopupErrorDetails({ document: doc = document, window: win 
     close({ restoreFocus: true });
   }
 
-  function open(button, message, label, pin) {
+  function open(button, message, label, isError, pin) {
     if (disposed || !button.isConnected) return;
     if (anchor !== button) {
       close();
@@ -66,7 +66,10 @@ export function createPopupErrorDetails({ document: doc = document, window: win 
       overlay.id = button.getAttribute("aria-controls");
       overlay.className = "popup-error-details";
       overlay.setAttribute("role", "dialog");
-      overlay.setAttribute("aria-label", `${label} error details`);
+      overlay.setAttribute(
+        "aria-label",
+        `${label} ${isError ? "error details" : "status details"}`
+      );
       overlay.tabIndex = -1;
       const closeButton = doc.createElement("button");
       closeButton.type = "button";
@@ -76,6 +79,11 @@ export function createPopupErrorDetails({ document: doc = document, window: win 
       const text = doc.createElement("div");
       text.className = "popup-error-details__text";
       text.textContent = message;
+      if (!isError) {
+        const title = doc.createElement("strong");
+        title.textContent = "Status details";
+        overlay.appendChild(title);
+      }
       overlay.append(closeButton, text);
       overlay.addEventListener("pointerleave", (event) => {
         if (!pinned && !anchor?.contains(event.relatedTarget)) close();
@@ -94,25 +102,28 @@ export function createPopupErrorDetails({ document: doc = document, window: win 
   }
 
   return {
-    createTrigger(message, { key, label, text = "Error" }) {
+    createTrigger(message, { key, label, text = "Error", isError = true }) {
       if (!String(message ?? "").trim()) return null;
       const button = doc.createElement("button");
       button.type = "button";
       button.className = "popup-product-error";
       button.textContent = String(text);
-      button.setAttribute("aria-label", `${label}: show full error`);
+      button.setAttribute(
+        "aria-label",
+        isError ? `${label}: show full error` : `${label}: ${text}. Show status details`
+      );
       button.setAttribute("aria-haspopup", "dialog");
       button.setAttribute("aria-controls", `popup-error-details-${++nextId}`);
       button.setAttribute("aria-expanded", "false");
       button.addEventListener("click", (event) => {
         event.stopPropagation();
-        open(button, String(message), label, true);
+        open(button, String(message), label, isError, true);
       });
       button.addEventListener("pointerenter", () => {
-        if (!pinned && !restoringFocus) open(button, String(message), label, false);
+        if (!pinned && !restoringFocus) open(button, String(message), label, isError, false);
       });
       button.addEventListener("focus", () => {
-        if (!pinned && !restoringFocus) open(button, String(message), label, false);
+        if (!pinned && !restoringFocus) open(button, String(message), label, isError, false);
       });
       button.addEventListener("pointerleave", (event) => {
         if (!pinned && !overlay?.contains(event.relatedTarget) && doc.activeElement !== button) {

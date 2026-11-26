@@ -1,6 +1,9 @@
 import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
 import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
-import { matchPackageDetailStatus } from "../../dataSources/domain/encPackageStatusObservation.js";
+import {
+  matchPackageDetailStatus,
+  resolveObservedPackageStatus,
+} from "../../dataSources/domain/encPackageStatusObservation.js";
 import { normalizeArtifactHistory } from "../../data/normalizers/productArtifact.js";
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
@@ -122,6 +125,7 @@ async function fetchResolvedAnalyzeProduct(datasetName, resolution, get, reuseDe
         aoiGeometry: geometry,
         sourceFeature: null,
         workUnit: resolution.workUnit,
+        displayPackageStatus: resolveObservedPackageStatus(resolution.workUnit, members),
         members,
       };
     } catch (error) {
@@ -185,6 +189,7 @@ function normalizeAnalyzeProduct(
     readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]) ??
     requestedDatasetName;
 
+  const rawStatus = readFirstDefined(product, ["status", "Status", "productState", "ProductState"]);
   return {
     datasetName,
     name: datasetName,
@@ -195,9 +200,8 @@ function normalizeAnalyzeProduct(
     productContext,
     workspaceLoadState: "loaded",
     contentAvailability: createContentAvailability(productContext),
-    status: normalizeOptionalStatus(
-      readFirstDefined(product, ["status", "Status", "productState", "ProductState"])
-    ),
+    status: normalizeOptionalStatus(rawStatus),
+    productStatusForDisplay: rawStatus,
     // Product detail owns Package.Status; member ProductState must not stand in for it.
     packageStatus: normalizeEncPackageStatus(
       readFirstDefined(product, ["packageStatus"]) ??
@@ -417,6 +421,7 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
       throw new Error("Product metadata is unavailable.");
     }
     let matchingDetailMember = null;
+    let packageObservation = null;
     let memberStatusObservation = null;
     if (workUnit) {
       const current = metadata.value?.workUnitMetadata
@@ -439,14 +444,19 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
       if (!matchingMember) throw new Error("Package member identity is missing.");
       matchingDetailMember = current.workUnitMetadata.members[matchingMember.key];
       const primary = workUnit.members.find(({ key }) => key === workUnit.primaryMemberKey);
-      const observation = matchPackageDetailStatus(current, primary?.datasetName, workUnit.members);
-      memberStatusObservation = observation?.members[matchingMember.key] ?? null;
+      packageObservation = matchPackageDetailStatus(
+        current,
+        primary?.datasetName,
+        workUnit.members
+      );
+      memberStatusObservation = packageObservation?.members[matchingMember.key] ?? null;
     }
     const product = normalizeAnalyzeProduct(metadata.value, datasetName, { productContext });
     // Backend Product-detail may carry version numbers on S101/S57 members instead
     // of the top-level Product. Reuse only this member's verified normalized values.
     if (matchingDetailMember) {
       product.memberStatusObservation = memberStatusObservation;
+      product.observedPackageStatus = packageObservation?.status;
       if (!hasVersionValue(product.edition) && hasVersionValue(matchingDetailMember.edition)) {
         product.edition = matchingDetailMember.edition;
       }

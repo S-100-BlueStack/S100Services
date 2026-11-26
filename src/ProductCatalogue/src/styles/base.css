@@ -26,3 +26,15 @@ calcite-shell,
   width: 100%;
   height: 100%;
 }
+
+.pc-package-status-indicator {
+  justify-self: start;
+  max-inline-size: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--pc-package-indicator-border, var(--pc-border));
+  background: var(--pc-package-indicator-background, var(--pc-surface-alt));
+  color: var(--pc-text);
+  font-size: 11px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

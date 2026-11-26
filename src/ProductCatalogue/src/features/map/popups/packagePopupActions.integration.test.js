@@ -34,7 +34,7 @@ function mountConfirmDialog(document) {
   return { popover, title, message, cancelButton, confirmButton };
 }
 
-function createHarness() {
+function createHarness({ diagnosticLookup = [] } = {}) {
   class Target {
     listeners = new Map();
     addEventListener(type, listener) {
@@ -227,10 +227,7 @@ function createHarness() {
     fetch: async (url, options = {}) => {
       requests.push({ url, method: options.method ?? "GET" });
       if (url === "/lookup/productstates")
-        return json([
-          { Id: 11, Name: "Ready" },
-          { Id: 15, Name: "Error" },
-        ]);
+        return json([{ Id: 11, Name: "Ready" }, { Id: 15, Name: "Error" }, ...diagnosticLookup]);
       if (url.startsWith("/electronicproducts/workspace/freshness?")) {
         return json([{ datasetName: "PRIMARY", available: true, revision }]);
       }
@@ -1280,6 +1277,66 @@ test("current popup diagnostics can clear and return without granting Send or ch
       h.requests.some(({ method }) => method === "POST"),
       false
     );
+  } finally {
+    h.destroy();
+  }
+});
+
+test("actual popup distinguishes nonfailure status details from verified member errors", async () => {
+  const h = createHarness({
+    diagnosticLookup: [
+      { Id: 5, Name: "Hold" },
+      { Id: 6, Name: "In Transit" },
+      { Id: 7, Name: "Rejected" },
+    ],
+  });
+  try {
+    await loadStatuses();
+    const popup = h.open();
+    await h.settle();
+    const getMemberStatus = () =>
+      popup
+        .querySelector(".popup-product-table")
+        .children[1].children.find((row) => row.children[0].textContent === "Status").children[2];
+
+    for (const [status, message, label, isError] of [
+      [6, "<b>Delivery uncertain</b>", "In Transit", false],
+      [7, "Rejected by IC-ENC", "Rejected", true],
+      [15, "Validation failed", "Error", true],
+      [5, "Awaiting operator", "Hold", false],
+      [99, "Public source diagnostic", "Unknown", false],
+      [null, null, "Unknown", false],
+    ]) {
+      Object.assign(h.graphic.attributes.workUnitStatus.members[1], {
+        status,
+        errorMessage: message,
+      });
+      await refreshOpenProductPopup("PRIMARY");
+      await h.settle();
+      const cell = getMemberStatus();
+      const trigger = cell.querySelector(".popup-product-error");
+      if (!message) {
+        assert.equal(cell.textContent, label);
+        assert.equal(trigger, null);
+        continue;
+      }
+      assert.equal(trigger.textContent, label);
+      assert.equal(
+        trigger.getAttribute("aria-label"),
+        isError ? "S-57: show full error" : `S-57: ${label}. Show status details`
+      );
+      trigger.focus();
+      const dialog = h.doc.body.querySelector(".popup-error-details");
+      assert.equal(
+        dialog.getAttribute("aria-label"),
+        isError ? "S-57 error details" : "S-57 status details"
+      );
+      assert.equal(dialog.querySelector(".popup-error-details__text").textContent, message);
+      trigger.click();
+      h.doc.emit("keydown", { key: "Escape", target: dialog });
+      assert.equal(h.doc.body.querySelector(".popup-error-details"), null);
+      assert.equal(h.doc.activeElement, trigger);
+    }
   } finally {
     h.destroy();
   }

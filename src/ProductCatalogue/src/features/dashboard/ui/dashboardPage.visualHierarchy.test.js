@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
+import { normalizeDashboardPayload } from "../domain/dashboardActivity.js";
+import {
+  createDefaultDashboardFilters,
+  normalizeDashboardFilters,
+} from "../domain/dashboardFilters.js";
 
 class Element {
   constructor(tagName) {
@@ -57,10 +62,11 @@ async function createHarness() {
     source
       .replace(/^import[\s\S]*?from "[^"]+";\r?\n/gm, "")
       .replace("export function", "function") +
-      `\ncreateActivityFilterBar = () => document.createElement("form");
+      `\nconst activityFilterBar = createActivityFilterBar;
+      createActivityFilterBar = () => document.createElement("form");
       createActivityTable = () => document.createElement("table");
       createActivityPagination = () => document.createElement("footer");
-      ({ createSummaryCards, createActivityList, createDashboardGrid, events });`,
+      ({ createSummaryCards, createActivityList, createDashboardGrid, activityFilterBar, createStatusPill, events });`,
     {
       document,
       events,
@@ -70,8 +76,8 @@ async function createHarness() {
           this.detail = options.detail;
         }
       },
-      createDefaultDashboardFilters: () => ({}),
-      normalizeDashboardFilters: (filters) => filters,
+      createDefaultDashboardFilters,
+      normalizeDashboardFilters,
       hasActiveDashboardFilters: () => false,
       isDashboardSummaryRowFilterActive: () => false,
     }
@@ -343,4 +349,32 @@ test("Only the six reporting metrics with non-obvious scopes expose explicit hel
   assert.match(explanations[3], /Package members are counted separately/);
   assert.match(explanations[4], /independent of the date range/);
   assert.match(explanations[5], /not validation runs/);
+});
+
+test("Dashboard renders a neutral Unknown status and the native filter submits only server tokens", async () => {
+  const h = await createHarness();
+  const dashboard = normalizeDashboardPayload({
+    Activities: [{ Severity: "critical" }, { Status: "completed", Type: "cancel" }],
+  });
+  const [unknown, completed] = dashboard.activities;
+  const neutral = h.createStatusPill(unknown.status, unknown.severity);
+  assert.equal(neutral.textContent, "Unknown");
+  assert.equal(neutral.className, "pc-dashboard-status-pill");
+  assert.equal(h.createStatusPill(completed.status, completed.severity).textContent, "Completed");
+
+  const form = h.activityFilterBar({
+    filters: createDefaultDashboardFilters(),
+    filterOptions: dashboard.filterOptions,
+    hasFilters: false,
+  });
+  const select = form.children
+    .flatMap((wrapper) => wrapper.children)
+    .find(({ dataset }) => dataset.dashboardFilterKey === "status");
+  assert.deepEqual(
+    select.children.map(({ value }) => value),
+    ["all", "completed"]
+  );
+  select.value = "completed";
+  select.listeners.get("change")();
+  assert.equal(h.events.at(-1).detail.filters.status, "completed");
 });

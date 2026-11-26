@@ -181,6 +181,8 @@ function normalizeBackendHistoryRecord(record, { index, datasetName, previousRec
         label: "Owner",
         value: owner,
       },
+      { label: "Error code", value: readFirstDefined(record, ["ErrorCode", "errorCode"]) },
+      { label: "Error message", value: readFirstDefined(record, ["ErrorMessage", "errorMessage"]) },
     ].filter((detail) => hasDisplayableValue(detail.value)),
   };
 }

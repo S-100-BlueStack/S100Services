@@ -165,6 +165,9 @@ ProductState.Idle      -> Type: lifecycle,  Status: idle,      Severity: normal
 ```
 
 The source backend state can still appear in activity details as `Source state` for traceability.
+Missing or unsupported Activity status displays as neutral `Unknown` in the Activity table
+and History context. Such rows contribute no fallback status option. Server-supplied options,
+counts and the reported status of valid rows remain authoritative.
 
 ## Range builder
 

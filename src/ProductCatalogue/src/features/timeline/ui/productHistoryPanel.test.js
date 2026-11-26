@@ -7,6 +7,7 @@ import {
   registerGraphicProductContext,
 } from "../../products/domain/productContext.js";
 import { loadPackageHistory } from "../services/packageHistoryLoader.js";
+import { fetchProductHistory } from "../api/productHistoryApi.js";
 import { openProductHistoryPanel } from "../events/productHistoryEvents.js";
 import { createPopupActionGroups } from "../../map/popups/popupActionConfig.js";
 import {
@@ -661,4 +662,39 @@ test("loading and publication preserve application focus and accessible member l
     assert.equal(member.getAttribute("aria-labelledby"), member.children[0].id)
   );
   assert.equal(h.root.attributes.has("aria-busy"), false);
+});
+
+test("expanding actual History details reveals only that member's public state diagnostic as text", async (t) => {
+  const h = await harness(t, {
+    fetchHistory: (name) =>
+      fetchProductHistory(name, {
+        get: async () => ({
+          Data: [
+            {
+              Name: name,
+              Status: 15,
+              From: "2026-10-08T08:00:00Z",
+              ErrorCode: "EXPORT_FAILED",
+              ErrorMessage: `<b>${name}</b> failed`,
+            },
+          ],
+        }),
+      }),
+  });
+  await h.panel.openHistory(h.names.s101);
+  const panels = walk(h.root).filter(
+    (element) => element.className === "pc-product-history-list__details-panel"
+  );
+  const [first, second] = panels;
+  assert.ok(first.hidden && second.hidden);
+  find(h.root, "pc-product-history-list__summary").dispatchEvent(new Event("click"));
+  assert.equal(first.hidden, false);
+  assert.equal(second.hidden, true);
+  assert.match(text(first), /Error code EXPORT_FAILED/);
+  assert.ok(
+    walk(first).some(
+      (node) => node.tagName === "dd" && node.textContent === `<b>${h.names.s101}</b> failed`
+    )
+  );
+  assert.ok(!text(first).includes(h.names.s57));
 });
