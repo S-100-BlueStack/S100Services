@@ -30,7 +30,12 @@ function harness({
   failExact = null,
   missingGeometry = false,
   contradictory = false,
-  packageStatus = 99,
+  packageStatus = 4,
+  memberStates = [
+    { Status: 11, ErrorMessage: null },
+    { Status: 15, ErrorMessage: "S-57 compilation failed" },
+  ],
+  statusMemberNames = names,
   aoiVersions = false,
   omitDetailVersions = false,
   memberDetailVersions = false,
@@ -81,7 +86,8 @@ function harness({
   });
   const payload = (name) => ({
     Name: name,
-    Status: name === names[0] ? 8 : 11,
+    Status: packageStatus === 2 ? 11 : 15,
+    ErrorMessage: "Aggregate diagnostic",
     ...(omitDetailVersions === true || (omitDetailVersions === "secondary" && name === names[1])
       ? {}
       : { Edition: name === names[0] ? 3 : 7, Update: name === names[0] ? 2 : 4 }),
@@ -99,7 +105,14 @@ function harness({
             Name: contradictory && name === names[1] ? "Different legacy" : names[1],
             ...(memberDetailVersions ? { Edition: 41, Update: 5 } : {}),
           },
-    Package: { Status: packageStatus },
+    Package: {
+      Layer: 1,
+      SourceDatasetName: names[0],
+      Status: packageStatus,
+      ErrorMessage: "Aggregate diagnostic",
+      S101: { DatasetName: statusMemberNames[0], ProductSpecification: 1, ...memberStates[0] },
+      S57: { DatasetName: statusMemberNames[1], ProductSpecification: 0, ...memberStates[1] },
+    },
   });
   const fetchProduct = async (name) => {
     detailCalls.push(name);
@@ -143,9 +156,18 @@ for (const input of [[names[0]], [names[1]], names, [...names].reverse()]) {
       ["S-101", "S-57"]
     );
     assert.deepEqual(
-      product.members.map((member) => member.status),
-      [8, 11]
+      product.members.map((member) => member.memberStatusObservation?.status),
+      [11, 15]
     );
+    assert.deepEqual(
+      product.members.map((member) => member.memberStatusObservation?.errorMessage),
+      [null, "S-57 compilation failed"]
+    );
+    assert.deepEqual(
+      product.members.map((member) => member.status),
+      [15, 15]
+    );
+    assert.equal(product.packageStatus, 4);
     assert.deepEqual(
       product.members.map((member) => member.edition),
       [3, 7]
@@ -299,8 +321,8 @@ test("Analyze retains backend Package.Status from the existing detail read", asy
   const [product] = await fetchAnalyzeProducts([names[0]], h);
   assert.equal(product.packageStatus, 2);
   assert.deepEqual(
-    product.members.map((member) => member.status),
-    [8, 11]
+    product.members.map((member) => member.memberStatusObservation?.status),
+    [11, 15]
   );
   assert.equal(h.detailCalls.filter((name) => name === names[0]).length, 1);
   assert.equal(h.getCalls.filter((path) => path.includes("/artifacts/history")).length, 2);
@@ -364,5 +386,53 @@ test("Analyze prefers own top-level version, then own nested detail, then own AO
   assert.deepEqual(
     product.members.map((member) => member.update),
     [2, 5]
+  );
+});
+
+test("Analyze attributes reversed and non-failure states through normalized and raw detail", async () => {
+  for (const reuseDetails of [true, false]) {
+    const h = harness({
+      memberStates: [
+        { Status: "15", ErrorMessage: "S-101 failure" },
+        { Status: 6, ErrorMessage: "Delivery awaiting confirmation" },
+      ],
+      statusMemberNames: names.map((name) => ` ${name.toUpperCase()} `),
+    });
+    const [product] = await fetchAnalyzeProducts([names[1]], { ...h, reuseDetails });
+    assert.equal(product.workspaceLoadState, "loaded", product.loadError);
+    assert.deepEqual(
+      product.members.map(({ memberStatusObservation }) => [
+        memberStatusObservation.status,
+        memberStatusObservation.errorMessage,
+      ]),
+      [
+        [15, "S-101 failure"],
+        [6, "Delivery awaiting confirmation"],
+      ]
+    );
+  }
+});
+
+test("Analyze does not infer missing or unknown member status from compatibility, sibling or AOI", async () => {
+  const h = harness({ aoiVersions: true, memberStates: [{ Status: 99 }, {}] });
+  const [product] = await fetchAnalyzeProducts([names[0]], h);
+  assert.equal(product.workspaceLoadState, "loaded", product.loadError);
+  assert.deepEqual(
+    product.members.map(({ memberStatusObservation }) => memberStatusObservation.status),
+    [undefined, undefined]
+  );
+});
+
+test("Analyze withholds a contradictory nested observation while preserving the independently resolved mapping", async () => {
+  const h = harness({ statusMemberNames: [names[0], "Unrelated chart"] });
+  const [product] = await fetchAnalyzeProducts([names[0]], h);
+  assert.equal(product.workspaceLoadState, "loaded", product.loadError);
+  assert.deepEqual(
+    product.members.map(({ datasetName }) => datasetName),
+    names
+  );
+  assert.deepEqual(
+    product.members.map(({ memberStatusObservation }) => memberStatusObservation),
+    [null, null]
   );
 });

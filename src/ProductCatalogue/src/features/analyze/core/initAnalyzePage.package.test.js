@@ -46,10 +46,11 @@ function packageProduct(
   polygonGeometry = false,
   packageStatus = 4
 ) {
-  const members = declaration.members.map((member) => ({
+  const members = declaration.members.map((member, index) => ({
     datasetName: member.datasetName,
     edition,
-    status: statuses[declaration.members.indexOf(member)],
+    status: packageStatus === 2 ? 11 : 15,
+    memberStatusObservation: { status: statuses[index] },
     memberKey: member.key,
     memberLabel: member.label,
     workspaceLoadState: "loaded",
@@ -717,7 +718,7 @@ test("package refresh follows aggregate status, not members, without disturbing 
   const mixed = findGraphic(h, names[0]);
   assert.notEqual(mixed, initial);
   assert.deepEqual(mixed.symbol, getPackageCorrectionSymbol(4));
-  assert.equal(h.page.products[0].members[1].status, 11);
+  assert.equal(h.page.products[0].members[1].memberStatusObservation.status, 11);
   assert.equal(findGraphic(h, ordinaryName), ordinary);
   assert.equal(h.state.unregistered.includes(ordinary.layer), false);
   assert.equal(h.view.popup.visible, true);

@@ -34,6 +34,8 @@ is historical and no longer represents runtime behavior.
 The live `electronicproducts/aoi?layer=ENC` and targeted status endpoints provide the authoritative
 aggregate and member states in `Attributes.Package`. The generic `electronic-aoi` normalizer projects
 `workUnitStatus: { packageStatus, workflowStatus, members }` into application-owned attributes.
+The aggregate and members also carry their own observed public diagnostic when supplied. An
+explicit clear is distinct from omission for comparisons with corresponding Product detail.
 `packageStatus` comes only from `Package.Status`; `workflowStatus` comes from top-level
 `Attributes.Status`, and `members[].status` comes from each Export Candidate ProductState.
 Member keys/order and transport mapping remain registry-owned. Both candidate status and candidate

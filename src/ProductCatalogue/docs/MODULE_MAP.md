@@ -20,6 +20,15 @@ This map gives AI-assisted contributors a **navigation starting point**. The pat
 | Shared user interaction           | Confirmation, tooltip and focus helpers                                                            | `src/shared/ui/confirm/`, `src/shared/ui/focus/`, `src/shared/ui/tooltips/`                                                      | Cleanup, accessibility, avoid duplicate help surfaces                                                 |
 | Global styling                    | Theme, map and popup presentation                                                                  | `src/styles/`                                                                                                                    | Light/dark contrast, public Calcite tokens, responsiveness                                            |
 
+## ENC read-side status
+
+`src/features/data/normalizers/productResponse.js` projects each exact nested member status and
+public diagnostic separately from published metadata and the compatibility status. Analyze and
+Review use that matched observation for member presentation. Main Map continues to use the
+AOI-owned status normalized by `src/features/dataSources/services/dataSourceNormalizer.js`.
+`src/features/map/popups/popupSourceStatusDrift.js` compares those observations and delegates any
+refresh to the existing source lifecycle.
+
 ## Shared validation viewer ownership
 
 Main Map popup, Dashboard, Analyze and Review delegate eligible VLD preview actions

@@ -46,13 +46,14 @@ for (const names of [
         member.datasetName,
         member.sourceId,
         member.memberLabel,
-        member.status,
+        member.memberStatusObservation?.status,
+        member.memberStatusObservation?.errorMessage,
         member.edition,
         member.update,
       ]),
       [
-        [packageNames[0], "s101", "S-101", 8, 3, 2],
-        [packageNames[1], "s57", "S-57", 11, 7, 4],
+        [packageNames[0], "s101", "S-101", 11, null, 3, 2],
+        [packageNames[1], "s57", "S-57", 15, "S-57 compilation failed", 7, 4],
       ]
     );
     assert.deepEqual(h.calls.history, packageNames);
@@ -297,4 +298,61 @@ test("Review associates IC-ENC attachments only with their exact member while re
   assert.equal(product.members[0].icEncArtifacts[1].revisionId, "historical");
   assert.equal(getReviewIcEncPresentation(product.members[0]).state, "content");
   assert.equal(getReviewIcEncPresentation(product.members[1]).state, "empty");
+});
+
+test("Review accepts raw detail with reversed member states and no AOI status fallback", async () => {
+  const h = createReviewPackageFixture();
+  const [product] = await loadReviewHistories([packageNames[1]], {
+    ...h.options,
+    fetchProduct: async (name) => ({
+      success: true,
+      data: {
+        Name: name,
+        Status: 15,
+        S101: { Name: packageNames[0] },
+        S57: { Name: packageNames[1] },
+        Package: {
+          Layer: 1,
+          SourceDatasetName: packageNames[0],
+          Status: 4,
+          S101: {
+            DatasetName: packageNames[0].toUpperCase(),
+            Status: 15,
+            ErrorMessage: "S-101 failed",
+          },
+          S57: { DatasetName: packageNames[1], Status: 99, ErrorMessage: null },
+        },
+      },
+    }),
+  });
+  assert.equal(product.loadState, "loaded", product.error);
+  assert.deepEqual(
+    product.members.map(({ memberStatusObservation }) => [
+      memberStatusObservation.status,
+      memberStatusObservation.errorMessage,
+    ]),
+    [
+      [15, "S-101 failed"],
+      [undefined, null],
+    ]
+  );
+});
+
+test("Review withholds a contradictory nested observation for both members", async () => {
+  const h = createReviewPackageFixture();
+  h.controls.memberStates[0] = {
+    DatasetName: "Unrelated chart",
+    Status: 15,
+    ErrorMessage: "Wrong member",
+  };
+  const [product] = await loadReviewHistories([packageNames[0]], h.options);
+  assert.equal(product.loadState, "loaded", product.error);
+  assert.deepEqual(
+    product.members.map(({ datasetName }) => datasetName),
+    packageNames
+  );
+  assert.deepEqual(
+    product.members.map(({ memberStatusObservation }) => memberStatusObservation),
+    [null, null]
+  );
 });

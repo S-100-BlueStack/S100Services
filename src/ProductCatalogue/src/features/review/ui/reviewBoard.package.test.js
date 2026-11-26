@@ -62,7 +62,7 @@ const boardExports = runInNewContext(
     ...list,
     ...presentation,
     ...historyRenderers,
-    getStatusName: (status) => `Member status ${status}`,
+    getStatusName: (status) => ({ 5: "Hold", 11: "Ready For Distribution", 15: "Error" })[status],
     getStatusIdByName: (name) =>
       ({
         Error: 15,
@@ -102,7 +102,7 @@ test("board has one package column with two ordered member sections and one ordi
   assert.equal(byClass(columns[1], "pc-review-member").length, 0);
   assert.deepEqual(
     byClass(sections[0], "pc-review-member__status").map((node) => node.textContent),
-    ["Member status 8"]
+    ["Ready For Distribution"]
   );
   assert.deepEqual(
     byClass(sections[1], "pc-review-member__edition").map((node) => node.textContent),
@@ -155,6 +155,15 @@ test("board has one package column with two ordered member sections and one ordi
       )
     );
   }
+  assert.equal(byClass(sections[1], "pc-review-member__status")[0].textContent, "Error");
+  assert.equal(
+    nodes(sections[0]).some((node) => node.textContent.startsWith("Message:")),
+    false
+  );
+  assert.equal(
+    nodes(sections[1]).filter((node) => node.textContent.startsWith("Message:"))[0]?.textContent,
+    "Message: S-57 compilation failed"
+  );
   const links = nodes(sections[1]).filter((node) => node.href);
   assert.equal(links.length, 1);
   assert.match(links[0].href, new RegExp(`${encodeURIComponent(packageNames[1])}/artifacts/`));
@@ -182,7 +191,10 @@ test("outer content and bulk toggles apply identically to both members without c
   board = createBoard({ productItems: items, enabledDatasetNames: [packageNames[0]], products });
   assert.equal(byClass(board, "pc-review-member").length, 2);
   assert.equal(byClass(board, "pc-review-content-card").length, 0);
-  assert.equal(byClass(board, "pc-review-content-card__state").length, 2);
+  assert.equal(
+    nodes(board).filter((node) => node.textContent === "No review content selected.").length,
+    2
+  );
   items = list.toggleReviewProductItem(items, items[0].id, false);
   board = createBoard({ productItems: items, enabledDatasetNames: [], products: [] });
   assert.equal(byClass(board, "pc-review-column").length, 0);
@@ -337,4 +349,30 @@ test("Review renders IC-ENC report downloads with exact member and revision meta
     "Revision ID: current"
   );
   assert.equal(byClass(icEncCards[1], "pc-review-content-card__artifact-revision").length, 0);
+});
+
+test("Review shows Hold and neutral Unknown with same-member diagnostic text", async () => {
+  const h = createReviewPackageFixture();
+  h.controls.memberStates = [
+    { Status: "5", ErrorMessage: "Awaiting operator" },
+    { Status: 99, ErrorMessage: null },
+  ];
+  const products = await loadReviewHistories([packageNames[1]], h.options);
+  const board = createBoard({
+    productItems: list.createReviewProductItems([packageNames[0]]),
+    enabledDatasetNames: [packageNames[0]],
+    products,
+  });
+  const chips = byClass(board, "pc-review-member__status");
+  assert.deepEqual(
+    chips.map((chip) => chip.textContent),
+    ["Hold", "Unknown"]
+  );
+  assert.equal(chips[1].className.includes("pc-status-chip--colored"), false);
+  assert.deepEqual(
+    nodes(board)
+      .filter((node) => node.textContent.startsWith("Message:"))
+      .map((node) => node.textContent),
+    ["Message: Awaiting operator"]
+  );
 });

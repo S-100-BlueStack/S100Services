@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
+import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
 import { createSourceStatusRefreshCoordinator } from "../../dataSources/services/sourceStatusRefreshCoordinator.js";
 import { detectPackagePopupStatusDrift } from "./popupSourceStatusDrift.js";
 import {
@@ -14,8 +16,15 @@ function createLayer(primaryStatus) {
       sourceId: "s101",
       datasetName: "101DK001OSTSO",
       featureKey: "s101:101DK001OSTSO",
+      workUnitMetadata: {
+        members: {
+          s101: { datasetName: "101DK001OSTSO" },
+          s57: { datasetName: "DK1OSTSO" },
+        },
+      },
       workUnitStatus: {
-        workflowStatus: 1,
+        packageStatus: 4,
+        workflowStatus: 15,
         members: [
           { key: "s101", datasetName: "101DK001OSTSO", status: primaryStatus },
           { key: "s57", datasetName: "DK1OSTSO", status: 1 },
@@ -57,9 +66,19 @@ test("external standalone Discard revalidates only the selected Graphic through 
   const productContext = {
     sourceId: "s101",
     datasetName: "101DK001OSTSO",
-    workUnit: { kind: "package", primaryMemberKey: "s101" },
+    workUnit: createDataSourceRegistry().byId.get("s101").workUnit,
   };
-  const detail = { datasetName: "101DK001OSTSO", status: 1, exportMetadata: { items: [] } };
+  const detail = normalizeElectronicProductResponse({
+    Name: "101DK001OSTSO",
+    Status: 1,
+    Package: {
+      Layer: 1,
+      SourceDatasetName: "101DK001OSTSO",
+      Status: 0,
+      S101: { DatasetName: "101DK001OSTSO", Status: 1 },
+      S57: { DatasetName: "DK1OSTSO", Status: 1 },
+    },
+  });
   const observations = [];
   const coordinator = createSourceStatusRefreshCoordinator({
     dataSourceController: {
@@ -75,6 +94,8 @@ test("external standalone Discard revalidates only the selected Graphic through 
           ...graphic.attributes,
           workUnitStatus: {
             ...graphic.attributes.workUnitStatus,
+            packageStatus: 0,
+            workflowStatus: 1,
             members: [
               { key: "s101", datasetName, status: 1 },
               { key: "s57", datasetName: "DK1OSTSO", status: 1 },
@@ -98,8 +119,11 @@ test("external standalone Discard revalidates only the selected Graphic through 
     // Product-detail did not mutate the selected AOI Graphic before source reload.
     assert.equal(selectedGraphic.attributes.workUnitStatus.members[0].status, 15);
     assert.equal(selectedGraphic.symbol.state, 15);
-    const refreshed = await requestPopupSourceStatusRefresh(observation);
-    assert.equal(refreshed[0].value.success, true);
+    const results = await Promise.all([
+      requestPopupSourceStatusRefresh(observation),
+      requestPopupSourceStatusRefresh(observation),
+    ]);
+    assert.ok(results.every(([result]) => result.value.success));
     assert.equal(currentLayer.graphics.toArray()[0], selectedGraphic);
     assert.equal(selectedGraphic.attributes.workUnitStatus.members[0].status, 1);
     assert.equal(selectedGraphic.attributes.workUnitStatus.members[1].status, 1);

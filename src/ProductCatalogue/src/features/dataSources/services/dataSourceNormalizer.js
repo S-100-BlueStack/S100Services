@@ -1,6 +1,7 @@
 import { normalizeWorkUnitMetadata } from "../../data/normalizers/workUnitMetadata.js";
 import { normalizeElectronicProductStatus } from "../domain/electronicProductStatus.js";
 import { normalizeEncPackageStatus } from "../domain/encPackageStatus.js";
+import { normalizePackageStatusMessage } from "../domain/encPackageStatusObservation.js";
 import {
   assertUniqueProductIdentities,
   createSourceAwareProductIdentity,
@@ -185,11 +186,15 @@ function readProperties(feature) {
   return properties && typeof properties === "object" ? properties : {};
 }
 
-function readFirstDefined(source, names) {
+function readFirstDefined(source, names, { includeNull = false } = {}) {
   const normalizedNames = new Set(names.map(normalizePropertyName));
 
   for (const [name, value] of Object.entries(source ?? {})) {
-    if (normalizedNames.has(normalizePropertyName(name)) && value !== undefined && value !== null) {
+    if (
+      normalizedNames.has(normalizePropertyName(name)) &&
+      value !== undefined &&
+      (includeNull || value !== null)
+    ) {
       return value;
     }
   }
@@ -307,18 +312,26 @@ function normalizeElectronicPackage(attributes, source, datasetName) {
       key: declaration.key,
       datasetName: memberDatasetName,
       status: normalizeElectronicProductStatus(readFirstDefined(member, ["status"])),
-      errorMessage: readFirstDefined(member, ["errorMessage"]) ?? null,
+      errorMessage: readPackageStatusMessage(member),
     };
   });
 
   // Package.Status is authoritative even when a member track is incomplete.
   // Preserve truthful partial member state for display; targeted mutations still
   // reject incomplete membership before publication.
+  const errorMessage = readPackageStatusMessage(pkg);
   return {
     packageStatus: normalizeEncPackageStatus(readFirstDefined(pkg, ["status"])),
+    ...(errorMessage !== undefined ? { errorMessage } : {}),
     workflowStatus: normalizeElectronicProductStatus(readFirstDefined(attributes, ["status"])),
     members,
   };
+}
+
+function readPackageStatusMessage(payload) {
+  return normalizePackageStatusMessage(
+    readFirstDefined(payload, ["errorMessage"], { includeNull: true })
+  );
 }
 
 // The targeted endpoint returns the same AOI status attributes without geometry.

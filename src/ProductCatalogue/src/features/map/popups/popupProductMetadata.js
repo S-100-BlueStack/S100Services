@@ -1,17 +1,23 @@
 import { findProductExportMetadataItem } from "../../products/domain/productExportTrack.js";
+import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
+import { findPackageStatusMember } from "../../dataSources/domain/encPackageStatusObservation.js";
 
 export function createPopupProductMetadataColumns(attributes, productContext) {
   const workUnit = productContext?.workUnit;
   if (workUnit?.kind === "package") {
     return workUnit.members.map((member) => {
       const current = attributes?.workUnitMetadata?.members?.[member.key];
-      const state = attributes?.workUnitStatus?.members?.find((item) => item.key === member.key);
+      const state = findPackageStatusMember(
+        attributes?.workUnitStatus?.members,
+        member.key,
+        current?.datasetName
+      );
       const main = {
         datasetName: current?.datasetName,
         edition: current?.edition,
         update: current?.update,
         date: current?.issueDate,
-        status: state?.status,
+        status: normalizeElectronicProductStatus(state?.status),
         errorMessage: state?.errorMessage,
         validationArtifacts: [],
       };
@@ -24,7 +30,13 @@ export function createPopupProductMetadataColumns(attributes, productContext) {
         presentation: { statusCell: true, compactError: true, productIdentity: true },
         item:
           related && (!related.datasetName || related.datasetName === current?.datasetName)
-            ? { ...mergeSelectedExport(main, related), datasetName: main.datasetName }
+            ? {
+                ...main,
+                edition: related.edition ?? main.edition,
+                update: related.update ?? main.update,
+                date: related.date ?? main.date,
+                validationArtifacts: related.validationArtifacts ?? [],
+              }
             : main,
       };
     });

@@ -29,11 +29,12 @@ function harness() {
         edition: 8,
         update: 0,
         status: 15,
+        errorMessage: "Old export failure",
         validationArtifacts: [{ url: "/validation", fileName: "result.txt" }],
       },
     },
   };
-  const attributes = (edition, status) => ({
+  const attributes = (edition, status, secondaryStatus = 11, secondaryError = null) => ({
     sourceId: "s101",
     productKey: "PRIMARY",
     datasetName: "PRIMARY",
@@ -43,8 +44,8 @@ function harness() {
     workUnitStatus: {
       workflowStatus: 1,
       members: [
-        { key: "s101", status },
-        { key: "s57", status: 11 },
+        { key: "s101", datasetName: "PRIMARY", status },
+        { key: "s57", datasetName: "OTHER", status: secondaryStatus, errorMessage: secondaryError },
       ],
     },
     workUnitMetadata: {
@@ -384,4 +385,42 @@ test("invalid source callback never advances publication generation", () => {
   });
   assert.equal(sync.synchronize(), false);
   assert.equal(publications, 0);
+});
+
+test("full and targeted popup publications use the current member state while keeping its report", async () => {
+  const h = harness();
+  try {
+    const patch = h.attributes(3, 8, 1, null);
+    // A full source publication replaces the Graphic's attributes.
+    h.graphic.attributes = patch;
+    let notified;
+    reconcileSourceInteractions({
+      sourceId: "s101",
+      layers: [h.layer],
+      view: { popup: { visible: true, selectedFeature: h.graphic } },
+      refreshPopup: (...args) => (notified = refreshOpenProductPopup(...args)),
+    });
+    await notified;
+    const member = () => createPopupProductMetadataColumns(h.state().current, h.context)[1].item;
+    const reports = h.overlay.byStandard.S57.validationArtifacts;
+    assert.equal(member().status, 1);
+    assert.equal(member().errorMessage, null);
+    assert.equal(member().edition, 8);
+    assert.equal(member().validationArtifacts, reports);
+
+    // Targeted reconciliation replaces status and metadata on that same Graphic.
+    const failed = h.attributes(3, 8, 15, "New S-57 failure");
+    h.graphic.attributes = {
+      ...h.graphic.attributes,
+      workUnitStatus: failed.workUnitStatus,
+      workUnitMetadata: failed.workUnitMetadata,
+    };
+    assert.deepEqual(await h.bridge(), { matched: 1, refreshed: 1 });
+    assert.equal(member().status, 15);
+    assert.equal(member().errorMessage, "New S-57 failure");
+    assert.equal(member().validationArtifacts, reports);
+    assert.equal(h.state().reads, 0);
+  } finally {
+    h.disconnect();
+  }
 });

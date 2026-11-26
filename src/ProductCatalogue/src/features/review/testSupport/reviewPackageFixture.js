@@ -30,6 +30,10 @@ export function createReviewPackageFixture() {
     artifactGate: null,
     edition: 3,
     remapped: false,
+    memberStates: [
+      { Status: 11, ErrorMessage: null },
+      { Status: 15, ErrorMessage: "S-57 compilation failed" },
+    ],
   };
   const electronic = createWorkspaceProductService({
     registry,
@@ -84,7 +88,24 @@ export function createReviewPackageFixture() {
       success: true,
       data: normalizeElectronicProductResponse({
         Name: name,
-        Status: index ? 11 : 8,
+        Status: 15,
+        ErrorMessage: "Aggregate diagnostic",
+        Package: {
+          Layer: 1,
+          SourceDatasetName: packageNames[0],
+          Status: 4,
+          ErrorMessage: "Aggregate diagnostic",
+          S101: {
+            DatasetName: packageNames[0],
+            ProductSpecification: 1,
+            ...controls.memberStates[0],
+          },
+          S57: {
+            DatasetName: packageNames[1],
+            ProductSpecification: 0,
+            ...controls.memberStates[1],
+          },
+        },
         Edition: index ? 7 : controls.edition,
         Update: index ? 4 : 2,
         S101: { Name: packageNames[0] },

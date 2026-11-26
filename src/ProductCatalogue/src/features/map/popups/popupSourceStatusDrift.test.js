@@ -1,104 +1,143 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
+import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
+import { normalizeDataSourcePayload } from "../../dataSources/services/dataSourceNormalizer.js";
+import { createLiveEncAoi } from "../../dataSources/tests/fixtures/liveEncAoi.js";
 import { detectPackagePopupStatusDrift } from "./popupSourceStatusDrift.js";
 
-test("primary Product detail drift requests targeted authoritative status revalidation without changing package status", () => {
-  const productContext = {
-    sourceId: "s101",
-    datasetName: "PRIMARY",
-    workUnit: { kind: "package", primaryMemberKey: "s101" },
+const source = createDataSourceRegistry().byId.get("s101");
+const datasetName = "101DK0041149E";
+const productContext = { sourceId: source.id, datasetName, workUnit: source.workUnit };
+const refresh = { sourceId: source.id, datasetName };
+
+function compare(updateDetail = () => {}, updateAoi = () => {}, context = productContext) {
+  const aoi = createLiveEncAoi({ workflowStatus: 15, s101Status: 11 });
+  const detail = {
+    Name: datasetName.toLowerCase(),
+    Status: 15,
+    ErrorMessage: "Compatibility message",
+    S101: { Name: datasetName, Status: 5 },
+    S57: { Name: aoi.Attributes.Package.S57.DatasetName, Status: 5 },
+    Package: structuredClone(aoi.Attributes.Package),
   };
-  const attributes = {
-    sourceId: "s101",
-    datasetName: "PRIMARY",
-    status: 11,
-    workUnitStatus: {
-      members: [
-        { key: "s101", datasetName: "PRIMARY", status: 15 },
-        { key: "s57", datasetName: "SECONDARY", status: 1 },
-      ],
-    },
-  };
-  const detail = { datasetName: "PRIMARY", status: 1 };
-  const input = { productContext, attributes, detail };
-  assert.deepEqual(detectPackagePopupStatusDrift(input), {
-    sourceId: "s101",
-    datasetName: "PRIMARY",
+  updateDetail(detail);
+  updateAoi(aoi.Attributes);
+  const [attributes] = normalizeDataSourcePayload([aoi], source).products;
+  const snapshot = structuredClone(attributes);
+  const result = detectPackagePopupStatusDrift({
+    productContext: context,
+    attributes,
+    detail: normalizeElectronicProductResponse(detail),
   });
-  assert.equal(attributes.workUnitStatus.members[0].status, 15);
-  assert.equal(attributes.status, 11);
+  assert.deepEqual(attributes, snapshot);
+  return result;
+}
+
+test("an equal mixed snapshot ignores compatibility status and published Product metadata", () => {
   assert.equal(
-    detectPackagePopupStatusDrift({ ...input, detail: { ...detail, status: 15 } }),
+    compare((detail) => {
+      detail.Status = 1;
+      detail.Package.Status = "error";
+      detail.Package.S101.Status = "11";
+      detail.Package.S57.Status = "15";
+      detail.Package.S57.DatasetName = detail.Package.S57.DatasetName.toLowerCase();
+    }),
     null
   );
+});
+
+for (const [change, update] of [
+  ["aggregate only", (pkg) => (pkg.Status = "2")],
+  ["S-101 only", (pkg) => (pkg.S101.Status = 10)],
+  ["S-57 only", (pkg) => (pkg.S57.Status = 1)],
+  ["aggregate diagnostic only", (pkg) => (pkg.ErrorMessage = "Updated aggregate diagnostic")],
+  ["member diagnostic only", (pkg) => (pkg.S57.ErrorMessage = "Updated member diagnostic")],
+  ["explicitly cleared member diagnostic", (pkg) => (pkg.S57.ErrorMessage = null)],
+  ["restored member diagnostic", (pkg) => (pkg.S101.ErrorMessage = "Delivery uncertainty")],
+]) {
+  test(`a comparable ${change} requests source revalidation`, () => {
+    assert.deepEqual(
+      compare((detail) => update(detail.Package)),
+      refresh
+    );
+  });
+}
+
+for (const [change, update] of [
+  ["omitted members", (detail) => delete detail.Package.S101],
+  ["omitted package", (detail) => delete detail.Package],
+  ["wrong root Product", (detail) => (detail.Name = "OTHER")],
+  ["omitted source dataset", (detail) => delete detail.Package.SourceDatasetName],
+  ["wrong source dataset", (detail) => (detail.Package.SourceDatasetName = "OTHER")],
+  ["contradictory member", (detail) => (detail.Package.S57.DatasetName = "OTHER")],
+  ["contradictory published identity", (detail) => (detail.S57.Name = "OTHER")],
+  ["contradictory specification", (detail) => (detail.Package.S57.ProductSpecification = 1)],
+]) {
+  test(`${change} makes the detail insufficient evidence even when aggregate changes`, () => {
+    assert.equal(
+      compare((detail) => {
+        detail.Package.Status = 2;
+        update(detail);
+      }),
+      null
+    );
+  });
+}
+
+test("unknown states and absent or invalid diagnostics do not manufacture drift", () => {
   assert.equal(
-    detectPackagePopupStatusDrift({ ...input, detail: { ...detail, status: 999 } }),
-    null
-  );
-  assert.equal(
-    detectPackagePopupStatusDrift({ ...input, detail: { datasetName: "OTHER", status: 1 } }),
-    null
-  );
-  assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      attributes: { ...attributes, datasetName: "OTHER" },
+    compare((detail) => {
+      detail.Package.Status = 999;
+      detail.Package.S101.Status = 999;
+      detail.Package.S57.Status = "Error"; // Product status accepts only known numeric IDs.
+      delete detail.Package.S57.ErrorMessage;
     }),
     null
   );
   assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      attributes: { ...attributes, sourceId: "s57" },
-    }),
+    compare((detail) => delete detail.Package.S57.ErrorMessage),
     null
   );
   assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      attributes: { ...attributes, workUnitStatus: { members: {} } },
-    }),
+    compare((detail) => (detail.Package.S57.ErrorMessage = false)),
     null
   );
   assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      attributes: {
-        ...attributes,
-        workUnitStatus: {
-          members: [{ key: "s101", datasetName: "OTHER", status: 15 }],
-        },
-      },
-    }),
+    compare(
+      (detail) => (detail.Package.S57.ErrorMessage = null),
+      (aoi) => delete aoi.Package.S57.ErrorMessage
+    ),
     null
   );
   assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      productContext: { ...productContext, workUnit: null },
-    }),
+    compare(
+      (detail) => (detail.Package.S57.ErrorMessage = "New error"),
+      (aoi) => delete aoi.Package.S57.ErrorMessage
+    ),
+    null
+  );
+  assert.deepEqual(
+    compare(
+      (detail) => (detail.Package.S57.ErrorMessage = "New error"),
+      (aoi) => (aoi.Package.S57.ErrorMessage = null)
+    ),
+    refresh
+  );
+});
+
+test("incomplete AOI member identity or a different source cannot borrow the detail observation", () => {
+  const changed = (detail) => (detail.Package.Status = 2);
+  assert.equal(
+    compare(changed, (aoi) => delete aoi.Package.S57),
     null
   );
   assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      attributes: { ...attributes, workUnitStatus: null },
-    }),
+    compare(changed, () => {}, { ...productContext, sourceId: "s57" }),
     null
   );
   assert.equal(
-    detectPackagePopupStatusDrift({
-      ...input,
-      attributes: {
-        ...attributes,
-        workUnitStatus: {
-          members: [
-            { key: "s101", status: 15 },
-            { key: "s57", status: 1 },
-          ],
-        },
-      },
-    })?.sourceId,
-    "s101"
+    compare(changed, () => {}, { ...productContext, workUnit: null }),
+    null
   );
 });

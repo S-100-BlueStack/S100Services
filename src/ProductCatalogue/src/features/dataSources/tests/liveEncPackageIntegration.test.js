@@ -92,6 +92,7 @@ test("live DTO maps representative geometry, scalar fields and authoritative ord
   assert.deepEqual(result.layers[0].data.features[0].geometry, JSON.parse(raw.Geometry));
   assert.deepEqual(attributes.workUnitStatus, {
     packageStatus: 4,
+    errorMessage: "Package error",
     workflowStatus: 9,
     members: [
       { key: "s101", datasetName: "101DK0041149E", status: 10, errorMessage: null },

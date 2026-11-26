@@ -241,9 +241,11 @@ version checks and execution guards.
 Main-map package contexts expose a declarative `workUnit` with a primary member key and ordered
 members (`key`, `label`, `exportStandard`). `popupProductMetadata.js` projects one column per member;
 `createPopup.js` remains an arbitrary-column table renderer. For ENC-package the order is S-101,
-then S-57. Related normalized `exportMetadata` supplies current candidate values when present.
-Both members use normalized current Product metadata. Missing member metadata
-stays empty; no version, status, error, membership identity or package workflow state is inferred.
+then S-57. Related normalized `exportMetadata` can supply that member's candidate Edition, Update,
+date and report links. The current exact AOI member supplies its status and public diagnostic.
+An absent or invalid current status displays as neutral `Unknown`. An explicit cleared message
+removes the diagnostic, even if the retained Export overlay still carries older error text.
+Both members use normalized current Product metadata for their Product identity.
 Simple/workspace contexts retain their existing single-column projection.
 
 Package column presentation decorates only the Status value cell with the existing status palette.
@@ -477,8 +479,8 @@ Graphic's normalized `workUnitStatus.packageStatus` (backend `Attributes.Package
 Status row contains the ProductState label and, when backend provides an error message,
 the same application-owned hover/focus/click detail trigger previously placed in an additional
 **Error message** row. The additional row is removed. Package-status Error shows the aggregate
-`Attributes.ErrorMessage` using the same trigger; member errors use current `Package.S101` /
-`Package.S57` ErrorMessage or the matching active export overlay.
+`Attributes.ErrorMessage` using the same trigger. Each member diagnostic uses that member's
+current `Package.S101` or `Package.S57` AOI observation.
 
 Only the source AOI/targeted-status refresh updates the map-owned aggregate, members, symbols and
 filters. Product-detail freshness does not rewrite map-owned status. An absent or unsupported
@@ -495,11 +497,11 @@ all other popup actions continue through existing session ownership.
 Products. Transport normalizers project them into `workUnitMetadata.members`;
 initial ENC AOIs populate the same boundary from `Attributes.Package` current
 member fields. The popup shows a Product row in registry member order. Missing
-members stay missing; names are never derived. Active normalized export metadata
-overlays only its matching member's version, status, error and validation artifacts.
-Without an export, current Edition/Update and AOI `workUnitStatus` member status are
-shown. Workflow status never replaces member status. Only Status cells are colored;
-unchanged presentation retains the existing DOM/error-details focus identity.
+members stay missing; names are never derived. The matching Export overlay supplies
+candidate versions, dates and validation artifacts. The current `workUnitStatus`
+member supplies status and diagnostic regardless of Export availability. Only
+Status cells are colored. Unchanged presentation retains the existing DOM and
+error-details focus identity.
 
 Connected package popups use `createWorkspaceFreshnessMonitor` with its 30,000 ms
 default. They prime revision, read Product detail once, then check revision again
@@ -513,10 +515,10 @@ callbacks, and do not poll `jobs/active` or Hangfire jobs.
 
 Detail publication allows only `workUnitMetadata` and `exportMetadata`. Package
 aggregate/member map status, filters, symbols, contextual facets, geometry and source
-identity remain owned by normal Main-map source refresh (10 minutes). Popup freshness
-does not fetch global AOIs. A member status without an active export therefore
-converges through normal source refresh. Non-package job discovery and targeted
-Graphic refresh remain unchanged. F5 did not add mutations; subsequent package action
+identity remain under the Main-map source controller. Popup freshness can request
+a targeted status read when it observes the drift described below. Global AOI reads
+stay on the normal source refresh path (10 minutes). Non-package job discovery
+and targeted Graphic refresh remain unchanged. F5 did not add mutations; subsequent package action
 sessions enabled backend-authorized Pause/Resume and Discard. F6A-F6D enabled
 package-aware Analyze/Review/History navigation; FI-029 preserves that boundary.
 
@@ -562,14 +564,13 @@ identity, connection and cleanup guards remain in place.
 
 ### External Product operations: AOI status drift
 
-An externally completed Product operation (for example, a Swagger-initiated
-standalone Discard) can change Product-detail `status` before the Main-map AOI
-source refreshes. An open package popup compares that authoritative primary-track
-status with the primary member in its current AOI `workUnitStatus`. A recognized,
-identity-consistent mismatch requests **one targeted active-source reload** through
-the existing source controller; detail never writes workflow/member status,
-symbols, filters or identity to a Graphic. Source reconciliation updates the map
-and the open popup using the existing generation and stable-Graphic mechanisms.
+An external Product operation can change the package or member observations in Product detail
+before the Main-map AOI source refreshes. An open package popup first matches the aggregate and
+both declared member identities to the current AOI. It compares known `Package.Status` values,
+corresponding member Product statuses and explicit diagnostics from the matching observations.
+An omitted message provides no comparison, and an explicit clear can be compared to earlier text.
+A verified difference requests **one targeted active-source reload**. The source controller owns
+publication to the map and popup through the existing generation and stable-Graphic mechanisms.
 
 Only connected, current popup detail results may issue this request. A map-owned
 coordinator coalesces in-flight source requests, uses a 30-second retry cooldown

@@ -1,5 +1,7 @@
 import { fetchProductArtifacts } from "../../data/api/productArtifactApi.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
+import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
+import { matchPackageDetailStatus } from "../../dataSources/domain/encPackageStatusObservation.js";
 import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 import { getDefaultWorkspaceProductService } from "../../products/services/workspaceProductService.js";
 import { createWorkspaceWorkUnitService } from "../../products/services/workspaceWorkUnitService.js";
@@ -53,9 +55,12 @@ export async function loadReviewHistories(
             const context = resolution.memberProducts[index];
             const product = await loadMember(context, { ...options, packageMember: true });
             const detail = await fetchProduct(member.datasetName);
+            const current = detail?.data?.workUnitMetadata
+              ? detail.data
+              : normalizeElectronicProductResponse(detail?.data);
             if (
               !detail?.success ||
-              reviewDatasetKey(detail.data?.datasetName) !== reviewDatasetKey(member.datasetName)
+              reviewDatasetKey(current.datasetName) !== reviewDatasetKey(member.datasetName)
             ) {
               throw new Error(
                 detail?.errorMessage ??
@@ -64,15 +69,19 @@ export async function loadReviewHistories(
             }
             for (const expected of resolution.workUnit.members) {
               if (
-                reviewDatasetKey(
-                  detail.data.workUnitMetadata?.members?.[expected.key]?.datasetName
-                ) !== reviewDatasetKey(expected.datasetName)
+                reviewDatasetKey(current.workUnitMetadata?.members?.[expected.key]?.datasetName) !==
+                reviewDatasetKey(expected.datasetName)
               ) {
                 throw new Error("Review package member mapping changed during loading.");
               }
             }
             const attributes = context.data.attributes;
-            const detailMember = detail.data.workUnitMetadata.members[member.key];
+            const detailMember = current.workUnitMetadata.members[member.key];
+            const observation = matchPackageDetailStatus(
+              current,
+              resolution.product.datasetName,
+              resolution.workUnit.members
+            );
             const aoiMember = attributes.workUnitMetadata?.members?.[member.key];
             const matchingAoiMember =
               reviewDatasetKey(aoiMember?.datasetName) === reviewDatasetKey(member.datasetName)
@@ -82,21 +91,21 @@ export async function loadReviewHistories(
               ...product,
               memberKey: member.key,
               memberLabel: member.label,
-              status: detail.data.status ?? attributes.status ?? null,
+              memberStatusObservation: observation?.members[member.key] ?? null,
               edition: firstVersionValue(
-                detail.data.edition,
+                current.edition,
                 detailMember.edition,
                 matchingAoiMember?.edition,
                 attributes.edition
               ),
               update: firstVersionValue(
-                detail.data.update,
+                current.update,
                 detailMember.update,
                 matchingAoiMember?.update,
                 attributes.update
               ),
-              issueDate: detail.data.issueDate ?? attributes.issueDate ?? null,
-              usageBand: detail.data.usageBand ?? attributes.usageBand ?? null,
+              issueDate: current.issueDate ?? attributes.issueDate ?? null,
+              usageBand: current.usageBand ?? attributes.usageBand ?? null,
               productSpecification: attributes.productSpecification,
             };
           })

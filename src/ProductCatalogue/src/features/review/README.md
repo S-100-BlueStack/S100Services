@@ -286,7 +286,11 @@ Each package record uses `workUnit.identityKey` and a signature of ordered membe
 source/Product keys and authoritative specifications. A complete outer payload contains S-101 first,
 S-57 second, with exact ProductContexts, current member metadata and independent content states.
 Member detail reads run after FI-022 priming and optional member work, immediately before
-publication, and validate both concrete mappings. F6A's request-local
+publication, and validate both concrete mappings. Each member's chip reads the exact nested
+`Package.S101` or `Package.S57` Product status from that member's detail response. The board displays
+a same-member public message as plain text below the member header. Missing or unsupported member
+status displays as neutral `Unknown`. Edition and Update continue to use verified published
+metadata. F6A's request-local
 `assertCurrent()` checks the source snapshot before and after optional content reads. Structural
 failure, changed identity/mapping or source replacement cannot publish a half-package. A rejected
 targeted replacement retains the last complete members, displays a separate refresh failure and

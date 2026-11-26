@@ -736,9 +736,9 @@ function createProductMetadataRows(columns, errorDetails, owner) {
         errorDetails.createTrigger(item?.errorMessage, {
           key: column.key,
           label: column.label,
-          text: formatProductStatus(item?.status) || "Error",
+          text: formatColumnProductStatus(item, column) || "Error",
         }),
-      getValue: (item) => formatProductStatus(item?.status),
+      getValue: formatColumnProductStatus,
     },
     {
       label: "Validation files",
@@ -795,7 +795,7 @@ function createProductTableRow({ label, getValue, getContent, decorateCell }, co
     if (content instanceof Node) {
       cell.appendChild(content);
     } else {
-      cell.textContent = getValue?.(column.item) ?? "";
+      cell.textContent = getValue?.(column.item, column) ?? "";
     }
     decorateCell?.(cell, column);
     row.appendChild(cell);
@@ -858,6 +858,10 @@ function createProductTableHeaderCell(label) {
   cell.scope = "col";
   cell.textContent = label;
   return cell;
+}
+
+function formatColumnProductStatus(item, column) {
+  return formatProductStatus(item?.status) || (column.presentation?.statusCell ? "Unknown" : "");
 }
 
 function formatProductStatus(status) {

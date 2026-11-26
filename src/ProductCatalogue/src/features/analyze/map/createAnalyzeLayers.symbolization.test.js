@@ -27,7 +27,8 @@ function packageProduct(statuses, packageStatus = 4, representativeStatus = stat
   const members = statuses.map((status, index) => ({
     datasetName: index ? "Mapped legacy" : "Primary harbour",
     memberKey: index ? "s57" : "s101",
-    status,
+    status: 15,
+    memberStatusObservation: { status },
     workspaceLoadState: "loaded",
     edition: 1,
     productContext: createWorkspaceProductContext({
@@ -99,8 +100,8 @@ test("Analyze package uses the authoritative package status regardless of candid
   assert.deepEqual(graphic.attributes.workUnitStatus, {
     packageStatus: 5,
     members: [
-      { key: "s101", datasetName: "Primary harbour", status: 8 },
-      { key: "s57", datasetName: "Mapped legacy", status: 11 },
+      { key: "s101", datasetName: "Primary harbour", status: 8, errorMessage: undefined },
+      { key: "s57", datasetName: "Mapped legacy", status: 11, errorMessage: undefined },
     ],
   });
   assert.equal(resolveProductContext({ graphic }), product.productContext);

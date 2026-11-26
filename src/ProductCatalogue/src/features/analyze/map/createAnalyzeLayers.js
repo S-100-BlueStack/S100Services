@@ -32,8 +32,8 @@ export async function createAnalyzeLayers(map, products, { onProgress, popupActi
       members: product.members.map((member) => ({
         key: member.memberKey,
         datasetName: member.datasetName,
-        status: member.status,
-        ...(member.errorMessage != null ? { errorMessage: member.errorMessage } : {}),
+        status: member.memberStatusObservation?.status,
+        errorMessage: member.memberStatusObservation?.errorMessage,
       })),
     };
     // The shared popup table reads source-member details from the graphic.

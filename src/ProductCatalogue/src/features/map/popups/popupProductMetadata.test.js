@@ -103,8 +103,8 @@ const packageAttributes = {
   workUnitStatus: {
     workflowStatus: 1,
     members: [
-      { key: "s101", status: 11 },
-      { key: "s57", status: 15 },
+      { key: "s101", datasetName: "PRIMARY", status: 11 },
+      { key: "s57", datasetName: "OTHER", status: 15 },
     ],
   },
 };
@@ -138,14 +138,21 @@ for (const [standard, key, index] of [
           datasetName: packageAttributes.workUnitMetadata.members[key].datasetName,
           edition: 9,
           update: 1,
-          status: 15,
-          errorMessage: "Failed",
+          date: "Candidate date",
+          status: 1,
+          errorMessage: "Old failure",
+          validationArtifacts: [{ url: "/validation", fileName: "candidate.vld" }],
         },
       ]),
     };
     const columns = createPopupProductMetadataColumns(attributes, packageContext);
     assert.equal(columns[index].item.edition, 9);
-    assert.equal(columns[index].item.errorMessage, "Failed");
+    assert.equal(columns[index].item.date, "Candidate date");
+    assert.equal(columns[index].item.status, current[index].item.status);
+    assert.equal(columns[index].item.errorMessage, current[index].item.errorMessage);
+    assert.deepEqual(columns[index].item.validationArtifacts, [
+      { url: "/validation", fileName: "candidate.vld" },
+    ]);
     assert.deepEqual(columns[1 - index], current[1 - index]);
     assert.equal(columns[index].item.datasetName, current[index].item.datasetName);
   });
@@ -168,8 +175,8 @@ test("package status columns retain authoritative member error messages without 
       workUnitStatus: {
         packageStatus: 4,
         members: [
-          { key: "s101", status: 11, errorMessage: null },
-          { key: "s57", status: 15, errorMessage: "S-57 compilation failed" },
+          { key: "s101", datasetName: "PRIMARY", status: 11, errorMessage: null },
+          { key: "s57", datasetName: "OTHER", status: 15, errorMessage: "S-57 compilation failed" },
         ],
       },
     },
@@ -181,4 +188,21 @@ test("package status columns retain authoritative member error messages without 
     columns.map(({ item }) => item.status),
     [11, 15]
   );
+});
+
+test("package display never borrows status or diagnostics without a unique exact AOI member", () => {
+  const attributes = structuredClone(packageAttributes);
+  attributes.workUnitStatus.members = [
+    { key: "s101", datasetName: "OTHER", status: 15, errorMessage: "Wrong product" },
+    { key: "s57", datasetName: "OTHER", status: 99, errorMessage: null },
+  ];
+  attributes.exportMetadata = exportMetadata([
+    { standard: "S100", datasetName: "PRIMARY", edition: 9, status: 15, errorMessage: "Old error" },
+  ]);
+  const [primary, secondary] = createPopupProductMetadataColumns(attributes, packageContext);
+  assert.equal(primary.item.edition, 9);
+  assert.equal(primary.item.status, undefined);
+  assert.equal(primary.item.errorMessage, undefined);
+  assert.equal(secondary.item.status, undefined);
+  assert.equal(secondary.item.errorMessage, null);
 });

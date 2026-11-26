@@ -74,15 +74,29 @@ test("package Collection identity survives refresh without adding child entries"
   }
 });
 
-test("package columns prefer current normalized related export values and keep independent versions", () => {
+test("package columns keep exported versions and take status from exact current members", () => {
   const columns = createPopupProductMetadataColumns(
     {
       edition: 2,
       update: 1,
       status: 1,
+      workUnitMetadata: {
+        members: { s101: { datasetName: "PRIMARY" }, s57: { datasetName: "SECONDARY" } },
+      },
+      workUnitStatus: {
+        members: [
+          { key: "s101", datasetName: "PRIMARY", status: 11 },
+          {
+            key: "s57",
+            datasetName: "SECONDARY",
+            status: 15,
+            errorMessage: "Full validation failure",
+          },
+        ],
+      },
       exportMetadata: normalizeProductExportMetadata([
-        { Type: "S57", Edition: 9, Update: 0, Status: 15, ErrorMessage: "Full validation failure" },
-        { Type: "S100", Edition: 3, Update: 0, Status: 11 },
+        { Type: "S57", Name: "SECONDARY", Edition: 9, Update: 0, Status: 1 },
+        { Type: "S100", Name: "PRIMARY", Edition: 3, Update: 0, Status: 15 },
       ]),
     },
     packageContext()

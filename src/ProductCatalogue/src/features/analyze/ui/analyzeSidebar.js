@@ -321,6 +321,9 @@ function setProductCardsOpen(container, open) {
 }
 
 function createProductCard(product) {
+  const statusObservation = product.memberKey ? product.memberStatusObservation : product;
+  const { status: productStatus, errorMessage } = statusObservation ?? {};
+
   const card = document.createElement("details");
   card.className = "analyze-product-card";
   card.open = true;
@@ -336,8 +339,8 @@ function createProductCard(product) {
   if (product.workUnit?.kind === "package") {
     status.textContent = "ENC package";
   } else {
-    status.textContent = getStatusName(product.status) ?? "Unknown";
-    applyProductStatusTone(status, product.status, { errorMessage: product.errorMessage });
+    status.textContent = getStatusName(productStatus) ?? "Unknown";
+    applyProductStatusTone(status, productStatus, { errorMessage });
   }
 
   summary.appendChild(title);
@@ -374,8 +377,8 @@ function createProductCard(product) {
   rows.appendChild(createInfoRow("Edition", product.edition));
   rows.appendChild(createInfoRow("Issue date", product.issueDate));
 
-  if (product.errorMessage) {
-    rows.appendChild(createInfoRow("Message", product.errorMessage));
+  if (errorMessage) {
+    rows.appendChild(createInfoRow("Message", errorMessage));
   }
   if (product.loadError) {
     rows.appendChild(createInfoRow("Load warning", product.loadError));

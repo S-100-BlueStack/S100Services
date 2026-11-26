@@ -288,8 +288,8 @@ function createHarness() {
       workUnitStatus: {
         workflowStatus: 11,
         members: [
-          { key: "s101", status: 11 },
-          { key: "s57", status: 15 },
+          { key: "s101", datasetName: "PRIMARY", status: 11 },
+          { key: "s57", datasetName: "SECONDARY", status: 15 },
         ],
       },
     },
@@ -398,7 +398,8 @@ test("completed Discard updates current popup attributes without closing the pop
     const context = resolveProductContext({ graphic: h.graphic });
     const getColumns = () => createPopupProductMetadataColumns(h.graphic.attributes, context);
     assert.equal(getColumns()[0].item.edition, 6);
-    assert.equal(getColumns()[0].item.errorMessage, "Old candidate failure");
+    assert.equal(getColumns()[0].item.status, 11);
+    assert.equal(getColumns()[0].item.errorMessage, undefined);
     const section = popup.querySelector(".popup-section");
     const discardButton = popup.querySelectorAll(".popup-action-bar__action")[1];
     assert.equal(discardButton.getAttribute("aria-disabled"), "false");
@@ -525,10 +526,8 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
     }
     assert.equal(h.requests.filter((request) => !request.url.endsWith("/actions")).length, count);
 
-    // Install a real error trigger through normalized member candidate metadata.
-    h.graphic.attributes.exportMetadata = {
-      byStandard: { S57: { datasetName: "SECONDARY", errorMessage: "Complete failure detail" } },
-    };
+    // Install a real error trigger through a source-owned member observation.
+    h.graphic.attributes.workUnitStatus.members[1].errorMessage = "Complete failure detail";
     await refreshOpenProductPopup("PRIMARY");
     const error = tableSection.querySelector(".popup-product-error");
     error.click();
@@ -576,11 +575,18 @@ test("actual popup requests source status revalidation after a newer external Pr
     observations.push(observation);
     return { success: true };
   });
+  h.graphic.attributes.workUnitStatus.packageStatus = 4;
   h.detail(async () => ({
     name: "PRIMARY",
-    status: 1,
+    status: 15,
     s101: { name: "PRIMARY", edition: 1, update: 0 },
     s57: { name: "SECONDARY", edition: 4, update: 0 },
+    package: {
+      sourceDatasetName: "PRIMARY",
+      status: 4,
+      s101: { datasetName: "PRIMARY", status: 11 },
+      s57: { datasetName: "SECONDARY", status: 7 },
+    },
     exports: [],
   }));
   try {
@@ -618,7 +624,16 @@ test("closed popup never requests a source reload from a late Product detail", a
     await h.settle();
     assert.equal(typeof finish, "function");
     h.close();
-    finish({ name: "PRIMARY", status: 1 });
+    finish({
+      name: "PRIMARY",
+      status: 1,
+      package: {
+        sourceDatasetName: "PRIMARY",
+        status: 0,
+        s101: { datasetName: "PRIMARY", status: 1 },
+        s57: { datasetName: "SECONDARY", status: 1 },
+      },
+    });
     await h.settle();
     assert.deepEqual(observations, []);
   } finally {
@@ -1156,6 +1171,113 @@ test("CanAcknowledge switches the same focused popup action between Send and Acc
     assert.equal(h.doc.activeElement, accept);
     assert.equal(
       h.requests.some((request) => request.url.endsWith("/acknowledge")),
+      false
+    );
+  } finally {
+    h.destroy();
+  }
+});
+
+test("current popup diagnostics can clear and return without granting Send or changing report ownership", async () => {
+  const h = createHarness();
+  h.graphic.attributes.workUnitStatus.packageStatus = 4;
+  h.graphic.attributes.workUnitStatus.members[1].errorMessage = "Current S-57 failure";
+  const artifactId = "22222222-2222-4222-8222-222222222222";
+  const report = {
+    id: artifactId,
+    fileName: "validation.txt",
+    url: `/electronicproducts/SECONDARY/artifacts/${artifactId}`,
+  };
+  h.detail(async () => ({
+    name: "PRIMARY",
+    s101: { name: "PRIMARY" },
+    s57: { name: "SECONDARY" },
+    exports: [
+      {
+        type: "S57",
+        name: "SECONDARY",
+        status: 15,
+        errorMessage: "Old overlay failure",
+        edition: 6,
+        validationArtifacts: [report],
+      },
+    ],
+  }));
+  h.actions({
+    packageId: "71ccb411-30f7-4b58-bb85-4af5f6c9872e",
+    sourceDatasetName: "PRIMARY",
+    paused: false,
+    status: 4,
+    canPause: true,
+    canDiscard: true,
+    canSend: false,
+    canAcknowledge: false,
+    eligibleMembers: [],
+  });
+  try {
+    await loadStatuses();
+    const popup = h.open();
+    await h.settle();
+    const section = popup.querySelector(".popup-section");
+    const statusCells = () =>
+      section
+        .querySelector(".popup-product-table")
+        .children[1].children.find((row) => row.children[0].textContent === "Status").children;
+    const actions = () => popup.querySelectorAll(".popup-action-bar__action");
+    const controls = actions();
+    const availability = () => actions().map((button) => button.getAttribute("aria-disabled"));
+    assert.deepEqual(availability(), ["false", "false", "true", null]);
+
+    const error = statusCells()[2].querySelector(".popup-product-error");
+    assert.equal(error.textContent, "Error");
+    error.click();
+    assert.equal(
+      h.doc.body.querySelector(".popup-error-details__text").textContent,
+      "Current S-57 failure"
+    );
+    const reportLink = () => section.querySelector(".popup-validation-file__actions").children[0];
+    assert.ok(reportLink().href.endsWith(report.url));
+
+    const { exportMetadata, ...sourceAttributes } = h.graphic.attributes;
+    assert.ok(exportMetadata);
+    h.graphic.attributes = {
+      ...sourceAttributes,
+      workUnitStatus: {
+        ...sourceAttributes.workUnitStatus,
+        members: [
+          sourceAttributes.workUnitStatus.members[0],
+          { key: "s57", datasetName: "SECONDARY", status: 99, errorMessage: null },
+        ],
+      },
+    };
+    await refreshOpenProductPopup("PRIMARY");
+    await h.settle();
+    assert.equal(statusCells()[2].textContent, "Unknown");
+    assert.equal(statusCells()[2].querySelector(".popup-product-error"), null);
+    assert.equal(h.doc.body.querySelector(".popup-error-details"), null);
+    assert.equal(h.doc.activeElement, section);
+    assert.ok(reportLink().href.endsWith(report.url));
+
+    h.graphic.attributes.workUnitStatus.members[1] = {
+      key: "s57",
+      datasetName: "SECONDARY",
+      status: 15,
+      errorMessage: "New S-57 failure",
+    };
+    await refreshOpenProductPopup("PRIMARY");
+    await h.settle();
+    const restored = statusCells()[2].querySelector(".popup-product-error");
+    restored.click();
+    assert.equal(
+      h.doc.body.querySelector(".popup-error-details__text").textContent,
+      "New S-57 failure"
+    );
+    assert.ok(reportLink().href.endsWith(report.url));
+    assert.deepEqual(actions(), controls);
+    assert.deepEqual(availability(), ["false", "false", "true", null]);
+    controls[2].click();
+    assert.equal(
+      h.requests.some(({ method }) => method === "POST"),
       false
     );
   } finally {

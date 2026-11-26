@@ -173,17 +173,16 @@ function createPackageMemberSection(productItem, member) {
   metadata.className = "pc-review-member__meta";
   const status = document.createElement("span");
   status.className = "pc-review-member__status";
-  status.textContent =
-    member.status === null || member.status === undefined
-      ? "Unknown"
-      : String(getStatusName(member.status) ?? member.status);
-  applyProductStatusTone(status, member.status);
+  const { status: memberStatus, errorMessage } = member.memberStatusObservation ?? {};
+  status.textContent = getStatusName(memberStatus) ?? "Unknown";
+  applyProductStatusTone(status, memberStatus);
   const edition = document.createElement("span");
   edition.className = "pc-review-member__edition";
   edition.textContent = `Edition ${member.edition ?? "-"}`;
   metadata.append(status, edition);
   header.append(identity, metadata);
   section.appendChild(header);
+  if (errorMessage) section.appendChild(createContentStateMessage(`Message: ${errorMessage}`));
   const types = getEnabledReviewContentTypes(productItem);
   for (const type of types) section.appendChild(createReviewContentCard(member, type));
   if (!types.length) section.appendChild(createContentStateMessage("No review content selected."));

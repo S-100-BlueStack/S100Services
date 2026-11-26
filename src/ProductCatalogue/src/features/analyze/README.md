@@ -278,8 +278,11 @@ failed resolution instead of overlapping package items. Unproven failures remain
 One outer model contains `workUnit` and ordered `members`. Each member retains its own exact
 ProductContext, identity, metadata, Product status, validation availability and read-only History.
 The sidebar reuses the ordinary Product card renderer for compact S-101/S-57 sections. Its outer
-label says `ENC package`; it does not substitute workflow status for a member's Product status.
-Members have no independent visibility or remove controls.
+label says `ENC package`. Each member's chip and Message row use the exact nested Product detail
+observation (`Package.S101` or `Package.S57`) after matching the resolved member key and dataset.
+Missing or unsupported member status displays as neutral `Unknown`. The same observation owns the
+public message. The top-level compatibility status and published version metadata keep their
+existing roles. Members have no independent visibility or remove controls.
 
 Only the outer model reaches `createAnalyzeLayers()`. It owns the representative's shared AOI and
 one Graphic. Missing/malformed shared geometry, member context, identity or mapping fails the whole

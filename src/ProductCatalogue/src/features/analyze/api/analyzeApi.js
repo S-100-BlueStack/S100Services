@@ -1,5 +1,6 @@
 import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
 import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
+import { matchPackageDetailStatus } from "../../dataSources/domain/encPackageStatusObservation.js";
 import { normalizeArtifactHistory } from "../../data/normalizers/productArtifact.js";
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
@@ -416,6 +417,7 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
       throw new Error("Product metadata is unavailable.");
     }
     let matchingDetailMember = null;
+    let memberStatusObservation = null;
     if (workUnit) {
       const current = metadata.value?.workUnitMetadata
         ? metadata.value
@@ -436,11 +438,15 @@ async function fetchElectronicAnalyzeProduct(productContext, get, detail = null,
       );
       if (!matchingMember) throw new Error("Package member identity is missing.");
       matchingDetailMember = current.workUnitMetadata.members[matchingMember.key];
+      const primary = workUnit.members.find(({ key }) => key === workUnit.primaryMemberKey);
+      const observation = matchPackageDetailStatus(current, primary?.datasetName, workUnit.members);
+      memberStatusObservation = observation?.members[matchingMember.key] ?? null;
     }
     const product = normalizeAnalyzeProduct(metadata.value, datasetName, { productContext });
     // Backend Product-detail may carry version numbers on S101/S57 members instead
     // of the top-level Product. Reuse only this member's verified normalized values.
     if (matchingDetailMember) {
+      product.memberStatusObservation = memberStatusObservation;
       if (!hasVersionValue(product.edition) && hasVersionValue(matchingDetailMember.edition)) {
         product.edition = matchingDetailMember.edition;
       }

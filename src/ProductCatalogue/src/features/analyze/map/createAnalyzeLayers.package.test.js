@@ -154,14 +154,19 @@ test("Analyze package popup metadata stays tied to validated members", async () 
       ],
     },
     members: [
-      { memberKey: "s101", datasetName: "Primary", edition: 2, update: 1, status: 11 },
+      {
+        memberKey: "s101",
+        datasetName: "Primary",
+        edition: 2,
+        update: 1,
+        memberStatusObservation: { status: 11 },
+      },
       {
         memberKey: "s57",
         datasetName: "Secondary",
         edition: 4,
         update: 0,
-        status: 15,
-        errorMessage: "Validation failed",
+        memberStatusObservation: { status: 15, errorMessage: "Validation failed" },
       },
     ],
   };

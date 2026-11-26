@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { fetchAnalyzeProducts } from "../api/analyzeApi.js";
+import { loadStatuses } from "../../data/stores/statusStore.js";
 import {
   artifactHarness,
   memberNames,
@@ -52,12 +53,27 @@ for (const emptyLegacy of [false, true]) {
     const response = {
       Data: emptyLegacy ? [validationArtifact(0)] : [validationArtifact(0), validationArtifact(1)],
     };
-    const [product] = await fetchAnalyzeProducts(memberNames, artifactHarness({ response }));
+    const memberStates = emptyLegacy
+      ? [{ Status: 5, ErrorMessage: "Awaiting operator" }, { Status: 99 }]
+      : [{ Status: 11 }, { Status: 15, ErrorMessage: "S-57 compilation failed" }];
+    const [product] = await fetchAnalyzeProducts(
+      memberNames,
+      artifactHarness({ response, memberStates })
+    );
     const previousDocument = globalThis.document;
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      Response.json([
+        { Id: 5, Name: "Hold" },
+        { Id: 11, Name: "Ready For Distribution" },
+        { Id: 15, Name: "Error" },
+      ]);
     globalThis.document = { createElement: (tag) => new Element(tag) };
     t.after(() => {
       globalThis.document = previousDocument;
+      globalThis.fetch = previousFetch;
     });
+    await loadStatuses();
     const moduleUrl = new URL("./analyzeSidebar.js", import.meta.url);
     const source = (await readFile(moduleUrl, "utf8"))
       .replace(/^import "@esri\/calcite-components\/components\/calcite-link";\r?\n/m, "")
@@ -79,6 +95,9 @@ for (const emptyLegacy of [false, true]) {
       node.className.split(" ").includes("analyze-package-member")
     );
     assert.equal(sections.length, 2);
+    assert.equal(card.querySelector(".analyze-product-card__status").textContent, "ENC package");
+    const statuses = emptyLegacy ? ["Hold", "Unknown"] : ["Ready For Distribution", "Error"];
+    const messages = emptyLegacy ? ["Awaiting operator", null] : [null, "S-57 compilation failed"];
     assert.equal(
       card.collect((node) => node.className.includes("analyze-product-card__actions")).length,
       0
@@ -87,7 +106,21 @@ for (const emptyLegacy of [false, true]) {
       const metadataLabels = section
         .collect((node) => node.className.split(" ").includes("analyze-info-row__label"))
         .map((node) => node.textContent);
-      assert.deepEqual(metadataLabels, ["Edition", "Issue date"]);
+      const chip = section.querySelector(".analyze-product-card__status");
+      assert.equal(chip.textContent, statuses[index]);
+      assert.equal(
+        chip.className.includes("pc-status-chip--colored"),
+        statuses[index] !== "Unknown"
+      );
+      assert.deepEqual(
+        metadataLabels,
+        messages[index] ? ["Edition", "Issue date", "Message"] : ["Edition", "Issue date"]
+      );
+      if (messages[index]) {
+        const values = section.collect((node) => node.className === "analyze-info-row__value");
+        assert.equal(values.at(-1).textContent, messages[index]);
+        assert.equal(chip.title, messages[index]);
+      }
       const links = section.collect((node) => node.tagName === "calcite-link");
       assert.deepEqual(
         links.map((link) => link.href),

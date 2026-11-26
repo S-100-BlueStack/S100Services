@@ -26,6 +26,7 @@ export function validationArtifact(index, overrides = {}) {
 }
 export function artifactHarness({
   response = { Data: [validationArtifact(0), validationArtifact(1)] },
+  memberStates = null,
 } = {}) {
   const registry = createDataSourceRegistry();
   const calls = [];
@@ -33,6 +34,17 @@ export function artifactHarness({
   const metadata = (name) => ({
     Name: name,
     Status: name === memberNames[0] ? 8 : 11,
+    ...(memberStates && {
+      Status: 15,
+      ErrorMessage: "Aggregate diagnostic",
+      Package: {
+        Layer: 1,
+        SourceDatasetName: memberNames[0],
+        Status: 4,
+        S101: { DatasetName: memberNames[0], ...memberStates[0] },
+        S57: { DatasetName: memberNames[1], ...memberStates[1] },
+      },
+    }),
     Edition: state.edition,
     S101: { Name: memberNames[0] },
     S57: { Name: memberNames[1] },
