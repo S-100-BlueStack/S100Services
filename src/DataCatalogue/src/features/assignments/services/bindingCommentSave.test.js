@@ -6,7 +6,7 @@ import { createAssignmentSession } from "../state/createAssignmentSession.js";
 
 const utc = "2026-11-25T13:00:00Z";
 
-function fixture() {
+function fixture(options = {}) {
   const active = new Set(["enc"]);
   const saved = [];
   const writes = [];
@@ -46,7 +46,10 @@ function fixture() {
       }
     },
   };
-  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 40 });
+  const services = createLiveAssignmentServices(catalogue, {
+    bindingRequestTimeoutMs: 40,
+    ...options,
+  });
   const session = createAssignmentSession({ services });
   return { active, saved, writes, catalogue, session };
 }
@@ -327,5 +330,88 @@ test("assignment history distinguishes paged success from a failed read", async 
   assert.deepEqual(
     session.snapshot().commentHistory.byPipeline.enc.map((item) => item.id),
     ["newer", "older"]
+  );
+});
+
+test("Comment freshness follows append evidence and read-only recovery independently of Save feedback", async () => {
+  const invalidated = [];
+  const { session, catalogue } = fixture({
+    onCommentsInvalidated: (binding) => invalidated.push(binding),
+    onMembershipInvalidated: () => assert.fail("Comment-only Save cannot invalidate membership"),
+  });
+  await session.select("package");
+  await nextTurn();
+  assert.deepEqual(invalidated, []);
+  await session.save();
+  addDraft(session, "enc", "Discarded draft");
+  session.discard();
+  assert.deepEqual(invalidated, []);
+
+  const add = catalogue.addBindingComment;
+  catalogue.addBindingComment = async () => {
+    throw Object.assign(new Error("Denied"), { status: 403 });
+  };
+  addDraft(session, "enc", "Definite rejection");
+  assert.equal(await session.save(), false);
+  assert.deepEqual(invalidated, []);
+  session.discard();
+
+  catalogue.addBindingComment = async (...args) => {
+    await add(...args);
+    throw new Error("Response interrupted");
+  };
+  addDraft(session, "enc", "Possibly saved");
+  assert.equal(await session.save(), false);
+  assert.deepEqual(
+    invalidated,
+    Array.from({ length: 1 }, () => ({ packageId: "package", pipelineId: "enc" }))
+  );
+  assert.equal(session.snapshot().saveConfirmed, false);
+  assert.equal(await session.reconcile(), true);
+  assert.deepEqual(
+    invalidated,
+    Array.from({ length: 2 }, () => ({ packageId: "package", pipelineId: "enc" }))
+  );
+  assert.equal(session.snapshot().saveConfirmed, false);
+});
+
+test("Partial success and preflight-confirmed appends mark only affected Package freshness", async () => {
+  const invalidated = [];
+  const { session, catalogue, saved, writes } = fixture({
+    onCommentsInvalidated: (binding) => invalidated.push(binding),
+  });
+  const add = catalogue.addBindingComment;
+  const first = "Committed before rejection";
+  catalogue.addBindingComment = async (...args) => {
+    if (args[1].text !== first) throw Object.assign(new Error("Denied"), { status: 403 });
+    await add(...args);
+  };
+  await session.select("package");
+  addDraft(session, "enc", first);
+  addDraft(session, "enc", "Definite rejection");
+  assert.equal(await session.save(), false);
+  assert.deepEqual(
+    invalidated,
+    Array.from({ length: 1 }, () => ({ packageId: "package", pipelineId: "enc" }))
+  );
+  session.discard();
+
+  catalogue.addBindingComment = async (...args) => {
+    await add(...args);
+    throw new Error("Unknown response");
+  };
+  const id = addDraft(session, "enc", "Confirmed on replay preflight");
+  assert.equal(await session.save(), false);
+  assert.equal(saved[0].id, id);
+  const late = saved.shift();
+  assert.equal(await session.reconcile(), true);
+  assert.equal(session.snapshot().draft.comments[0].awaitingConfirmation, true);
+  saved.unshift(late);
+  const outgoing = writes.length;
+  assert.equal(await session.save(), true);
+  assert.equal(writes.length, outgoing);
+  assert.deepEqual(
+    invalidated,
+    Array.from({ length: 3 }, () => ({ packageId: "package", pipelineId: "enc" }))
   );
 });

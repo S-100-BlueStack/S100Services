@@ -55,6 +55,22 @@ Current AD name/photo enrichment is optional. History retention follows the
 event store. See [backend contracts](BACKEND_CONTRACTS.md) for actor fallback,
 paging and profile behavior.
 
+## Main Map comment viewer
+
+The speech bubble beneath Severity opens a compact, read-only popup anchored
+to that row. It shows retained saved comments for the row's Package–Workstream
+binding, including its own unbind/rebind history. Workspace contexts of the
+same pair share availability. Other Workstreams and other Packages have
+independent availability. Blue signals saved comments and gray confirms
+absence. Loading, unknown and failure have separate cues.
+
+The popup names the Workstream and shows one page at a time with recorded UTC
+time and actor. Optional directory names and photos use the existing
+event-scoped profile route. Comment-only Save refreshes the affected
+binding's availability when the list is visible. Existing binding
+synchronization applies when bindings also change. Package-level comments
+and editable Discarded status remain COMMENT-03.
+
 ## Package assignment page
 
 The four-panel page retains independent scrolling, draft navigation decisions,

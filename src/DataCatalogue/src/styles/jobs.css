@@ -1038,3 +1038,128 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.job-card__comments,
+.package-comment-viewer__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 1.55rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.job-card__comments[data-availability="present"] {
+  color: var(--calcite-color-brand);
+}
+
+.job-card__comments[data-availability="absent"] {
+  color: var(--dc-text-muted);
+}
+
+.job-card__comments[data-availability="error"] {
+  color: var(--calcite-color-status-danger);
+}
+
+.job-card__comments:hover,
+.package-comment-viewer__action:hover {
+  border-color: var(--dc-border);
+}
+
+.job-card__comments:focus-visible,
+.package-comment-viewer__action:focus-visible,
+.package-comment-viewer__scroll:focus-visible {
+  outline: 2px solid var(--calcite-color-brand);
+  outline-offset: 2px;
+}
+
+.package-comment-viewer {
+  position: fixed;
+  inset: auto;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(17rem, calc(100vw - 1rem));
+  margin: 0;
+  padding: 0.45rem;
+  overflow: auto;
+  border: 1px solid var(--dc-border);
+  background: var(--calcite-color-foreground-1);
+  color: var(--dc-text);
+  box-shadow: var(--dc-shadow);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.package-comment-viewer[hidden],
+.package-comment-viewer [hidden] {
+  display: none;
+}
+
+.package-comment-viewer header,
+.package-comment-viewer footer,
+.package-comment-viewer__actor {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.package-comment-viewer header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.package-comment-viewer footer {
+  justify-content: flex-end;
+}
+
+.package-comment-viewer__action[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.package-comment-viewer__scroll {
+  min-height: 0;
+  max-height: min(13rem, 32vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.package-comment-viewer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.package-comment-viewer li {
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--dc-border);
+}
+
+.package-comment-viewer time {
+  display: block;
+  color: var(--dc-text-muted);
+}
+
+.package-comment-viewer p {
+  margin: 0.25rem 0;
+}
+
+.package-comment-viewer__text {
+  white-space: pre-wrap;
+}
+
+.package-comment-viewer__actor img {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: cover;
+}

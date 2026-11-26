@@ -24,8 +24,12 @@ integration details.
   `1e71d17693294cf75d5aa26afcf378cc337e3bda`, as reported by the user.
 - DC-MAIN-MAP-PERF-01 was accepted locally and committed at
   `9f5efc23934c0349b1ede2a42d5ca12270091319` as reported by the user.
-- DC-MAIN-MAP-SYNC-01 is a candidate awaiting local browser acceptance.
-  COMMENT-02 and COMMENT-03 follow. Functional Compilation/QC remains deferred.
+- DC-MAIN-MAP-SYNC-01 was accepted at
+  `7e82018e7f2608af86f3c1c27fde78d8135b0cee` and merged at
+  `4b2e7b73f16140d25b99767032301d0e73bfcb5e`, as reported by the user.
+- COMMENT-02 v1 was rejected during local browser acceptance. V2 is a
+  binding-scoped candidate awaiting local frontend and backend acceptance.
+  COMMENT-03 and functional Compilation/QC remain deferred.
   The accepted Main Map preview exposes mode selection only. Persistent contextual
   status, archived Package discovery and prospective Workspace matching remain
   separate tasks.
@@ -35,7 +39,8 @@ integration details.
 ## DC-MAIN-MAP-SYNC-01 - Main Map synchronization after assignment (2026-11-26)
 
 **Baseline:** `9f5efc23934c0349b1ede2a42d5ca12270091319`.
-**Status:** frontend candidate awaiting local acceptance.
+**Status:** user-reported local acceptance and merge. The notes below describe
+the delivered behavior.
 
 - A confirmed or possibly committed binding mutation, or authoritative binding
   readback proving a Pipeline change, invalidates Main Map membership. The next
@@ -63,7 +68,7 @@ integration details.
   remain separate. Request-count tests cover 29 Workspaces across three
   Workstreams and 100/200 in one Workstream. Actual timings and payload sizes
   require a controlled comparison on the local API.
-- The user reported improved refresh and 18 requests. The reported Network
+- The user reported that Refresh went from 34 to 18 requests. The reported Network
   view included Overview, individual Package metadata and geometry calls.
   This is an observation from local acceptance. The synthetic request-count
   tests use controlled fixtures. Metadata scaling and long-running memory
@@ -92,12 +97,12 @@ The verification notes below describe the original candidate delivery.
 
 ## Package comment and assignment status follow-ups (2026-11-25)
 
-- **COMMENT-02:** show a comment icon below Severity on the Main Map Package
-  row, blue for saved comments and gray for confirmed absence. The viewer
-  should load saved comments on demand. Confirm an efficient availability
-  contract that avoids per-Package reads and distinguishes unknown/error from
-  confirmed absence. Reuse verified comment, history and profile contracts
-  where they fit.
+- **COMMENT-02:** v2 candidate at baseline
+  `4b2e7b73f16140d25b99767032301d0e73bfcb5e`. V1 was rejected for opening an
+  in-flow card and aggregating availability and text across Workstreams. V2
+  anchors the popup to its initiating button and scopes text and availability
+  to the exact Package–Pipeline binding. Optional profiles still use the actual
+  History event UUID. Local Windows/ArcGIS and browser acceptance are pending.
 - **COMMENT-03 - Package comments and third assignment status:** support Package-level
   comments independent of Workstream bindings. Add an assignment-level
   decision labeled **Discarded** beside **Assigned** and **Not assigned** for

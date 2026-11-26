@@ -1,3 +1,5 @@
+import { createPackageCommentAvailability } from "../../features/jobs/services/createPackageCommentAvailability.js";
+import { createPackageCommentViewer } from "../../features/jobs/ui/createPackageCommentViewer.js";
 import { createJobList } from "../../features/jobs/ui/jobList.js";
 import { createPackageInformationPanel } from "../../features/jobs/ui/createPackageInformationPanel.js";
 import { createPackageScopeControls } from "../../features/jobs/ui/createPackageScopeControls.js";
@@ -11,6 +13,8 @@ export function createJobsOverlay({
   sourceMode = "mock",
   readPackageHistory,
   readPackageHistoryProfile,
+  readCommentAvailability,
+  readBindingComments,
   onScopeChange = () => {},
   now = () => Date.now(),
 } = {}) {
@@ -118,7 +122,50 @@ export function createJobsOverlay({
       : null;
   panelElement.append(headerElement);
   if (scopeControls) panelElement.append(scopeControls.element);
+  const commentAvailability =
+    sourceMode === "live" && readCommentAvailability && readBindingComments
+      ? createPackageCommentAvailability({
+          read: readCommentAvailability,
+          onChange: () => commentViewer.syncButtons(),
+        })
+      : null;
+  const commentViewer = commentAvailability
+    ? createPackageCommentViewer({
+        listElement: jobList.element,
+        panelElement,
+        headerElement,
+        availability: commentAvailability,
+        read: readBindingComments,
+        readProfile: readPackageHistoryProfile,
+      })
+    : null;
+  if (commentViewer) {
+    jobList.setCommentViewer(commentViewer);
+  }
   panelElement.append(jobList.element);
+  if (commentViewer) panelElement.append(commentViewer.element);
+
+  let panelOpen = false;
+  let mainMapActive = true;
+  let waitingForPanelOpen = false;
+  let detailsMode = false;
+  let lastJobsState = null;
+  function syncComments() {
+    if (!commentAvailability || !lastJobsState) return;
+    const state = lastJobsState;
+    const visible = panelOpen && mainMapActive && !waitingForPanelOpen && !detailsMode;
+    if (!visible) commentViewer.close();
+    if (!visible || state.isLoading) {
+      commentAvailability.setContext({ visible, busy: state.isLoading });
+    }
+    if (state.lastChange?.type === JOB_STORE_CHANGE_TYPE.JOBS_LOADED && !state.isLoading) {
+      commentAvailability.acceptJobs(state.lastChange.sequence, state.jobs);
+    }
+    if (visible && !state.isLoading) {
+      commentAvailability.setContext({ visible, busy: false });
+    }
+    commentViewer.syncButtons();
+  }
 
   updateStickyHeaderHeight(panelElement, headerElement);
 
@@ -141,6 +188,8 @@ export function createJobsOverlay({
     ) {
       scopeControls.setJobs(state.jobs);
     }
+    lastJobsState = state;
+    syncComments();
     refreshButton.disabled = state.isLoading;
     const label = state.isLoading ? "Refreshing Packages" : "Refresh Packages";
     refreshButton.title = label;
@@ -150,6 +199,10 @@ export function createJobsOverlay({
   jobList.element.addEventListener("data-catalogue:job-details-mode-changed", (event) => {
     const isDetailsMode = Boolean(event.detail?.isDetailsMode);
 
+    if (detailsMode !== isDetailsMode) {
+      detailsMode = isDetailsMode;
+      syncComments();
+    }
     if (scopeControls) {
       scopeControls.element.hidden = isDetailsMode;
       scopeControls.element.inert = isDetailsMode;
@@ -178,6 +231,20 @@ export function createJobsOverlay({
     refreshButton,
     setPipelineCatalogue(groups) {
       scopeControls?.setCatalogue(groups);
+      commentViewer?.setPipelineCatalogue(groups);
+    },
+    setPanelOpen(open) {
+      panelOpen = open;
+      waitingForPanelOpen = false;
+      syncComments();
+    },
+    setMainMapActive(active, { openJobs = false } = {}) {
+      mainMapActive = active;
+      waitingForPanelOpen = active && openJobs;
+      syncComments();
+    },
+    invalidateComments(binding) {
+      commentAvailability?.invalidate(binding);
     },
     getWorkScope() {
       return scopeControls?.getScope() ?? null;
@@ -222,6 +289,8 @@ export function createJobsOverlay({
       unsubscribeLoading?.();
       scopeControls?.destroy();
       packageInformation?.destroy();
+      commentAvailability?.destroy();
+      commentViewer?.destroy();
       jobList.destroy();
     },
   };

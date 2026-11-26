@@ -1,6 +1,7 @@
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Repositories;
+using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Services;
 using DataCatalague.Api.Services.Commands;
 using Eventuous;
@@ -42,5 +43,45 @@ public sealed class BindingCommentTests
         Assert.Equal(actor, history.FindEvent("package", comment.Id, default)!.Actor);
         Assert.Null(history.FindEvent("other", comment.Id, default));
         Assert.Equal(saved.Text, comment.CommentText);
+    }
+
+    [Fact]
+    public async Task Availability_follows_retained_events_without_geometry_or_profile_services() {
+        const string packageId = "package";
+        const string bindingId = "package::enc";
+        var store = new InMemoryEventStore();
+        var streams = new StreamNameMap();
+        var packages = new PackageCommandService(store);
+        (await packages.Handle(new PackagesCommands.CreatePackage(packageId, "test", "input.zip", "https://example.org/input.zip", "unused-aoi", 0, null, null), default)).ThrowIfError();
+        var bindings = new BindingCommandService(store);
+        (await bindings.Handle(new DispatcherCommands.Bind(bindingId, packageId, "enc"), default)).ThrowIfError();
+        var assignments = new PipelineAssignmentService(store, streams, bindings, new PipelineAssignmentIndex());
+
+        bool? IsPresent() => Assert.Single(assignments.GetCommentAvailability([new BindingCommentScope(packageId, "enc")], default).Items).HasBindingComments;
+        Assert.False(IsPresent());
+        await assignments.AddCommentAsync(packageId, "enc", Guid.NewGuid(), "First", @"PROD\reader", default);
+        Assert.True(IsPresent());
+        var stream = streams.GetStreamName(new BindingId(bindingId));
+        await store.TruncateStream(stream, new StreamTruncatePosition(0), ExpectedStreamVersion.Any, default);
+        Assert.True(IsPresent());
+        Assert.Single(assignments.ListComments(packageId, null, 50, default, "enc").Items);
+        await store.TruncateStream(stream, new StreamTruncatePosition(1), ExpectedStreamVersion.Any, default);
+        Assert.Null(IsPresent());
+        Assert.Throws<KeyNotFoundException>(() => assignments.ListComments(packageId, null, 50, default, "enc"));
+
+        // The assignment state was also truncated, so recreate the binding before appending again.
+        await store.DeleteStream(stream, ExpectedStreamVersion.Any, default);
+        (await bindings.Handle(new DispatcherCommands.Bind(bindingId, packageId, "enc"), default)).ThrowIfError();
+        await assignments.AddCommentAsync(packageId, "enc", Guid.NewGuid(), "Second", @"PROD\reader", default);
+        Assert.True(IsPresent());
+        await store.DeleteStream(stream, ExpectedStreamVersion.Any, default);
+        Assert.Null(IsPresent());
+        Assert.Throws<KeyNotFoundException>(() => assignments.ListComments(packageId, null, 50, default, "enc"));
+        await store.DeleteStream(streams.GetStreamName(new PackageId(packageId)), ExpectedStreamVersion.Any, default);
+        Assert.Null(IsPresent());
+
+        using var aborted = new CancellationTokenSource();
+        aborted.Cancel();
+        Assert.Throws<OperationCanceledException>(() => assignments.GetCommentAvailability([new BindingCommentScope(packageId, "enc")], aborted.Token));
     }
 }

@@ -484,7 +484,7 @@ namespace ProductCatalogueAPI.Controllers
                 return NotFound(response);
             }
 
-            var tracks = await GetRelatedExportTracksAsync(electronicProduct, cancellationToken);
+            var tracks = await GetRelatedEncTracksAsync(electronicProduct, cancellationToken);
             var artifacts = new List<ProductArtifactHistoryResponse>();
             foreach (var track in tracks)
             {
@@ -963,15 +963,22 @@ namespace ProductCatalogueAPI.Controllers
 
         private async Task<IReadOnlyList<ProductExportTrackRecord>> GetRelatedExportTracksAsync(ElectronicProduct electronicProduct, CancellationToken cancellationToken = default)
         {
+            var tracks = await GetRelatedEncTracksAsync(electronicProduct, cancellationToken);
+            return [.. tracks.Where(track => (track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue)
+                || track.State is ProductState.Error or ProductState.Rejected)];
+        }
+
+        private async Task<IReadOnlyList<ProductExportTrackRecord>> GetRelatedEncTracksAsync(ElectronicProduct electronicProduct, CancellationToken cancellationToken)
+        {
             var tracks = new List<ProductExportTrackRecord>();
             foreach (var relatedDatasetName in GetRelatedDatasetNames(electronicProduct))
                 tracks.AddRange(await _workflowRepository.GetTracksAsync(relatedDatasetName, cancellationToken));
 
+            // Report history must retain stored files even after a candidate is cleared.
+            // Only the current export projection applies candidate/state eligibility.
             return [.. tracks
                 .DistinctBy(track => track.Id)
                 .Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101)
-                .Where(track => (track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue)
-                    || track.State is ProductState.Error or ProductState.Rejected)
                 .OrderBy(track => track.ProductSpecification)];
         }
 

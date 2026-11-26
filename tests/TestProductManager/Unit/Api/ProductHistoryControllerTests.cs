@@ -165,7 +165,8 @@ public class ProductHistoryControllerTests
 
         internal sealed class FakeElectronicProductManager(
             Dictionary<string, string> aois,
-            Dictionary<string, ElectronicProduct> products
+            Dictionary<string, ElectronicProduct> products,
+            IReadOnlyDictionary<(string Name, string Specification), IReadOnlyList<ElectronicProduct>>? mappedProducts = null
         ) : IElectronicProductManager
         {
             public IReadOnlyDictionary<string, string> Aois { get; } = aois;
@@ -181,6 +182,9 @@ public class ProductHistoryControllerTests
                 var actual = product?.productSpecification?.name?.Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase);
                 return string.Equals(requested, actual, StringComparison.OrdinalIgnoreCase) ? product : null;
             }
+
+            public IReadOnlyList<ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) =>
+                mappedProducts?.GetValueOrDefault((name, productSpecification)) ?? [];
 
             public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
                 string datasetName,

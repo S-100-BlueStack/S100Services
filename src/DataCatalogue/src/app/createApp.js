@@ -117,6 +117,8 @@ export async function createApp(rootElement) {
     jobStore,
     readPackageHistory: live ? catalogue.packageHistory : undefined,
     readPackageHistoryProfile: live ? catalogue.packageHistoryProfile : undefined,
+    readCommentAvailability: live ? catalogue.bindingCommentAvailability : undefined,
+    readBindingComments: live ? catalogue.bindingComments : undefined,
     onScopeChange(scope) {
       currentWorkScope = scope;
       if (!applyingWorkspaceCatalogue) applyWorkScopeToMap();
@@ -310,6 +312,7 @@ export async function createApp(rootElement) {
         ...options,
         basemapSettings,
         onMembershipInvalidated: live ? jobStore.invalidateMembership : undefined,
+        onCommentsInvalidated: live ? jobsPanel.invalidateComments : undefined,
       }),
     onNavigationError(error) {
       showErrorNotice({
@@ -319,14 +322,16 @@ export async function createApp(rootElement) {
     },
     onOpenJobs: jobsPanelActions.open,
     onReturnMainMap: live
-      ? () => {
+      ? ({ openJobs }) => {
           if (jobStore.hasPendingMembershipRefresh()) {
             void jobsPanel.refreshJobs({ afterAssignment: true });
           }
+          jobsPanel.setMainMapActive(true, { openJobs });
         }
       : undefined,
     onLeaveMainMap: live
       ? () => {
+          jobsPanel.setMainMapActive(false);
           jobStore.cancelNavigationLoad();
           cancelPendingMapRestores();
         }
@@ -579,6 +584,7 @@ export async function createApp(rootElement) {
     setPanelOpen(jobsPanel.element, navbar.jobsButton, isOpen);
     navbar.jobsButton.active = isOpen;
     workspace.setJobsVisible(isOpen);
+    jobsPanel.setPanelOpen(isOpen);
   }
 
   function resetJobsPanelContext() {

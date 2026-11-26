@@ -60,4 +60,39 @@ public sealed class ActorProfileEndpointTests(CatalogueFixture runtime)
         Assert.Equal(actor, (await client.GetFromJsonAsync<ActorProfileResponse>($"/v1/packages/{package.Id}/history/{severity.Id}/profile"))!.Actor);
         Assert.Equal(1, directory.Calls);
     }
+
+    [Fact]
+    public async Task Comment_get_links_to_the_exact_profile_event_without_enriching_availability() {
+        var directory = new DirectoryStub();
+        await using var app = await CatalogueApplication.CreateAsync(runtime, configureServices: services => {
+            services.RemoveAll<IActorProfileDirectory>();
+            services.AddSingleton<IActorProfileDirectory>(directory);
+        });
+        var client = app.Client;
+        await app.CreateAsync<CategoryResponse>("/v1/dispatcher/categories", new { id = "test", displayName = "Test", description = "Test fixtures", prefix = "TT" });
+        const string actor = @"PROD\B123456";
+        client.DefaultRequestHeaders.Remove(TestAuthentication.UserHeader);
+        client.DefaultRequestHeaders.Add(TestAuthentication.UserHeader, actor);
+        var package = await app.CreateAsync<PackageResponse>("/v1/packages", new { category = "test", absoluteUri = "https://example.org/input.zip", esriJSON = CatalogueTest.Geometry });
+        var other = await app.CreateAsync<PackageResponse>("/v1/packages", new { category = "test", absoluteUri = "https://example.org/other.zip", esriJSON = CatalogueTest.DistantGeometry });
+        var pipeline = await app.CreateAsync<PipelineResponse>("/v1/pipelines", new { displayName = "Test pipeline", description = "Test fixtures" });
+        await app.CreateAsync<BindingResponse>("/v1/dispatcher/bindings", new { packageId = package.Id, pipelineId = pipeline.Id });
+        var commentsPath = $"/v1/packages/{package.Id}/binding-comments";
+        var operationId = Guid.NewGuid();
+        await app.CreateAsync<BindingCommentResponse>(commentsPath, new { operationId, pipelineId = pipeline.Id, text = "Review" });
+
+        var comment = Assert.Single((await client.GetFromJsonAsync<BindingCommentPageResponse>($"{commentsPath}?pipelineId={pipeline.Id}"))!.Items);
+        Assert.NotNull(comment.HistoryEventId);
+        Assert.NotEqual(operationId, comment.HistoryEventId);
+        using var batch = await client.PostAsJsonAsync("/v1/packages/binding-comments/availability", new { bindings = new[] { new BindingCommentScope(package.Id, pipeline.Id), new BindingCommentScope(other.Id, pipeline.Id) } });
+        Assert.Equal(HttpStatusCode.OK, batch.StatusCode);
+        Assert.Equal(0, directory.Calls);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/v1/packages/{other.Id}/history/{comment.HistoryEventId}/profile")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/v1/packages/{package.Id}/history/{operationId}/profile")).StatusCode);
+        var profile = await client.GetFromJsonAsync<ActorProfileResponse>($"/v1/packages/{package.Id}/history/{comment.HistoryEventId}/profile");
+        Assert.Equal(actor, profile!.Actor);
+        Assert.Equal("Example user", profile.DisplayName);
+        Assert.Equal(1, directory.Calls);
+    }
 }

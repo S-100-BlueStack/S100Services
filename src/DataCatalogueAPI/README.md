@@ -58,6 +58,21 @@ profile route. See the full [wire contract](../DataCatalogue/docs/BACKEND_CONTRA
 dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter "FullyQualifiedName~BindingComment"
 ```
 
+## Check retained binding-comment availability
+
+`POST /api/v1/packages/binding-comments/availability` is a non-cacheable read
+under the catalogue access policy. Provide `{"bindings":[{"packageId":"...","pipelineId":"..."}]}`
+with 1–200 distinct canonical pairs (512 KiB request cap). Each result echoes
+the pair and `hasBindingComments` (`true` for retained comments, `false` for
+an identifiable binding with none, `null` for missing or unverifiable identity).
+
+To page only one binding, send `pipelineId` on the comment GET. The filter
+applies before cursor validation and pagination. The scoped response echoes the
+Pipeline ID. Omit the filter to read all retained Package binding comments.
+Comment GET items retain the committed `historyEventId` for the Profile route.
+Comment `id`, the cursor and POST acknowledgment retain their original operation
+UUID behavior. See the [COMMENT-02 contract](../DataCatalogue/docs/BACKEND_CONTRACTS.md#comment-02---main-map-binding-comment-reads).
+
 ## Read individual Package history
 
 `GET /api/v1/packages/{id}/history` returns actual committed Package and binding

@@ -98,8 +98,9 @@ export function createWorkflowNavigation({
     } else {
       page?.deactivate?.();
       // A return refresh can start before Packages considers its panel-open reuse policy.
-      onReturnMainMap?.();
-      if (openJobs && isJobsStartupComplete()) onOpenJobs?.();
+      const willOpenJobs = openJobs && isJobsStartupComplete();
+      onReturnMainMap?.({ openJobs: willOpenJobs });
+      if (willOpenJobs) onOpenJobs?.();
     }
   }
 

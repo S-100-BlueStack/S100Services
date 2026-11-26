@@ -149,6 +149,36 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
+        internal readonly record struct BindingCommentStream(
+            string PackageId, string PipelineId, string BindingId, StreamName PackageStream, StreamName BindingStream);
+
+        internal bool?[] ReadBindingCommentAvailability(
+            IReadOnlyList<BindingCommentStream> scopes, CancellationToken cancellationToken) {
+            var result = new bool?[scopes.Count];
+            lock (this._gate) {
+                for (var index = 0; index < scopes.Count; index++) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var scope = scopes[index];
+                    if (this._storage.ContainsKey(scope.PackageStream) &&
+                        this._storage.TryGetValue(scope.BindingStream, out var binding)) {
+                        result[index] = binding.GetBindingCommentPresence(scope, cancellationToken);
+                    }
+                }
+            }
+            return result;
+        }
+
+        internal IReadOnlyList<StreamEvent>? ReadBindingCommentEvents(
+            BindingCommentStream scope, CancellationToken cancellationToken) {
+            lock (this._gate) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!this._storage.ContainsKey(scope.PackageStream) ||
+                    !this._storage.TryGetValue(scope.BindingStream, out var binding)) { return null; }
+
+                return binding.GetBindingCommentEvents(scope, cancellationToken);
+            }
+        }
+
         /// <summary>Captures the existing package and all its historical binding streams together.</summary>
         internal IReadOnlyList<StreamEvent>? ReadPackageEvents(string packageId, StreamName packageStream, CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
@@ -328,6 +358,45 @@ namespace DataCatalague.Api.Repositories
         public DispatcherEvents.V1.BindingCommentAdded? FindBindingComment(Guid operationId)
             => this._events.Select(item => item.Event.Payload).OfType<DispatcherEvents.V1.BindingCommentAdded>()
                 .FirstOrDefault(comment => comment.OperationId == operationId);
+
+        internal bool? GetBindingCommentPresence(
+            InMemoryEventStore.BindingCommentStream scope, CancellationToken cancellationToken) {
+            bool? present = null;
+            for (var index = this._events.Count - 1; index >= 0; index--) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var payload = this._events[index].Event.Payload;
+                if (!MatchesBinding(payload, scope)) { continue; }
+                if (payload is DispatcherEvents.V1.BindingCommentAdded) { return true; }
+                present = false;
+            }
+            return present;
+        }
+
+        internal IReadOnlyList<StreamEvent>? GetBindingCommentEvents(
+            InMemoryEventStore.BindingCommentStream scope, CancellationToken cancellationToken) {
+            List<StreamEvent>? events = null;
+            foreach (var stored in this._events) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var payload = stored.Event.Payload;
+                if (!MatchesBinding(payload, scope)) { continue; }
+                events ??= [];
+                if (payload is DispatcherEvents.V1.BindingCommentAdded) { events.Add(stored.Event); }
+            }
+            return events;
+        }
+
+        private static bool MatchesBinding(object? payload, InMemoryEventStore.BindingCommentStream scope) {
+            // The stream name alone does not prove the exact pair after truncation or a key collision.
+            return payload switch {
+                DispatcherEvents.V1.Binded item => Matches(item.BindingId, item.PackageId, item.PipelineId),
+                DispatcherEvents.V1.Unbound item => Matches(item.BindingId, item.PackageId, item.PipelineId),
+                DispatcherEvents.V1.BindingCommentAdded item => Matches(item.BindingId, item.PackageId, item.PipelineId),
+                _ => false,
+            };
+
+            bool Matches(string bindingId, string packageId, string pipelineId)
+                => bindingId == scope.BindingId && packageId == scope.PackageId && pipelineId == scope.PipelineId;
+        }
 
         public IReadOnlyList<StreamEvent> GetEvents(StreamReadPosition from, int count) {
             IEnumerable<StoredEvent> selected = this._events

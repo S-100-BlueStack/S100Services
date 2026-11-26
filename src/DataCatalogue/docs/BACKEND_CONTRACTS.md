@@ -15,6 +15,47 @@ discovery and prospective Workspace intersection remain separate
 [backend gaps](DC_API_BACKEND_GAPS.md). Dated integration and demo notes retain
 the semantics and limitations known at delivery.
 
+## COMMENT-02 - Main Map binding-comment reads
+
+`POST /v1/packages/binding-comments/availability` is an authorized read with
+`Cache-Control: no-store`. Supply 1–200 distinct canonical Package–Pipeline
+pairs and a body at most 512 KiB.
+
+```json
+{ "bindings": [{ "packageId": "package-1", "pipelineId": "enc" }] }
+```
+
+```json
+{ "items": [{ "packageId": "package-1", "pipelineId": "enc", "hasBindingComments": false }] }
+```
+
+Each identifier has at most 200 UTF-16 code units with no outer whitespace,
+control characters or `::`. Invalid identifiers, duplicate exact pairs and
+invalid list sizes return 400. At six JSON bytes per code unit, 200 pairs
+need at most 480,000 bytes for identifier characters and less than 8 KiB
+more for compact JSON structure. The host applies the action's 512 KiB
+request-size limit to the full body.
+
+The response contains exactly one item per pair. `true` means the verified
+binding has a retained comment. `false` confirms that an identifiable retained
+binding exists without saved comments. `null` covers missing or unverifiable
+Package/binding identity. The read checks the exact retained binding stream and
+its event identities under the existing store lock. It uses no directory,
+geometry or global event read.
+
+`GET /v1/packages/{id}/binding-comments?pipelineId={pipelineId}` reads only
+that binding before sorting, validating `before` and taking a page. The
+response echoes `pipelineId` for scoped reads, including empty pages, so a
+client can distinguish confirmed absence from an unscoped response. A missing
+or unverifiable binding returns 404. An invalid filter or a cursor from another
+binding returns 400. Omit the filter for existing Assignment readback across
+all Package bindings.
+
+Comment GET items use the actual committed stream event UUID as
+`historyEventId` for `GET /v1/packages/{id}/history/{eventId}/profile`. The
+comment `id`, `nextBefore` and POST acknowledgment retain their operation UUID
+behavior. Profile identity still requires the existing Package/event check.
+
 ## COMMENT-01 - Workstream binding comments
 
 Both methods on `/v1/packages/{id}/binding-comments` use the canonical Package

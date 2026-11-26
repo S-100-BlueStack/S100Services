@@ -8,12 +8,15 @@ import { createAssignmentMap } from "../map/assignment/createAssignmentMap.js";
 export function createAssignmentWorkflow(
   runtimeConfig,
   catalogue,
-  { onPackageSelected, basemapSettings, onMembershipInvalidated } = {}
+  { onPackageSelected, basemapSettings, onMembershipInvalidated, onCommentsInvalidated } = {}
 ) {
   return createAssignmentPage({
     services:
       runtimeConfig.sourceMode === "live"
-        ? createLiveAssignmentServices(catalogue, { onMembershipInvalidated })
+        ? createLiveAssignmentServices(catalogue, {
+            onMembershipInvalidated,
+            onCommentsInvalidated,
+          })
         : createPrototypeServices(),
     createMap: createAssignmentMapFactory({
       sourceMode: runtimeConfig.sourceMode,

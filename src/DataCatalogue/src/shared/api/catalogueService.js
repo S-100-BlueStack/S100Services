@@ -7,9 +7,12 @@ import { normalizeActorProfile, validateProfileRequest } from "./actorProfile.js
 import {
   BINDING_COMMENT_PAGE_SIZE,
   normalizeBindingComment,
+  normalizeBindingCommentAvailability,
   normalizeBindingCommentPage,
   toBindingCommentRequest,
   trimBindingComment,
+  validateBindingCommentAvailabilityBindings,
+  validateBindingCommentScope,
 } from "./bindingComments.js";
 
 export function requiredId(value) {
@@ -303,12 +306,26 @@ export function createCatalogueService(client) {
         };
       });
     },
-    async bindingComments(packageId, { before = null, signal } = {}) {
-      const value = await client.request(`/v1/packages/${segment(packageId)}/binding-comments`, {
-        query: { pageSize: BINDING_COMMENT_PAGE_SIZE, before },
+    async bindingCommentAvailability(bindings, { signal } = {}) {
+      validateBindingCommentAvailabilityBindings(bindings);
+      const value = await client.request("/v1/packages/binding-comments/availability", {
+        method: "POST",
+        body: { bindings },
         signal,
       });
-      return normalizeBindingCommentPage(value, packageId, before);
+      return normalizeBindingCommentAvailability(value, bindings);
+    },
+    async bindingComments(packageId, { pipelineId, before = null, signal } = {}) {
+      if (pipelineId !== undefined) validateBindingCommentScope({ packageId, pipelineId });
+      const value = await client.request(`/v1/packages/${segment(packageId)}/binding-comments`, {
+        query: {
+          pageSize: BINDING_COMMENT_PAGE_SIZE,
+          before,
+          ...(pipelineId === undefined ? {} : { pipelineId }),
+        },
+        signal,
+      });
+      return normalizeBindingCommentPage(value, packageId, before, pipelineId);
     },
     async addBindingComment(packageId, draft, { signal } = {}) {
       const body = toBindingCommentRequest(draft);
