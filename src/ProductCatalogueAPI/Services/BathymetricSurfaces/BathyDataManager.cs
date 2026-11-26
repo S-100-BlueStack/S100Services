@@ -69,7 +69,7 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
         var parts = credentials.Split("::", 2, StringSplitOptions.None);
 
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
-            throw new InvalidOperationException($"Bathymetric source {source} requires 'arcgis_portal_user' in username::password format after decryption.");
+            throw new InvalidOperationException($"Bathymetric source {source} requires 'arcgis_portal_user' in username::password format.");
 
         var handler = new PortalSignOnHandler(portal, parts[0], parts[1]);
 
@@ -97,24 +97,17 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
         throw new InvalidOperationException($"Bathymetric source {source} requires an HTTPS URL without credentials, a query or a fragment in '{variable}'.");
     }
 
-    /// <summary>Decrypts one worker environment variable for Portal sign-in.</summary>
-    /// <param name="source">Source to identify in an error.</param>
-    /// <param name="variable">Worker environment variable containing the encrypted value.</param>
-    /// <returns>The decrypted credential for use by the challenge handler.</returns>
+    /// <summary>Reads the Portal credentials from a worker environment variable.</summary>
+    /// <param name="source">Bathymetric source to identify if the variable is missing.</param>
+    /// <param name="variable">Environment variable containing the credentials in username::password format.</param>
+    /// <returns>The credential pair exactly as configured.</returns>
+    /// <exception cref="InvalidOperationException">The variable is missing or blank.</exception>
     private static string ReadCredential(BathymetricSource source, string variable) {
-        var encrypted = Environment.GetEnvironmentVariable(variable);
-        if (!string.IsNullOrWhiteSpace(encrypted)) {
-            try {
-                var value = Configuration.DecryptString(encrypted);
-                if (!string.IsNullOrWhiteSpace(value))
-                    return value;
-            }
-            catch (Exception) {
-                // The decryption exception may contain configuration details.
-            }
-        }
+        var credentials = Environment.GetEnvironmentVariable(variable);
+        if (string.IsNullOrWhiteSpace(credentials))
+            throw new InvalidOperationException($"Bathymetric source {source} requires the environment variable '{variable}'.");
 
-        throw new InvalidOperationException($"Bathymetric source {source} could not read the encrypted credential in '{variable}'.");
+        return credentials;
     }
 
     /// <summary>Drains the manager's ArcGIS lane after the worker stops using it.</summary>
@@ -122,8 +115,8 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
 
     /// <summary>Answers CoreHost challenges only for the explicitly configured Portal.</summary>
     /// <param name="portal">Allowed Portal origin and path.</param>
-    /// <param name="user">Decrypted Portal account.</param>
-    /// <param name="password">Decrypted Portal password.</param>
+    /// <param name="user">Portal account.</param>
+    /// <param name="password">Portal password.</param>
     private sealed class PortalSignOnHandler(Uri portal, string user, string password) : ISignOnHandler
     {
         /// <summary>Indicates that a challenge failed and the visible error should identify sign-in.</summary>
