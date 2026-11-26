@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
 
 import { createAttributeFilterService } from "./attributeFilterService.js";
+import { readEncPackageStatusFilterValues } from "../../dataSources/domain/encPackageStatus.js";
 import {
   ATTRIBUTE_FILTER_SNAPSHOT_READ_STATUS,
   readAttributeFilterSnapshot,
@@ -295,4 +296,43 @@ describe("package-status filter migration", () => {
     assert.equal(service.getSelectedValues("s101", "packageStatus"), null);
     assert.equal(service.getLayerMetadata("s101").visibleCount, 1);
   });
+});
+
+it("capitalizes the Package Unknown label while preserving its filter value and serialization", () => {
+  const layer = createLayer("s101-products", [
+    { workUnitStatus: { packageStatus: 99 } },
+    { workUnitStatus: { packageStatus: 0 } },
+  ]);
+  const register = (service) =>
+    service.replaceProvider({
+      providerId: "s101",
+      generation: 1,
+      layers: [layer],
+      filterDefinitions: [
+        { fieldName: "packageStatus", readValues: readEncPackageStatusFilterValues },
+      ],
+      useLookupOptions: true,
+    });
+  const service = createService();
+  register(service);
+  const entries = service.getValuesForField("s101", "packageStatus");
+  assert.deepEqual(
+    entries.find(({ value }) => value === "unknown"),
+    {
+      value: "unknown",
+      label: "Unknown",
+      count: 1,
+    }
+  );
+  service.setFilter("s101", "packageStatus", ["unknown"], entries.length);
+  const snapshot = service.getFilterSnapshot();
+  assert.deepEqual(snapshot.sources[0].fields, [
+    { fieldName: "packageStatus", mode: "values", values: ["unknown"] },
+  ]);
+  const restored = createService();
+  register(restored);
+  assert.equal(restored.applyFilterSnapshot(JSON.parse(JSON.stringify(snapshot))), true);
+  assert.equal(restored.getLayerMetadata("s101").visibleCount, 1);
+  assert.ok(restored.matchesGraphic(layer.graphics.toArray()[0], layer));
+  assert.equal(restored.matchesGraphic(layer.graphics.toArray()[1], layer), false);
 });

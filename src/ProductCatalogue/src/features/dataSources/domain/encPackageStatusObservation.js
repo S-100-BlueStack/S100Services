@@ -1,3 +1,5 @@
+import { normalizeEncPackageStatus } from "./encPackageStatus.js";
+
 export function packageDatasetKey(name) {
   return typeof name === "string" ? name.trim().toUpperCase() : "";
 }
@@ -46,4 +48,17 @@ export function findPackageStatusMember(members, key, datasetName) {
   return matching.length === 1 && packageDatasetKey(matching[0].datasetName) === name
     ? matching[0]
     : null;
+}
+
+export function resolveObservedPackageStatus(workUnit, members) {
+  const primary = members.find(({ memberKey }) => memberKey === workUnit.primaryMemberKey);
+  const status = normalizeEncPackageStatus(primary?.observedPackageStatus);
+  if (status === undefined) return undefined;
+
+  // Only a comparable, identity-matched detail can contradict the canonical read.
+  const contradictory = members.some(({ observedPackageStatus }) => {
+    const observed = normalizeEncPackageStatus(observedPackageStatus);
+    return observed !== undefined && observed !== status;
+  });
+  return contradictory ? undefined : status;
 }

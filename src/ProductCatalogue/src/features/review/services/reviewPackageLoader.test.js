@@ -34,11 +34,14 @@ for (const names of [
       names[0] === packageNames[0] ? packageNames : [...packageNames].reverse()
     );
     const exactBefore = h.calls.exact.length;
+    const detailBefore = h.calls.detail.length;
     const [product] = await loadReviewHistories([packageNames[0]], {
       ...h.options,
       resolutions: composition.resolutions,
     });
     assert.equal(h.calls.exact.length, exactBefore);
+    assert.deepEqual(h.calls.detail.slice(detailBefore), packageNames);
+    assert.equal(product.displayPackageStatus, 4);
     assert.equal(product.loadState, "loaded", product.error);
     assert.equal(product.workUnitSignature, getReviewWorkUnitSignature(composition.resolutions[0]));
     assert.deepEqual(
@@ -355,4 +358,29 @@ test("Review withholds a contradictory nested observation for both members", asy
     product.members.map(({ memberStatusObservation }) => memberStatusObservation),
     [null, null]
   );
+});
+
+test("Review uses the matched primary detail and detects disagreement without extra requests", async () => {
+  for (const [statuses, expected] of [
+    [[0, null], 0],
+    [[2, 2], 2],
+    [[3, 3], 3],
+    [[5, 2], undefined],
+    [[null, 5], undefined],
+    [[99, 5], undefined],
+  ]) {
+    const h = createReviewPackageFixture();
+    h.controls.packageStatuses = statuses;
+    const composition = await resolveReviewComposition([packageNames[1]], h.options);
+    const readsBefore = h.calls.detail.length;
+    const [product] = await loadReviewHistories([packageNames[1]], {
+      ...h.options,
+      resolutions: composition.resolutions,
+    });
+    assert.equal(product.loadState, "loaded");
+    assert.equal(product.displayPackageStatus, expected, JSON.stringify(statuses));
+    assert.deepEqual(h.calls.detail.slice(readsBefore), packageNames);
+    assert.deepEqual(h.calls.history, packageNames);
+    assert.deepEqual(h.calls.artifacts, packageNames);
+  }
 });

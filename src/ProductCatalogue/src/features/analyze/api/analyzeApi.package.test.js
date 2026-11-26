@@ -31,6 +31,8 @@ function harness({
   missingGeometry = false,
   contradictory = false,
   packageStatus = 4,
+  secondaryPackageStatus = packageStatus,
+  packageSourceName = names[0],
   memberStates = [
     { Status: 11, ErrorMessage: null },
     { Status: 15, ErrorMessage: "S-57 compilation failed" },
@@ -107,8 +109,8 @@ function harness({
           },
     Package: {
       Layer: 1,
-      SourceDatasetName: names[0],
-      Status: packageStatus,
+      SourceDatasetName: packageSourceName,
+      Status: name === names[0] ? packageStatus : secondaryPackageStatus,
       ErrorMessage: "Aggregate diagnostic",
       S101: { DatasetName: statusMemberNames[0], ProductSpecification: 1, ...memberStates[0] },
       S57: { DatasetName: statusMemberNames[1], ProductSpecification: 0, ...memberStates[1] },
@@ -168,6 +170,7 @@ for (const input of [[names[0]], [names[1]], names, [...names].reverse()]) {
       [15, 15]
     );
     assert.equal(product.packageStatus, 4);
+    assert.equal(product.displayPackageStatus, 4);
     assert.deepEqual(
       product.members.map((member) => member.edition),
       [3, 7]
@@ -260,6 +263,7 @@ test("failed refresh retains both accepted members atomically while unrelated su
   );
   assert.equal(next[0].members, accepted.members);
   assert.equal(next[0].aoiGeometry, accepted.aoiGeometry);
+  assert.equal(next[0].displayPackageStatus, 4);
   assert.ok(next[0].loadError);
   assert.equal(next[1].edition, 2);
   assert.equal(retainAcceptedAnalyzePackages([failed], [accepted])[0].members, accepted.members);
@@ -435,4 +439,42 @@ test("Analyze withholds a contradictory nested observation while preserving the 
     product.members.map(({ memberStatusObservation }) => memberStatusObservation),
     [null, null]
   );
+});
+
+test("Analyze package indicator uses validated primary status, including Idle, without another read", async () => {
+  const canonical = harness({ packageStatus: 0, secondaryPackageStatus: null });
+  const [product] = await fetchAnalyzeProducts([names[1]], canonical);
+  assert.equal(product.packageStatus, 0);
+  assert.equal(product.displayPackageStatus, 0);
+  assert.deepEqual(canonical.detailCalls, [...names].reverse());
+  assert.deepEqual(
+    canonical.getCalls,
+    names.map((name) => `electronicproducts/${encodeURIComponent(name)}/artifacts/history`)
+  );
+
+  const refresh = harness({ packageStatus: 2, secondaryPackageStatus: 5 });
+  const [conflict] = await fetchAnalyzeProducts([names[0]], { ...refresh, reuseDetails: false });
+  assert.equal(conflict.packageStatus, 2); // Existing Analyze map owner.
+  assert.equal(conflict.displayPackageStatus, undefined);
+  assert.deepEqual(
+    refresh.getCalls,
+    names.flatMap((name) => {
+      const detail = `electronicproducts/${encodeURIComponent(name)}`;
+      return [detail, `${detail}/artifacts/history`];
+    })
+  );
+  assert.deepEqual(
+    conflict.members.map((member) => member.memberStatusObservation?.status),
+    [11, 15]
+  );
+
+  for (const options of [
+    { packageStatus: null, secondaryPackageStatus: 2 },
+    { packageStatus: 99, secondaryPackageStatus: 2 },
+    { packageStatus: 2, packageSourceName: "Different package" },
+  ]) {
+    const [unverified] = await fetchAnalyzeProducts([names[0]], harness(options));
+    assert.equal(unverified.workspaceLoadState, "loaded");
+    assert.equal(unverified.displayPackageStatus, undefined);
+  }
 });

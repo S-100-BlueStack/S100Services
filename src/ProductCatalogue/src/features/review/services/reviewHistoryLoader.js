@@ -1,7 +1,10 @@
 import { fetchProductArtifacts } from "../../data/api/productArtifactApi.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
 import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
-import { matchPackageDetailStatus } from "../../dataSources/domain/encPackageStatusObservation.js";
+import {
+  matchPackageDetailStatus,
+  resolveObservedPackageStatus,
+} from "../../dataSources/domain/encPackageStatusObservation.js";
 import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 import { getDefaultWorkspaceProductService } from "../../products/services/workspaceProductService.js";
 import { createWorkspaceWorkUnitService } from "../../products/services/workspaceWorkUnitService.js";
@@ -92,6 +95,7 @@ export async function loadReviewHistories(
               memberKey: member.key,
               memberLabel: member.label,
               memberStatusObservation: observation?.members[member.key] ?? null,
+              observedPackageStatus: observation?.status,
               edition: firstVersionValue(
                 current.edition,
                 detailMember.edition,
@@ -120,6 +124,7 @@ export async function loadReviewHistories(
           sourceId: resolution.product.sourceId,
           workUnit: resolution.workUnit,
           workUnitSignature: signature,
+          displayPackageStatus: resolveObservedPackageStatus(resolution.workUnit, members),
           members,
           loadState: REVIEW_PRODUCT_LOAD_STATE.LOADED,
         };

@@ -5,6 +5,7 @@ import { normalizeDashboardReporting } from "./dashboardReporting.js";
 const DEFAULT_SEVERITY = "normal";
 const DEFAULT_TYPE = "activity";
 const FAILED_STATUSES = new Set(["failed", "error", "rejected"]);
+const ACTIVITY_STATUSES = new Set(["active", "completed", "idle", ...FAILED_STATUSES]);
 const IMPORTANT_SEVERITIES = new Set(["important", "critical", "warning"]);
 const IMPORTANT_TYPES = new Set(["export", "validation", "status", "send", "rollback"]);
 
@@ -80,7 +81,10 @@ function normalizeActivity(value, index) {
     readFirstDefined(source, ["timestamp", "Timestamp", "date", "Date"])
   );
   const type = normalizeToken(readFirstDefined(source, ["type", "Type"]), DEFAULT_TYPE);
-  const status = normalizeToken(readFirstDefined(source, ["status", "Status"]), "completed");
+  const rawStatus = readFirstDefined(source, ["status", "Status"]);
+  const statusToken = typeof rawStatus === "string" ? rawStatus.trim().toLowerCase() : "";
+  // Null has no server filter token; it is displayed locally as Unknown.
+  const status = ACTIVITY_STATUSES.has(statusToken) ? statusToken : null;
   const severity = normalizeToken(
     readFirstDefined(source, ["severity", "Severity"]),
     DEFAULT_SEVERITY
@@ -129,7 +133,11 @@ function isImportantActivity(activity) {
     return true;
   }
 
-  return IMPORTANT_TYPES.has(activity.type) && activity.status !== "completed";
+  return (
+    activity.status !== null &&
+    IMPORTANT_TYPES.has(activity.type) &&
+    activity.status !== "completed"
+  );
 }
 
 function normalizeLinks(value) {

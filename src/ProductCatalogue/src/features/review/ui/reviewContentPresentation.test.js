@@ -78,7 +78,7 @@ test("Review Validation presentation distinguishes unavailable, failed, empty, a
     {
       state: REVIEW_CONTENT_PRESENTATION_STATE.UNAVAILABLE,
       status: "Unavailable",
-      message: "No validation reports found for this product.",
+      message: "Validation reports are not available for this Product source.",
     }
   );
   assert.deepEqual(

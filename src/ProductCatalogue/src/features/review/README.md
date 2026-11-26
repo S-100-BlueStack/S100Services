@@ -335,6 +335,19 @@ request lifecycle and focus/scroll contracts are maintained in this README.
 
 The Review sidebar displays accepted local Product selections immediately while the existing Product session resolves canonical work units and loads content. Pending rows are provisional UI composition, not synthetic successful backend payloads. Previous canonical content overrides and workspace-wide content intent must survive alias resolution, intermediate interactions, superseded requests and Refresh. The picker remains keyboard-usable after a selection-triggered render.
 
+## FI-016B Package status and validation availability
+
+The outer ENC Package column shows `Package status` from the canonical member's existing
+identity-matched detail response. It uses the aggregate palette and vocabulary, including
+`Idle` for ID 0. Missing, unsupported or conflicting canonical observations display as
+`Unknown`. Each member keeps its own Product status and content; a failed refresh keeps the
+previous accepted column with its warning.
+
+Internal validation distinguishes source-level unavailability from a successful empty read.
+Unsupported sources display `Validation reports are not available for this Product source.`
+Successful empty results show `0 files`; request failures show `Failed` with the safe request
+error. Available files retain their member, revision, preview and download behavior.
+
 ## FI-016 presentation-only status and error polish
 
 Review content cards retain their existing presentation state contract (`content`, `empty`,

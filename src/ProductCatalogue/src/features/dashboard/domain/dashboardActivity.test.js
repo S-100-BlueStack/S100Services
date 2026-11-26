@@ -130,3 +130,63 @@ describe("dashboardActivity", () => {
     assert.equal(dashboard.summary.reportsAvailable, 2);
   });
 });
+
+it("keeps invalid Activity status local and preserves authoritative statuses, facets and totals", () => {
+  const activities = [
+    { Id: "absent", Type: "send", Description: "Delivery failed" },
+    { Id: "null", Status: null, Severity: "critical" },
+    { Id: "blank", Status: " " },
+    { Id: "wrong-type", Status: ["failed"] },
+    { Id: "unsupported", Status: "Open errors" },
+    { Id: "failed", Status: " Failed " },
+    { Id: "cancelled", Type: "cancel", Status: "completed" },
+    { Id: "compat-error", Status: "error" },
+    { Id: "compat-rejected", Status: "rejected" },
+    { Id: "active", Status: "active" },
+    { Id: "idle", Status: "idle" },
+  ];
+  const expected = [
+    null,
+    null,
+    null,
+    null,
+    null,
+    "failed",
+    "completed",
+    "error",
+    "rejected",
+    "active",
+    "idle",
+  ];
+  const fallback = normalizeDashboardPayload({ Activities: activities }, TEST_RANGE);
+  assert.deepEqual(
+    fallback.activities.map(({ status }) => status),
+    expected
+  );
+  assert.equal(fallback.activities[0].isImportant, false);
+  assert.equal(fallback.activities[1].isImportant, true);
+  assert.equal(fallback.summary.failedOperations, 3);
+  assert.deepEqual(
+    fallback.filterOptions.statuses.map(({ value }) => value),
+    ["active", "completed", "error", "failed", "idle", "rejected"]
+  );
+
+  const authoritative = normalizeDashboardPayload(
+    {
+      Activities: activities,
+      FilterOptions: { Statuses: [{ Value: "completed", Label: "Completed (server)" }] },
+      Summary: { TotalActivities: 33, FailedOperations: 7 },
+      StatusSummary: [{ Status: "completed", Count: 21 }],
+      Paging: { Total: 33, HasMore: true, NextCursor: "server-cursor" },
+    },
+    TEST_RANGE
+  );
+  assert.deepEqual(authoritative.filterOptions.statuses, [
+    { value: "completed", label: "Completed (server)" },
+  ]);
+  assert.deepEqual(authoritative.statusSummary, [{ label: "completed", count: 21, failed: 0 }]);
+  assert.equal(authoritative.summary.totalActivities, 33);
+  assert.equal(authoritative.summary.failedOperations, 7);
+  assert.equal(authoritative.paging.total, 33);
+  assert.equal(authoritative.paging.nextCursor, "server-cursor");
+});

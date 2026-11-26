@@ -30,6 +30,7 @@ export function createReviewPackageFixture() {
     artifactGate: null,
     edition: 3,
     remapped: false,
+    packageStatuses: [4, 4],
     memberStates: [
       { Status: 11, ErrorMessage: null },
       { Status: 15, ErrorMessage: "S-57 compilation failed" },
@@ -93,7 +94,7 @@ export function createReviewPackageFixture() {
         Package: {
           Layer: 1,
           SourceDatasetName: packageNames[0],
-          Status: 4,
+          Status: controls.packageStatuses[index],
           ErrorMessage: "Aggregate diagnostic",
           S101: {
             DatasetName: packageNames[0],

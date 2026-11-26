@@ -702,7 +702,10 @@ function buildFacets({ layers, definitions, useLookupOptions, getStatuses, getUs
       for (const value of readFilterValues(graphic, definition)) {
         const entry = values.get(value) ?? {
           value,
-          label: createFallbackValueLabel(value),
+          label:
+            definition.optionSource === "packageStatuses" && value === "unknown"
+              ? "Unknown"
+              : createFallbackValueLabel(value),
           count: 0,
         };
         entry.count += 1;

@@ -13,6 +13,10 @@ import {
 } from "../../dataSources/domain/encPackageStatus.js";
 import { packageStatusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { applyPopupProductStatusCell } from "./popupProductStatusCell.js";
+import {
+  formatElectronicProductStatus,
+  resolveElectronicProductDisplayStatus,
+} from "../attributes/attributeDisplay.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
 import { getStatusName, getStatusIdByName, getAllStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
@@ -430,7 +434,9 @@ function renderPopupContent(
   const columns = createPopupProductMetadataColumns(attributes, productContext);
   const signature = JSON.stringify({
     columns,
-    statuses: columns.map((column) => formatProductStatus(column.item.status)),
+    statuses: columns.map((column) =>
+      formatColumnProductStatus(column.item, column, productContext)
+    ),
     packageStatus: attributes?.workUnitStatus?.packageStatus,
     packageError: productContext?.workUnit?.kind === "package" ? attributes?.errorMessage : null,
   });
@@ -475,6 +481,7 @@ function renderProductRows(section, columns, errorDetails, attributes, productCo
   const table = createProductMetadataTable(columns, errorDetails, {
     datasetName: productContext?.datasetName,
     isPackage: productContext?.workUnit?.kind === "package",
+    productContext,
   });
 
   if (table) {
@@ -498,11 +505,11 @@ function createPackageStatusRow(attributes, errorDetails) {
   const text = getEncPackageStatusLabel(status);
   const palette = packageStatusColorConfig[status];
   if (palette) value.style.setProperty("--pc-package-status-background", palette.badge);
-  const errorMessage = status === 4 ? attributes?.errorMessage : null;
-  const trigger = errorDetails.createTrigger(errorMessage, {
+  const trigger = errorDetails.createTrigger(attributes?.errorMessage, {
     key: "package-status",
     label: "Package",
     text,
+    isError: status === 4,
   });
   if (trigger) value.appendChild(trigger);
   else value.textContent = text;
@@ -732,13 +739,17 @@ function createProductMetadataRows(columns, errorDetails, owner) {
           });
         }
       },
-      getContent: (item, column) =>
-        errorDetails.createTrigger(item?.errorMessage, {
+      getContent: (item, column) => {
+        const electronic = hasElectronicProductStatus(column, owner?.productContext);
+        const id = electronic ? resolveElectronicProductDisplayStatus(item?.status) : undefined;
+        return errorDetails.createTrigger(item?.errorMessage, {
           key: column.key,
           label: column.label,
-          text: formatColumnProductStatus(item, column) || "Error",
-        }),
-      getValue: formatColumnProductStatus,
+          text: formatColumnProductStatus(item, column, owner?.productContext) || "Unknown",
+          isError: id === 7 || id === 15,
+        });
+      },
+      getValue: (item, column) => formatColumnProductStatus(item, column, owner?.productContext),
     },
     {
       label: "Validation files",
@@ -860,16 +871,16 @@ function createProductTableHeaderCell(label) {
   return cell;
 }
 
-function formatColumnProductStatus(item, column) {
-  return formatProductStatus(item?.status) || (column.presentation?.statusCell ? "Unknown" : "");
+function hasElectronicProductStatus(column, productContext) {
+  return column.presentation?.statusCell || productContext?.capabilities?.backendProductRefresh;
 }
 
-function formatProductStatus(status) {
-  if (!hasDisplayableValue(status)) {
-    return "";
+function formatColumnProductStatus(item, column, productContext) {
+  const status = item?.status;
+  if (hasElectronicProductStatus(column, productContext)) {
+    return formatElectronicProductStatus(status);
   }
-
-  return getStatusName(status);
+  return hasDisplayableValue(status) ? getStatusName(status) : "";
 }
 
 function formatProductTableValue(value) {

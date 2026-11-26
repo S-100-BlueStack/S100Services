@@ -333,6 +333,10 @@ body.pc-analyze-route {
   list-style: none;
 }
 
+.analyze-product-card__summary--package {
+  grid-template-columns: auto minmax(0, 1fr) fit-content(50%);
+}
+
 .analyze-product-card__summary::-webkit-details-marker {
   display: none;
 }

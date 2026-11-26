@@ -4,6 +4,11 @@ import { runInNewContext } from "node:vm";
 import test from "node:test";
 import * as list from "../domain/reviewProductList.js";
 import * as presentation from "./reviewContentPresentation.js";
+import {
+  getEncPackageStatusLabel,
+  normalizeEncPackageStatus,
+} from "../../dataSources/domain/encPackageStatus.js";
+import { packageStatusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { loadReviewHistories } from "../services/reviewHistoryLoader.js";
 import { createReviewPackageFixture, packageNames } from "../testSupport/reviewPackageFixture.js";
 
@@ -14,6 +19,7 @@ class Element {
   dataset = {};
   attributes = {};
   textContent = "";
+  style = { setProperty() {} };
   className = "";
   classList = {
     add: (...names) => {
@@ -51,6 +57,15 @@ const historyRenderers = runInNewContext(
   `${historySource}\n({createProductHistoryBanner,createProductHistoryStateMessage,formatHistoryTimestamp});`,
   { document }
 );
+const indicatorSource = (
+  await readFile(new URL("../../../shared/ui/packageStatusIndicator.js", import.meta.url), "utf8")
+)
+  .replace(/^import[\s\S]*?from "[^"]+";\s*/gm, "")
+  .replace("export function", "function");
+const createPackageStatusIndicator = runInNewContext(
+  `${indicatorSource}\ncreatePackageStatusIndicator;`,
+  { document, getEncPackageStatusLabel, normalizeEncPackageStatus, packageStatusColorConfig }
+);
 const boardSource = (await readFile(new URL("reviewBoard.js", import.meta.url), "utf8"))
   .replace(/^import "[^"]+";\s*/gm, "")
   .replace(/^import[\s\S]*?from "[^"]+";\s*/gm, "")
@@ -62,6 +77,7 @@ const boardExports = runInNewContext(
     ...list,
     ...presentation,
     ...historyRenderers,
+    createPackageStatusIndicator,
     getStatusName: (status) => ({ 5: "Hold", 11: "Ready For Distribution", 15: "Error" })[status],
     getStatusIdByName: (name) =>
       ({
@@ -94,6 +110,10 @@ test("board has one package column with two ordered member sections and one ordi
   });
   const columns = byClass(board, "pc-review-column");
   assert.equal(columns.length, 2);
+  const indicators = byClass(columns[0], "pc-package-status-indicator");
+  assert.equal(indicators.length, 1);
+  assert.equal(indicators[0].textContent, "Package status: Error");
+  assert.equal(byClass(columns[1], "pc-package-status-indicator").length, 0);
   const sections = byClass(columns[0], "pc-review-member");
   assert.deepEqual(
     sections.map((section) => section.dataset.reviewMemberKey),
@@ -211,6 +231,10 @@ test("retained package refresh warning stays outside successful member presentat
   });
   assert.equal(byClass(board, "pc-review-member").length, 2);
   assert.ok(nodes(board).some((node) => node.textContent === "Mapping rejected"));
+  assert.equal(
+    byClass(board, "pc-package-status-indicator")[0].textContent,
+    "Package status: Error"
+  );
   assert.equal(byClass(board, "pc-review-content-card").length, 6);
 });
 
@@ -375,4 +399,19 @@ test("Review shows Hold and neutral Unknown with same-member diagnostic text", a
       .map((node) => node.textContent),
     ["Message: Awaiting operator"]
   );
+});
+
+test("the workspace package indicator displays every aggregate label, including zero", () => {
+  const labels = [
+    [0, "Idle"],
+    [2, "Ready"],
+    [3, "InTransit"],
+    [4, "Error"],
+    [5, "Hold"],
+    [undefined, "Unknown"],
+    [99, "Unknown"],
+  ];
+  for (const [value, label] of labels) {
+    assert.equal(createPackageStatusIndicator(value).textContent, `Package status: ${label}`);
+  }
 });

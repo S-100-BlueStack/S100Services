@@ -1,6 +1,10 @@
 import { getAllLayers } from "../core/layerRegistry.js";
 import { layerSupportsCapability } from "../config/layerDefinitions.js";
-import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
+import {
+  formatElectronicProductStatus,
+  formatStatusDisplayValue,
+} from "../attributes/attributeDisplay.js";
+import { resolveProductContext } from "../../products/domain/productContext.js";
 import { resolveGraphicStatusPresentation } from "../symbology/graphicStatusPresentation.js";
 import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
 import {
@@ -185,6 +189,8 @@ function getGraphicSubtitle(graphic) {
 
   if (presentation.isPackage) {
     values.push(`Package status: ${presentation.label}`);
+  } else if (resolveProductContext({ graphic })?.capabilities?.backendProductRefresh) {
+    values.push(`Status: ${formatElectronicProductStatus(presentation.status)}`);
   } else if (presentation.status !== undefined && presentation.status !== null) {
     values.push(`Status: ${formatStatusDisplayValue(presentation.status)}`);
   }

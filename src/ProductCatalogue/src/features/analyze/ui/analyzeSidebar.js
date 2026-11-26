@@ -1,5 +1,10 @@
 import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { getStatusName } from "../../data/stores/statusStore.js";
+import { createPackageStatusIndicator } from "../../../shared/ui/packageStatusIndicator.js";
+import {
+  formatElectronicProductStatus,
+  resolveElectronicProductDisplayStatus,
+} from "../../map/attributes/attributeDisplay.js";
 import {
   captureWorkspaceTransferFocus,
   createWorkspaceTransferLink,
@@ -334,17 +339,25 @@ function createProductCard(product) {
   title.className = "analyze-product-card__title";
   title.textContent = product.datasetName;
 
-  const status = document.createElement("span");
-  status.className = "analyze-product-card__status";
-  if (product.workUnit?.kind === "package") {
-    status.textContent = "ENC package";
-  } else {
-    status.textContent = getStatusName(productStatus) ?? "Unknown";
-    applyProductStatusTone(status, productStatus, { errorMessage });
-  }
-
   summary.appendChild(title);
-  summary.appendChild(status);
+  if (product.workUnit?.kind === "package") {
+    summary.classList.add("analyze-product-card__summary--package");
+    summary.appendChild(createPackageStatusIndicator(product.displayPackageStatus));
+  } else {
+    const status = document.createElement("span");
+    status.className = "analyze-product-card__status";
+    if (product.memberKey || product.productContext?.capabilities?.backendProductRefresh) {
+      const rawStatus = product.memberKey ? productStatus : product.productStatusForDisplay;
+      status.textContent = formatElectronicProductStatus(rawStatus);
+      applyProductStatusTone(status, resolveElectronicProductDisplayStatus(rawStatus), {
+        errorMessage,
+      });
+    } else {
+      status.textContent = getStatusName(productStatus) ?? "Unknown";
+      applyProductStatusTone(status, productStatus, { errorMessage });
+    }
+    summary.appendChild(status);
+  }
 
   const content = document.createElement("div");
   content.className = "analyze-product-card__content";

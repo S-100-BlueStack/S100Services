@@ -87,12 +87,15 @@ for (const failure of ["missing", "remapped", "failExact"]) {
   test(`failed targeted ${failure} retains the last complete accepted package and retries`, async (t) => {
     const h = await harness(t);
     const old = h.state.products[0];
+    h.controls.packageStatuses = [5, 5];
     h.controls[failure] = failure === "remapped" ? true : packageNames[1];
     assert.equal(await h.session.refresh([packageNames[0]]), false);
     assert.equal(h.state.products[0].members, old.members);
+    assert.equal(h.state.products[0].displayPackageStatus, old.displayPackageStatus);
     assert.ok(h.state.products[0].refreshError);
     h.controls[failure] = failure === "remapped" ? false : null;
     assert.equal(await h.session.refresh([packageNames[0]]), true);
+    assert.equal(h.state.products[0].displayPackageStatus, 5);
     assert.equal(h.state.products[0].refreshError, undefined);
   });
 }

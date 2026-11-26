@@ -15,6 +15,7 @@ class Element {
     this.children = [];
     this.className = "";
     this.textContent = "";
+    this.style = { setProperty() {} };
     this.classList = {
       add: (value) => {
         this.className += ` ${value}`;
@@ -95,7 +96,21 @@ for (const emptyLegacy of [false, true]) {
       node.className.split(" ").includes("analyze-package-member")
     );
     assert.equal(sections.length, 2);
-    assert.equal(card.querySelector(".analyze-product-card__status").textContent, "ENC package");
+    const aggregate = card.querySelector(".pc-package-status-indicator");
+    assert.equal(aggregate.textContent, "Package status: Error");
+    assert.equal(aggregate.tagName, "span");
+    assert.equal(card.children[0].children[0].textContent, memberNames[0]);
+    assert.equal(card.children[0].tagName, "summary");
+    assert.equal(card.open, true);
+    const standalone = createProductCard({
+      ...product,
+      workUnit: null,
+      memberKey: undefined,
+      members: undefined,
+      productStatusForDisplay: 99,
+    });
+    assert.equal(standalone.querySelector(".pc-package-status-indicator"), null);
+    assert.equal(standalone.querySelector(".analyze-product-card__status").textContent, "Unknown");
     const statuses = emptyLegacy ? ["Hold", "Unknown"] : ["Ready For Distribution", "Error"];
     const messages = emptyLegacy ? ["Awaiting operator", null] : [null, "S-57 compilation failed"];
     assert.equal(

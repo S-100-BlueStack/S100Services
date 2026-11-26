@@ -66,6 +66,10 @@ Current frontend shape:
 }
 ```
 
+Public `ErrorCode` and `ErrorMessage` from a legacy state record appear as `Error code` and
+`Error message` on that record's expandable details when supplied. The existing state
+reconciliation, explicit operation events and outcome ownership continue to apply.
+
 ## Current rendering behavior
 
 The shared product history renderer is used by both:

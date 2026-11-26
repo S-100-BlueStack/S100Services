@@ -296,3 +296,50 @@ test("multiple explicit references do not make a unique legacy ID ambiguous", as
   assert.equal(result.events.filter((event) => event.sourceKind === "explicit").length, 2);
   assert.equal(result.events.filter((event) => event.sourceKind === "legacy").length, 1);
 });
+
+test("legacy state diagnostics stay on their own rows and existing explicit reconciliation still applies", async () => {
+  const rows = legacyRows();
+  const result = await history({
+    Data: [
+      { ...rows[0], ErrorCode: "COVERED", ErrorMessage: "Covered by the explicit event" },
+      { ...rows[1], errorMessage: "Last historical failure <script>" },
+      {
+        id: "code-only",
+        name: "101DK001",
+        status: 6,
+        from: "2026-09-09T00:00:00Z",
+        errorCode: "DELIVERY_UNCERTAIN",
+        errorMessage: " ",
+      },
+      {
+        id: "distinct",
+        name: "101DK001",
+        status: 15,
+        from: "2026-09-08T00:00:00Z",
+        ErrorCode: null,
+        ErrorMessage: "Earlier failure",
+      },
+    ],
+    Events: [explicit()],
+  });
+  const diagnostics = (event) => event.details.filter((detail) => detail.label.startsWith("Error"));
+  const find = (id) => result.events.find((event) => event.stateRecordId === id);
+  assert.equal(
+    result.events.some((event) => event.sourceKind === "legacy" && event.stateRecordId === stateId),
+    false
+  );
+  assert.deepEqual(diagnostics(find(previousId)), [
+    { label: "Error message", value: "Last historical failure <script>" },
+  ]);
+  assert.deepEqual(diagnostics(find("code-only")), [
+    { label: "Error code", value: "DELIVERY_UNCERTAIN" },
+  ]);
+  assert.deepEqual(diagnostics(find("distinct")), [
+    { label: "Error message", value: "Earlier failure" },
+  ]);
+  const explicitEvent = find(stateId);
+  assert.equal(explicitEvent.sourceKind, "explicit");
+  assert.equal(explicitEvent.outcome, "Succeeded");
+  assert.deepEqual(diagnostics(explicitEvent), []);
+  assert.equal(explicitEvent.description, "The operation completed successfully.");
+});

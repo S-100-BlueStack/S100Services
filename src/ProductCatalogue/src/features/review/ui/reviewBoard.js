@@ -1,6 +1,7 @@
 import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { getStatusIdByName, getStatusName } from "../../data/stores/statusStore.js";
 import { applyProductStatusTone } from "../../../shared/ui/productStatusTone.js";
+import { createPackageStatusIndicator } from "../../../shared/ui/packageStatusIndicator.js";
 import "@esri/calcite-components/components/calcite-icon";
 import "@esri/calcite-components/components/calcite-link";
 import {
@@ -110,6 +111,9 @@ function createProductReviewColumn(productItem, product) {
   title.title = productItem.datasetName;
   // The selected content is already visible in the cards and sidebar controls.
   header.appendChild(title);
+  if (product.workUnit?.kind === "package") {
+    header.appendChild(createPackageStatusIndicator(product.displayPackageStatus));
+  }
 
   const content = document.createElement("div");
   content.className = "pc-review-column__content pc-scrollbar";

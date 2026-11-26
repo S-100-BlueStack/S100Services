@@ -27,7 +27,10 @@ public diagnostic separately from published metadata and the compatibility statu
 Review use that matched observation for member presentation. Main Map continues to use the
 AOI-owned status normalized by `src/features/dataSources/services/dataSourceNormalizer.js`.
 `src/features/map/popups/popupSourceStatusDrift.js` compares those observations and delegates any
-refresh to the existing source lifecycle.
+refresh to the existing source lifecycle. Analyze and Review derive their outer `Package status`
+indicator from the identity-matched canonical detail observation. A conflicting known member-detail
+aggregate yields neutral `Unknown`. The existing Analyze map status and workflow action projection
+have their own owners.
 
 ## Shared validation viewer ownership
 
