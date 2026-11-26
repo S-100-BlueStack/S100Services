@@ -73,15 +73,13 @@ public sealed class EncPackageSendSafetyTests
         var repository = new PairRepository();
         var capture = new Capture();
         var inbox = new Inbox(capture);
-        var random = new AlwaysAccepted();
-        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(random), inbox, new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
+        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(), inbox, new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
         var members = repository.Deliveries.Select(d => new EncPackageSendMember(d.DatasetName, d.Specification, d.Edition, d.Update, d.RevisionId)).ToArray();
         var packageId = Guid.NewGuid();
         await coordinator.SendPackageAsync("101DK0041335E", packageId, members, "job-123", default);
         await coordinator.SendPackageAsync("101DK0041335E", packageId, members, "job-123", default);
         Assert.Equal(2, repository.Reservations);
         Assert.Equal(2, capture.Messages.Count);
-        Assert.Equal(0, random.Calls);
         Assert.Equal(2, inbox.Polls);
     }
 
@@ -91,7 +89,7 @@ public sealed class EncPackageSendSafetyTests
         var repository = new PairRepository { FailPreflight = true };
         var capture = new Capture();
         var inbox = new Inbox(capture);
-        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(new AlwaysAccepted()), inbox, new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
+        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(), inbox, new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
         var members = repository.Deliveries.Select(d => new EncPackageSendMember(d.DatasetName, d.Specification, d.Edition, d.Update, d.RevisionId)).ToArray();
         await Assert.ThrowsAsync<InvalidDataException>(() => coordinator.SendPackageAsync("101DK0041335E", Guid.NewGuid(), members, "job-123", default));
         Assert.Empty(capture.Messages);
@@ -105,7 +103,7 @@ public sealed class EncPackageSendSafetyTests
     public async Task CapturedResponseFailureIsSurfacedToTheSendJob(string status, string? errorCode) {
         var repository = new PairRepository();
         var capture = new Capture { ProcessingStatus = status, ErrorCode = errorCode };
-        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(new AlwaysAccepted()), new Inbox(capture), new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
+        var coordinator = new ValidationEmailSimulatedSend(repository, capture, new IcEncResponseGenerator(), new Inbox(capture), new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), TimeProvider.System);
         var members = repository.Deliveries.Select(d => new EncPackageSendMember(d.DatasetName, d.Specification, d.Edition, d.Update, d.RevisionId)).ToArray();
         await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.SendPackageAsync("101DK0041335E", Guid.NewGuid(), members, "job-123", default));
         Assert.Equal(2, capture.Messages.Count);
@@ -150,11 +148,6 @@ public sealed class EncPackageSendSafetyTests
     {
         public int Polls { get; private set; }
         public Task PollAsync(CancellationToken cancellationToken) { Assert.Equal(2, capture.Messages.Count); Polls++; return Task.CompletedTask; }
-    }
-    private sealed class AlwaysAccepted : IValidationEmailSimulationRandom
-    {
-        public int Calls { get; private set; }
-        public int Next(int upperBound) { Calls++; return 2; }
     }
     private sealed class Settings : IOptionsMonitor<SendToIcEncOptions>
     {

@@ -14,10 +14,9 @@ namespace ProductCatalogueAPI.Services.Operations;
 /// <summary>
 /// Builds SQL-owned candidates from read-only geodatabase snapshots and deliberately stops before S-128 publication.
 /// </summary>
-public class ExportOperationService(IProductManager productManager, IExportEngineRegistry exportEngines, IProductWorkflowRepository workflowRepository, ISevenCsService sevenCsService, TimeProvider timeProvider, ILogger<ExportOperationService> logger, IEncPackageRepository? packages = null) : IExportOperationService
+public class ExportOperationService(IProductManager productManager, ExportEngineRegistry exportEngines, IProductWorkflowRepository workflowRepository, ISevenCsService sevenCsService, TimeProvider timeProvider, ILogger<ExportOperationService> logger, IEncPackageRepository? packages = null) : IExportOperationService
 {
     private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
-    private readonly IExportEngineRegistry _exportEngines = exportEngines;
     private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
     private readonly ISevenCsService _sevenCsService = sevenCsService;
     private readonly TimeProvider _timeProvider = timeProvider;
@@ -38,7 +37,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             return false;
         foreach (var output in result.Outputs) {
             try {
-                await _exportEngines.GetRequiredEngine(output.Specification).DeleteOutputAsync(
+                await exportEngines.GetRequiredEngine(output.Specification).DeleteOutputAsync(
                     new ExportOutputIdentity(output.DatasetName, output.Specification, output.Edition, output.Update, _electronicProductManager.OutputFolder), cancellationToken);
             }
             catch (Exception exception) {
@@ -54,7 +53,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         var product = ResolveRequiredExportProduct(datasetName);
         var targetDatasetName = product.DatasetName;
         var productSpecification = product.ProductSpecification;
-        var engine = _exportEngines.GetRequiredEngine(productSpecification);
+        var engine = exportEngines.GetRequiredEngine(productSpecification);
         var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(targetDatasetName, productSpecification.ToString(), cancellationToken)
             ?? throw new ExportOperationRejectedException($"Electronic product '{datasetName}' was not found in the public S-128 catalogue.");
 
@@ -233,7 +232,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         // Discard as rolled back; the Worker holds the Product lock until this finishes.
         if (candidateOutput is not null) {
             try {
-                await _exportEngines.GetRequiredEngine(productSpecification).DeleteOutputAsync(
+                await exportEngines.GetRequiredEngine(productSpecification).DeleteOutputAsync(
                     candidateOutput, cancellationToken);
             }
             catch (Exception exception) {

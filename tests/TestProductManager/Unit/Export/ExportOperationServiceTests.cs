@@ -454,7 +454,7 @@ public sealed class ExportOperationServiceTests
         new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, sevenCs ?? new FakeSevenCsService(validation, diagnostics ?? [], validationFailure),
         new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml", packages, logger);
 
-    private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml, IEncPackageRepository? packages, ILogger<ExportOperationService>? logger = null)
+    private sealed class TestExportOperationService(IProductManager productManager, ExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml, IEncPackageRepository? packages, ILogger<ExportOperationService>? logger = null)
         : ExportOperationService(productManager, engines, repository, sevenCs, timeProvider, logger ?? NullLogger<ExportOperationService>.Instance, packages)
     {
         protected override string SerializeDataset(YamlDataset dataset) => yaml;

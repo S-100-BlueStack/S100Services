@@ -93,10 +93,8 @@ public static class ValidationEmailRegistrations
         services.AddScoped<IValidationEmailInboxProcessor>(provider => provider.GetRequiredService<ValidationEmailService>());
         services.AddScoped<IValidationEmailSimulatedSend, ValidationEmailSimulatedSend>();
         services.AddScoped<IValidationEmailSimulationStore>(provider => provider.GetRequiredService<ValidationEmailRepository>());
-        services.AddSingleton<IValidationEmailSimulationRandom, ValidationEmailSimulationRandom>();
         services.AddScoped<IValidationResponseGenerator, IcEncResponseGenerator>();
-        services.AddScoped<IValidationEmailSimulationService>(provider => new ValidationEmailSimulationService(provider.GetRequiredService<IValidationEmailSimulationStore>(),
-            provider.GetRequiredService<IValidationResponseGenerator>(), () => provider.GetRequiredService<IOptions<ValidationEmailOptions>>().Value.Mode, provider.GetRequiredService<TimeProvider>()));
+        services.AddScoped<IValidationEmailSimulationService, ValidationEmailSimulationService>();
         if (worker) {
             services.AddTransient<ProcessValidationMailboxJob>();
             services.AddHostedService<ValidationEmailSchedule>();

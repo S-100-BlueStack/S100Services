@@ -62,8 +62,7 @@ public sealed class ProductExternalExportRepository(DbConnectionFactory connecti
     /// <param name="owner">Authenticated producer identity, when available.</param>
     /// <param name="token">Cancels the batch and rolls back incomplete locks.</param>
     /// <returns>The current exports or null when the batch contains a conflicting dataset.</returns>
-    internal async Task<ExternalProductExportResponse[]?> StartAsync(ExternalProductReference[] products, Guid exportId,
-        ProductSpecification specification, ExportEngineKind engine, string? owner, CancellationToken token) {
+    internal async Task<ExternalProductExportResponse[]?> StartAsync((string DatasetName, int PublishedEdition)[] products, Guid exportId, ProductSpecification specification, ExportEngineKind engine, string? owner, CancellationToken token) {
         foreach (var product in products)
             await workflow.GetOrCreateTrackAsync(product.DatasetName, specification, engine, product.PublishedEdition, 0, token);
 
@@ -280,11 +279,6 @@ public sealed class ProductExternalExportRepository(DbConnectionFactory connecti
             VALUES (@ArtifactId, @TrackId, @RevisionId, @Kind, @FileName, @MediaType, @Content, @Hash, @Now);
             """, new { ArtifactId = artifactId, TrackId = trackId, RevisionId = revisionId, Kind = kind.ToString(), FileName = fileName,
                 MediaType = mediaType, Content = content, Hash = hash, Now = now }, transaction, cancellationToken: token));
-
-    /// <summary>The S-128 metadata needed to initialize an external export track.</summary>
-    /// <param name="DatasetName">Canonical catalogue dataset name.</param>
-    /// <param name="PublishedEdition">Edition recorded in S-128, or zero for a new dataset.</param>
-    internal sealed record ExternalProductReference(string DatasetName, int PublishedEdition);
 
     /// <summary>Revision edition and timestamp assigned by the database.</summary>
     private sealed class NewRevision

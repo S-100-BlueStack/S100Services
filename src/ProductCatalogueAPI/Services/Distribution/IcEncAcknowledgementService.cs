@@ -36,18 +36,17 @@ public sealed record IcEncAcknowledgementResult(Guid DeliveryId, Guid? PackageId
     public string? PackageName { get; init; }
 }
 
-/// <summary>Application boundary shared by future email ingestion and the manual recovery endpoint.</summary>
-public interface IIcEncAcknowledgementService
-{
-    /// <summary>Records a verified acceptance or rejection for the current delivered revision.</summary>
-    Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, CancellationToken cancellationToken);
-}
-
 /// <summary>Finalizes accepted pairs immediately in the worker; API requests queue worker execution and DPC recovers failures.</summary>
 public sealed class IcEncAcknowledgementService(IEncPackageAcknowledgementRepository repository, IBackgroundJobClient jobs,
-    IOptionsMonitor<SendToIcEncOptions> options, TimeProvider clock, ILogger<IcEncAcknowledgementService> logger, IOptions<ValidationEmailOptions>? emailOptions = null, IEncPackageFinalizationService? finalization = null) : IIcEncAcknowledgementService
+    IOptionsMonitor<SendToIcEncOptions> options, TimeProvider clock, ILogger<IcEncAcknowledgementService> logger, IOptions<ValidationEmailOptions>? emailOptions = null, IEncPackageFinalizationService? finalization = null)
 {
-    /// <inheritdoc/>
+    /// <summary>Records an exact delivery decision and starts finalization once both ENC members are accepted.</summary>
+    /// <param name="acknowledgement">Verified acceptance or rejection with its source and candidate identity.</param>
+    /// <param name="cancellationToken">Cancels persistence or immediate worker finalization.</param>
+    /// <returns>The matched delivery, or null when there is no eligible exact match.</returns>
+    /// <exception cref="ArgumentNullException">The acknowledgement is null.</exception>
+    /// <exception cref="ArgumentException">The acknowledgement lacks a valid identity or notice reference.</exception>
+    /// <exception cref="InvalidOperationException">The notice source conflicts with the configured mode.</exception>
     public async Task<IcEncAcknowledgementResult?> RecordAsync(IcEncAcknowledgement acknowledgement, CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(acknowledgement);
         var simulation = acknowledgement.Source == IcEncAcknowledgementSource.Simulation;

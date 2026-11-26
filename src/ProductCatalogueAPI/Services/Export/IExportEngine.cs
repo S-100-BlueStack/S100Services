@@ -19,12 +19,3 @@ public interface IExportEngine
     /// <summary>Removes filesystem output for a cancelled, unverified candidate.</summary>
     Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default);
 }
-
-/// <summary>
-/// Resolves a single export engine for a product specification.
-/// </summary>
-public interface IExportEngineRegistry
-{
-    /// <summary>Gets the configured engine for a product specification.</summary>
-    IExportEngine GetRequiredEngine(ProductSpecification productSpecification);
-}
