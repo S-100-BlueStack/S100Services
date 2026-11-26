@@ -9,10 +9,6 @@ namespace ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc;
 /// <summary>Creates unconditional simulated acceptance reports using real candidate identity and outgoing checksums.</summary>
 public sealed class IcEncResponseGenerator : IValidationResponseGenerator
 {
-    /// <summary>Retains the existing constructor contract; simulation no longer draws any random outcomes.</summary>
-    /// <param name="random">Legacy injected dependency, retained for source compatibility and never consumed.</param>
-    public IcEncResponseGenerator(IValidationEmailSimulationRandom random) => ArgumentNullException.ThrowIfNull(random);
-
     /// <summary>Generates one permanently synthetic unconditional acceptance notice, without accessing any mailbox or workflow.</summary>
     /// <param name="candidate">Exact immutable candidate including its stored exchange set.</param>
     /// <param name="sourceKey">Stable send-job or preview request key.</param>

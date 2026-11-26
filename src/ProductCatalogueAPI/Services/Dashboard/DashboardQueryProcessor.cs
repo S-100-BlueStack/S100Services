@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using ProductCatalogueAPI.Contracts;
@@ -93,16 +94,19 @@ public sealed record DashboardQueryOptions(
             return false;
         }
 
-        if (normalizedCursor is not null && !DashboardQueryProcessor.IsValidCursor(normalizedCursor))
+        if (normalizedCursor is not null)
         {
-            validationMessage = "The 'cursor' query parameter is invalid.";
-            return false;
-        }
+            if (!DashboardQueryProcessor.DashboardCursor.TryParse(normalizedCursor, out var parsedCursor))
+            {
+                validationMessage = "The 'cursor' query parameter is invalid.";
+                return false;
+            }
 
-        if (normalizedCursor is not null && !DashboardQueryProcessor.CursorMatchesSort(normalizedCursor, options))
-        {
-            validationMessage = "The 'cursor' query parameter does not match the requested sort.";
-            return false;
+            if (!parsedCursor.MatchesSort(options))
+            {
+                validationMessage = "The 'cursor' query parameter does not match the requested sort.";
+                return false;
+            }
         }
 
         return true;
@@ -129,14 +133,6 @@ public sealed record DashboardQueryResult(
 
 public static class DashboardQueryProcessor
 {
-    public static bool IsValidCursor(string value) =>
-        DashboardCursor.TryParse(value, out _);
-
-    public static bool CursorMatchesSort(string value, DashboardQueryOptions options) =>
-        DashboardCursor.TryParse(value, out var cursor)
-        && cursor!.SortBy == options.SortBy
-        && cursor.SortDirection == options.SortDirection;
-
     private static readonly HashSet<string> FailedStatuses =
         new(StringComparer.OrdinalIgnoreCase) { "failed", "error", "rejected" };
 
@@ -276,12 +272,12 @@ public static class DashboardQueryProcessor
         }
 
         if (!DashboardCursor.TryParse(options.Cursor, out var cursor)
-            || !CursorMatchesSort(options.Cursor, options))
+            || !cursor.MatchesSort(options))
         {
             throw new ArgumentException("Invalid Dashboard cursor or sort mismatch.", nameof(options));
         }
 
-        return activities.Where(activity => ComparePosition(activity, cursor!.PrimaryValue,
+        return activities.Where(activity => ComparePosition(activity, cursor.PrimaryValue,
             cursor.TimestampUtcTicks, cursor.ActivityId, options) > 0).ToArray();
     }
 
@@ -323,7 +319,7 @@ public static class DashboardQueryProcessor
 
         if (!MatchesToken(activity.Type, options.Type)
             || !MatchesToken(activity.Status, options.Status)
-            || !MatchesProduct(activity.DatasetName, options.Product))
+            || !MatchesToken(activity.DatasetName, options.Product))
         {
             return false;
         }
@@ -360,10 +356,6 @@ public static class DashboardQueryProcessor
     }
 
     private static bool MatchesToken(string value, string filter) =>
-        filter == DashboardQueryOptions.AnyValue
-        || string.Equals(value, filter, StringComparison.OrdinalIgnoreCase);
-
-    private static bool MatchesProduct(string value, string filter) =>
         filter == DashboardQueryOptions.AnyValue
         || string.Equals(value, filter, StringComparison.OrdinalIgnoreCase);
 
@@ -455,7 +447,13 @@ public static class DashboardQueryProcessor
                     .Select(part => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(part.ToLowerInvariant())))
         };
 
-    private sealed record DashboardCursor(
+    /// <summary>Identifies the last row of a page under a specific dashboard sort.</summary>
+    /// <param name="TimestampUtcTicks">UTC timestamp used to order rows and break ties.</param>
+    /// <param name="ActivityId">Stable final tie-breaker when rows share the same timestamp.</param>
+    /// <param name="SortBy">Field used to order the page.</param>
+    /// <param name="SortDirection">Primary sort direction.</param>
+    /// <param name="PrimaryValue">Last row's sort value when sorting by a non-time field.</param>
+    internal sealed record DashboardCursor(
         long TimestampUtcTicks, string ActivityId, string SortBy = "time",
         string SortDirection = "desc", string PrimaryValue = "")
     {
@@ -469,7 +467,17 @@ public static class DashboardQueryProcessor
                 .Replace('/', '_');
         }
 
-        public static bool TryParse(string value, out DashboardCursor? cursor)
+        /// <summary>Checks that the cursor can continue a query using the same sort field and direction.</summary>
+        /// <param name="options">The dashboard query that will continue the page.</param>
+        /// <returns>True when both sort settings match.</returns>
+        internal bool MatchesSort(DashboardQueryOptions options) =>
+            SortBy == options.SortBy && SortDirection == options.SortDirection;
+
+        /// <summary>Decodes both the current and legacy dashboard cursor formats.</summary>
+        /// <param name="value">The cursor supplied with the query.</param>
+        /// <param name="cursor">The decoded cursor on success.</param>
+        /// <returns>True when the cursor has a valid structure and sort settings.</returns>
+        internal static bool TryParse(string value, [NotNullWhen(true)] out DashboardCursor? cursor)
         {
             cursor = null;
 

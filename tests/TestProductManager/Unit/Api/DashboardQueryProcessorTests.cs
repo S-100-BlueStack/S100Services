@@ -315,7 +315,8 @@ public class DashboardQueryProcessorTests
     [InlineData("v1|product|asc|100||")]
     public void RejectsMalformedVersionedCursor(string decoded)
     {
-        Assert.False(DashboardQueryProcessor.IsValidCursor(EncodeCursor(decoded)));
+        Assert.False(DashboardQueryOptions.TryCreate(null, null, null, null, null, null, 1, EncodeCursor(decoded), out _, out var message));
+        Assert.Equal("The 'cursor' query parameter is invalid.", message);
     }
 
     [Fact]

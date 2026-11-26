@@ -5,12 +5,11 @@ using ProductCatalogueAPI.Services.ValidationEmail;
 namespace ProductCatalogueAPI.Services.ValidationEmail.Providers.IcEnc;
 
 /// <summary>Bridges email evidence to the same business service used by the manual acknowledgement endpoint.</summary>
-public sealed class IcEncAcknowledgementAdapter(IIcEncAcknowledgementService acknowledgements) : IValidationEmailDecisionSink
+public sealed class IcEncAcknowledgementAdapter(IcEncAcknowledgementService acknowledgements) : IValidationEmailDecisionSink
 {
     /// <inheritdoc/>
-    public async Task<bool> ApplyAsync(Guid emailId, ValidationOutgoingFile file, ValidationEmailParseResult parsed, CancellationToken cancellationToken) {
-        return await RecordAsync(emailId, file, parsed, IcEncAcknowledgementSource.Email, cancellationToken);
-    }
+    public Task<bool> ApplyAsync(Guid emailId, ValidationOutgoingFile file, ValidationEmailParseResult parsed, CancellationToken cancellationToken) =>
+        RecordAsync(emailId, file, parsed, IcEncAcknowledgementSource.Email, cancellationToken);
 
     /// <inheritdoc/>
     public Task<bool> ApplySimulationAsync(Guid emailId, ValidationOutgoingFile file, ValidationEmailParseResult parsed, CancellationToken cancellationToken) =>

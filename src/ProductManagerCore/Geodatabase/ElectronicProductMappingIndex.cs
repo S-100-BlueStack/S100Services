@@ -31,17 +31,16 @@ internal sealed class ElectronicProductMappingIndex
     /// <returns>The unique product with that dataset name, or <see langword="null"/> when no product exists.</returns>
     /// <exception cref="ProductMappingIntegrityException">Thrown when the same dataset name is used by multiple product specifications.</exception>
     public ElectronicProduct? ResolveByDatasetName(string datasetName) {
-        var normalizedName = NormalizeDatasetName(datasetName);
-        var matches = _productsByIdentity
-            .Where(pair => pair.Key.DatasetName == normalizedName)
-            .Select(pair => pair.Value)
-            .ToArray();
-
-        return matches.Length switch {
-            0 => null,
-            1 => matches[0],
-            _ => throw new ProductMappingIntegrityException($"Dataset '{datasetName}' is used by multiple S-128 ElectronicProducts with different product specifications.")
-        };
+        var normalizedName = NormalizeId(datasetName);
+        ElectronicProduct? match = null;
+        foreach (var (identity, product) in _productsByIdentity) {
+            if (identity.DatasetName != normalizedName)
+                continue;
+            if (match is not null)
+                throw new ProductMappingIntegrityException($"Dataset '{datasetName}' is used by multiple S-128 ElectronicProducts with different product specifications.");
+            match = product;
+        }
+        return match;
     }
 
     public static ElectronicProductMappingIndex Create(IEnumerable<ElectronicProductCatalogueEntry> entries) {
@@ -56,7 +55,7 @@ internal sealed class ElectronicProductMappingIndex
             if (!productsByIdentity.TryAdd(identity, entry.Product))
                 throw new ProductMappingIntegrityException($"Multiple S-128 ElectronicProduct rows use dataset '{entry.Product.datasetName}' and specification '{entry.Product.productSpecification?.name}'.");
 
-            var featureId = NormalizeFeatureId(entry.FeatureId);
+            var featureId = NormalizeId(entry.FeatureId);
             if (string.IsNullOrWhiteSpace(featureId))
                 continue;
             if (!identityByFeatureId.TryAdd(featureId, identity))
@@ -82,7 +81,7 @@ internal sealed class ElectronicProductMappingIndex
     }
 
     public ElectronicProduct? Resolve(string datasetName, string productSpecification) {
-        var exactIdentity = new ProductIdentity(NormalizeProductSpecification(productSpecification), NormalizeDatasetName(datasetName));
+        var exactIdentity = new ProductIdentity(NormalizeProductSpecification(productSpecification), NormalizeId(datasetName));
         if (_productsByIdentity.TryGetValue(exactIdentity, out var exact))
             return exact;
 
@@ -94,20 +93,26 @@ internal sealed class ElectronicProductMappingIndex
         };
     }
 
+    /// <summary>Returns distinct mapped products of the requested specification in dataset-name order.</summary>
+    /// <param name="datasetName">Dataset name of the source products.</param>
+    /// <param name="productSpecification">Required specification of each mapped product.</param>
+    /// <returns>Products linked through S-128 ProductMapping feature bindings.</returns>
     public IReadOnlyList<ElectronicProduct> GetMapped(string datasetName, string productSpecification) {
-        var normalizedName = NormalizeDatasetName(datasetName);
+        var normalizedName = NormalizeId(datasetName);
         var normalizedSpecification = NormalizeProductSpecification(productSpecification);
-        var sourceIdentities = _productsByIdentity.Keys.Where(identity => identity.DatasetName == normalizedName).ToArray();
-        var results = new Dictionary<ProductIdentity, ElectronicProduct>();
+        var targets = new HashSet<ProductIdentity>();
 
-        foreach (var source in sourceIdentities) {
-            if (!_relationships.TryGetValue(source, out var related))
+        foreach (var (source, related) in _relationships) {
+            if (source.DatasetName != normalizedName)
                 continue;
-            foreach (var target in related.Where(identity => identity.ProductSpecification == normalizedSpecification))
-                results[target] = _productsByIdentity[target];
+            foreach (var target in related) {
+                if (target.ProductSpecification == normalizedSpecification)
+                    targets.Add(target);
+            }
         }
 
-        return results.OrderBy(pair => pair.Key.DatasetName, StringComparer.OrdinalIgnoreCase).Select(pair => pair.Value).ToArray();
+        return targets.OrderBy(target => target.DatasetName, StringComparer.OrdinalIgnoreCase)
+            .Select(target => _productsByIdentity[target]).ToArray();
     }
 
     /// <summary>Reads ProductMapping target IDs from flattened S-128 feature bindings.</summary>
@@ -132,7 +137,7 @@ internal sealed class ElectronicProductMappingIndex
                     string.Equals(binding.featureType, nameof(ElectronicProduct), StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(association.S100FC_code, nameof(ProductMapping), StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(binding.featureId))
-                .Select(binding => NormalizeFeatureId(binding.featureId))
+                .Select(binding => NormalizeId(binding.featureId))
                 .ToArray();
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or OverflowException) {
@@ -148,8 +153,7 @@ internal sealed class ElectronicProductMappingIndex
         targets.Add(target);
     }
 
-    private static ProductIdentity CreateIdentity(ElectronicProduct product) => new(NormalizeProductSpecification(product.productSpecification?.name), NormalizeDatasetName(product.datasetName));
-    private static string NormalizeFeatureId(string? value) => value?.Trim().ToUpperInvariant() ?? string.Empty;
-    private static string NormalizeDatasetName(string? value) => value?.Trim().ToUpperInvariant() ?? string.Empty;
+    private static ProductIdentity CreateIdentity(ElectronicProduct product) => new(NormalizeProductSpecification(product.productSpecification?.name), NormalizeId(product.datasetName));
+    private static string NormalizeId(string? value) => value?.Trim().ToUpperInvariant() ?? string.Empty;
     private static string NormalizeProductSpecification(string? value) => value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
 }

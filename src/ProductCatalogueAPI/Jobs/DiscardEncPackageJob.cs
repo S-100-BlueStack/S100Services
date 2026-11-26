@@ -10,7 +10,7 @@ namespace ProductCatalogueAPI.Jobs;
 /// <summary>Executes one real package Discard on the Worker, never in the HTTP process.</summary>
 public sealed class DiscardEncPackageJob(
     IEncPackageRepository packages,
-    IExportEngineRegistry engines,
+    ExportEngineRegistry engines,
     IProductManager productManager,
     IDatasetLockService locks,
     TimeProvider clock,

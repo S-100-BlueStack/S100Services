@@ -42,13 +42,12 @@ public sealed class BathymetricSurfacesController(BathymetricSurfaceService cata
         if (request.ExportId == Guid.Empty)
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "A non-empty exportId is required.");
 
-        var products = new Dictionary<string, ProductExternalExportRepository.ExternalProductReference>(StringComparer.OrdinalIgnoreCase);
+        var products = new Dictionary<string, (string DatasetName, int PublishedEdition)>(StringComparer.OrdinalIgnoreCase);
         foreach (var input in request.DatasetNames) {
             if (!BathymetricSurfaceService.IsDatasetName(input))
                 return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Use a dataset name of at most 64 characters with ASCII letters, digits, underscores or hyphens, and an optional .H5 extension.");
 
-            var product = catalogue.ResolveDataset(input);
-            if (product is null)
+            if (catalogue.ResolveDataset(input) is not { } product)
                 return Problem(statusCode: StatusCodes.Status404NotFound, title: "Bathymetric dataset not found.", detail: input);
             products.TryAdd(product.DatasetName, product);
         }
@@ -130,7 +129,7 @@ public sealed class BathymetricSurfacesController(BathymetricSurfaceService cata
         if (mode == SendToIcEncMode.Live && !HasOperatorKey(settings.OperatorKey, operatorKey))
             return Forbid();
 
-        if (!BathymetricSurfaceService.IsDatasetName(datasetName) || catalogue.ResolveDataset(datasetName) is not { DatasetName: var name })
+        if (!BathymetricSurfaceService.IsDatasetName(datasetName) || catalogue.ResolveDataset(datasetName)?.DatasetName is not string name)
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Bathymetric dataset not found.");
 
         var current = (await repository.GetCurrentAsync(name, BathymetricSurfaceService.Specification, cancellationToken)).SingleOrDefault();

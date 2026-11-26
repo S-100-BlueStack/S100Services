@@ -1,8 +1,4 @@
-using System.Globalization;
-using System.IO.Compression;
-using System.Security.Cryptography;
-using System.Text;
-using System.Xml.Linq;
+using Microsoft.Extensions.Options;
 
 namespace ProductCatalogueAPI.Services.ValidationEmail;
 
@@ -45,20 +41,6 @@ public interface IValidationEmailSimulationStore
     Task<ValidationEmailSimulationRecord> SaveSimulationAsync(string sourceKey, ValidationEmailMessage message, CancellationToken cancellationToken);
 }
 
-/// <summary>Replaceable randomness for deterministic coverage of every response template.</summary>
-public interface IValidationEmailSimulationRandom
-{
-    /// <summary>Returns an integer from zero inclusive to upperBound exclusive.</summary>
-    int Next(int upperBound);
-}
-
-/// <summary>Uses independent per-call randomness without global mutable seed configuration.</summary>
-public sealed class ValidationEmailSimulationRandom : IValidationEmailSimulationRandom
-{
-    /// <inheritdoc/>
-    public int Next(int upperBound) => Random.Shared.Next(upperBound);
-}
-
 /// <summary>Optional hook for Send-To-IC-ENC simulation; disabled/live email modes return without generating evidence.</summary>
 public interface IValidationEmailSimulationService
 {
@@ -67,11 +49,15 @@ public interface IValidationEmailSimulationService
 }
 
 /// <summary>Coordinates generation with durable deduplication; accepts no live mailbox or decision sink dependency.</summary>
-public sealed class ValidationEmailSimulationService(IValidationEmailSimulationStore store, IValidationResponseGenerator generator, Func<ValidationEmailMode> mode, TimeProvider clock) : IValidationEmailSimulationService
+/// <param name="store">Reads candidates and stores generated evidence by request key.</param>
+/// <param name="generator">Renders the provider's simulated acknowledgement.</param>
+/// <param name="options">Controls whether simulated replies can be generated.</param>
+/// <param name="clock">Supplies the timestamp for a newly captured reply.</param>
+public sealed class ValidationEmailSimulationService(IValidationEmailSimulationStore store, IValidationResponseGenerator generator, IOptions<ValidationEmailOptions> options, TimeProvider clock) : IValidationEmailSimulationService
 {
     /// <inheritdoc/>
     public async Task<ValidationEmailSimulationRecord?> GenerateAsync(string datasetName, string? specification, int? edition, int? update, string sourceKey, CancellationToken cancellationToken) {
-        if (mode() != ValidationEmailMode.Simulation) return null;
+        if (options.Value.Mode != ValidationEmailMode.Simulation) return null;
         if (string.IsNullOrWhiteSpace(sourceKey) || sourceKey.Length > 256) throw new ArgumentException("A bounded simulation source key is required.", nameof(sourceKey));
         var existing = await store.FindSimulationAsync(sourceKey, cancellationToken);
         if (existing is not null) {

@@ -65,7 +65,7 @@ public static class BackendRegistrations
         services.AddScoped<IEncPackageControlRepository, EncPackageControlRepository>();
         services.AddScoped<IEncPackageActionService, EncPackageActionService>();
         services.AddScoped<IEncPackageAcknowledgementRepository, EncPackageAcknowledgementRepository>();
-        services.AddScoped<IIcEncAcknowledgementService, IcEncAcknowledgementService>();
+        services.AddScoped<IcEncAcknowledgementService>();
         services.AddValidationEmailProcessing(configuration, processProfile.RunsHangfireServer);
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
         services.AddScoped<IProductIcEncDeliveryHistoryRepository, ProductIcEncDeliveryHistoryRepository>();
@@ -110,7 +110,7 @@ public static class BackendRegistrations
         ));
         services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
         services.AddSingleton<IExportEngine, GmlExportEngine>();
-        services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();
+        services.AddSingleton<ExportEngineRegistry>();
         services.AddSingleton<ISevenCsService, SevenCsService>();
         services.AddScoped<IProductExportHistory, ProductExportHistory>();
         services.AddScoped<IProductHistoryRecoveryRepository, ProductHistoryRecoveryRepository>();
@@ -127,6 +127,13 @@ public static class BackendRegistrations
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<UploadSingularProductJob>();
         services.AddTransient<DetectProductChangesJob>();
+        services.AddSingleton<IBathyDataManager, BathyDataManager>();
+        services.AddHttpClient<BathymetricSurfaceClient>(client => BathymetricSurfaceClient.Configure(client, configuration))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler {
+                UseDefaultCredentials = true,
+                AllowAutoRedirect = false,
+                UseCookies = false
+            }).RemoveAllLoggers();
         services.AddScoped<IBathymetricSurfaceChangeDetector, BathymetricSurfaceChangeDetector>();
         services.AddTransient<DetectBathymetricSurfaceChangesJob>();
         services.AddTransient<SendBathymetricSurfaceJob>();

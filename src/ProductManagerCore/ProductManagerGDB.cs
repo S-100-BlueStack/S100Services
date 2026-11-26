@@ -2375,11 +2375,24 @@ namespace S100FC.ProductCatalogue
             return stopwatchTicks * 1000d / Stopwatch.Frequency;
         }
 
-        public Task<Dictionary<string, string>> GetDatasetAOIs() => GetDatasetAOIsCore(null);
+        public Task<Dictionary<string, string>> GetDatasetAOIs() => GetDatasetAOIsCore(null, SerializeAoiRectangle, nameof(GetDatasetAOIs), CancellationToken.None);
 
-        public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) => GetDatasetAOIsCore(productSpecification);
+        public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) => GetDatasetAOIsCore(productSpecification, SerializeAoiRectangle, nameof(GetDatasetAOIs), CancellationToken.None);
 
-        private async Task<Dictionary<string, string>> GetDatasetAOIsCore(string? productSpecification) {
+        /// <inheritdoc/>
+        public Task<Dictionary<string, ArcGIS.Core.Geometry.Polygon>> GetDatasetAoiGeometriesAsync(string productSpecification, CancellationToken cancellationToken = default) {
+            ArgumentException.ThrowIfNullOrWhiteSpace(productSpecification);
+            return GetDatasetAOIsCore(productSpecification, shape => (ArcGIS.Core.Geometry.Polygon)shape.Clone(), nameof(GetDatasetAoiGeometriesAsync), cancellationToken);
+        }
+
+        /// <summary>Reads and filters S-128 surface rows on the Product Manager's ArcGIS thread.</summary>
+        /// <typeparam name="T">AOI representation returned to the caller.</typeparam>
+        /// <param name="productSpecification">Product type filter, or null for all electronic products.</param>
+        /// <param name="projectAoi">Maps each immutable shape to the requested AOI representation.</param>
+        /// <param name="operationType">Operation name for ArcGIS profiling.</param>
+        /// <param name="cancellationToken">Cancels the cursor scan between rows.</param>
+        /// <returns>AOIs keyed by their S-128 dataset names.</returns>
+        private async Task<Dictionary<string, T>> GetDatasetAOIsCore<T>(string? productSpecification, Func<ArcGIS.Core.Geometry.Geometry, T> projectAoi, string operationType, CancellationToken cancellationToken) {
             var dispatchStartedAt = Stopwatch.GetTimestamp();
             var executionStartedAt = 0L;
             var executionCompletedAt = 0L;
@@ -2403,7 +2416,8 @@ namespace S100FC.ProductCatalogue
                     executionStartedAt = Stopwatch.GetTimestamp();
 
                     try {
-                        var dispatchResult = new Dictionary<string, string>();
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var dispatchResult = new Dictionary<string, T>();
 
                         var openAndSearchStartedAt = Stopwatch.GetTimestamp();
                         using var surface = this._geodatabase!.OpenDataset<FeatureClass>(
@@ -2417,6 +2431,7 @@ namespace S100FC.ProductCatalogue
                             Stopwatch.GetTimestamp() - openAndSearchStartedAt;
 
                         while (true) {
+                            cancellationToken.ThrowIfCancellationRequested();
                             var moveNextStartedAt = Stopwatch.GetTimestamp();
                             var hasNext = cursor.MoveNext();
                             cursorMoveNextStopwatchTicks +=
@@ -2463,32 +2478,14 @@ namespace S100FC.ProductCatalogue
                                     rowsFailed++;
                                     continue;
                                 }
-                                if (boundary.SpatialReference.Wkid != SpatialReferences.WGS84.Wkid)
-                                    boundary = GeometryEngine.Instance.Project(boundary, SpatialReferences.WGS84);
-                                var env = boundary.Extent;
-                                geometryReadStopwatchTicks +=
-                                    Stopwatch.GetTimestamp() - geometryReadStartedAt;
+                                geometryReadStopwatchTicks += Stopwatch.GetTimestamp() - geometryReadStartedAt;
 
-                                var rectangleSerializationStartedAt =
-                                    Stopwatch.GetTimestamp();
-
-                                // The public AOI contract returns the existing extent-based rectangle.
-                                var rectangle = PolygonBuilder.CreatePolygon(
-                                [
-                                    new Coordinate2D(env.XMin, env.YMin),
-                                    new Coordinate2D(env.XMax, env.YMin),
-                                    new Coordinate2D(env.XMax, env.YMax),
-                                    new Coordinate2D(env.XMin, env.YMax),
-                                    new Coordinate2D(env.XMin, env.YMin)
-                                ], SpatialReferences.WGS84);
-
-                                dispatchResult[datasetName] = rectangle.ToJson();
-                                rectangleSerializationStopwatchTicks +=
-                                    Stopwatch.GetTimestamp() -
-                                    rectangleSerializationStartedAt;
+                                var projectionStartedAt = Stopwatch.GetTimestamp();
+                                dispatchResult[datasetName] = projectAoi(boundary);
+                                rectangleSerializationStopwatchTicks += Stopwatch.GetTimestamp() - projectionStartedAt;
                                 rowsAccepted++;
                             }
-                            catch (Exception) {
+                            catch (Exception error) when (error is not OperationCanceledException) {
                                 rowsFailed++;
                                 continue;
                             }
@@ -2527,7 +2524,7 @@ namespace S100FC.ProductCatalogue
                 Logger.Verbose(
                     "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisProductReadMs: {ArcGisProductReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
                     this._executionLane,
-                    "GetDatasetAOIs",
+                    operationType,
                     correlationId,
                     succeeded,
                     dispatchTotalMs,
@@ -2549,6 +2546,24 @@ namespace S100FC.ProductCatalogue
                     geometryCount
                 );
             }
+        }
+
+        /// <summary>Serializes the WGS84 bounding rectangle used by the existing AOI API.</summary>
+        /// <param name="boundary">Dataset footprint with a known spatial reference.</param>
+        /// <returns>Bounding rectangle as Esri JSON.</returns>
+        private static string SerializeAoiRectangle(ArcGIS.Core.Geometry.Geometry boundary) {
+            if (boundary.SpatialReference.Wkid != SpatialReferences.WGS84.Wkid)
+                boundary = GeometryEngine.Instance.Project(boundary, SpatialReferences.WGS84);
+
+            var extent = boundary.Extent;
+            return PolygonBuilder.CreatePolygon(
+            [
+                new Coordinate2D(extent.XMin, extent.YMin),
+                new Coordinate2D(extent.XMax, extent.YMin),
+                new Coordinate2D(extent.XMax, extent.YMax),
+                new Coordinate2D(extent.XMin, extent.YMax),
+                new Coordinate2D(extent.XMin, extent.YMin)
+            ], SpatialReferences.WGS84).ToJson();
         }
 
         public async Task<string> GetDatasetBoundary(string datasetName) {

@@ -15,29 +15,25 @@ public sealed class ValidationEmailWorkflowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 11, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>Simulation always produces final acceptance through the normal processor, independent of the former outcome draw.</summary>
-    [Theory]
-    [InlineData(0, "Applied", 1)]
-    [InlineData(1, "Applied", 1)]
-    [InlineData(2, "Applied", 1)]
-    [InlineData(3, "Applied", 1)]
-    public async Task GeneratedWorkflowAlwaysProcessesAcceptance(int outcome, string status, int decisions) {
-        var message = Message(outcome);
+    /// <summary>Simulation produces final acceptance through the normal processor.</summary>
+    [Fact]
+    public async Task GeneratedWorkflowProcessesAcceptance() {
+        var message = Message();
         var store = new Store(message.SimulatedOutgoingFile!);
         var sink = new Decisions();
         var processor = new ValidationEmailProcessor(new IcEncReportParser(), store, sink);
         var result = await processor.ProcessAsync(Guid.NewGuid(), message, true, null, null, default, applySimulation: true);
-        Assert.Equal(status, result.Status);
+        Assert.Equal("Applied", result.Status);
         Assert.True(result.IsSimulation);
-        Assert.Equal(decisions, sink.Simulated);
+        Assert.Equal(1, sink.Simulated);
         Assert.Equal(0, sink.Live);
-        Assert.Equal(decisions == 1 ? new[] { "Pending", "Applied" } : new[] { "Review" }, store.Writes);
+        Assert.Equal(new[] { "Pending", "Applied" }, store.Writes);
     }
 
     /// <summary>Mode changes never promote generated evidence into live acknowledgement.</summary>
     [Fact]
     public async Task SimulationWorkflowRemainsPreviewOutsideSimulationHost() {
-        var message = Message(2);
+        var message = Message();
         var sink = new Decisions();
         var result = await new ValidationEmailProcessor(new IcEncReportParser(), new Store(message.SimulatedOutgoingFile!), sink)
             .ProcessAsync(Guid.NewGuid(), message, false, Now.AddDays(-1), null, default);
@@ -48,7 +44,7 @@ public sealed class ValidationEmailWorkflowTests
     /// <summary>A synthetic report cannot accept a live transmission with the same filename and checksum.</summary>
     [Fact]
     public async Task SyntheticWorkflowCannotMatchLiveReservation() {
-        var message = Message(2);
+        var message = Message();
         var sink = new Decisions();
         var result = await new ValidationEmailProcessor(new IcEncReportParser(), new Store(message.SimulatedOutgoingFile! with { IsSimulation = false }), sink)
             .ProcessAsync(Guid.NewGuid(), message, false, null, null, default, applySimulation: true);
@@ -60,7 +56,7 @@ public sealed class ValidationEmailWorkflowTests
     /// <summary>Real incoming mail cannot acknowledge a simulated transmission after modes change.</summary>
     [Fact]
     public async Task LiveMessageCannotMatchSimulatedReservation() {
-        var generated = Message(2);
+        var generated = Message();
         var message = generated with { IsSimulation = false, SimulationWorkflow = false, SimulatedOutgoingFile = null, TrustedSender = true };
         var sink = new Decisions();
         var result = await new ValidationEmailProcessor(new IcEncReportParser(), new Store(generated.SimulatedOutgoingFile!), sink)
@@ -69,18 +65,16 @@ public sealed class ValidationEmailWorkflowTests
         Assert.Equal(0, sink.Simulated + sink.Live);
     }
 
-    /// <summary>A capture committed before connection loss is reused on the next execution without another random draw or transport.</summary>
+    /// <summary>A capture committed before connection loss is reused on the next execution.</summary>
     [Fact]
-    public async Task SendRecoversAfterDurableCaptureAndDoesNotReroll() {
+    public async Task SendRecoversAfterDurableCapture() {
         var delivery = new Delivery();
         var store = new Capture { LoseConnectionAfterCapture = true };
-        var random = new RandomOutcome(2);
         var inbox = new Inbox();
-        var service = new ValidationEmailSimulatedSend(delivery, store, new IcEncResponseGenerator(random), inbox, new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), new Clock());
+        var service = new ValidationEmailSimulatedSend(delivery, store, new IcEncResponseGenerator(), inbox, new Settings(), Options.Create(new ValidationEmailOptions { Mode = ValidationEmailMode.Simulation }), new Clock());
         var request = new SendToIcEncJobRequest("DK5OTERP", SendToIcEncMode.Simulation, 3, 1, "trace", Now, ProductSpecification: "S57");
         await Assert.ThrowsAsync<IOException>(() => service.SendAsync(request, "job-123", default));
         await service.SendAsync(request, "job-123", default);
-        Assert.Equal(0, random.Calls);
         Assert.Equal(1, inbox.Polls);
         Assert.Equal(2, delivery.Reservations);
         Assert.Equal(delivery.Value.Id, store.Saved!.Message.SimulatedOutgoingFile!.DeliveryId);
@@ -88,16 +82,11 @@ public sealed class ValidationEmailWorkflowTests
         Assert.True(store.Saved.Message.SimulatedOutgoingFile.IsSimulation);
     }
 
-    private static ValidationEmailMessage Message(int outcome) {
+    private static ValidationEmailMessage Message() {
         var delivery = new Delivery().Value;
         var candidate = new ValidationSimulationCandidate(delivery.RevisionId, delivery.TrackId, delivery.DatasetName, "S57", delivery.Edition, delivery.Update, delivery.ExchangeSet);
-        var generated = new IcEncResponseGenerator(new RandomOutcome(outcome)).Generate(candidate, "workflow-send:123", Now);
+        var generated = new IcEncResponseGenerator().Generate(candidate, "workflow-send:123", Now);
         return generated with { SimulationWorkflow = true, SimulatedOutgoingFile = generated.SimulatedOutgoingFile! with { IsSimulation = true } };
-    }
-    private sealed class RandomOutcome(int outcome) : IValidationEmailSimulationRandom
-    {
-        public int Calls { get; private set; }
-        public int Next(int upperBound) => Calls++ == 0 ? outcome : 0;
     }
     private sealed class Store(ValidationOutgoingFile file) : IValidationEmailStore
     {

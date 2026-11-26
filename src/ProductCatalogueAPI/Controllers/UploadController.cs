@@ -36,7 +36,7 @@ namespace ProductCatalogueAPI.Controllers
         TimeProvider timeProvider,
         IProductManager productManager,
         IIcEncDeliveryRepository? deliveryRepository = null,
-        IIcEncAcknowledgementService? acknowledgementService = null,
+        IcEncAcknowledgementService? acknowledgementService = null,
         IOptions<ValidationEmailOptions>? emailOptions = null
     ) : ControllerBase
     {
@@ -49,7 +49,7 @@ namespace ProductCatalogueAPI.Controllers
         private readonly TimeProvider _timeProvider = timeProvider;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IIcEncDeliveryRepository? _deliveryRepository = deliveryRepository;
-        private readonly IIcEncAcknowledgementService? _acknowledgementService = acknowledgementService;
+        private readonly IcEncAcknowledgementService? _acknowledgementService = acknowledgementService;
 
         /// <summary>
         /// Queues delivery of the ready S-57 or S-101 candidate to IC-ENC. Simulation mode performs no transfer.

@@ -1,3 +1,4 @@
+using ArcGIS.Core.Geometry;
 using S100FC.S128.ComplexAttributes;
 using S100FC.S128.FeatureTypes;
 
@@ -87,6 +88,14 @@ namespace S100FC.ProductCatalogue
             throw new NotSupportedException("This product manager cannot verify the ENC export selection.");
         Task<Dictionary<string, string>> GetDatasetAOIs();
         Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification);
+
+        /// <summary>Reads actual S-128 dataset footprints for the specified product type.</summary>
+        /// <param name="productSpecification">Product specification used to select catalogue rows.</param>
+        /// <param name="cancellationToken">Cancels the scan between rows.</param>
+        /// <returns>Immutable polygon geometries keyed by dataset name in their stored spatial reference.</returns>
+        /// <exception cref="NotSupportedException">The product manager does not provide direct S-128 geometry access.</exception>
+        Task<Dictionary<string, Polygon>> GetDatasetAoiGeometriesAsync(string productSpecification, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The product manager does not provide S-128 AOI geometries.");
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);

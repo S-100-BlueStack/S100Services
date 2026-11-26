@@ -35,11 +35,14 @@ public sealed class BathymetricSurfaceService(IProductManager productManager, Pr
 
     /// <summary>Resolves the canonical name of a dataset currently classified as a bathymetric surface.</summary>
     /// <param name="name">Caller-supplied dataset name.</param>
-    /// <returns>The authoritative canonical name, or null if the catalogue does not identify the dataset as bathymetric.</returns>
-    internal ProductExternalExportRepository.ExternalProductReference? ResolveDataset(string name) {
+    /// <returns>The canonical name and published edition, or null when no usable bathymetric dataset matches.</returns>
+    internal (string DatasetName, int PublishedEdition)? ResolveDataset(string name) {
         var product = productManager.ElectronicProductManager.ElectronicProduct(name, Specification.ToString());
-        var datasetName = product?.datasetName?.Trim();
-        return IsDatasetName(datasetName) ? new(datasetName!, product!.editionNumber ?? 0) : null;
+        if (product?.datasetName is not string catalogueName)
+            return null;
+
+        var datasetName = catalogueName.Trim();
+        return IsDatasetName(datasetName) ? (datasetName, product.editionNumber ?? 0) : null;
     }
 
     /// <summary>Checks that a dataset name can be used in an API route and FTP directory.</summary>
