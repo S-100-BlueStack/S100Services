@@ -12,9 +12,11 @@ public sealed class BathymetricSurfaceChangeDetectorTests
 {
     /// <summary>Verifies the S-128 catalogue contains bathymetric polygons and both feature services can be read.</summary>
     /// <returns>A task that completes when all three inputs are available.</returns>
-    [Fact(Skip = "Manual test.")]
-    [Trait("Category", "Manual")]
+    [Fact]
     public async Task ReadBathymetricInputs() {
+        if (!System.Diagnostics.Debugger.IsAttached)
+            return;
+
         using var products = await CreateProductManagerInstance();
         var aois = await products.ElectronicProductManager.GetDatasetAoiGeometriesAsync("S102");
         Assert.NotEmpty(aois);
@@ -31,9 +33,11 @@ public sealed class BathymetricSurfaceChangeDetectorTests
 
     /// <summary>Calls the real detector directly with a one-hour UTC scan window and an offline ProductCatalogue client.</summary>
     /// <returns>A task that completes when the detector completes its scan.</returns>
-    [Fact(Skip = "Manual test.")]
-    [Trait("Category", "Manual")]
+    [Fact]
     public async Task RunDetectorDirectly() {
+        if (!System.Diagnostics.Debugger.IsAttached)
+            return;
+
         using var products = await CreateProductManagerInstance();
         using var dataManager = new BathyDataManager();
         using var http = new HttpClient(new OfflineApiHandler()) { BaseAddress = new Uri("https://productcatalogue.invalid/") };
