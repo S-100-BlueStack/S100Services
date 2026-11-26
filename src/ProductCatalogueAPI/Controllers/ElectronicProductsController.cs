@@ -14,6 +14,7 @@ using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.OpenApi;
+using ProductCatalogueAPI.Services.BathymetricSurfaces;
 using ProductCatalogueAPI.Services.Dashboard;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.History;
@@ -142,15 +143,23 @@ namespace ProductCatalogueAPI.Controllers
         }
 
         /// <summary>
-        /// Gets S-101 AOIs as ENC packages with their mapped S-57 and S-101 products.
+        /// Gets AOIs for the selected package layer. The default layer groups the S-57 and S-101 ENC products.
         /// </summary>
-        /// <returns>An ESRI JSON feature collection containing each AOI's package status and candidate versions.</returns>
+        /// <param name="layer">ENC or BathymetricSurface.</param>
+        /// <param name="bathymetricSurfaces">Projects bathymetric AOIs and their workflow state.</param>
+        /// <param name="cancellationToken">Cancels waiting for the bathymetric AOIs.</param>
+        /// <returns>An array of AOI geometries with attributes for the selected layer.</returns>
         [ProducesResponseType(typeof(List<AOIResponse>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
-        public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery, SwaggerAllowedValues(nameof(PackageLayer.ENC))] string layer = "ENC")
+        public async Task<IActionResult> GetAllElectronicProductsAOI(
+            [FromQuery, SwaggerAllowedValues(nameof(PackageLayer.ENC), nameof(PackageLayer.BathymetricSurface))] string layer = "ENC",
+            [FromServices] BathymetricSurfaceService? bathymetricSurfaces = null, CancellationToken cancellationToken = default)
         {
+            if (layer == nameof(PackageLayer.BathymetricSurface))
+                return Ok(await (bathymetricSurfaces ?? throw new InvalidOperationException("Bathymetric surface service is unavailable.")).GetAoisAsync(cancellationToken));
+
             var controllerStopwatch = Stopwatch.StartNew();
             var geometryRetrievalStopwatch = new Stopwatch();
             var productStateRetrievalStopwatch = new Stopwatch();
@@ -168,7 +177,7 @@ namespace ProductCatalogueAPI.Controllers
             try
             {
                 if (!Enum.TryParse<PackageLayer>(layer, ignoreCase: false, out var selectedLayer) || selectedLayer != PackageLayer.ENC)
-                    return BadRequest(new ApiResponse { Success = false, Message = "layer must be ENC." });
+                    return BadRequest(new ApiResponse { Success = false, Message = "layer must be ENC or BathymetricSurface." });
 
                 var cacheKey = $"{AoiCacheKeyPrefix}:{selectedLayer}";
                 cacheState = _cache.TryGetValue(cacheKey, out Lazy<Task<Dictionary<string, string>>>? cachedAois)

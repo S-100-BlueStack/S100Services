@@ -31,6 +31,9 @@ namespace ProductCatalogueAPI.Contracts
             /// <summary>Gets the ENC package represented by this S-101 AOI.</summary>
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public EncPackageResponse? Package { get; set; }
+            /// <summary>Gets the independent workflow of a bathymetric AOI.</summary>
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public ExternalProductExportResponse? BathymetricSurface { get; set; }
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public string? DatasetName { get; set; }
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
