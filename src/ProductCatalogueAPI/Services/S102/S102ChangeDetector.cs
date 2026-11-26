@@ -17,22 +17,20 @@ public interface IBathymetricSurfaceChangeDetector
 }
 
 /// <summary>Provides bathymetric source access and ProductCatalogue API access for a bounded scan.</summary>
-/// <param name="dataManager">Read-only access to constraints and deconflicted surveys.</param>
-/// <param name="productManager">Reads the stored S-128 bathymetric footprints.</param>
+/// <param name="dataManager">Read-only access to S128 Surfaces, constraints and deconflicted surveys.</param>
 /// <param name="bathymetricSurfaceClient">Client for export reservations and completions.</param>
-internal sealed class BathymetricSurfaceChangeDetector(IBathyDataManager dataManager, IProductManager productManager, BathymetricSurfaceClient bathymetricSurfaceClient) : IBathymetricSurfaceChangeDetector
+internal sealed class BathymetricSurfaceChangeDetector(IBathyDataManager dataManager, BathymetricSurfaceClient bathymetricSurfaceClient) : IBathymetricSurfaceChangeDetector
 {
     private readonly IBathyDataManager _dataManager = dataManager;
     private readonly BathymetricSurfaceClient _bathymetricSurfaceClient = bathymetricSurfaceClient;
 
-    private readonly IElectronicProductManager _productManager = productManager.ElectronicProductManager;
 
     /// <inheritdoc/>
     /// <exception cref="NotImplementedException">The detector has no scan implementation.</exception>
     public async Task DetectAsync(DateTime? lastSuccessfulRunUtc, DateTime scanThroughUtc, CancellationToken cancellationToken) {
 
         // Get AOI
-        var aois = await _productManager.GetDatasetAoiGeometriesAsync(ProductSpecification.S102.ToString(), cancellationToken);
+        var aois = await _dataManager.ReadBathymetricAoisAsync(cancellationToken);
 
 
         // Get FeatureServices as Geodatabase 

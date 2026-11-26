@@ -17,11 +17,10 @@ public sealed class BathymetricSurfaceChangeDetectorTests
         if (!System.Diagnostics.Debugger.IsAttached)
             return;
 
-        using var products = await CreateProductManagerInstance();
-        var aois = await products.ElectronicProductManager.GetDatasetAoiGeometriesAsync("S102");
-        Assert.NotEmpty(aois);
-
         using var dataManager = new BathyDataManager();
+
+        var aois = await dataManager.ReadBathymetricAoisAsync(CancellationToken.None);
+
         await dataManager.RunOnStaAsync(() => {
             using var constraints = dataManager.OpenFeatureService(BathymetricSource.Constraints);
             using var deconflicted = dataManager.OpenFeatureService(BathymetricSource.DeconflictedSurveys);
@@ -38,33 +37,12 @@ public sealed class BathymetricSurfaceChangeDetectorTests
         if (!System.Diagnostics.Debugger.IsAttached)
             return;
 
-        using var products = await CreateProductManagerInstance();
         using var dataManager = new BathyDataManager();
         using var http = new HttpClient(new OfflineApiHandler()) { BaseAddress = new Uri("https://productcatalogue.invalid/") };
-        var detector = new BathymetricSurfaceChangeDetector(dataManager, products, new BathymetricSurfaceClient(http));
+        var detector = new BathymetricSurfaceChangeDetector(dataManager, new BathymetricSurfaceClient(http));
 
         var scanThroughUtc = DateTime.UtcNow;
         await detector.DetectAsync(scanThroughUtc.AddHours(-1), scanThroughUtc, CancellationToken.None);
-    }
-
-    /// <summary>Initializes ArcGIS on an STA thread and opens the explicitly selected test S-128 catalogue.</summary>
-    /// <returns>The initialized product manager, owned by the test.</returns>
-    private static async Task<ProductManagerGDB> CreateProductManagerInstance() {
-        var connection = ProductCatalogueStartupPrerequisites.ValidateS128Connection(
-            Environment.GetEnvironmentVariable("PRODUCTCATALOGUE_TEST_S128_CONNECTION"));
-
-        using var initialization = new SingleThreadTaskScheduler("ArcGIS-BathymetricManualInitialization");
-        await Task.Factory.StartNew(() => ArcGisHost.Initialize(ArcGisHost.LicenseProductCode.ArcGISPro),
-            CancellationToken.None, TaskCreationOptions.None, initialization);
-
-        return (ProductManagerGDB)await ProductManagerGDB.CreateInstanceAsync(() => {
-            var path = new Uri(connection.Path);
-            return connection.ConnectionType switch {
-                S128ConnectionType.EnterpriseGeodatabase => new Geodatabase(new DatabaseConnectionFile(path)),
-                S128ConnectionType.FileGeodatabase => new Geodatabase(new FileGeodatabaseConnectionPath(path)),
-                _ => throw new InvalidOperationException("Unsupported test S-128 connection type.")
-            };
-        }, "BathymetricManual");
     }
 
 

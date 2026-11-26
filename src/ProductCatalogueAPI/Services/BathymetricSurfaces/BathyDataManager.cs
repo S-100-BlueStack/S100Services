@@ -1,4 +1,6 @@
+using System.Globalization;
 using ArcGIS.Core.Data;
+using ArcGIS.Core.Geometry;
 using ArcGIS.Core.SystemCore;
 using S100FC.ProductCatalogue;
 
@@ -12,6 +14,11 @@ internal enum BathymetricSource
     /// <summary>Source containing deconflicted survey features.</summary>
     DeconflictedSurveys
 }
+
+/// <summary>A bathymetric AOI read from the S-128 feature service.</summary>
+/// <param name="Geometry">The feature geometry in the spatial reference returned by the service.</param>
+/// <param name="AttributeBindings">The full attributeBindings field as stored in the service.</param>
+internal sealed record BathymetricAoi(Geometry Geometry, string AttributeBindings);
 
 /// <summary>Opens the configured bathymetric feature services for direct ArcGIS access.</summary>
 internal interface IBathyDataManager
@@ -27,6 +34,11 @@ internal interface IBathyDataManager
     /// <returns>An open geodatabase owned by the caller. Dispose it on the same STA thread.</returns>
     /// <exception cref="InvalidOperationException">Called outside the STA callback, or the source could not be configured, authenticated or opened.</exception>
     Geodatabase OpenFeatureService(BathymetricSource source);
+
+    /// <summary>Reads S-128 AOIs whose attribute bindings contain the S-102 marker. Runs on its own STA</summary>
+    /// <param name="token">Cancels queued work and stops the cursor scan between rows.</param>
+    /// <returns>Geometries and complete attribute bindings from the layer configured in S128AoiConnection.</returns>
+    Task<IReadOnlyList<BathymetricAoi>> ReadBathymetricAoisAsync(CancellationToken token);
 }
 
 /// <summary>Opens federated feature services after the worker initializes CoreHost.</summary>
@@ -60,10 +72,60 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
             BathymetricSource.DeconflictedSurveys => "S102DeconflictedSurveyConnection",
             _ => throw new ArgumentOutOfRangeException(nameof(source))
         };
-        var service = ReadUrl(source, urlVariable);
+        var service = ReadUrl(source.ToString(), urlVariable);
         if (!service.AbsolutePath.TrimEnd('/').EndsWith("/FeatureServer", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Bathymetric source {source} requires the FeatureServer root in '{urlVariable}'.");
 
+        return OpenFeatureService(source.ToString(), service);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<BathymetricAoi>> ReadBathymetricAoisAsync(CancellationToken token) {
+        const string source = "S-128 AOIs";
+        const string variable = "S128AoiConnection";
+        const string bindingsField = "attributeBindings";
+        var aois = new List<BathymetricAoi>();
+
+        await RunOnStaAsync(() => {
+            var layerUrl = ReadUrl(source, variable);
+            var path = layerUrl.AbsolutePath.TrimEnd('/');
+            var separator = path.LastIndexOf('/');
+            if (separator < 0 || !path[..separator].EndsWith("/FeatureServer", StringComparison.OrdinalIgnoreCase)
+                || !int.TryParse(path.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var layerId))
+                throw new InvalidOperationException($"'{variable}' must point to a numeric layer under /FeatureServer.");
+
+            // The ArcGIS connector uses the service root; the feature class is selected by layer ID.
+            var serviceUrl = new Uri(layerUrl.GetLeftPart(UriPartial.Authority) + path[..separator]);
+            using var geodatabase = OpenFeatureService(source, serviceUrl);
+            using var featureClass = geodatabase.OpenDataset<FeatureClass>(layerId.ToString(CultureInfo.InvariantCulture));
+            using var definition = featureClass.GetDefinition();
+            if (definition.FindField(bindingsField) < 0)
+                throw new InvalidOperationException($"The layer configured in '{variable}' must expose '{bindingsField}'.");
+
+            using var cursor = featureClass.Search(new QueryFilter {
+                WhereClause = "attributeBindings LIKE '%S-102%'",
+                SubFields = $"{definition.GetObjectIDField()}, {bindingsField}, {definition.GetShapeField()}"
+            }, true);
+
+            while (true) {
+                token.ThrowIfCancellationRequested();
+                if (!cursor.MoveNext())
+                    break;
+
+                using var feature = (Feature)cursor.Current;
+                if (feature[bindingsField] is string bindings && feature.GetShape() is { IsEmpty: false } shape)
+                    aois.Add(new BathymetricAoi(shape.Clone(), bindings));
+            }
+        }, token);
+
+        return aois;
+    }
+
+    /// <summary>Opens the service root and registers its Portal challenge handler for the current STA callback.</summary>
+    /// <param name="source">Source label used in configuration and connection errors.</param>
+    /// <param name="service">Validated root URL of the feature service.</param>
+    /// <returns>The open geodatabase, owned by the caller on the ArcGIS thread.</returns>
+    private Geodatabase OpenFeatureService(string source, Uri service) {
         var portal = ReadUrl(source, "arcgis_portal_url");
         var credentials = ReadCredential(source, "arcgis_portal_user");
         var parts = credentials.Split("::", 2, StringSplitOptions.None);
@@ -89,7 +151,7 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
     /// <param name="source">Source to identify in an error.</param>
     /// <param name="variable">Worker environment variable containing the URL.</param>
     /// <returns>An HTTPS URL without user information, query or fragment.</returns>
-    private static Uri ReadUrl(BathymetricSource source, string variable) {
+    private static Uri ReadUrl(string source, string variable) {
         if (Uri.TryCreate(Environment.GetEnvironmentVariable(variable), UriKind.Absolute, out var uri)
             && uri.Scheme == Uri.UriSchemeHttps && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0)
             return uri;
@@ -102,7 +164,7 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
     /// <param name="variable">Environment variable containing the credentials in username::password format.</param>
     /// <returns>The credential pair exactly as configured.</returns>
     /// <exception cref="InvalidOperationException">The variable is missing or blank.</exception>
-    private static string ReadCredential(BathymetricSource source, string variable) {
+    private static string ReadCredential(string source, string variable) {
         var credentials = Environment.GetEnvironmentVariable(variable);
         if (string.IsNullOrWhiteSpace(credentials))
             throw new InvalidOperationException($"Bathymetric source {source} requires the environment variable '{variable}'.");

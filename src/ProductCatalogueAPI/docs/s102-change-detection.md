@@ -8,12 +8,12 @@ The IHO calls S-102 **Bathymetric Surface**. The catalogue footprint is an S-128
 | --- | --- |
 | `S102ConstraintConnection` | HTTPS URL of the constraints service, ending at `/FeatureServer`. |
 | `S102DeconflictedSurveyConnection` | HTTPS URL of the deconflicted surveys service, ending at `/FeatureServer`. |
+| `S128AoiConnection` | HTTPS layer URL of the S-128 AOI feature service, ending at `/FeatureServer/<layerId>`. |
 | `arcgis_portal_url` | HTTPS base URL of the Portal that federates both services, including its application path if present. |
-| `arcgis_portal_user` | Portal username encrypted with the existing `Configuration.EncryptString` mechanism. |
-| `arcgis_portal_password` | Portal password encrypted the same way. |
+| `arcgis_portal_user` | Portal credentials in `username::password` format. |
 | `BathymetricChangeDetection__ApiBaseUrl` | ProductCatalogue API application URL, including the IIS virtual path if used. The appsettings equivalent is `BathymetricChangeDetection:ApiBaseUrl`. |
 
-Make these variables available to the Windows service process. Use a Portal account with read access to both feature services. CoreHost uses those credentials only for challenges from the configured Portal. The HTTP client uses the Windows service identity. Give that identity `productmanager:manage` for reservation and completion. The API URL must point to the same environment whose System database and catalogue the worker is configured to use.
+Make these variables available to the Windows service process. Use a Portal account with read access to the bathymetric and S-128 feature services. CoreHost uses those credentials only for challenges from the configured Portal. The HTTP client uses the Windows service identity. Give that identity `productmanager:manage` for reservation and completion. The API URL must point to the same environment whose System database and catalogue the worker is configured to use.
 
 ## Detector entry point
 
@@ -21,7 +21,7 @@ Make these variables available to the Windows service process. Use a Portal acco
 
 Use `_dataManager.RunOnStaAsync` with a synchronous callback. Inside it, open either source with `using var geodatabase = _dataManager.OpenFeatureService(BathymetricSource.Constraints);` or select `BathymetricSource.DeconflictedSurveys`. Use ArcGIS feature classes, cursors and rows directly, and dispose them before leaving the callback. Keep async work outside that callback.
 
-`GetBathymetricAoisAsync` uses the injected Product Manager to read S-102 polygons directly from S-128. The dictionary key is the dataset name, and the value is the stored footprint in its original spatial reference. Project the footprint to the source layer's spatial reference if your query requires it. The AOI HTTP endpoint supplies WGS84 bounding rectangles for API consumers.
+Call `_dataManager.ReadBathymetricAoisAsync(cancellationToken)` to read the configured S-128 layer directly. It queries `attributeBindings LIKE '%S-102%'` and returns each non-empty geometry with its full `attributeBindings` string. The geometry uses the service's spatial reference. The detector's Product Manager lookup reads directly from the S-128 geodatabase, and the AOI HTTP endpoint serves WGS84 bounding rectangles.
 
 The injected `bathymetricSurfaceClient` exposes `ReserveAsync` and `CompleteAsync`. The Hangfire job saves completed scan boundaries under `DetectBathymetricSurfaceChangesJob` in `dbo.JobRunState`. Recurring scheduling is disabled.
 
