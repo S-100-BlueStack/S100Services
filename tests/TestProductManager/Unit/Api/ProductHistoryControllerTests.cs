@@ -1,15 +1,23 @@
 using TestProductCatalogueAPI.Unit.History;
 using System.Collections;
+using System.Data;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using ProductCatalogueAPI.Contracts;
 using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.History;
+using ProductCatalogueAPI.Services.ValidationEmail;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using static ProductCatalogueAPI.Contracts.ResponseTypes;
@@ -141,6 +149,161 @@ public class ProductHistoryControllerTests
             Assert.Empty(response.Events);
             Assert.Equal(0, response.EventTotalHits);
             Assert.Equal(0, events.Accesses);
+        }
+    }
+
+    [Fact]
+    public async Task DeliveryHistoryRequiresOptInAndAnExactCatalogueSpecification()
+    {
+        var projection = new DeliveryHistoryStub();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var controller = CreateDeliveryController(cache, projection);
+
+        var legacy = DeliveryEnvelope(await controller.GetElectronicProductHistory("101DK001", specification: "S102"));
+        Assert.False(JsonSerializer.SerializeToElement(legacy).TryGetProperty("IcEncDeliveries", out _));
+        var mismatch = DeliveryEnvelope(await controller.GetElectronicProductHistory("101DK001", "true", "S57"));
+        Assert.Equal("Unavailable", mismatch.IcEncDeliveries!.Availability);
+        Assert.Null(mismatch.IcEncDeliveries.HasMore);
+        Assert.IsType<NotFoundObjectResult>(await controller.GetElectronicProductHistory("UNKNOWN", "true", "S101"));
+        Assert.Empty(projection.Calls);
+
+        var exact = DeliveryEnvelope(await controller.GetElectronicProductHistory("101dk001", "true", "S101"));
+        Assert.Equal(("101DK001", "S101"), Assert.Single(projection.Calls));
+        Assert.Equal("Available", exact.IcEncDeliveries!.Availability);
+        Assert.Empty(exact.IcEncDeliveries.Items);
+        Assert.Empty(exact.Data!);
+        Assert.Empty(exact.Events);
+    }
+
+    [Theory]
+    [InlineData("yes", "S101")]
+    [InlineData("", "S101")]
+    [InlineData("true", null)]
+    [InlineData("true", "S102")]
+    public async Task InvalidDeliveryOptionsReturnBadRequestBeforeProjection(string option, string? specification)
+    {
+        var projection = new DeliveryHistoryStub();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var controller = CreateDeliveryController(cache, projection);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.GetElectronicProductHistory("101DK001", option, specification));
+        Assert.Empty(projection.Calls);
+    }
+
+    [Theory]
+    [InlineData("?includeIcEncDeliveries", null, null)]
+    [InlineData("?includeIcEncDeliveries=true&includeIcEncDeliveries=false", "true", "S101")]
+    [InlineData("?includeIcEncDeliveries=true&specification=S101&specification=S57", "true", "S101")]
+    public async Task EmptyOrRepeatedQueryParametersCannotOptIn(string query, string? option, string? specification)
+    {
+        var projection = new DeliveryHistoryStub();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var controller = CreateDeliveryController(cache, projection);
+        controller.ControllerContext.HttpContext = new DefaultHttpContext();
+        controller.Request.QueryString = new QueryString(query);
+        Assert.IsType<BadRequestObjectResult>(await controller.GetElectronicProductHistory("101DK001", option, specification));
+        Assert.Empty(projection.Calls);
+    }
+
+    [Fact]
+    public async Task DeliveryFailureRetainsStateHistoryAndCancellationPropagates()
+    {
+        var fixture = new InMemoryProductRepository();
+        await fixture.AppendAsync("101DK001", ProductState.Idle, "S-101", 1, 0);
+        var projection = new DeliveryHistoryStub { Failure = new InvalidOperationException("private fixture") };
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var controller = CreateDeliveryController(cache, projection, fixture);
+        var response = DeliveryEnvelope(await controller.GetElectronicProductHistory("101DK001", "true", "S101"));
+        Assert.Single(response.Data!);
+        Assert.Equal("Unavailable", response.IcEncDeliveries!.Availability);
+        Assert.DoesNotContain("private fixture", JsonSerializer.Serialize(response));
+
+        projection.Failure = new OperationCanceledException();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => controller.GetElectronicProductHistory("101DK001", "true", "S101"));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            controller.GetElectronicProductHistory("101DK001", "true", "S101", cancelled.Token));
+        Assert.Equal(2, projection.Calls.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvalidOrUnresolvableModeLeavesLegacyHistoryAndNeverOpensTheProjectionDatabase(bool bindingFails)
+    {
+        var settingsReads = 0;
+        var services = new ServiceCollection();
+        services.AddOptions<SendToIcEncOptions>().Configure(options =>
+        {
+            settingsReads++;
+            if (bindingFails) throw new InvalidOperationException("private fixture");
+            options.Mode = (SendToIcEncMode)99;
+        });
+        services.AddOptions<ValidationEmailOptions>().Configure(options => options.Mode = ValidationEmailMode.Simulation);
+        using var provider = services.BuildServiceProvider();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var connection = new UnusedHistoryConnectionFactory();
+        var projection = new ProductIcEncDeliveryHistoryRepository(
+            connection, NullLogger<ProductIcEncDeliveryHistoryRepository>.Instance,
+            provider.GetRequiredService<IOptionsMonitor<SendToIcEncOptions>>(),
+            provider.GetRequiredService<IOptions<ValidationEmailOptions>>());
+        var controller = CreateDeliveryController(cache, projection);
+
+        var legacy = DeliveryEnvelope(await controller.GetElectronicProductHistory("101DK001"));
+        Assert.Null(legacy.IcEncDeliveries);
+        Assert.Equal(0, settingsReads);
+
+        var optedIn = DeliveryEnvelope(await controller.GetElectronicProductHistory("101DK001", "true", "S101"));
+        Assert.True(optedIn.Success);
+        Assert.Equal("Unavailable", optedIn.IcEncDeliveries!.Availability);
+        Assert.Empty(optedIn.IcEncDeliveries.Items);
+        Assert.DoesNotContain("private fixture", JsonSerializer.Serialize(optedIn));
+        Assert.Equal(1, settingsReads);
+        Assert.Equal(0, connection.Calls);
+    }
+
+    private sealed class UnusedHistoryConnectionFactory() : DbConnectionFactory(new ConfigurationBuilder().Build())
+    {
+        public int Calls { get; private set; }
+
+        public override IDbConnection Create()
+        {
+            Calls++;
+            throw new InvalidOperationException("The delivery history database must not be opened.");
+        }
+    }
+
+    private static ProductHistoryEnvelope DeliveryEnvelope(IActionResult result) =>
+        Assert.IsType<ProductHistoryEnvelope>(Assert.IsType<OkObjectResult>(result).Value);
+
+    private static ElectronicProductsController CreateDeliveryController(
+        IMemoryCache cache, IProductIcEncDeliveryHistoryRepository projection, InMemoryProductRepository? fixture = null)
+    {
+        var states = fixture ?? new InMemoryProductRepository();
+        return new(NullLogger<ElectronicProductsController>.Instance, cache,
+            new FakeProductManager(new FakeElectronicProductManager(new(), new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["101DK001"] = new ElectronicProduct
+                {
+                    datasetName = "101DK001",
+                    productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" }
+                }
+            })), states, states, ProductHistoryEventTests.CreateService(new()), deliveryHistoryRepository: projection);
+    }
+
+    private sealed class DeliveryHistoryStub : IProductIcEncDeliveryHistoryRepository
+    {
+        public Exception? Failure { get; set; }
+        public List<(string Dataset, string Specification)> Calls { get; } = [];
+
+        public Task<ProductIcEncDeliveryHistoryResponse> GetAsync(string datasetName, string specification,
+            Func<Guid, string> downloadUrl, CancellationToken cancellationToken)
+        {
+            Calls.Add((datasetName, specification));
+            return Failure is null
+                ? Task.FromResult(new ProductIcEncDeliveryHistoryResponse(datasetName, specification, "Available", false, []))
+                : Task.FromException<ProductIcEncDeliveryHistoryResponse>(Failure);
         }
     }
 

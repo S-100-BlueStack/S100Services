@@ -898,7 +898,55 @@ candidate/failure track selector. BE-109A separates these read purposes.
 
 The history list remains Product-scoped, not proof of ownership by a particular
 job, History event, Dashboard Activity, current Package or IC-ENC verdict. The
-separate event-attribution and decision-projection requirements remain open.
+specific delivery and decision relations use the separate BE-109C projection below.
+
+### IC-ENC delivery History (BE-109C)
+
+`GET /electronicproducts/{datasetName}/history?includeIcEncDeliveries=true&specification=S101`
+adds the optional `IcEncDeliveries` member. Supported specifications are `S57`
+and `S101`. Without opt-in the original envelope and reads apply. Malformed
+opt-in values and missing/unsupported specifications on opted-in requests return 400. The existing Product access policy and Product lookup apply. A legacy
+timeline can succeed while the extension is unavailable.
+
+The extension echoes the exact dataset and specification with `Availability`,
+`HasMore` and `Items`. `Unavailable` has empty items and null `HasMore`. An
+available owner with no attempts has empty items and false `HasMore`. Items
+carry an internal rendering key, Edition/Update, UTC reservation and optional
+completion/reconciliation time, and either the recorded transport status or a
+persisted Accepted/Rejected decision. Unknown source or recording time is null.
+No relation to a state event, job, Dashboard Activity, or historical Package is
+asserted.
+
+The read captures the effective `SendToIcEncOptions.Mode` and
+`ValidationEmailOptions.Mode` once. It selects persisted Simulated deliveries
+when both are Simulation and persisted Live deliveries otherwise. Invalid or
+unresolvable settings make the extension unavailable. This uses existing bound
+options, including legacy email binding. Decisions retain their stored recognized
+source, including Simulation. The interface omits the synthetic source detail.
+There is no request or response environment flag.
+
+Reports are scoped to the stored IC-ENC artifact, track, revision, delivery and
+verified original receipt. Simulation report evidence requires the reserved
+mailbox, typed simulation and workflow flags, and a simulated outgoing record
+coherent with the owned attempt, track, revision and version. Preview alone
+does not qualify. On re-review, the latest receipt match may move
+independently of the stored artifact. The artifact stays with its original
+validated delivery. `FromDecisionEmail` requires the persisted Live Email decision's
+source event and the receipt's current match to corroborate that exact tuple.
+The report contains only its artifact key, original filename, time stored, marker,
+and the existing exact owner download URL. Unknown receipt classification
+suppresses the link from this projection. Attributable reports on the owned track
+with a missing or mismatched revision produce `Partial` even without links. General BE-109A report history is
+independent of this projection.
+
+The metadata projection uses one query for up to 51 attempt rows and a separate
+batched report query for up to 21 validated rows per selected attempt. The output
+limits are 50 attempts and 20 reports per attempt. `Partial` identifies suppressed
+or truncated candidate evidence. A failed report query leaves recorded decisions
+readable with `ReportsAvailability: Unavailable`. No content bytes or raw inbound
+metadata are returned by the projection. The legacy history and exact download
+continue to use their own queries. Verify representative SQL plans and access
+outcomes before production acceptance.
 
 ### Historical report planning requirements
 

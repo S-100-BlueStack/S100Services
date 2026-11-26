@@ -1,3 +1,4 @@
+import { createIcEncDeliveryHistorySection } from "./icEncDeliveryHistoryView.js";
 import "@esri/calcite-components/components/calcite-icon";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError } from "../../notices/services/noticeService.js";
@@ -169,8 +170,13 @@ export function initProductHistoryPanel({
             registry,
             fetchHistory,
             assertCurrent: assertAuthority,
+            includeIcEncDeliveries: true,
           })
-        : await fetchHistory(datasetName, { productContext: context });
+        : await fetchHistory(datasetName, {
+            productContext: context,
+            includeIcEncDeliveries: true,
+            registry,
+          });
       assertAuthority();
       if (history.workUnit?.kind === "package") renderPackageHistory(panel, history);
       else renderHistory(panel, history);
@@ -331,8 +337,9 @@ function renderLoading(panel, datasetName) {
 
 function renderHistory(panel, history) {
   panel.title.textContent = history.datasetName;
+  const fragment = document.createDocumentFragment();
   if (!history.events.length) {
-    panel.content.replaceChildren(
+    fragment.appendChild(
       createProductHistoryStateMessage({
         title: history.endpointAvailable
           ? "No historical changes found"
@@ -343,31 +350,32 @@ function renderHistory(panel, history) {
             "The history UI is ready, but the backend endpoint has not been implemented yet."),
       })
     );
-    return;
-  }
-  const fragment = document.createDocumentFragment();
+  } else {
+    if (history.isDemo) {
+      fragment.appendChild(
+        createProductHistoryBanner({
+          title: "Demo history",
+          message:
+            "This product history is generated in the frontend until the backend endpoint is available.",
+        })
+      );
+    }
 
-  if (history.isDemo) {
-    fragment.appendChild(
-      createProductHistoryBanner({
-        title: "Demo history",
-        message:
-          "This product history is generated in the frontend until the backend endpoint is available.",
-      })
-    );
+    for (const warning of history.warnings) {
+      fragment.appendChild(
+        createProductHistoryBanner({
+          title: "History note",
+          message: warning,
+        })
+      );
+    }
+    fragment.appendChild(createProductHistorySummary(history));
+    fragment.appendChild(createProductHistoryEventList(history.events));
   }
 
-  for (const warning of history.warnings) {
-    fragment.appendChild(
-      createProductHistoryBanner({
-        title: "History note",
-        message: warning,
-      })
-    );
+  if (history.icEncDeliveries) {
+    fragment.appendChild(createIcEncDeliveryHistorySection(history.icEncDeliveries));
   }
-  fragment.appendChild(createProductHistorySummary(history));
-  fragment.appendChild(createProductHistoryEventList(history.events));
-
   panel.content.replaceChildren(fragment);
 }
 

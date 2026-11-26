@@ -28,6 +28,7 @@ export async function loadPackageHistory(
     fetchHistory = fetchProductHistory,
     fetchProduct = fetchProductPropertiesByDatasetName,
     assertCurrent = () => {},
+    includeIcEncDeliveries = false,
   } = {}
 ) {
   assertCurrent();
@@ -38,7 +39,11 @@ export async function loadPackageHistory(
   resolution.assertCurrent();
   const results = await Promise.allSettled(
     resolution.memberProducts.map((context) =>
-      fetchHistory(context.datasetName, { productContext: context, validateOwnership: true })
+      fetchHistory(context.datasetName, {
+        productContext: context,
+        validateOwnership: true,
+        ...(includeIcEncDeliveries ? { includeIcEncDeliveries, registry } : {}),
+      })
     )
   );
   assertCurrent();

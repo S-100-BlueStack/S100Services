@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Records;
 using static ProductCatalogueAPI.Contracts.ResponseTypes;
@@ -9,6 +10,9 @@ public sealed class ProductHistoryEnvelope : ApiResponse<ProductHistoryResponse[
 {
     public ProductHistoryEventResponse[] Events { get; set; } = [];
     public int EventTotalHits { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProductIcEncDeliveryHistoryResponse? IcEncDeliveries { get; set; }
 }
 
 public sealed class ProductHistoryEventResponse

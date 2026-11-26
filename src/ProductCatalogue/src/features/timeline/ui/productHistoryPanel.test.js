@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   createCompatibilityWorkspaceProductContext,
   createProductContextIdentityAttributes,
+  createWorkspaceProductContext,
   registerGraphicProductContext,
 } from "../../products/domain/productContext.js";
 import { loadPackageHistory } from "../services/packageHistoryLoader.js";
@@ -80,6 +81,7 @@ const find = (root, name) => walk(root).find((element) => element.className === 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 async function harness(t, options = {}) {
   const h = createPackageHarness();
+  if (options.configureRegistry) h.registry = options.configureRegistry(h.registry);
   const context = (await h.workUnitService.resolveWorkUnit(h.names.s101)).product;
   const layer = { appSourceDefinition: h.registry.byId.get("s101"), graphics: [] };
   const graphic = { layer, attributes: createProductContextIdentityAttributes(context) };
@@ -697,4 +699,157 @@ test("expanding actual History details reveals only that member's public state d
     )
   );
   assert.ok(!text(first).includes(h.names.s57));
+});
+
+for (const [decisionSource, expectedSource] of [
+  ["Email", "Decision by email"],
+  ["Manual", "Manual decision"],
+  ["Simulation", null],
+]) {
+  test(`each member opts in once and renders a neutral delivery section for ${decisionSource} decisions`, async (t) => {
+    const paths = [];
+    const deliveryId = "10000000-0000-4000-8000-000000000001";
+    const artifactId = "20000000-0000-4000-8000-000000000001";
+    const time = "2026-11-25T10:15:00Z";
+    const h = await harness(t, {
+      fetchHistory: (name, options) =>
+        fetchProductHistory(name, {
+          ...options,
+          get: async (path) => {
+            paths.push(path);
+            const primary = options.productContext.sourceId === "s101";
+            return {
+              Data: [],
+              Events: [],
+              IcEncDeliveries: {
+                DatasetName: primary ? name : "Wrong owner",
+                ProductSpecification: primary ? "S101" : "S57",
+                Availability: "Available",
+                HasMore: true,
+                Items: [
+                  {
+                    DeliveryId: deliveryId,
+                    Edition: 2,
+                    Update: 0,
+                    ReservedAtUtc: time,
+                    Decision: { Outcome: "Rejected", Source: decisionSource, RecordedAtUtc: time },
+                    ReportsAvailability: "Partial",
+                    Reports: [
+                      {
+                        ArtifactId: artifactId,
+                        FileName: `report-${artifactId}.DOC`,
+                        StoredAtUtc: time,
+                        DownloadUrl: `/electronicproducts/${encodeURIComponent(name)}/artifacts/${artifactId}`,
+                        FromDecisionEmail: true,
+                      },
+                    ],
+                  },
+                  {
+                    DeliveryId: "10000000-0000-4000-8000-000000000002",
+                    Edition: 2,
+                    Update: 1,
+                    ReservedAtUtc: time,
+                    TransportStatus: "Delivered",
+                    ReportsAvailability: "Available",
+                    Reports: [],
+                  },
+                ],
+              },
+            };
+          },
+        }),
+    });
+
+    await h.panel.openHistory(h.names.s101, { productContext: h.context, graphic: h.graphic });
+    assert.deepEqual(paths, [
+      `electronicproducts/${encodeURIComponent(h.names.s101)}/history?includeIcEncDeliveries=true&specification=S101`,
+      `electronicproducts/${encodeURIComponent(h.names.s57)}/history?includeIcEncDeliveries=true&specification=S57`,
+    ]);
+    const sections = walk(h.root).filter((e) => e.className === "pc-icenc-history");
+    assert.equal(sections.length, 2);
+    assert.ok(
+      sections.every((section) => section.tagName === "details" && !section.getAttribute("open"))
+    );
+    assert.match(text(h.root), /No historical changes found/);
+    assert.match(text(sections[0]), /Edition 2 \/ Update 0 · Rejected/);
+    assert.equal(sections[0].querySelector("summary").textContent, "IC-ENC deliveries");
+    assert.match(text(sections[0]), /Delivered · No recorded decision/);
+    assert.match(text(sections[0]), /Decision recorded/);
+    if (expectedSource) assert.ok(text(sections[0]).includes(expectedSource));
+    else
+      assert.doesNotMatch(
+        text(sections[0]),
+        /Decision source unknown|Decision by email|Manual decision/
+      );
+    assert.equal(/From decision email/.test(text(sections[0])), decisionSource === "Email");
+    assert.match(text(sections[0]), /50 most recent delivery attempts/);
+    assert.match(text(sections[0]), /Up to 20 reports are shown/);
+    assert.match(text(sections[1]), /IC-ENC deliveries could not be loaded/);
+    const link = sections[0].querySelector("a");
+    assert.ok(link.getAttribute("href").endsWith(`/artifacts/${artifactId}`));
+    assert.ok(
+      walk(sections[0]).some((e) => e.tagName === "time" && e.getAttribute("datetime") === time)
+    );
+    const presentation = [
+      text(sections[0]),
+      ...walk(sections[0]).flatMap((e) => [e.getAttribute("aria-label"), e.getAttribute("title")]),
+    ].join(" ");
+    assert.doesNotMatch(presentation, /\b(live|simulation|demo|preview|debug)\b/i);
+    assert.ok(!presentation.includes(deliveryId) && !presentation.includes(artifactId));
+
+    sections[0].setAttribute("open", "");
+    assert.equal(sections[0].querySelector("a"), link);
+    assert.equal(sections[1].getAttribute("open"), undefined);
+    assert.equal(paths.length, 2);
+  });
+}
+
+test("a registered standalone electronic Product uses one History request and one disclosure", async (t) => {
+  const calls = [];
+  const name = "Standalone ENC";
+  const sourceId = "standalone-electronic";
+  const h = await harness(t, {
+    configureRegistry(registry) {
+      const base = registry.byId.get("s101");
+      const standalone = { ...base, id: sourceId, workUnit: null };
+      return {
+        definitions: [...registry.definitions, standalone],
+        byId: new Map([...registry.byId, [sourceId, standalone]]),
+      };
+    },
+    fetchHistory: (dataset, options) =>
+      fetchProductHistory(dataset, {
+        ...options,
+        get: async (path) => {
+          calls.push(path);
+          return {
+            Data: [],
+            Events: [],
+            IcEncDeliveries: {
+              DatasetName: name,
+              ProductSpecification: "S101",
+              Availability: "Available",
+              HasMore: false,
+              Items: [],
+            },
+          };
+        },
+      }),
+  });
+  const source = h.registry.byId.get(sourceId);
+  const context = createWorkspaceProductContext({
+    sourceId,
+    datasetName: name,
+    productKey: name,
+    productType: source.productType,
+    capabilities: source.capabilities,
+    contentConfiguration: source.contentConfiguration,
+    data: { attributes: { productSpecification: "S101" } },
+  });
+  await h.panel.openHistory(name, { source: "external", productContext: context });
+  assert.deepEqual(calls, [
+    "electronicproducts/Standalone%20ENC/history?includeIcEncDeliveries=true&specification=S101",
+  ]);
+  assert.equal(find(h.root, "pc-product-history-member"), undefined);
+  assert.match(text(find(h.root, "pc-icenc-history")), /No IC-ENC deliveries found/);
 });

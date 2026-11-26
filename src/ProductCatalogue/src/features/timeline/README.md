@@ -311,3 +311,32 @@ popup selection only while its original source snapshot remains valid. A new ope
 Only package `navigationCapabilities.history` is enabled. Analyze/Review remain enabled, collection
 navigation remains Analyze/Review only, and package mutation/export/scheduling capabilities remain
 unavailable. Dashboard's route-local panel, map timeline and backend contracts are unchanged.
+
+## BE-109C IC-ENC deliveries
+
+The floating History panel requests the optional delivery projection on the existing
+History read for each exact S-57 or S-101 Product context with registry-owned History
+and IC-ENC report capabilities. An ordinary registered electronic Product uses the
+same section without the member wrapper. Compatibility contexts without an exact
+specification retain legacy History. A missing or contradictory declared Package
+mapping remains a structural failure. Dashboard, Analyze and Review direct History
+callers keep the legacy request.
+
+The collapsed section follows the state/audit timeline and remains available when
+that timeline has no events. The server selects the persisted history for the
+configured workflow. It lists up to 50 recent delivery attempts with their
+Edition/Update, reservation and optional completion/reconciliation times, recorded
+transport or final decision, source and recording time as applicable. A nonfinal attempt shows
+“No recorded decision” alongside its transport status. Partial
+reports or unavailable data use neutral messages. Report details are bounded to 20
+exact links per attempt. Expanding a disclosure uses the content already loaded.
+
+The UI includes no visible internal delivery, receipt or artifact identifiers in
+this section. Product Catalogue uses release-ready business presentation in every
+environment. The section uses the same labels everywhere and omits synthetic
+source details without claiming external provenance. GUID-shaped portions of filenames are omitted in presentation.
+The existing owner download returns the original filename and bytes. “From decision
+email” means that the original Live receipt and current match corroborate the
+recorded Email decision. Other exact links show “Stored for this delivery”. A
+changed inbox match does not move the report to a different attempt.
+See the [backend History contract](../../../BACKEND_CONTRACTS.md#ic-enc-delivery-history-be-109c).
