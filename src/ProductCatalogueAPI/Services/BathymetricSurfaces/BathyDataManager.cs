@@ -65,9 +65,13 @@ internal sealed class BathyDataManager : IBathyDataManager, IDisposable
             throw new InvalidOperationException($"Bathymetric source {source} requires the FeatureServer root in '{urlVariable}'.");
 
         var portal = ReadUrl(source, "arcgis_portal_url");
-        var user = ReadCredential(source, "arcgis_portal_user");
-        var password = ReadCredential(source, "arcgis_portal_password");
-        var handler = new PortalSignOnHandler(portal, user, password);
+        var credentials = ReadCredential(source, "arcgis_portal_user");
+        var parts = credentials.Split("::", 2, StringSplitOptions.None);
+
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+            throw new InvalidOperationException($"Bathymetric source {source} requires 'arcgis_portal_user' in username::password format after decryption.");
+
+        var handler = new PortalSignOnHandler(portal, parts[0], parts[1]);
 
         try {
             // CoreHost requests credentials on demand, including during reads after the geodatabase has opened.
