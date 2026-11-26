@@ -18,7 +18,7 @@ function fixture() {
     },
     async bind(packageId, pipelineId) {
       calls.push(`add:${pipelineId}`);
-      if (pipelineId === "fail") throw new Error("Denied");
+      if (pipelineId === "fail") throw Object.assign(new Error("Denied"), { status: 403 });
       bindings.push({ id: `b-${pipelineId}`, packageId, pipelineId, workspaces: [] });
     },
     async unbind(id) {
@@ -26,7 +26,22 @@ function fixture() {
       bindings = bindings.filter((item) => item.id !== id);
     },
   };
-  return { catalogue, calls, services: createLiveAssignmentServices(catalogue) };
+  let invalidations = 0;
+  function makeServices(options) {
+    return createLiveAssignmentServices(catalogue, {
+      ...options,
+      onMembershipInvalidated() {
+        invalidations++;
+      },
+    });
+  }
+  return {
+    catalogue,
+    calls,
+    makeServices,
+    getInvalidations: () => invalidations,
+    services: makeServices(),
+  };
 }
 
 test("independent deltas report partial failure and reconcile authoritative bindings", async () => {
@@ -52,13 +67,18 @@ test("independent deltas report partial failure and reconcile authoritative bind
 });
 
 test("session preserves failed intention but uses reconciled record for dirty state and retry", async () => {
-  const { services, calls } = fixture();
+  const { services, calls, getInvalidations } = fixture();
   const session = createAssignmentSession({ services });
   await session.select("p");
+  session.setAssigned("fail", true);
+  assert.equal(await session.save(), false);
+  assert.equal(getInvalidations(), 0, "A definite rejection leaves membership current");
   session.setAssigned("a", false);
   session.setAssigned("b", true);
   session.setAssigned("fail", true);
   assert.equal(await session.save(), false);
+  assert.ok(getInvalidations() > 0, "Successful parts invalidate membership");
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.deepEqual(Object.keys(session.snapshot().record.relations), ["b"]);
   assert.deepEqual(session.snapshot().draft.activeIds, ["b", "fail"]);
   assert.equal(session.snapshot().dirty, true);
@@ -166,8 +186,8 @@ function heldRequest() {
 }
 
 test("stalled binding preflight settles without writes and leaves the draft retryable", async () => {
-  const { catalogue, calls } = fixture();
-  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const { catalogue, calls, makeServices, getInvalidations } = fixture();
+  const services = makeServices({ bindingRequestTimeoutMs: 12 });
   const session = createAssignmentSession({ services });
   await session.select("p");
   session.setAssigned("b", true);
@@ -175,6 +195,7 @@ test("stalled binding preflight settles without writes and leaves the draft retr
   const pending = heldRequest();
   catalogue.bindings = () => pending.promise;
   assert.equal(await session.save(), false);
+  assert.equal(getInvalidations(), 0, "Preflight timeout dispatched no write");
   assert.equal(session.snapshot().saving, false);
   assert.equal(session.snapshot().dirty, true);
   assert.equal(session.snapshot().reconciliationRequired, false);
@@ -185,8 +206,8 @@ test("stalled binding preflight settles without writes and leaves the draft retr
 });
 
 test("uncertain timed-out mutation stops the batch and requires read-only verification", async () => {
-  const { catalogue, calls } = fixture();
-  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const { catalogue, calls, makeServices, getInvalidations } = fixture();
+  const services = makeServices({ bindingRequestTimeoutMs: 12 });
   const session = createAssignmentSession({ services });
   await session.select("p");
   session.setAssigned("b", true);
@@ -201,6 +222,9 @@ test("uncertain timed-out mutation stops the batch and requires read-only verifi
 
   assert.equal(await session.save(), false);
   assert.equal(signal.aborted, true);
+  const afterTimeout = getInvalidations();
+  assert.ok(afterTimeout > 0, "An uncertain write must invalidate membership");
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(session.snapshot().saving, false);
   assert.equal(session.snapshot().reconciliationRequired, true);
   assert.deepEqual(session.snapshot().draft.activeIds, ["b"]);
@@ -217,12 +241,17 @@ test("uncertain timed-out mutation stops the batch and requires read-only verifi
   assert.deepEqual(session.snapshot().draft.activeIds, ["b"]);
   assert.deepEqual(Object.keys(session.snapshot().record.relations), ["a"]);
   assert.match(session.snapshot().error, /timed-out request may still complete/);
+  assert.equal(
+    getInvalidations(),
+    afterTimeout,
+    "Unchanged read-only recovery adds no invalidation"
+  );
   heldWrite.resolve();
 });
 
 test("post-write reconciliation deadline retains draft and blocks another mutation", async () => {
-  const { catalogue, calls } = fixture();
-  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const { catalogue, calls, makeServices, getInvalidations } = fixture();
+  const services = makeServices({ bindingRequestTimeoutMs: 12 });
   const session = createAssignmentSession({ services });
   await session.select("p");
   session.setAssigned("b", true);
@@ -232,12 +261,17 @@ test("post-write reconciliation deadline retains draft and blocks another mutati
   catalogue.bindings = (...args) => (++reads === 2 ? heldRead.promise : originalRead(...args));
 
   assert.equal(await session.save(), false);
+  const afterWrite = getInvalidations();
+  assert.ok(afterWrite > 0, "A successful write survives failed readback");
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(session.snapshot().reconciliationRequired, true);
   assert.equal(await session.save(), false);
   assert.equal(calls.filter((call) => call === "add:b").length, 1);
   assert.equal(await session.reconcile(), true);
   assert.equal(session.snapshot().reconciliationRequired, false);
   assert.equal(session.snapshot().dirty, false);
+  assert.ok(getInvalidations() > afterWrite, "Readback proved a changed binding record");
+  assert.equal(session.snapshot().saveConfirmed, false, "Recovery never becomes a confirmed Save");
   heldRead.resolve([]);
 });
 
@@ -266,8 +300,8 @@ test("binding response body is included in the deadline and aborts transport", a
 });
 
 test("an explicit local abandonment unlocks navigation without claiming server rollback", async () => {
-  const { catalogue, calls } = fixture();
-  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const { catalogue, calls, makeServices, getInvalidations } = fixture();
+  const services = makeServices({ bindingRequestTimeoutMs: 12 });
   const session = createAssignmentSession({ services });
   await session.select("p");
   session.setAssigned("b", true);
@@ -277,7 +311,10 @@ test("an explicit local abandonment unlocks navigation without claiming server r
   assert.equal(session.snapshot().reconciliationRequired, true);
   assert.equal(session.discard(), undefined);
   assert.equal(session.snapshot().dirty, true);
+  const afterTimeout = getInvalidations();
+  assert.ok(afterTimeout > 0);
   assert.equal(session.abandonUncertainDraft(), true);
+  assert.equal(getInvalidations(), afterTimeout, "Abandonment does not retract invalidation");
   assert.equal(session.snapshot().feature, null);
   assert.equal(session.snapshot().reconciliationRequired, false);
   assert.equal(session.snapshot().dirty, false);
@@ -286,7 +323,7 @@ test("an explicit local abandonment unlocks navigation without claiming server r
 });
 
 test("Unsupported manual Workspace payloads are rejected before any network writes", async () => {
-  const { services, calls } = fixture();
+  const { services, calls, getInvalidations } = fixture();
   await assert.rejects(
     services.assignments.save("p", {
       activeIds: ["a"],
@@ -304,6 +341,7 @@ test("Unsupported manual Workspace payloads are rejected before any network writ
     /Manual Workspace assignments are not supported/
   );
   assert.deepEqual(calls, []);
+  assert.equal(getInvalidations(), 0);
 });
 
 test("Workspace catalogue reader collects every page for the requested Pipeline", async () => {
@@ -437,4 +475,15 @@ test("unfiltered Package lists use each backend assignment summary without bindi
       [null, null],
     ]
   );
+});
+
+test("A no-op write batch invalidates only when preflight proves membership changed", async () => {
+  const { catalogue, services, calls, getInvalidations } = fixture();
+  await services.assignments.save("p", { activeIds: ["a"] }, { baselineActiveIds: ["a"] });
+  assert.equal(getInvalidations(), 0);
+  await catalogue.bind("p", "b");
+  calls.length = 0;
+  await services.assignments.save("p", { activeIds: ["a", "b"] }, { baselineActiveIds: ["a"] });
+  assert.deepEqual(calls, ["read", "read"]);
+  assert.equal(getInvalidations(), 1);
 });

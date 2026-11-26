@@ -22,18 +22,36 @@ integration details.
 - DC-ASSIGN-SAVE-FEEDBACK-01 is accepted locally at
   `a7cfd438c169f172a7874faab48da7b6d85507c7`, merged at
   `1e71d17693294cf75d5aa26afcf378cc337e3bda`, as reported by the user.
-- DC-MAIN-MAP-PERF-01 is a frontend candidate. Run the local browser checks and
-  controlled benchmark before acceptance. Then scope DC-MAIN-MAP-SYNC-01 and
-  COMMENT-02. Functional Compilation/QC remains deferred. The accepted Main Map
-  preview exposes mode selection only. Persistent contextual status, archived
-  Package discovery and prospective Workspace matching remain separate tasks.
+- DC-MAIN-MAP-PERF-01 was accepted locally and committed at
+  `9f5efc23934c0349b1ede2a42d5ca12270091319` as reported by the user.
+- DC-MAIN-MAP-SYNC-01 is a candidate awaiting local browser acceptance.
+  COMMENT-02 and COMMENT-03 follow. Functional Compilation/QC remains deferred.
+  The accepted Main Map preview exposes mode selection only. Persistent contextual
+  status, archived Package discovery and prospective Workspace matching remain
+  separate tasks.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
+
+## DC-MAIN-MAP-SYNC-01 - Main Map synchronization after assignment (2026-11-26)
+
+**Baseline:** `9f5efc23934c0349b1ede2a42d5ca12270091319`.
+**Status:** frontend candidate awaiting local acceptance.
+
+- A confirmed or possibly committed binding mutation, or authoritative binding
+  readback proving a Pipeline change, invalidates Main Map membership. The next
+  accepted return starts one fresh Overview load. Unchanged Home returns do
+  not fetch membership. Explicit Packages opens retain their normal reuse policy
+  when membership is current and share the dirty load when one is pending.
+- A failed or canceled load retains the pending invalidation and previous valid
+  snapshot. The existing Retry and Refresh actions use the same load path.
+  Package History keeps its independent refresh. A timed-out write can still
+  commit after a successful Overview read.
 
 ## DC-MAIN-MAP-PERF-01 - Fresh Main Map Workspace overview (2026-11-26)
 
 **Baseline:** `1e71d17693294cf75d5aa26afcf378cc337e3bda`.
-**Status:** frontend candidate awaiting local acceptance and browser measurements.
+**Status:** user-reported local acceptance and commit
+`9f5efc23934c0349b1ede2a42d5ca12270091319` (2026-11-26).
 
 - Live Refresh reads the current catalogue through the existing bounded
   Workspace overview. The accepted Jobs load publishes membership and Workspace
@@ -45,9 +63,11 @@ integration details.
   remain separate. Request-count tests cover 29 Workspaces across three
   Workstreams and 100/200 in one Workstream. Actual timings and payload sizes
   require a controlled comparison on the local API.
-- DC-MAIN-MAP-SYNC-01 remains pending. Normal return from Assignment reveals the
-  current Main Map. A later task must reconcile confirmed or possibly committed
-  binding mutations without adding a refresh on every route transition.
+- The user reported improved refresh and 18 requests. The reported Network
+  view included Overview, individual Package metadata and geometry calls.
+  This is an observation from local acceptance. The synthetic request-count
+  tests use controlled fixtures. Metadata scaling and long-running memory
+  behavior remain separate measurement questions.
 
 ## DC-ASSIGN-SAVE-FEEDBACK-01 - Confirmed assignment Save (2026-11-25)
 
@@ -78,7 +98,7 @@ The verification notes below describe the original candidate delivery.
   contract that avoids per-Package reads and distinguishes unknown/error from
   confirmed absence. Reuse verified comment, history and profile contracts
   where they fit.
-- **Package comments and third assignment status:** support Package-level
+- **COMMENT-03 - Package comments and third assignment status:** support Package-level
   comments independent of Workstream bindings. Add an assignment-level
   decision labeled **Discarded** beside **Assigned** and **Not assigned** for
   a Package that needs no chart work. Persist the decision and comment or reason

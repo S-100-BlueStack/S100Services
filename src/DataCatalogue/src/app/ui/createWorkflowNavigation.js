@@ -13,6 +13,7 @@ export function createWorkflowNavigation({
   createPage,
   onOpenJobs,
   onLeaveMainMap,
+  onReturnMainMap,
   onNavigationError = () => {},
   isJobsStartupComplete = () => true,
   locationRef = globalThis.location,
@@ -96,6 +97,8 @@ export function createWorkflowNavigation({
       page.activate();
     } else {
       page?.deactivate?.();
+      // A return refresh can start before Packages considers its panel-open reuse policy.
+      onReturnMainMap?.();
       if (openJobs && isJobsStartupComplete()) onOpenJobs?.();
     }
   }

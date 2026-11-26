@@ -3,6 +3,11 @@ import test from "node:test";
 import { createJobList } from "./jobList.js";
 import { createPackageHistoryList } from "./createPackageHistory.js";
 import { createJobsOverlay } from "../../../app/ui/createJobsOverlay.js";
+import { createWorkflowNavigation } from "../../../app/ui/createWorkflowNavigation.js";
+import { createJobsPanelActions } from "../../../app/ui/createJobsPanelActions.js";
+import { createDraftNavigation } from "../../assignmentPage/ui/confirmDraftNavigation.js";
+import { createLiveAssignmentServices } from "../../assignments/services/liveAssignmentServices.js";
+import { createAssignmentSession } from "../../assignments/state/createAssignmentSession.js";
 import { createJobStore } from "../state/jobStore.js";
 
 class TestElement {
@@ -62,6 +67,10 @@ class TestElement {
 
   setAttribute(name, value) {
     this.attributes.set(name, String(value));
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
   }
 
   addEventListener(name, listener) {
@@ -1458,6 +1467,277 @@ test("Profile enrichment updates only History and preserves the mounted scroll a
       assert.equal(findByClass(overlay.packageInformationElement, "package-history").length, 0);
     } finally {
       overlay.destroy();
+    }
+  });
+});
+
+test("Accepted navigation refreshes only after binding changes and joins Packages open and Refresh", async (t) => {
+  await withAsyncDocument(async () => {
+    const job = { ...fixture("live").job, pipelineId: "enc", workspaceId: "east" };
+    const bindings = new Map();
+    const comments = [];
+    const reads = [];
+    let finishRead;
+    let delayRead = false;
+    const store = createJobStore({
+      service: {
+        async loadJobs(options) {
+          reads.push(options);
+          if (delayRead) {
+            delayRead = false;
+            await new Promise((resolve) => {
+              finishRead = resolve;
+            });
+          }
+          const jobs = bindings.has(job.packageId) ? [job] : [];
+          return { ok: true, data: { jobs, workspaceCatalogue: { workspaces: [] } } };
+        },
+      },
+    });
+    const session = createAssignmentSession({
+      services: createLiveAssignmentServices(
+        {
+          package: async (id) => ({ id }),
+          bindings: async (id) => bindings.get(id) ?? [],
+          async bind(packageId, pipelineId) {
+            const item = { id: packageId, packageId, pipelineId, workspaces: [] };
+            bindings.set(packageId, [...(bindings.get(packageId) ?? []), item]);
+          },
+          async unbind(id) {
+            bindings.delete(id);
+          },
+          bindingComments: async () => ({ items: comments, nextBefore: null }),
+          async addBindingComment(_id, comment) {
+            comments.push({ id: comment.id, pipelineId: comment.workStreamId, text: comment.text });
+          },
+        },
+        { onMembershipInvalidated: store.invalidateMembership }
+      ),
+    });
+    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const assignmentHost = new TestElement("assignment");
+    const guard = createDraftNavigation({
+      session,
+      host: assignmentHost,
+      onSaved() {},
+    });
+    const dialog = assignmentHost.children[0];
+    let waitingForChoice = false;
+    dialog.showModal = () => {
+      waitingForChoice = true;
+    };
+    dialog.remove = () => {};
+    function choose(choice) {
+      assert.equal(waitingForChoice, true);
+      waitingForChoice = false;
+      dialog.returnValue = choice;
+      dialog.dispatchEvent({ type: "close" });
+    }
+
+    const button = new TestElement("assignment-button");
+    const home = new TestElement("home");
+    const updated = new TestElement("updated");
+    const navbar = {
+      element: {
+        querySelector: (selector) =>
+          ({
+            "#feature-assignment-toggle": button,
+            ".navbar-title-link": home,
+            "#last-updated": updated,
+          })[selector],
+      },
+      jobsButton: new TestElement("jobs-button"),
+      filtersButton: new TestElement("filters-button"),
+      filtersPopover: new TestElement("filters-popover"),
+    };
+    const jobsWorkflowHost = new TestElement("jobs-workflow");
+    jobsWorkflowHost.append(overlay.element);
+    const locationRef = { pathname: "/catalogue/assignments" };
+    const historyRef = {
+      pushState(_state, _title, pathname) {
+        locationRef.pathname = pathname;
+      },
+      replaceState(_state, _title, pathname) {
+        locationRef.pathname = pathname;
+      },
+    };
+    const windowRef = new EventTarget();
+    const panelActions = createJobsPanelActions({
+      isOpen: () => !overlay.element.hidden,
+      resetContext: overlay.clearSelectedJob,
+      prepareOpen() {
+        overlay.clearAoiFilter();
+        void overlay.refreshJobs({ onPanelOpen: true });
+      },
+      setOpen(open) {
+        overlay.element.hidden = !open;
+      },
+    });
+    let returns = 0;
+    let completion;
+    let routeToPackage;
+    const navigation = createWorkflowNavigation({
+      shellElement: new TestElement("shell"),
+      navbar,
+      jobsWorkflowHost,
+      locationRef,
+      historyRef,
+      windowRef,
+      createPage({ onPackageSelected }) {
+        routeToPackage = onPackageSelected;
+        return {
+          element: assignmentHost,
+          activate() {},
+          deactivate: session.clearSaveConfirmation,
+          allowLeave: guard.allow,
+          selectPackage: session.select,
+          destroy: guard.destroy,
+        };
+      },
+      onOpenJobs: panelActions.open,
+      onLeaveMainMap: store.cancelNavigationLoad,
+      onReturnMainMap() {
+        returns++;
+        if (store.hasPendingMembershipRefresh()) {
+          completion = overlay.refreshJobs({ afterAssignment: true });
+        }
+      },
+    });
+    const flush = () => new Promise(setImmediate);
+    try {
+      await flush();
+      assert.equal(jobsWorkflowHost.hidden, true);
+      assert.equal(button.focused, undefined, "Direct Assignment does not force focus");
+      overlay.element.hidden = true;
+      await store.loadJobs();
+      const startingReads = reads.length;
+
+      await session.select(job.packageId);
+      routeToPackage(job.packageId);
+      session.setAssigned(job.pipelineId, true);
+      home.dispatchEvent(new Event("click"));
+      choose("cancel");
+      await flush();
+      assert.equal(locationRef.pathname, "/catalogue/assignments/packages/package");
+      assert.equal(returns, 0);
+      assert.equal(reads.length, startingReads);
+
+      home.dispatchEvent(new Event("click"));
+      choose("discard");
+      await flush();
+      assert.equal(returns, 1);
+      assert.equal(overlay.element.hidden, true);
+      assert.equal(reads.length, startingReads);
+      t.diagnostic(
+        "Canceled leave and unchanged/discarded Home return: 0 logical membership loads"
+      );
+
+      await navigation.openAssignment();
+      session.setAssigned(job.pipelineId, true);
+      home.dispatchEvent(new Event("click"));
+      choose("save");
+      await flush();
+      assert.ok(completion, JSON.stringify(session.snapshot()));
+      assert.equal(await completion.then(({ ok }) => ok), true);
+      assert.equal(locationRef.pathname, "/catalogue/");
+      assert.equal(jobsWorkflowHost.hidden, false);
+      assert.equal(overlay.element.hidden, true, "Home preserves the closed panel");
+      assert.equal(store.getSnapshot().jobs[0].id, job.id);
+      assert.equal(session.snapshot().saveConfirmed, false, "Deactivation clears Save feedback");
+
+      await navigation.openAssignment();
+      assert.equal(await session.save(), true, "Clean Save has no membership effect");
+      assert.equal(session.addComment(job.pipelineId), true);
+      session.editComment(
+        session.snapshot().draft.comments[0].id,
+        "A comment on the saved binding"
+      );
+      assert.equal(await session.save(), true);
+      assert.equal(session.snapshot().saveConfirmed, true);
+      const beforeCommentReturn = reads.length;
+      await navigation.openJobs();
+      assert.equal(overlay.element.hidden, false);
+      assert.equal(reads.length, beforeCommentReturn);
+      t.diagnostic(
+        "Clean Save and comment-only return to a recent Packages panel: 0 membership loads"
+      );
+
+      await navigation.openAssignment();
+      for (const packageId of ["another", "third"]) {
+        await session.select(packageId);
+        routeToPackage(packageId);
+        session.setAssigned(job.pipelineId, true);
+        assert.equal(await session.save(), true);
+      }
+      const beforeHistoryReturn = reads.length;
+      const assignmentPath = locationRef.pathname;
+      delayRead = true;
+      locationRef.pathname = "/catalogue/";
+      windowRef.dispatchEvent(new Event("popstate"));
+      await flush();
+      overlay.refreshButton.dispatchEvent({ type: "click" });
+      assert.equal(reads.length - beforeHistoryReturn, 1);
+      assert.equal(reads.at(-1).freshWorkspaceCatalogue, true);
+      assert.equal(overlay.element.hidden, false);
+      finishRead();
+      assert.equal((await completion).ok, true);
+      t.diagnostic("Two Package saves + browser Back + Packages open + Refresh: 1 membership load");
+
+      locationRef.pathname = assignmentPath;
+      windowRef.dispatchEvent(new Event("popstate"));
+      await flush();
+      assert.equal(jobsWorkflowHost.hidden, true);
+      locationRef.pathname = "/catalogue/";
+      windowRef.dispatchEvent(new Event("popstate"));
+      await flush();
+      assert.equal(
+        reads.length - beforeHistoryReturn,
+        1,
+        "Unchanged history return reuses the list"
+      );
+
+      overlay.setPipelineCatalogue([
+        {
+          id: "enc",
+          name: "ENC",
+          workspaces: [{ pipelineId: "enc", workspaceId: "east", name: "East" }],
+        },
+      ]);
+      const scope = overlay.getWorkScope();
+      await overlay.showJobDetails(job);
+      assert.equal(findByClass(overlay.element, "job-details").length, 1);
+      await navigation.openAssignment();
+      await session.select("another");
+      session.setAssigned(job.pipelineId, false);
+      assert.equal(await session.save(), true);
+      home.dispatchEvent(new Event("click"));
+      await flush();
+      assert.equal((await completion).ok, true);
+      assert.equal(
+        findByClass(overlay.element, "job-details").length,
+        1,
+        "Valid selection survives"
+      );
+
+      await navigation.openAssignment();
+      await session.select(job.packageId);
+      session.setAssigned(job.pipelineId, false);
+      assert.equal(await session.save(), true);
+      home.dispatchEvent(new Event("click"));
+      await flush();
+      assert.equal((await completion).ok, true);
+      assert.equal(
+        findByClass(overlay.element, "job-details").length,
+        0,
+        "Removed selection clears"
+      );
+      assert.deepEqual(overlay.getWorkScope(), scope);
+      assert.equal(overlay.element.hidden, false, "Home preserves the open panel");
+    } finally {
+      navigation.destroy();
+      session.destroy();
+      overlay.destroy();
+      store.destroy();
     }
   });
 });

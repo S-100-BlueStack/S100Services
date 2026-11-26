@@ -199,3 +199,64 @@ test("superseded Packages read never updates the successful read timestamp", asy
   assert.equal(store.getSnapshot().lastSuccessfulLoadAt, latest);
   assert.equal(store.getSnapshot().jobs.length, 1);
 });
+
+test("A dirty membership generation only acknowledges its own current successful read", async () => {
+  const requests = [];
+  const catalogue = { workspaces: [] };
+  const publications = [];
+  const store = createJobStore({
+    service: {
+      loadJobs(options) {
+        return new Promise((resolve) => requests.push({ ...options, resolve }));
+      },
+    },
+  });
+  store.subscribe((snapshot, workspaceCatalogue) => {
+    if (workspaceCatalogue) publications.push(snapshot.jobs);
+  });
+  const initial = store.loadJobs();
+  assert.equal(requests[0].freshWorkspaceCatalogue, undefined);
+  requests[0].resolve(createSuccessResult({ jobs: [BASE_JOB] }));
+  await initial;
+
+  store.invalidateMembership();
+  const beforeLeave = store.loadJobs();
+  assert.equal(store.loadJobs({ cancelOnLeave: true }), beforeLeave);
+  store.cancelNavigationLoad();
+  assert.equal(requests[1].signal.aborted, true);
+  assert.equal(store.hasPendingMembershipRefresh(), true);
+  assert.equal(store.getSnapshot().jobs[0].id, BASE_JOB.id);
+
+  const older = store.loadJobs();
+  store.invalidateMembership();
+  assert.equal(requests[2].signal.aborted, true);
+  const failed = store.loadJobs();
+  requests[3].resolve(createErrorResult("Overview offline"));
+  assert.equal((await failed).ok, false);
+  assert.equal(store.hasPendingMembershipRefresh(), true);
+  assert.equal(store.getSnapshot().error.message, "Overview offline");
+  assert.equal(store.getSnapshot().jobs[0].id, BASE_JOB.id);
+
+  const newest = store.loadJobs();
+  requests[2].resolve(createSuccessResult({ jobs: [], workspaceCatalogue: catalogue }));
+  assert.equal((await older).stale, true);
+  assert.equal(store.hasPendingMembershipRefresh(), true);
+  requests[4].resolve(createSuccessResult({ jobs: [], workspaceCatalogue: catalogue }));
+  await newest;
+  assert.equal(store.hasPendingMembershipRefresh(), false);
+  requests[1].resolve(createSuccessResult({ jobs: [BASE_JOB], workspaceCatalogue: catalogue }));
+  assert.equal((await beforeLeave).stale, true);
+  assert.deepEqual(publications, [[]]);
+  assert.equal(
+    requests.slice(1).every((request) => request.freshWorkspaceCatalogue),
+    true
+  );
+
+  store.invalidateMembership();
+  const disposed = store.loadJobs();
+  store.destroy();
+  assert.equal(requests[5].signal.aborted, true);
+  requests[5].resolve(createSuccessResult({ jobs: [BASE_JOB], workspaceCatalogue: catalogue }));
+  assert.equal((await disposed).stale, true);
+  assert.deepEqual(publications, [[]]);
+});

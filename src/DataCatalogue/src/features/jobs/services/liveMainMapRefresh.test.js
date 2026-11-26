@@ -6,6 +6,12 @@ import { loadWorkspaceOverview } from "../../../shared/api/loadWorkspaceOverview
 import { createJobStore } from "../state/jobStore.js";
 import { createJobService } from "./jobService.js";
 import { createLiveJobServiceAdapter } from "./liveJobServiceAdapter.js";
+import { createLiveAssignmentServices } from "../../assignments/services/liveAssignmentServices.js";
+import { createAssignmentSession } from "../../assignments/state/createAssignmentSession.js";
+import {
+  countOpenJobsByWorkspace,
+  getVisiblePackageIdsForScope,
+} from "../domain/packageScopeFilter.js";
 import { loadPackageAois } from "../../map/packages/loadPackageAois.js";
 
 const aoi = {
@@ -42,11 +48,47 @@ function fixture(pipelines, packages = ["shared"]) {
   const catalogue = createCatalogueService(
     createCatalogueClient({
       baseUrl: "/api",
-      async fetchImpl(url, { signal }) {
+      async fetchImpl(url, { signal, method, body }) {
         const { pathname, searchParams } = new URL(url, "https://fixture.invalid");
         const number = Number(searchParams.get("page") ?? 1);
         const size = Number(searchParams.get("pageSize") ?? 200);
         const [, , , path, id, subresource, workspaceId, membership] = pathname.split("/");
+        if (path === "dispatcher") {
+          assert.equal(id, "bindings");
+          calls.push({ kind: "binding", method });
+          if (method === "GET") {
+            const packageId = searchParams.get("packageId");
+            return Response.json(
+              Object.entries(state.pipelines)
+                .filter(([, rows]) =>
+                  rows.some((row) =>
+                    row.packages.items.some((item) => item.packageId === packageId)
+                  )
+                )
+                .map(([pipelineId]) => ({
+                  id: pipelineId,
+                  packageId,
+                  pipelineId,
+                  workspaces: [],
+                }))
+            );
+          }
+          if (method === "POST") {
+            const { pipelineId, packageId } = JSON.parse(body);
+            state.pipelines[pipelineId] = state.pipelines[pipelineId].map((row) =>
+              workspace(row.workspace.id, [
+                ...row.packages.items.map((item) => item.packageId),
+                packageId,
+              ])
+            );
+          } else {
+            assert.equal(method, "DELETE");
+            state.pipelines[subresource] = state.pipelines[subresource].map((row) =>
+              workspace(row.workspace.id)
+            );
+          }
+          return new Response(null, { status: 204 });
+        }
         let kind;
         if (path === "pipelines") {
           if (!id) kind = "pipeline";
@@ -119,7 +161,20 @@ function fixture(pipelines, packages = ["shared"]) {
     if (workspaceCatalogue) published.push({ jobs: snapshot.jobs, ...workspaceCatalogue });
   });
 
-  return { catalogue, store, calls, state, published };
+  return {
+    catalogue,
+    store,
+    calls,
+    state,
+    published,
+    newAssignmentSession() {
+      return createAssignmentSession({
+        services: createLiveAssignmentServices(catalogue, {
+          onMembershipInvalidated: store.invalidateMembership,
+        }),
+      });
+    },
+  };
 }
 
 function summarize(calls) {
@@ -374,4 +429,109 @@ test("Leaving during a retry keeps the earlier failure and the last verified Job
   assert.equal(f.store.getSnapshot().error, failure.error);
   assert.equal(f.store.getSnapshot().jobs[0].packageId, "shared");
   assert.equal(f.published.length, 0);
+});
+
+test("Binding and unbinding reconcile real wire clients through one bounded Overview load", async (t) => {
+  const f = fixture({ enc: [workspace("east"), workspace("west")], paper: [workspace("west")] });
+  const session = f.newAssignmentSession();
+  const scope = { pipelineIds: ["enc"], workspaceKeys: null };
+  assert.equal(await session.select("shared"), true);
+  assert.equal((await f.store.loadJobs()).data.jobs.length, 0);
+
+  session.setAssigned("enc", true);
+  assert.equal(await session.save(), true);
+  assert.equal(session.snapshot().saveConfirmed, true);
+  session.setAssigned("paper", true);
+  assert.equal(await session.save(), true);
+  f.calls.length = 0;
+
+  const onReturn = f.store.loadJobs();
+  assert.equal(f.store.loadJobs(), onReturn, "Manual Refresh shares the dirty generation");
+  const { data } = await onReturn;
+  assert.equal(f.published.length, 1);
+  assert.deepEqual(f.published[0].jobs, data.jobs);
+  assert.equal(new Set(data.jobs.map(({ id }) => id)).size, 3);
+  assert.equal(countOpenJobsByWorkspace(data.jobs).size, 3);
+  const visiblePackageIds = getVisiblePackageIdsForScope(data.jobs, scope);
+  assert.deepEqual(visiblePackageIds, ["shared"]);
+  const geometry = await loadPackageAois(f.catalogue, scope);
+  assert.equal(geometry[0].shortId, "shared");
+
+  assert.equal(f.store.hasPendingMembershipRefresh(), false);
+  const addedCounts = summarize(f.calls);
+  assert.deepEqual(addedCounts, {
+    pipeline: 1,
+    overview: 2,
+    membership: 0,
+    workspaceDetail: 0,
+    metadataList: 0,
+    metadataDetail: 1,
+    geometry: 1,
+  });
+  t.diagnostic(`Changed return with first bindings: ${JSON.stringify(addedCounts)}`);
+
+  session.setAssigned("enc", false);
+  session.setAssigned("paper", false);
+  assert.equal(await session.save(), true);
+  f.calls.length = 0;
+  assert.equal((await f.store.loadJobs()).ok, true);
+  assert.deepEqual(f.published.at(-1).jobs, []);
+  assert.deepEqual(getVisiblePackageIdsForScope(f.store.getSnapshot().jobs, scope), []);
+  const afterUnbind = await loadPackageAois(f.catalogue, scope);
+  const idsAfterUnbind = getVisiblePackageIdsForScope(f.store.getSnapshot().jobs, scope);
+  assert.deepEqual(
+    afterUnbind.filter(({ packageId }) => idsAfterUnbind.includes(packageId)),
+    []
+  );
+  const removedCounts = summarize(f.calls);
+  assert.deepEqual(removedCounts, {
+    pipeline: 1,
+    overview: 2,
+    membership: 0,
+    workspaceDetail: 0,
+    metadataList: 0,
+    metadataDetail: 0,
+    geometry: 1,
+  });
+  t.diagnostic(`Changed return after last unbind: ${JSON.stringify(removedCounts)}`);
+  session.destroy();
+  f.store.destroy();
+});
+
+test("An in-flight startup Overview cannot satisfy a post-mutation read", async (t) => {
+  const f = fixture({ enc: [workspace("east")] });
+  let finish;
+  let started;
+  const pendingStartup = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const startedStartup = new Promise((resolve) => {
+    started = resolve;
+  });
+  f.state.intercept = (call) => {
+    if (call.kind !== "overview") return;
+    f.state.intercept = null;
+    const preMutation = Response.json(page([workspace("east")], 1, 20));
+    started();
+    return pendingStartup.then(() => preMutation);
+  };
+  const startup = f.store.loadJobs();
+  await startedStartup;
+
+  const session = f.newAssignmentSession();
+  await session.select("shared");
+  session.setAssigned("enc", true);
+  assert.equal(await session.save(), true);
+  const postMutation = f.store.loadJobs();
+  finish();
+
+  assert.equal((await startup).stale, true);
+  assert.equal((await postMutation).data.jobs[0].packageId, "shared");
+  assert.equal(f.published.length, 1);
+  const counts = summarize(f.calls);
+  assert.equal(counts.overview, 2, "One preexisting startup page and one fresh page");
+  assert.equal(counts.membership, 0);
+  t.diagnostic(`Startup overlap, including preexisting startup calls: ${JSON.stringify(counts)}`);
+  session.destroy();
+  f.store.destroy();
 });

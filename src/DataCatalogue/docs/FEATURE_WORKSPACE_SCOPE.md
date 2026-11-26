@@ -84,6 +84,14 @@ draft for read-only reconciliation via **Check saved bindings** or **Check saved
 changes**. **Discard local draft** clears the browser draft. A server write
 may still complete late.
 
+On return to Main Map, confirmed or possibly committed binding writes trigger
+a fresh read of backend-derived Workspace membership. A preflight or recovery
+read can also invalidate the Main Map when it proves a saved binding change.
+Draft-only changes and comment-only saves with unchanged bindings require no
+membership read. Home preserves the active Work Scope and panel visibility.
+Existing Refresh remains available if an uncertain write lands after the read.
+Package History has its own Refresh action.
+
 In live Package Assignment, an explicit Save of a changed draft shows a green
 check and reports **Changes saved** after the service confirms the intended
 bindings and comments. Ordinary refreshes retain the check. A new draft edit,

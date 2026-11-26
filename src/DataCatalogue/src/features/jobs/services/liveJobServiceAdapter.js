@@ -42,7 +42,7 @@ export function createLiveJobServiceAdapter({
     setScope(value) {
       setWorkspaces(value ? [value] : []);
     },
-    async loadJobs({ signal } = {}) {
+    async loadJobs({ signal, freshWorkspaceCatalogue = false } = {}) {
       if (scopes === null) {
         if (typeof ensureWorkspaces !== "function") {
           throw new Error(
@@ -59,7 +59,8 @@ export function createLiveJobServiceAdapter({
         }
       }
       const initialScopes = scopes;
-      const initialOverview = pendingOverview;
+      // A completed startup request can predate the binding write.
+      const initialOverview = freshWorkspaceCatalogue ? null : pendingOverview;
       pendingOverview = null;
       const currentLoad = ++loadGeneration;
       // Startup shares the catalogue already loaded for the map. Later Main Map reads

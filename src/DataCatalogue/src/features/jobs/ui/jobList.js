@@ -66,6 +66,7 @@ export function createJobList({
   const pendingMutationJobIds = new Set();
   const collapsedPackageIds = new Set();
   let historyView = null;
+  let membershipRefresh = null;
   const history = createPackageHistoryLoader({
     read: readPackageHistory,
     readProfile: readPackageHistoryProfile,
@@ -74,12 +75,32 @@ export function createJobList({
     },
   });
 
-  async function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
-    const result = await loadJobs(store, visibleCompletedJobIds, {
-      showErrorNoticeOnFailure: false,
-      cancelOnLeave: sourceMode === "live" && source !== "panel-open",
-    });
+  function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
+    const cancelOnLeave = sourceMode === "live" && source !== "panel-open";
+    const pendingMembership = sourceMode === "live" && store.hasPendingMembershipRefresh?.();
+    if (pendingMembership) {
+      // All triggers for this Store generation share its publication and notices.
+      // Keep the current list context when reconciling after Assignment.
+      const load = store.loadJobs({ cancelOnLeave });
+      if (membershipRefresh?.load === load) return membershipRefresh.completion;
+      const completion = completeJobsRefresh(load, source, showSuccessNoticeOnSuccess).finally(
+        () => {
+          if (membershipRefresh?.load === load) membershipRefresh = null;
+        }
+      );
+      membershipRefresh = { load, completion };
+      return completion;
+    }
 
+    return completeJobsRefresh(
+      loadJobs(store, visibleCompletedJobIds, { showErrorNoticeOnFailure: false, cancelOnLeave }),
+      source,
+      showSuccessNoticeOnSuccess
+    );
+  }
+
+  async function completeJobsRefresh(load, source, showSuccessNoticeOnSuccess) {
+    const result = await load;
     if (!alive || result.stale) return result;
     if (!result.ok) {
       showErrorNotice({
@@ -224,8 +245,13 @@ export function createJobList({
     );
   };
 
-  const unsubscribeJobs = store.subscribe((state) => {
+  const unsubscribeJobs = store.subscribe((state, workspaceCatalogue) => {
     currentState = state;
+    if (workspaceCatalogue && selectedJobId && !getJobById(state.jobs, selectedJobId)) {
+      selectedJobId = "";
+      viewMode = JOB_LIST_VIEW_MODE.LIST;
+      shouldNotifySelectionClearedOnBack = false;
+    }
     makeSelectedCompletedJobVisible(visibleCompletedJobIds, state.jobs, selectedJobId);
     removeInvisibleExpandedJobs(
       expandedJobIds,
@@ -264,9 +290,9 @@ export function createJobList({
       );
       render();
     },
-    refreshJobs({ manual = false } = {}) {
+    refreshJobs({ manual = false, afterAssignment = false } = {}) {
       return runJobsRefresh({
-        source: manual ? "manual" : "panel-open",
+        source: afterAssignment ? "assignment-return" : manual ? "manual" : "panel-open",
         showSuccessNoticeOnSuccess: manual,
       });
     },

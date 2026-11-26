@@ -182,7 +182,7 @@ export function createJobsOverlay({
     getWorkScope() {
       return scopeControls?.getScope() ?? null;
     },
-    refreshJobs({ onPanelOpen = false } = {}) {
+    refreshJobs({ onPanelOpen = false, afterAssignment = false } = {}) {
       if (onPanelOpen && sourceMode === "live") {
         const snapshot = jobStore.getSnapshot();
         const loadedAt = snapshot.lastSuccessfulLoadAt;
@@ -192,6 +192,7 @@ export function createJobsOverlay({
         // Only a recent successful read can be reused; manual Refresh bypasses this policy.
         if (
           !snapshot.error &&
+          !jobStore.hasPendingMembershipRefresh() &&
           Number.isFinite(loadedAt) &&
           age >= 0 &&
           age < LIVE_PACKAGE_PANEL_REUSE_MS
@@ -199,7 +200,7 @@ export function createJobsOverlay({
           return Promise.resolve({ ok: true, reused: true });
         }
       }
-      return jobList.refreshJobs();
+      return jobList.refreshJobs({ afterAssignment });
     },
     showJobsForAoi(selectedAoi) {
       return jobList.showJobsForAoi(selectedAoi);

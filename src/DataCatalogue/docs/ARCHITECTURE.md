@@ -18,6 +18,32 @@
   Dated notes below describe changes in their delivery context. The preserved
   mock workflow retains its separate Feature/Work stream domain.
 
+## DC-MAIN-MAP-SYNC-01 - Binding invalidation and Main Map refresh
+
+The live Assignment service reports binding write outcomes and differences
+observed by authoritative binding preflight or readback. The session passes the
+previous active Pipeline IDs when recovering saved state. Comment responses and
+the confirmed Save indicator have their own lifecycles. The app connects the
+service callback to the live Job store and starts a refresh only when an accepted
+return has pending membership invalidation. Home keeps the existing panel
+visibility. Explicit Packages navigation shares the active load and keeps its
+existing panel-open behavior.
+
+The store owns the pending membership revision, in-flight request and successful
+acknowledgment. Invalidation cancels an older Jobs read. A dirty generation
+bypasses the startup Overview snapshot and reuses the PERF-01 bounded loader,
+even when it first has to join an in-flight startup catalogue prerequisite.
+Only the successful current generation publishes fresh Workspaces and contextual
+Jobs and acknowledges its revision. The app uses that publication for Work Scope,
+counts and the existing geometry consumers. Failure, navigation cancellation
+and disposal cannot acknowledge the revision. Manual Refresh and Retry use the
+same path. Removed contextual selections clear when the new catalogue publishes.
+
+A successful read reflects the available backend state at read time. A timed-out
+binding mutation may still land later. Use Assignment's saved-change recovery
+and the Main Map Refresh action to check again. Package History retains its
+separate Refresh action when the same Package's Details stay mounted.
+
 ## COMMENT-01 - Binding comment ownership
 
 `BindingCommentsController` uses the existing catalogue policy and captures the
@@ -2602,7 +2628,8 @@ successful Jobs result. App composition adopts that catalogue without reentering
 the startup callback, preserves valid Work Scope choices, updates counts and
 requests one AOI reload for the current Workstream union. Uncommitted live
 refreshes are canceled on leaving Main Map. Startup can still finish in the
-background. Returning via the normal Home link does not trigger a load.
+background. Returning via Home starts a read only when a binding change
+invalidated the live Main Map, as described in DC-MAIN-MAP-SYNC-01 above.
 
 The Workspace geometry source reads matching polygons from that catalogue and
 falls back to Workspace detail independently for missing polygons or mismatched

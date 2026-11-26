@@ -15,6 +15,9 @@ export function createJobStore({ service = jobService } = {}) {
   let cancelOnNavigation = false;
   let errorBeforeLoad = null;
   let alive = true;
+  let membershipRevision = 0;
+  let loadedMembershipRevision = 0;
+  let pendingMembershipLoad = null;
   let state = {
     jobs: [],
     isLoading: false,
@@ -46,25 +49,55 @@ export function createJobStore({ service = jobService } = {}) {
     };
   }
 
-  async function loadJobs({ clear = false, cancelOnLeave = false } = {}) {
+  function hasPendingMembershipRefresh() {
+    return loadedMembershipRevision !== membershipRevision;
+  }
+
+  function invalidateMembership() {
+    if (!alive) return;
+    membershipRevision++;
+    // The active read may have started before the binding write.
+    cancelLoad();
+  }
+
+  function loadJobs({ clear = false, cancelOnLeave = false } = {}) {
+    if (!alive) return Promise.resolve({ ok: false, stale: true });
+    const freshWorkspaceCatalogue = hasPendingMembershipRefresh();
+    if (freshWorkspaceCatalogue && pendingMembershipLoad && !clear) {
+      return pendingMembershipLoad;
+    }
+
+    const revision = membershipRevision;
     const current = ++loadGeneration;
     if (!loadAbort) errorBeforeLoad = state.error;
     loadAbort?.abort();
     const request = new AbortController();
     loadAbort = request;
-    cancelOnNavigation = cancelOnLeave || state.lastSuccessfulLoadAt !== null;
+    cancelOnNavigation =
+      freshWorkspaceCatalogue || cancelOnLeave || state.lastSuccessfulLoadAt !== null;
     setState({
       ...(clear ? { jobs: [], lastSuccessfulLoadAt: null } : {}),
       isLoading: true,
       error: null,
     });
 
-    const result = await service.loadJobs({ signal: request.signal });
+    const operation = completeLoad(request, current, revision, freshWorkspaceCatalogue);
+    pendingMembershipLoad = freshWorkspaceCatalogue ? operation : null;
+    return operation;
+  }
+
+  async function completeLoad(request, current, revision, freshWorkspaceCatalogue) {
+    const result = await service.loadJobs({
+      signal: request.signal,
+      ...(freshWorkspaceCatalogue ? { freshWorkspaceCatalogue } : {}),
+    });
     if (!alive || current !== loadGeneration || request.signal.aborted)
       return { ...result, stale: true };
 
     loadAbort = null;
+    pendingMembershipLoad = null;
     if (result.ok) {
+      loadedMembershipRevision = revision;
       setState(
         {
           jobs: result.data.jobs,
@@ -100,6 +133,7 @@ export function createJobStore({ service = jobService } = {}) {
       // A read started before this mutation must not restore the previous status.
       loadAbort?.abort();
       loadAbort = null;
+      pendingMembershipLoad = null;
       setState({
         isLoading: false,
         jobs: applyJobMutationResult(state.jobs, result.data),
@@ -138,10 +172,15 @@ export function createJobStore({ service = jobService } = {}) {
   function cancelNavigationLoad() {
     // The initial catalogue/list may finish in the background, as on a direct
     // Assignment URL. A refresh started in Main Map belongs to that visit.
-    if (!loadAbort || !cancelOnNavigation) return;
+    if (cancelOnNavigation) cancelLoad();
+  }
+
+  function cancelLoad() {
+    if (!loadAbort) return;
     loadGeneration++;
     loadAbort.abort();
     loadAbort = null;
+    pendingMembershipLoad = null;
     setState({ isLoading: false, error: errorBeforeLoad });
   }
 
@@ -167,10 +206,13 @@ export function createJobStore({ service = jobService } = {}) {
       alive = false;
       loadGeneration++;
       loadAbort?.abort();
+      pendingMembershipLoad = null;
       listeners.clear();
     },
     subscribe,
     loadJobs,
+    invalidateMembership,
+    hasPendingMembershipRefresh,
     cancelNavigationLoad,
     updateJobStatus,
     getSnapshot,

@@ -236,6 +236,7 @@ export function createAssignmentSession({ services }) {
     const current = generation;
     const id = state.feature.id;
     const awaiting = state.draft.comments.filter((comment) => comment.awaitingConfirmation);
+    const baselineActiveIds = createDraft(state.record).activeIds;
     state.saving = true;
     state.error = "";
     emit();
@@ -244,6 +245,7 @@ export function createAssignmentSession({ services }) {
       .then(() =>
         (services.assignments.reconcile ?? services.assignments.load)(id, {
           includeComments: awaiting.length > 0,
+          baselineActiveIds,
         })
       )
       .then(({ commentHistory: comments, ...record }) => {

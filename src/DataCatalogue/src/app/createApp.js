@@ -306,7 +306,11 @@ export async function createApp(rootElement) {
     jobsWorkflowHost,
     navbar,
     createPage: (options) =>
-      createAssignmentWorkflow(runtimeConfig, catalogue, { ...options, basemapSettings }),
+      createAssignmentWorkflow(runtimeConfig, catalogue, {
+        ...options,
+        basemapSettings,
+        onMembershipInvalidated: live ? jobStore.invalidateMembership : undefined,
+      }),
     onNavigationError(error) {
       showErrorNotice({
         title: "Package assignment could not be opened",
@@ -314,6 +318,13 @@ export async function createApp(rootElement) {
       });
     },
     onOpenJobs: jobsPanelActions.open,
+    onReturnMainMap: live
+      ? () => {
+          if (jobStore.hasPendingMembershipRefresh()) {
+            void jobsPanel.refreshJobs({ afterAssignment: true });
+          }
+        }
+      : undefined,
     onLeaveMainMap: live
       ? () => {
           jobStore.cancelNavigationLoad();
@@ -334,6 +345,12 @@ export async function createApp(rootElement) {
           applyWorkScopeToMap();
         },
         onWorkspacesLoaded(workspaces, groups, overview) {
+          const wasLoaded = hasLoadedJobCatalogue;
+          liveJobs.setWorkspaces(workspaces, { overview });
+          hasLoadedJobCatalogue = true;
+          // A pre-mutation startup response can still unblock the adapter. The
+          // post-mutation Jobs generation owns catalogue publication in this case.
+          if (jobStore.hasPendingMembershipRefresh()) return;
           const previousPipelines = JSON.stringify(currentWorkScope.pipelineIds);
           scopeWorkspaces = workspaces;
           jobsPanel.setPipelineCatalogue(groups);
@@ -347,9 +364,6 @@ export async function createApp(rootElement) {
           });
           // Packages belong to every Workspace, regardless of which Pipelines are shown on the map.
           resetJobsPanelContext();
-          const wasLoaded = hasLoadedJobCatalogue;
-          liveJobs.setWorkspaces(workspaces, { overview });
-          hasLoadedJobCatalogue = true;
           // Only the first catalogue load can be joined by a pending Packages read.
           // Later catalogue reloads must supersede any read using older scopes.
           if (wasLoaded || !jobStore.getSnapshot().isLoading) {

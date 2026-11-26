@@ -57,9 +57,13 @@ function hasUncertainOutcome(error) {
   );
 }
 
+function isDefiniteClientRejection(error) {
+  return error?.status >= 400 && error.status < 500 && error.status !== 408;
+}
+
 export function createLiveAssignmentServices(
   catalogue,
-  { bindingRequestTimeoutMs = DEFAULT_BINDING_REQUEST_TIMEOUT_MS } = {}
+  { bindingRequestTimeoutMs = DEFAULT_BINDING_REQUEST_TIMEOUT_MS, onMembershipInvalidated } = {}
 ) {
   const pending = new Map();
   const pendingCommentReads = new Map();
@@ -69,12 +73,24 @@ export function createLiveAssignmentServices(
       timeoutMs: bindingRequestTimeoutMs,
       signal,
     });
-  const readBindings = (id, signal) =>
-    request(
+
+  async function readBindings(id, signal, baselineActiveIds) {
+    const bindings = await request(
       "Binding catalogue read",
       ({ signal: requestSignal }) => catalogue.bindings(id, { signal: requestSignal }),
       signal
     );
+    if (Array.isArray(baselineActiveIds)) {
+      const currentIds = new Set(bindings.map((binding) => binding.pipelineId));
+      if (
+        currentIds.size !== baselineActiveIds.length ||
+        baselineActiveIds.some((pipelineId) => !currentIds.has(pipelineId))
+      ) {
+        onMembershipInvalidated?.();
+      }
+    }
+    return bindings;
+  }
 
   const supportsComments =
     typeof catalogue.bindingComments === "function" &&
@@ -114,9 +130,10 @@ export function createLiveAssignmentServices(
       return bindingRecord(await readBindings(id, signal));
     },
     // Recovery is read-only. It must not repeat an unconfirmed POST or DELETE.
-    async reconcile(id, { includeComments = false } = {}) {
-      if (!includeComments) return bindingRecord(await readBindings(id));
-      const [bindings, commentHistory] = await Promise.all([readBindings(id), readComments(id)]);
+    async reconcile(id, { includeComments = false, baselineActiveIds } = {}) {
+      const bindingsRead = readBindings(id, undefined, baselineActiveIds);
+      if (!includeComments) return bindingRecord(await bindingsRead);
+      const [bindings, commentHistory] = await Promise.all([bindingsRead, readComments(id)]);
       return { ...bindingRecord(bindings), commentHistory };
     },
     save(id, draft, { baselineActiveIds } = {}) {
@@ -147,7 +164,7 @@ export function createLiveAssignmentServices(
     if (validationError) throw new Error(validationError);
     // Preflight is always authoritative. A previous unsuccessful response may have committed.
     const [existing, priorComments] = await Promise.all([
-      readBindings(id),
+      readBindings(id, undefined, baselineActiveIds),
       comments.length ? readComments(id) : [],
     ]);
     const alreadyConfirmed = confirmedBindingCommentIds(
@@ -188,15 +205,20 @@ export function createLiveAssignmentServices(
       try {
         await request(`Binding ${change.action.toLowerCase()}`, ({ signal }) => change.run(signal));
         successfulWrites++;
+        onMembershipInvalidated?.();
         outcomes.push({ pipelineId: change.pipelineId, action: change.action, ok: true });
       } catch (error) {
+        // An interrupted or invalid response can follow a committed write. A
+        // definite client rejection does not require a membership refresh.
+        const uncertain = hasUncertainOutcome(error);
+        if (uncertain || !isDefiniteClientRejection(error)) onMembershipInvalidated?.();
         outcomes.push({
           pipelineId: change.pipelineId,
           action: change.action,
           ok: false,
           message: error.message,
         });
-        if (hasUncertainOutcome(error)) {
+        if (uncertain) {
           throw new BindingSaveError(
             `${change.action} ${change.pipelineId}: ${error.message} The server outcome is unknown. Check saved bindings before another Save. No remaining changes were sent.`,
             { outcomes, requiresReconciliation: true, ...priorConfirmation }
@@ -234,8 +256,7 @@ export function createLiveAssignmentServices(
         } catch (error) {
           outcome.message = error.message;
           // An invalid or interrupted success response also leaves the append uncertain.
-          const rejected = error.status >= 400 && error.status < 500 && error.status !== 408;
-          if (hasUncertainOutcome(error) || !rejected) {
+          if (hasUncertainOutcome(error) || !isDefiniteClientRejection(error)) {
             throw new BindingSaveError(
               `Comment ${comment.workStreamId}: ${error.message} Check saved changes before another Save. No remaining changes were sent.`,
               {
@@ -262,7 +283,10 @@ export function createLiveAssignmentServices(
       .join("; ");
     let record;
     try {
-      record = await assignments.reconcile(id, { includeComments: comments.length > 0 });
+      record = await assignments.reconcile(id, {
+        includeComments: comments.length > 0,
+        baselineActiveIds: currentIds,
+      });
     } catch (error) {
       throw new BindingSaveError(
         `${summary ? `${summary}. ` : ""}Authoritative reload failed: ${error.message} ${successfulWrites ? "Check saved changes before another Save." : "Retry Save to read the current state."}`,

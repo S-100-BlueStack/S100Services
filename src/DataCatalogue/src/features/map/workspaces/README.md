@@ -112,7 +112,11 @@ Workspace/polygon/Package membership snapshot from the backend per Pipeline page
 and initial Jobs load. After startup, live Jobs reads get a fresh overview
 through the same loader. Only a successful current Jobs load supplies the
 replacement catalogue to the Work Scope controls and map. Healthy unchanged
-polygons and labels remain mounted. `createWorkspaceGeometrySource` validates
+polygons and labels remain mounted. After Package Assignment invalidates
+membership, the next accepted Main Map return uses the same fresh load and
+keeps the current Work Scope. The accepted Jobs snapshot drives the Workspace
+counts and visible Package AOIs. The geometry overlays retain their own error
+and retry lifecycles. `createWorkspaceGeometrySource` validates
 references before consuming a polygon, and retries a null polygon through the
 existing Workspace detail endpoint. The overlay owns stale-result rejection,
 SDK preparation and rendering.
