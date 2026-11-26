@@ -19,6 +19,9 @@ public sealed class BathymetricSurfaceChangeDetectorTests
 
         using var dataManager = new BathyDataManager();
 
+        await dataManager.RunOnStaAsync(() => ArcGisHost.Initialize(ArcGisHost.LicenseProductCode.ArcGISPro), CancellationToken.None);
+
+
         var aois = await dataManager.ReadBathymetricAoisAsync(CancellationToken.None);
 
         await dataManager.RunOnStaAsync(() => {
