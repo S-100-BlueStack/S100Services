@@ -123,6 +123,13 @@ export async function collectPages(read, { signal, initialPage = null } = {}) {
     if (result.page !== page || (expectedTotal !== undefined && expectedTotal !== result.total)) {
       throw new Error("Catalogue changed during paging. Reload to obtain a complete list.");
     }
+    if (
+      initialPage &&
+      (result.pageSize !== initialPage.pageSize ||
+        result.items.length !== Math.min(result.pageSize, result.total - page * result.pageSize))
+    ) {
+      throw new Error("Workspace membership paging returned an incomplete or inconsistent page.");
+    }
     expectedTotal = result.total;
     for (const item of result.items) {
       const key = item.key ?? item.packageId ?? item.id;

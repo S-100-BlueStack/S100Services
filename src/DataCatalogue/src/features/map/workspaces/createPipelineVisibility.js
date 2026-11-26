@@ -161,6 +161,15 @@ export function createPipelineVisibility({
     return { pipelines, workspaces, overview: null };
   }
 
+  function replaceCatalogue({ pipelines, workspaces }) {
+    const next = groupWorkspacePipelines(workspaces, pipelines);
+    enabledPipelines = new Set(preservePipelineSelection(next, groups, enabledPipelines));
+    enabledWorkspaces = new Set(preserveWorkspaceSelection(next, groups, enabledWorkspaces));
+    groups = next;
+    render();
+    return groups;
+  }
+
   function reload() {
     if (!alive) {
       return Promise.resolve({
@@ -178,11 +187,7 @@ export function createPipelineVisibility({
       try {
         const { pipelines, workspaces, overview } = await readCatalogue(signal);
         if (!alive || current !== generation) return { ok: false, stale: true };
-        const next = groupWorkspacePipelines(workspaces, pipelines);
-        enabledPipelines = new Set(preservePipelineSelection(next, groups, enabledPipelines));
-        enabledWorkspaces = new Set(preserveWorkspaceSelection(next, groups, enabledWorkspaces));
-        groups = next;
-        render();
+        replaceCatalogue({ pipelines, workspaces });
         // Packages use the complete, verified catalogue rather than map visibility.
         onWorkspacesLoaded?.(
           groups.flatMap((group) => group.workspaces),
@@ -215,6 +220,7 @@ export function createPipelineVisibility({
   return {
     reload,
     ensureLoaded,
+    replaceCatalogue,
     destroy() {
       alive = false;
       generation++;

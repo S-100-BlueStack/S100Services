@@ -12,6 +12,7 @@ export function createWorkflowNavigation({
   navbar,
   createPage,
   onOpenJobs,
+  onLeaveMainMap,
   onNavigationError = () => {},
   isJobsStartupComplete = () => true,
   locationRef = globalThis.location,
@@ -90,8 +91,10 @@ export function createWorkflowNavigation({
     navbar.filtersButton.hidden = show;
     navbar.element.querySelector("#last-updated").hidden = show;
     syncNavigation();
-    if (show) page.activate();
-    else {
+    if (show) {
+      onLeaveMainMap?.();
+      page.activate();
+    } else {
       page?.deactivate?.();
       if (openJobs && isJobsStartupComplete()) onOpenJobs?.();
     }

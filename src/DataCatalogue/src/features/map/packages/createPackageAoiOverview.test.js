@@ -383,3 +383,26 @@ test("Failed same-scope refresh retains Package labels and MapView replacement d
   assert.equal(state.map.layers.length, 0);
   state.overview.destroy();
 });
+
+test("Catalogue refresh sends one AOI read per selected Pipeline", async () => {
+  const state = fixture();
+  try {
+    state.overview.setView(state.view);
+    state.overview.setPipelineIds(["enc"]);
+    await flush();
+    state.calls.length = 0;
+
+    state.overview.setPipelineIds(["enc"], { reload: true });
+    state.overview.setPipelineIds(["enc"]);
+    await flush();
+    assert.deepEqual(state.calls, ["page:enc:true"]);
+    state.calls.length = 0;
+
+    state.overview.setPipelineIds(["paper", "enc"], { reload: true });
+    state.overview.setPipelineIds(["enc", "paper"]);
+    await flush();
+    assert.deepEqual(state.calls, ["page:enc:true", "page:paper:true"]);
+  } finally {
+    state.overview.destroy();
+  }
+});

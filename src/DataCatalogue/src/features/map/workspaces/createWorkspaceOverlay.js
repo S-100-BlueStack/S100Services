@@ -110,6 +110,7 @@ export function createWorkspaceOverlay({ source, renderer, onStatus = () => {} }
 
   return {
     setContext,
+    getStatus: () => currentState.status,
     focus,
     setVisibleWorkspaces(workspaces) {
       if (alive) renderer.setVisibleWorkspaces?.(workspaces);

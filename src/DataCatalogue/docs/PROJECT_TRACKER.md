@@ -19,19 +19,41 @@ integration details.
   `fa944f3af61c4a98fac0a8cc790a9aa53afbff5b` as reported by the user.
 - COMMENT-01 is accepted locally at `18c29ff4aa34dfcc72fbdb7924a20540ee178581`
   as reported by the user.
-- DC-ASSIGN-SAVE-FEEDBACK-01 is the current frontend candidate. Verify the Save
-  indicator in the live Package Assignment browser workflow before accepting it.
-  Plan COMMENT-02 after acceptance. Functional Compilation/QC remains deferred.
-  The accepted Main Map preview exposes mode selection only. Persistent
-  contextual status, archived Package discovery and prospective Workspace
-  matching remain separate tasks.
+- DC-ASSIGN-SAVE-FEEDBACK-01 is accepted locally at
+  `a7cfd438c169f172a7874faab48da7b6d85507c7`, merged at
+  `1e71d17693294cf75d5aa26afcf378cc337e3bda`, as reported by the user.
+- DC-MAIN-MAP-PERF-01 is a frontend candidate. Run the local browser checks and
+  controlled benchmark before acceptance. Then scope DC-MAIN-MAP-SYNC-01 and
+  COMMENT-02. Functional Compilation/QC remains deferred. The accepted Main Map
+  preview exposes mode selection only. Persistent contextual status, archived
+  Package discovery and prospective Workspace matching remain separate tasks.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
+
+## DC-MAIN-MAP-PERF-01 - Fresh Main Map Workspace overview (2026-11-26)
+
+**Baseline:** `1e71d17693294cf75d5aa26afcf378cc337e3bda`.
+**Status:** frontend candidate awaiting local acceptance and browser measurements.
+
+- Live Refresh reads the current catalogue through the existing bounded
+  Workspace overview. The accepted Jobs load publishes membership and Workspace
+  scope from that same read. Healthy first pages require no individual
+  membership calls. A null page uses the targeted fallback and overflow continues
+  at page two. Startup still shares its initial overview.
+- Work Scope, map and list use the same catalogue. Healthy unchanged Workspace
+  coverage is retained. The existing Package metadata and scoped AOI reads
+  remain separate. Request-count tests cover 29 Workspaces across three
+  Workstreams and 100/200 in one Workstream. Actual timings and payload sizes
+  require a controlled comparison on the local API.
+- DC-MAIN-MAP-SYNC-01 remains pending. Normal return from Assignment reveals the
+  current Main Map. A later task must reconcile confirmed or possibly committed
+  binding mutations without adding a refresh on every route transition.
 
 ## DC-ASSIGN-SAVE-FEEDBACK-01 - Confirmed assignment Save (2026-11-25)
 
 **Baseline:** `18c29ff4aa34dfcc72fbdb7924a20540ee178581`.
-**Status:** frontend candidate awaiting local acceptance.
+**Status:** accepted locally as reported by the user on 2026-11-26.
+The verification notes below describe the original candidate delivery.
 
 - After explicit Save of a changed live Package draft, the existing disabled
   Save control shows a green check and announces **Changes saved** when the
@@ -58,12 +80,13 @@ integration details.
   where they fit.
 - **Package comments and third assignment status:** support Package-level
   comments independent of Workstream bindings. Add an assignment-level
-  decision beside **Assigned** and **Not assigned** for a Package that needs
-  no chart work before binding. Persist the decision and comment or reason
-  through the backend. A Package in this state remains editable. Existing
-  contextual **Done** and **No update** actions remain separate. The final
-  label, coexistence with active bindings, status precedence, allowed
-  transitions and filter behavior are pending agreement.
+  decision labeled **Discarded** beside **Assigned** and **Not assigned** for
+  a Package that needs no chart work. Persist the decision and comment or reason
+  through the backend once the contract is agreed. A **Discarded** Package
+  remains editable and can later be commented on or assigned. Existing
+  contextual **Done** and **No update** actions remain separate. Coexistence with
+  active bindings, status precedence, allowed transitions, Main Map inclusion
+  and filter behavior are pending agreement.
 
 ## COMMENT-01 - Workstream binding comments (2026-11-25)
 
@@ -537,9 +560,9 @@ DC-PERF-BE-02, ZIP SHA-256
   Empty, non-null membership pages remain authoritative empty results. Invalid,
   duplicate, inconsistent or incomplete pages fail visibly rather than silently
   truncating the Jobs scope.
-- Subsequent manual Packages refreshes continue querying current Workspace
-  membership, not a cross-refresh snapshot. The existing catalogue-generation,
-  Job-store and map-overlay lifecycle guards prevent stale publication.
+- At the initial integration, subsequent manual Packages refreshes queried
+  individual Workspace memberships. DC-MAIN-MAP-PERF-01 above supersedes that
+  path with fresh bounded overview reads.
 - User-reported backend smoke test: 18 Paper Chart and 15 ENC Workspaces, zero
   null geometry/membership fields; selected Workspace geometry/count/Package ID
   match and successful backend overview logs. Frontend browser performance and

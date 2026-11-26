@@ -26,7 +26,7 @@ class Element extends EventTarget {
   }
 }
 
-function fixture({ onOpenJobs, startupComplete = true } = {}) {
+function fixture({ onOpenJobs, onLeaveMainMap, startupComplete = true } = {}) {
   const button = new Element();
   const home = new Element();
   const updated = new Element();
@@ -83,6 +83,7 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
       (() => {
         jobsActions++;
       }),
+    onLeaveMainMap,
     isJobsStartupComplete: () => jobsStartupComplete,
     documentRef,
   });
@@ -92,6 +93,7 @@ function fixture({ onOpenJobs, startupComplete = true } = {}) {
     page,
     navbar,
     button,
+    home,
     startupLoader,
     jobsWorkflowHost,
     documentRef,
@@ -390,6 +392,23 @@ test("browser title follows the main map, assignment and selected Package short 
     assert.equal(f.documentRef.title, "Package assignment: NM260041");
     await f.navigation.openJobs();
     assert.equal(f.documentRef.title, "Data Catalogue");
+  } finally {
+    f.navigation.destroy();
+  }
+});
+
+test("Leaving Main Map cancels once and Home does not reopen Jobs", async () => {
+  let leaves = 0;
+  const f = fixture({ onLeaveMainMap: () => leaves++ });
+  try {
+    await f.navigation.openAssignment();
+    await f.navigation.openAssignment();
+    assert.equal(leaves, 1);
+    f.home.dispatchEvent(new Event("click"));
+    await new Promise(setImmediate);
+    assert.equal(f.jobsWorkflowHost.hidden, false);
+    assert.equal(f.counts().jobsActions, 0);
+    assert.equal(leaves, 1);
   } finally {
     f.navigation.destroy();
   }

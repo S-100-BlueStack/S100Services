@@ -8,6 +8,7 @@ export function createLiveJobServiceAdapter({
   catalogue,
   statuses = createScopedJobStatusAdapter(),
   ensureWorkspaces = null,
+  readWorkspaceCatalogue = null,
 }) {
   // Null means the catalogue has not loaded; [] means a verified empty catalogue.
   let scopes = null;
@@ -57,13 +58,19 @@ export function createLiveJobServiceAdapter({
           throw new Error("Workspace catalogue did not provide an authoritative Package scope.");
         }
       }
-      const selected = scopes;
-      const overview = pendingOverview;
-      // A snapshot is a single initial read, not a persistent membership cache. Manual
-      // refreshes must re-read the current Workspace membership from the API.
+      const initialScopes = scopes;
+      const initialOverview = pendingOverview;
       pendingOverview = null;
       const currentLoad = ++loadGeneration;
-      if (!selected.length) return { jobs: [] };
+      // Startup shares the catalogue already loaded for the map. Later Main Map reads
+      // fetch a new catalogue, including Workspaces outside the current display scope.
+      const workspaceCatalogue =
+        !initialOverview && readWorkspaceCatalogue
+          ? await readWorkspaceCatalogue({ signal })
+          : null;
+      signal?.throwIfAborted();
+      const selected = workspaceCatalogue?.workspaces ?? initialScopes;
+      const overview = workspaceCatalogue?.overview ?? initialOverview;
       const memberships = [];
       let scopeIndex = 0;
       // Only missing/overflowing memberships need legacy reads; bound those requests.
@@ -124,9 +131,9 @@ export function createLiveJobServiceAdapter({
         };
       });
       loaded.sort((a, b) => compareSeverity(a.severity, b.severity) || a.id.localeCompare(b.id));
-      if (scopes === selected && currentLoad === loadGeneration)
+      if (scopes === initialScopes && currentLoad === loadGeneration)
         jobs = new Map(loaded.map((job) => [job.id, job]));
-      return { jobs: loaded };
+      return workspaceCatalogue ? { jobs: loaded, workspaceCatalogue } : { jobs: loaded };
     },
     async updateJobStatus(id, status) {
       const job = jobs.get(id);

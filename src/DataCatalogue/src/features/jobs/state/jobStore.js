@@ -12,6 +12,8 @@ export function createJobStore({ service = jobService } = {}) {
   let changeSequence = 0;
   let loadGeneration = 0;
   let loadAbort = null;
+  let cancelOnNavigation = false;
+  let errorBeforeLoad = null;
   let alive = true;
   let state = {
     jobs: [],
@@ -44,11 +46,13 @@ export function createJobStore({ service = jobService } = {}) {
     };
   }
 
-  async function loadJobs({ clear = false } = {}) {
+  async function loadJobs({ clear = false, cancelOnLeave = false } = {}) {
     const current = ++loadGeneration;
+    if (!loadAbort) errorBeforeLoad = state.error;
     loadAbort?.abort();
     const request = new AbortController();
     loadAbort = request;
+    cancelOnNavigation = cancelOnLeave || state.lastSuccessfulLoadAt !== null;
     setState({
       ...(clear ? { jobs: [], lastSuccessfulLoadAt: null } : {}),
       isLoading: true,
@@ -59,20 +63,25 @@ export function createJobStore({ service = jobService } = {}) {
     if (!alive || current !== loadGeneration || request.signal.aborted)
       return { ...result, stale: true };
 
+    loadAbort = null;
     if (result.ok) {
-      setState({
-        jobs: result.data.jobs,
-        lastSuccessfulLoadAt: Date.now(),
-        isLoading: false,
-        error: null,
-        lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOBS_LOADED, {
-          jobCount: result.data.jobs.length,
-        }),
-      });
+      setState(
+        {
+          jobs: result.data.jobs,
+          lastSuccessfulLoadAt: Date.now(),
+          isLoading: false,
+          error: null,
+          lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOBS_LOADED, {
+            jobCount: result.data.jobs.length,
+          }),
+        },
+        result.data.workspaceCatalogue
+      );
 
       return result;
     }
 
+    request.abort();
     setState({
       isLoading: false,
       error: result.error,
@@ -90,6 +99,7 @@ export function createJobStore({ service = jobService } = {}) {
     if (result.ok) {
       // A read started before this mutation must not restore the previous status.
       loadAbort?.abort();
+      loadAbort = null;
       setState({
         isLoading: false,
         jobs: applyJobMutationResult(state.jobs, result.data),
@@ -125,20 +135,30 @@ export function createJobStore({ service = jobService } = {}) {
     };
   }
 
-  function setState(partialState) {
+  function cancelNavigationLoad() {
+    // The initial catalogue/list may finish in the background, as on a direct
+    // Assignment URL. A refresh started in Main Map belongs to that visit.
+    if (!loadAbort || !cancelOnNavigation) return;
+    loadGeneration++;
+    loadAbort.abort();
+    loadAbort = null;
+    setState({ isLoading: false, error: errorBeforeLoad });
+  }
+
+  function setState(partialState, workspaceCatalogue) {
     state = {
       ...state,
       ...partialState,
     };
 
-    emit();
+    emit(workspaceCatalogue);
   }
 
-  function emit() {
+  function emit(workspaceCatalogue) {
     const snapshot = getSnapshot();
 
     for (const listener of listeners) {
-      listener(snapshot);
+      listener(snapshot, workspaceCatalogue);
     }
   }
 
@@ -151,6 +171,7 @@ export function createJobStore({ service = jobService } = {}) {
     },
     subscribe,
     loadJobs,
+    cancelNavigationLoad,
     updateJobStatus,
     getSnapshot,
   };

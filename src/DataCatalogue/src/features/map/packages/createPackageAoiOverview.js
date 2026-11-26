@@ -134,13 +134,16 @@ export function createPackageAoiOverview({
     }
   }
 
-  function setPipelineIds(nextPipelineIds) {
+  function setPipelineIds(nextPipelineIds, { reload = false } = {}) {
     if (!alive) return;
     const selected = Array.isArray(nextPipelineIds)
       ? [...new Set(nextPipelineIds.filter((id) => typeof id === "string" && id.trim()))].sort()
       : [];
     const nextKey = JSON.stringify(selected);
-    if (nextKey === pipelineKey) return;
+    if (nextKey === pipelineKey) {
+      if (reload) void refresh();
+      return;
+    }
     abortPending();
     labels?.clear();
     pipelineIds = selected;
@@ -148,7 +151,7 @@ export function createPackageAoiOverview({
     if (layer) layer.visible = loadedPipelineKey === nextKey && selected.length > 0;
     if (!view || !selected.length) return;
     if (loadedPipelineKey === nextKey) displayCurrentGraphics();
-    else void refresh();
+    if (reload || loadedPipelineKey !== nextKey) void refresh();
   }
 
   return {

@@ -233,15 +233,19 @@ The existing `createCatalogueClient` continues to apply the configured API base
 and credentials exactly once. `createCatalogueService.workspaceOverview` normalizes
 1-based Workspace pages (1–20 per page), Pipeline-scoped Workspace identity,
 Esri JSON strings and nullable first-200 membership pages. The shared overview
-read is reused by main-map geometry hydration and the _initial_ scoped Jobs
-membership read. The Package assignment workflow still uses its existing APIs.
+read is reused by main-map geometry hydration and the initial scoped Jobs
+membership read. DC-MAIN-MAP-PERF-01 also uses a fresh overview for each
+post-startup live Jobs read that needs the API. Package Assignment uses its
+existing APIs.
 
 A `null` geometry or membership component is a failed component, not empty data.
 The corresponding unchanged individual route is used as fallback; Package
 membership counts above 200 require the unchanged paged membership route starting
-at page two. Manual Packages refresh bypasses the initial overview snapshot so
-it can observe current memberships. The frontend does not cache these reads
-across catalogue reloads or change the backend authorization contract.
+at page two. Healthy complete first pages need no individual membership
+requests. An invalid overview fails the current load. Manual Refresh bypasses
+panel reuse and reads current Workspace identities and memberships. The endpoint
+does not provide a cross-page or cross-Pipeline snapshot token. The frontend
+keeps the backend authorization contract.
 
 **Deployment prerequisite:** DC-PERF-BE-02 must be installed at the configured
 API origin. A missing/unauthorized overview route is an explicit catalogue-load

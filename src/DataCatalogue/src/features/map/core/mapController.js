@@ -1,4 +1,7 @@
-import { createWorkspaceGeometrySource } from "../workspaces/createWorkspaceGeometrySource.js";
+import {
+  createWorkspaceGeometrySource,
+  hasSameWorkspaceOverviewGeometry,
+} from "../workspaces/createWorkspaceGeometrySource.js";
 import { createPackageGeometrySource } from "../packages/createPackageGeometrySource.js";
 import { createPackageGraphics } from "../packages/createPackageGraphics.js";
 import { createPackageGeometryOverlay } from "../packages/createPackageGeometryOverlay.js";
@@ -304,10 +307,21 @@ export function createMapController({
     }
   }
 
-  function setWorkspaceCatalog(workspaces, { overview = null, ...options } = {}) {
+  function setWorkspaceCatalog(workspaces, { overview = null, reuseUnchanged = false } = {}) {
+    const status = workspaceOverlay?.getStatus();
+    const reuseGeometry =
+      reuseUnchanged &&
+      (status === "ready" || status === "empty") &&
+      hasSameWorkspaceOverviewGeometry(workspaceOverview, overview);
     workspaceCatalog = [...workspaces];
-    workspaceOverview = overview;
-    catalogOptions = { autoFocus: false, ...options };
+    // The map needs only coverage, so it does not retain membership pages.
+    workspaceOverview = overview
+      ? new Map(
+          [...overview].map(([key, { workspace, esriJSON }]) => [key, { workspace, esriJSON }])
+        )
+      : null;
+    // Keep identical healthy graphics (and their popup) through membership-only refreshes.
+    catalogOptions = { autoFocus: false, reload: !reuseGeometry };
     return workspaceOverlay?.setContext(
       { id: "workspace-catalog", workspaces: workspaceCatalog },
       catalogOptions

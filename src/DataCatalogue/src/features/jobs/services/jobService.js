@@ -10,11 +10,8 @@ export function createJobService({ adapter = createJobServiceAdapter() } = {}) {
     loadJobs(options) {
       return toApiResult(
         async () => {
-          const jobsResult = await adapter.loadJobs(options);
-
-          return {
-            jobs: jobsResult.jobs,
-          };
+          const { jobs, workspaceCatalogue } = await adapter.loadJobs(options);
+          return workspaceCatalogue ? { jobs, workspaceCatalogue } : { jobs };
         },
         {
           source: adapter.source,

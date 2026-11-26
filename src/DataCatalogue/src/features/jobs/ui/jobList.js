@@ -77,6 +77,7 @@ export function createJobList({
   async function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
     const result = await loadJobs(store, visibleCompletedJobIds, {
       showErrorNoticeOnFailure: false,
+      cancelOnLeave: sourceMode === "live" && source !== "panel-open",
     });
 
     if (!alive || result.stale) return result;
@@ -346,10 +347,14 @@ export function createJobList({
   };
 }
 
-async function loadJobs(store, visibleCompletedJobIds, { showErrorNoticeOnFailure = true } = {}) {
+async function loadJobs(
+  store,
+  visibleCompletedJobIds,
+  { showErrorNoticeOnFailure = true, cancelOnLeave = false } = {}
+) {
   visibleCompletedJobIds.clear();
 
-  const result = await store.loadJobs();
+  const result = await store.loadJobs(cancelOnLeave ? { cancelOnLeave } : undefined);
 
   if (!result.stale && !result.ok && showErrorNoticeOnFailure) {
     showErrorNotice({

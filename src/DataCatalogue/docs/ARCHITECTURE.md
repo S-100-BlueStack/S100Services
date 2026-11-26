@@ -2588,15 +2588,28 @@ without clearing the `GraphicsLayer` or requesting geometry again.
 For the live Main Map, `shared/api/loadWorkspaceOverview` is the bounded read
 coordinator: it fetches the Pipeline catalogue followed by at most two concurrent
 Pipeline overview reads, with a maximum of 20 Workspaces per page. It publishes
-one complete generation to `createPipelineVisibility`. The app passes that
-snapshot to the `liveJobServiceAdapter` and the map controller; API normalization
-remains in `shared/api`. The first Jobs load consumes the embedded membership
-page, requesting only missing membership components or subsequent pages after
-200 members. Manual Jobs refreshes read current membership from the existing
-endpoint. The geometry source consumes the same generation and independently
-falls back to Workspace detail only for missing polygons or mismatched geometry
-references. Existing JobStore/map overlay generation and abort guards remain
-publication owners, and new catalogue loads replace the overview snapshot.
+one complete startup catalogue to `createPipelineVisibility`. The app passes
+that catalogue to `liveJobServiceAdapter` and the map controller. The first Jobs
+load consumes the embedded membership once and joins in-flight startup catalogue
+work. API normalization remains in `shared/api`.
+
+For subsequent live loads, including manual Refresh and panel opens that need a
+read, the Jobs adapter calls the same bounded loader for a new catalogue. An
+embedded membership page covers up to 200 members. A null page falls back to
+the existing membership route, and overflow continues from page two. The Job
+store cancels superseded reads and publishes the fresh catalogue alongside the
+successful Jobs result. App composition adopts that catalogue without reentering
+the startup callback, preserves valid Work Scope choices, updates counts and
+requests one AOI reload for the current Workstream union. Uncommitted live
+refreshes are canceled on leaving Main Map. Startup can still finish in the
+background. Returning via the normal Home link does not trigger a load.
+
+The Workspace geometry source reads matching polygons from that catalogue and
+falls back to Workspace detail independently for missing polygons or mismatched
+references. The map keeps healthy, identical coverage and its popup through
+membership-only changes. The existing Workspace and Package AOI overlays own
+geometry cancellation, rendering and disposal. Package Assignment remains a
+separate workflow.
 
 Preferences are application-owned (`features/preferences/state` and `ui`), with
 independent localStorage permissions for theme, basemap selection, and map position.

@@ -3,8 +3,7 @@ import { workspaceGeometryKey } from "./workspaceGeometry.js";
 const WORKSPACE_PAGE_SIZE = 20;
 const PIPELINE_CONCURRENCY = 2;
 
-// One bounded catalogue read supplies both the main map's geometry and its initial Jobs scope.
-// Subsequent manual Jobs refreshes still request current membership from the individual routes.
+// One bounded catalogue read supplies Main Map Workspace geometry and current membership.
 export async function loadWorkspaceOverview(catalogue, { signal } = {}) {
   const pipelines = await catalogue.pipelines({ signal });
   signal?.throwIfAborted();

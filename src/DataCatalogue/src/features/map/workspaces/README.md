@@ -30,8 +30,8 @@ selection or destroy. Identical rerenders do not re-fetch or re-zoom. A distinct
 context reloads even when its relevant Workspace IDs happen to match the previous Package.
 
 Workspace geometry has no persistent or cross-selection detail cache. Main Map
-can reuse the current overview generation and refreshes it on catalogue reload
-without an automatic fit. Assignment Retry map recreates its view and re-reads
+can reuse identical healthy coverage from the previous generation and adopts
+new polygons or metadata without an automatic fit. Assignment Retry map recreates its view and re-reads
 the selected context. Explicit Focus actions use the current graphics.
 
 `createWorkspaceGraphics` owns a GraphicsLayer, real SDK Polygon conversion, client projection,
@@ -104,15 +104,18 @@ without a new widget, private shadow DOM or backend/API work. Verify light and
 dark appearances, mouse/keyboard scrolling and focus, long labels and disabled
 Pipeline children in a real desktop browser.
 
-## Combined Workspace overview (DC-PERF-FE-01)
+## Combined Workspace overview (DC-PERF-FE-01 and DC-MAIN-MAP-PERF-01)
 
 For the live Main Map, `shared/api/loadWorkspaceOverview.js` retrieves one bounded
 Workspace/polygon/Package membership snapshot from the backend per Pipeline page.
-`createPipelineVisibility` owns catalogue reload/cancellation and hands the verified
-result to the map and scoped Jobs consumers. `createWorkspaceGeometrySource`
-reuses the snapshot only for matching Workspace geometry references; a null
-polygon is retried via the existing Workspace detail endpoint. The map overlay
-continues to own stale-result rejection, SDK preparation and rendering.
+`createPipelineVisibility` owns the startup catalogue and shares it with the map
+and initial Jobs load. After startup, live Jobs reads get a fresh overview
+through the same loader. Only a successful current Jobs load supplies the
+replacement catalogue to the Work Scope controls and map. Healthy unchanged
+polygons and labels remain mounted. `createWorkspaceGeometrySource` validates
+references before consuming a polygon, and retries a null polygon through the
+existing Workspace detail endpoint. The overlay owns stale-result rejection,
+SDK preparation and rendering.
 
 The Package assignment map continues using its independent per-Workspace
 geometry source. See [DC-PERF-FE-01 validation](../../../../docs/DC_PERF_FE_01_VALIDATION.md)

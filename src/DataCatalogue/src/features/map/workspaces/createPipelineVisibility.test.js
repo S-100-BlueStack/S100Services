@@ -461,3 +461,32 @@ test("Workstream load failure preserves the diagnostic and uses a user-facing pr
     f.restore();
   }
 });
+
+test("Adopting a catalogue does not start a second Jobs read", async () => {
+  let reads = 0;
+  const f = fixture({
+    readOnly: true,
+    async loadCatalogue() {
+      reads++;
+      return { pipelines: [{ id: "enc", name: "ENC" }], workspaces: [defaultWorkspaces[1]] };
+    },
+  });
+  try {
+    await f.controller.ensureLoaded();
+    const west = defaultWorkspaces[0];
+    const groups = f.controller.replaceCatalogue({
+      pipelines: [{ id: "paper", name: "Paper Charts" }],
+      workspaces: [west],
+    });
+    assert.deepEqual(groups, [{ id: "paper", name: "Paper Charts", workspaces: [west] }]);
+    assert.equal(
+      f.container.children[1].children[0].attributes.get("aria-label"),
+      "Paper Charts Workstream"
+    );
+    assert.equal(f.loaded.length, 1);
+    assert.equal(f.callbacks.length, 1);
+    assert.equal(reads, 1);
+  } finally {
+    f.restore();
+  }
+});

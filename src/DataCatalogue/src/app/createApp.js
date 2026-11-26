@@ -46,6 +46,7 @@ export async function createApp(rootElement) {
   let packageAoiOverview = null;
   let currentWorkScope = { pipelineIds: [], workspaceKeys: null, showEmptyWorkspaces: false };
   let scopeWorkspaces = [];
+  let applyingWorkspaceCatalogue = false;
   const basemapSettings = createBasemapSettings({
     apiKey: runtimeConfig.arcgisBasemapApiKey,
     preferences,
@@ -71,6 +72,7 @@ export async function createApp(rootElement) {
     ? createLiveJobServiceAdapter({
         catalogue,
         ensureWorkspaces: () => pipelineVisibility.ensureLoaded(),
+        readWorkspaceCatalogue: (options) => loadWorkspaceOverview(catalogue, options),
       })
     : null;
   const selectedAoiStore = createSelectedAoiStore();
@@ -117,7 +119,7 @@ export async function createApp(rootElement) {
     readPackageHistoryProfile: live ? catalogue.packageHistoryProfile : undefined,
     onScopeChange(scope) {
       currentWorkScope = scope;
-      applyWorkScopeToMap();
+      if (!applyingWorkspaceCatalogue) applyWorkScopeToMap();
     },
   });
   const workspace = createMapWorkspace({
@@ -273,7 +275,7 @@ export async function createApp(rootElement) {
     packageAoiOverview.setVisiblePackageIds(packageIds);
   }
 
-  function applyWorkScopeToMap() {
+  function applyWorkScopeToMap({ reloadPackageAois = false } = {}) {
     if (!live) return;
     const snapshot = jobStore.getSnapshot();
     // Until the first successful catalogue read, unknown counts must not
@@ -283,8 +285,10 @@ export async function createApp(rootElement) {
     mapController.setVisibleWorkspaces(
       filterWorkspacesByPackageScope(scopeWorkspaces, currentWorkScope, counts)
     );
-    packageAoiOverview?.setPipelineIds(currentWorkScope.pipelineIds);
     updateScopedPackageAois();
+    packageAoiOverview?.setPipelineIds(currentWorkScope.pipelineIds, {
+      reload: reloadPackageAois,
+    });
   }
 
   const jobsPanelActions = createJobsPanelActions({
@@ -310,6 +314,12 @@ export async function createApp(rootElement) {
       });
     },
     onOpenJobs: jobsPanelActions.open,
+    onLeaveMainMap: live
+      ? () => {
+          jobStore.cancelNavigationLoad();
+          cancelPendingMapRestores();
+        }
+      : undefined,
     isJobsStartupComplete: () => live || isStartupComplete,
   });
 
@@ -333,8 +343,6 @@ export async function createApp(rootElement) {
           }
           workspaceJobColorSync.setCatalogue(workspaces);
           void mapController.setWorkspaceCatalog(workspaces, {
-            reload: true,
-            autoFocus: false,
             overview,
           });
           // Packages belong to every Workspace, regardless of which Pipelines are shown on the map.
@@ -381,10 +389,37 @@ export async function createApp(rootElement) {
     mapController.applyAoiMapFilters(snapshot.filters);
   });
 
-  const unsubscribeJobStoreSync = jobStore.subscribe((snapshot) => {
+  const unsubscribeJobStoreSync = jobStore.subscribe((snapshot, workspaceCatalogue) => {
     if (live) {
+      if (workspaceCatalogue) {
+        // The store publishes the catalogue only with the successful, current Jobs
+        // generation. Adopt it without invoking the startup callback or loading Jobs again.
+        const groups = pipelineVisibility.replaceCatalogue(workspaceCatalogue);
+        scopeWorkspaces = workspaceCatalogue.workspaces;
+        applyingWorkspaceCatalogue = true;
+        try {
+          jobsPanel.setPipelineCatalogue(groups);
+        } finally {
+          applyingWorkspaceCatalogue = false;
+        }
+        workspaceJobColorSync.setCatalogue(scopeWorkspaces);
+        void mapController.setWorkspaceCatalog(scopeWorkspaces, {
+          reuseUnchanged: true,
+          overview: workspaceCatalogue.overview,
+        });
+        const selected = selectedJobStore.getSnapshot().selectedJob;
+        if (selected?.jobId && !snapshot.jobs.some((job) => job.id === selected.jobId)) {
+          cancelPendingMapRestores();
+          isSelectedJobMapScopeActive = false;
+          selectedJobStore.clearSelection();
+          mapController.closeJobPopup(selected);
+          mapController.clearJobHighlight();
+          mapController.clearAoiHighlight();
+          mapController.clearAoiJobScope();
+        }
+      }
       workspaceJobColorSync.onJobsChanged(snapshot);
-      applyWorkScopeToMap();
+      applyWorkScopeToMap({ reloadPackageAois: Boolean(workspaceCatalogue) });
     }
     mapController.refreshAoiPopupContent();
     void mapSyncCoordinator.syncMapAfterJobStoreChange(snapshot);
@@ -510,9 +545,6 @@ export async function createApp(rootElement) {
       void mapSyncCoordinator.refreshMapAfterJobsRefresh({
         jobs: event.detail?.jobs,
       });
-      if (live && event.detail?.source === "manual") {
-        void packageAoiOverview?.refresh();
-      }
     },
     {
       signal: appEventAbortController.signal,

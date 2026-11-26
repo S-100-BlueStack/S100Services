@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createWorkspaceGeometrySource } from "./createWorkspaceGeometrySource.js";
+import {
+  createWorkspaceGeometrySource,
+  hasSameWorkspaceOverviewGeometry,
+} from "./createWorkspaceGeometrySource.js";
 
 const polygon = JSON.stringify({
   rings: [
@@ -169,4 +172,22 @@ test("a changed Workspace reference cannot consume polygon from an older overvie
   });
   assert.equal((await source.load([current]))[0].error, null);
   assert.deepEqual(reads, [["p", "w"]]);
+});
+
+test("Workspace coverage comparison ignores membership-only changes", () => {
+  const key = JSON.stringify(["enc", "east"]);
+  const original = detail("enc", "east");
+  const previous = new Map([[key, original]]);
+  const sameMembershipRefresh = new Map([[key, { ...original, packages: { items: [] } }]]);
+  assert.equal(hasSameWorkspaceOverviewGeometry(previous, sameMembershipRefresh), true);
+  for (const next of [
+    { ...original, esriJSON: null },
+    { ...original, esriJSON: `${polygon} ` },
+    { ...original, workspace: { ...original.workspace, name: "New label" } },
+    { ...original, workspace: { ...original.workspace, pipelineName: "New heading" } },
+    { ...original, workspace: { ...original.workspace, geometryRef: { globalId: "next" } } },
+  ]) {
+    assert.equal(hasSameWorkspaceOverviewGeometry(previous, new Map([[key, next]])), false);
+  }
+  assert.equal(hasSameWorkspaceOverviewGeometry(previous, new Map()), false);
 });

@@ -4,6 +4,25 @@ import {
   workspaceGeometryContextKey,
 } from "../../../shared/api/workspaceGeometry.js";
 
+export function hasSameWorkspaceOverviewGeometry(previous, next) {
+  if (!previous || !next || previous.size !== next.size) return false;
+  for (const [key, entry] of next) {
+    const old = previous.get(key);
+    // Null polygons use independent detail reads whose freshness cannot be inferred.
+    if (
+      !old ||
+      entry.esriJSON === null ||
+      old.esriJSON !== entry.esriJSON ||
+      workspaceGeometryContextKey(old.workspace) !== workspaceGeometryContextKey(entry.workspace) ||
+      old.workspace.name !== entry.workspace.name ||
+      old.workspace.pipelineName !== entry.workspace.pipelineName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function createWorkspaceGeometrySource({
   catalogue,
   concurrency = 4,
