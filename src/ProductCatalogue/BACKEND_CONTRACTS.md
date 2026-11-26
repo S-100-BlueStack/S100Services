@@ -878,6 +878,28 @@ attribution, IC-ENC decision history and live processing/download verification
 remain separate boundaries. Do not interpret the historical placeholder-only
 wording as a requirement to disable supported existing links or previews.
 
+### Historical report availability (BE-109A)
+
+The BE-109 discovery at `76f7c182e67621e953626ed65372c431eb4f560a` identified
+an incomplete historical read: the artifact history endpoint reused the current
+candidate/failure track selector. BE-109A separates these read purposes.
+
+- `GET electronicproducts/{datasetName}/artifacts/history` includes stored
+  validation and IC-ENC report artifacts for the existing related S-57/S-101
+  tracks, independently of current candidate fields or track state. Published
+  and discarded candidates' retained files remain discoverable. Legacy files
+  with no revision ID remain eligible.
+- `GET electronicproducts/{datasetName}` retains the existing candidate/failure
+  filter and current-revision links. Historical files do not create an export
+  candidate or change workflow availability.
+- Artifact metadata, exact owner-specific download URLs, report kinds, mapping,
+  authorization and ordering are unchanged. No database migration, write-path
+  change or additional endpoint is required.
+
+The history list remains Product-scoped, not proof of ownership by a particular
+job, History event, Dashboard Activity, current Package or IC-ENC verdict. The
+separate event-attribution and decision-projection requirements remain open.
+
 ### Historical report planning requirements
 
 Report implementation was blocked pending IC-ENC and internal validation process decisions at the earlier reviewed baseline.

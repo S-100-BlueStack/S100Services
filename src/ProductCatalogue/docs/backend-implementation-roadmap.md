@@ -14,6 +14,18 @@
 > integrations do not settle every BE-109 requirement; exact event attribution,
 > decision history and live verification remain separate. No new backend work
 > or roadmap priority is approved by this reconciliation.
+>
+> **2026-11-26 BE-109 discovery and BE-109A:** Discovery at
+> `76f7c182e67621e953626ed65372c431eb4f560a` confirmed existing typed artifact
+> storage, exact downloads, modern revision ownership, R06 Product-scoped
+> reporting and R10 preview. Those historical storage/content requirements are
+> complete within their verified scope. BE-109A addresses missing historical
+> visibility after candidate clearance by separating related ENC track discovery
+> from the current export projection; backend verification and local acceptance
+> are pending. See [Reports](../BACKEND_CONTRACTS.md#reports). Exact ordinary
+> operation attribution (BE-109B) and IC-ENC decision projection (BE-109C) are
+> separate, unapproved follow-up scopes. No Package lifecycle or persistence
+> change is included.
 
 Historical reviewed backend runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 Historical reviewed frontend baseline: `8e375296a286e3228fa8a6f7111769715038b320`.
@@ -47,7 +59,7 @@ These decisions apply to every work package:
 5. BE-106 confirms that ProductCatalogueAPI remains the public API/enqueue/status owner while worker hosting may later move to JobPlatform. No runtime move is approved by BE-106.
 6. Do not introduce a competing background-job system.
 7. Keep `datasetName` until the planned permanent Product ID is introduced by the database owners.
-8. Reports remain blocked pending IC-ENC/internal validation process and API decisions.
+8. Historical report storage/content planning is superseded by the 2026-11-26 BE-109 discovery boundary above; exact event attribution and IC-ENC decision projection require separate approval.
 9. Product History is an audit log, not a historical-map reconstruction system.
 10. Global map timeline is deferred and must not be smuggled into Product History work.
 11. Analyze continues to request one Product at a time.
@@ -73,7 +85,7 @@ These decisions apply to every work package:
 | BE-107  | Dashboard filtering and pagination          | Complete                                    | No                          | Product state-history data and stable activity ID               |
 | BE-108A | Product History audit event hardening       | Batch 1 port verified; manual smoke pending | Yes, additive audit table   | Product workflow redesign and database-owner deployment process |
 | BE-108B | Additional Product History producers        | Deferred                                    | Unknown                     | Internal validation, IC-ENC and Send producer contracts         |
-| BE-109  | Report storage/content                      | Blocked                                     | Unknown                     | IC-ENC and internal validation process/API                      |
+| BE-109  | Report storage/content                      | Discovery complete; BE-109A candidate       | No (BE-109A)                | History visibility; attribution/provenance pending approval     |
 | BE-110  | Permanent Product ID                        | Blocked                                     | Yes                         | Database owners                                                 |
 | BE-111  | Historical global map timeline              | Deferred                                    | Likely                      | Architecture and retention decision                             |
 
@@ -84,7 +96,7 @@ Recommended order:
 1. BE-101 through BE-107 are complete at the current implementation baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 2. BE-108A Batch 1: foundation ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf`; automated and database-owner verification completed on 2026-09-11, with post-port manual History smoke still pending.
 3. BE-108A Batch 2: Export/Rollback producers and recovery remain separate and must target the normalized Product workflow persistence model.
-4. Deferred: additional producers, reports, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
+4. Deferred: additional producers, report attribution and decision projection beyond the approved BE-109A scope, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
 
 Worker extraction is not the next runtime package. It remains deferred until JobPlatform is ready and a separate implementation package is explicitly approved.
 
@@ -933,15 +945,29 @@ Status: unscheduled separate API-contract task.
 
 ---
 
-## Deferred: report storage and IC-ENC integration
+## BE-109: report relationships
 
-Status: blocked by external process/API decisions.
+The read-only discovery is complete at `76f7c182e67621e953626ed65372c431eb4f560a`.
+The historical storage/content and placeholder-only planning is superseded by the
+verified Product-scoped artifact history/download, typed storage and report viewer
+contracts. Deployed retention, authorization and live processing remain separate
+verification gates.
 
-Do not implement permanent storage or placeholder backend models that will become de facto contracts.
+- **BE-109A (D01):** Candidate implemented; local acceptance pending. Historical
+  report discovery includes related ENC tracks without requiring an active export
+  candidate. Current Product detail, download ownership and workflow are unchanged.
+  No schema change, new endpoint or dependency.
+- **BE-109B (D02):** Deferred pending an operator use case for exact ordinary
+  export-to-revision/report attribution. Do not derive this from timestamps or
+  version numbers. Historical Package attribution remains with the workflow owner.
+- **BE-109C (D03):** Deferred pending audience and safe-field decisions for the
+  existing IC-ENC inbound/delivery/decision relations. Validate the possible
+  re-review reassociation boundary (D04) before exposing provenance.
+- **D05/D06:** Dashboard range inventory consumption is optional; possible older
+  revision links in current detail require concrete runtime evidence. Preserve
+  R06 Product-scoped reporting and R10 preview.
 
-Maintain only the documented future metadata requirements.
-
-Frontend actions remain disabled or unavailable.
+No additional BE-109 implementation is approved by the discovery or this update.
 
 ---
 
