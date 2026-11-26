@@ -9,7 +9,7 @@ namespace TestProductCatalogueAPI;
 /// <summary>Verifies bathymetric surface checkpoint handling using in-memory storage and a fixed clock.</summary>
 public sealed class DetectBathymetricSurfaceChangesJobTests
 {
-    private const string CheckpointKey = "DetectS102ChangesJob";
+    private const string CheckpointKey = nameof(DetectBathymetricSurfaceChangesJob);
     private static readonly DateTime ScanThroughUtc = new(2026, 11, 24, 9, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime PreviousUtc = ScanThroughUtc.AddHours(-1);
 
@@ -46,7 +46,7 @@ public sealed class DetectBathymetricSurfaceChangesJobTests
     public async Task UnimplementedDetectorPreservesCheckpoint() {
         var repository = new InMemoryProductRepository();
         await repository.SetSuccessfulRunUtcAsync(CheckpointKey, PreviousUtc);
-        var job = CreateJob(repository, new BathymetricSurfaceChangeDetector());
+        var job = CreateJob(repository, new BathymetricSurfaceChangeDetector(null!, null!, null!));
 
         await Assert.ThrowsAsync<NotImplementedException>(() => job.RunAsync(CancellationToken.None));
 
@@ -75,7 +75,7 @@ public sealed class DetectBathymetricSurfaceChangesJobTests
         var repository = new InMemoryProductRepository();
         var futureUtc = ScanThroughUtc.AddMinutes(1);
         await repository.SetSuccessfulRunUtcAsync(CheckpointKey, futureUtc);
-        var job = CreateJob(repository, new BathymetricSurfaceChangeDetector());
+        var job = CreateJob(repository, new BathymetricSurfaceChangeDetector(null!, null!, null!));
 
         await job.RunAsync(CancellationToken.None);
 

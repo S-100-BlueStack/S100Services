@@ -126,6 +126,13 @@ public static class BackendRegistrations
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<UploadSingularProductJob>();
         services.AddTransient<DetectProductChangesJob>();
+        services.AddSingleton<IBathyDataManager, BathyDataManager>();
+        services.AddHttpClient<BathymetricSurfaceClient>(client => BathymetricSurfaceClient.Configure(client, configuration))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler {
+                UseDefaultCredentials = true,
+                AllowAutoRedirect = false,
+                UseCookies = false
+            }).RemoveAllLoggers();
         services.AddScoped<IBathymetricSurfaceChangeDetector, BathymetricSurfaceChangeDetector>();
         services.AddTransient<DetectBathymetricSurfaceChangesJob>();
         services.AddTransient<SendBathymetricSurfaceJob>();

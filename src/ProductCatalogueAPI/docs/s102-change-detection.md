@@ -2,23 +2,35 @@
 
 The IHO calls S-102 **Bathymetric Surface**. The catalogue footprint is an S-128 `ElectronicProduct` in `S100.surface`, classified by the product specification in its `attributeBindings`. The externally supplied exchange set contains the HDF5 grid and its discovery metadata. The new workflow uses the existing HDF5 engine kind to identify the export track. The producer creates and validates the exchange set.
 
-## Start here for the change detector
+## Configure the worker
 
-Open `Services/S102/S102ChangeDetector.cs` and implement `BathymetricSurfaceChangeDetector.DetectAsync`. This is where the source database query or Python detection process belongs. The job supplies two UTC instants:
+| Environment variable | Worker value |
+| --- | --- |
+| `S102ConstraintConnection` | HTTPS URL of the constraints service, ending at `/FeatureServer`. |
+| `S102DeconflictedSurveyConnection` | HTTPS URL of the deconflicted surveys service, ending at `/FeatureServer`. |
+| `arcgis_portal_url` | HTTPS base URL of the Portal that federates both services, including its application path if present. |
+| `arcgis_portal_user` | Portal username encrypted with the existing `Configuration.EncryptString` mechanism. |
+| `arcgis_portal_password` | Portal password encrypted the same way. |
+| `BathymetricChangeDetection__ApiBaseUrl` | ProductCatalogue API application URL, including the IIS virtual path if used. The appsettings equivalent is `BathymetricChangeDetection:ApiBaseUrl`. |
 
-- `lastSuccessfulRunUtc` is the previous successful scan's upper bound. A null value means you must apply the agreed first-run source baseline.
-- `scanThroughUtc` is the fixed upper bound for this invocation. When the source uses committed UTC timestamps, process edits after the lower bound and through the upper bound. Decide how the source handles late commits or tied timestamps before enabling the schedule.
+Make these variables available to the Windows service process. Use a Portal account with read access to both feature services. CoreHost uses those credentials only for challenges from the configured Portal. The HTTP client uses the Windows service identity. Give that identity `productmanager:manage` for reservation and completion. The API URL must point to the same environment whose System database and catalogue the worker is configured to use.
 
-Reuse a stable export ID when handing the same changed-dataset batch to the API again. Return from the detector once the source changes through the upper bound are durably recorded for processing. If an API lock conflict leaves any change unrecorded, retain it for retry or fail the scan. A successful run with zero changes still advances the checkpoint.
+## Detector entry point
 
-The worker registers `DetectBathymetricSurfaceChangesJob` as an `IBackgroundJob` implementation. It appends successful UTC boundaries to `dbo.JobRunState` under the historical `DetectS102ChangesJob` key. The placeholder throws, so it cannot advance the checkpoint. There is no recurring registration. Once the detector and first-run policy are ready, register the job alongside the existing recurring jobs under `BackgroundProcessing/Scheduling`.
+`BathymetricSurfaceChangeDetector.DetectAsync` in `Services/S102/S102ChangeDetector.cs` receives the previously saved UTC checkpoint and the fixed UTC cutoff for this execution. For a timestamp-based scan, use changes after the checkpoint and through the cutoff, including the cutoff itself. A null checkpoint means there is no previous successful scan, so the source's initial baseline applies.
+
+Use `_dataManager.RunOnStaAsync` with a synchronous callback. Inside it, open either source with `using var geodatabase = _dataManager.OpenFeatureService(BathymetricSource.Constraints);` or select `BathymetricSource.DeconflictedSurveys`. Use ArcGIS feature classes, cursors and rows directly, and dispose them before leaving the callback. Keep async work outside that callback.
+
+`GetBathymetricAoisAsync` uses the injected Product Manager to read S-102 polygons directly from S-128. The dictionary key is the dataset name, and the value is the stored footprint in its original spatial reference. Project the footprint to the source layer's spatial reference if your query requires it. The AOI HTTP endpoint supplies WGS84 bounding rectangles for API consumers.
+
+The injected `bathymetricSurfaceClient` exposes `ReserveAsync` and `CompleteAsync`. The Hangfire job saves completed scan boundaries under `DetectBathymetricSurfaceChangesJob` in `dbo.JobRunState`. Recurring scheduling is disabled.
 
 ## API
 
 | Request | Contract |
 | --- | --- |
 | `GET /Lookup/packagelayers` | Includes `BathymetricSurface` with ID 2. |
-| `GET /ElectronicProducts/aoi?layer=BathymetricSurface` | Existing AOI geometry envelope shape with `Attributes.BathymetricSurface` for export status, edition and artifact identifiers. The product footprint comes from S-128. |
+| `GET /ElectronicProducts/aoi?layer=BathymetricSurface` | WGS84 bounding rectangles derived from S-128, with `Attributes.BathymetricSurface` for export status, edition and artifact identifiers. The product footprint comes from S-128. |
 | `POST /BathymetricSurfaces/changes` | JSON containing a caller-generated `ExportId` GUID and up to 100 `DatasetNames`. The response supplies the reserved edition and export status for each dataset. The batch reserves all exports together. |
 | `POST /BathymetricSurfaces/{datasetName}/exports/{exportId}/complete` | Multipart form with `validationPassed`, the `exchangeSet` ZIP when validation passed, and an optional `validationArtifact` VLD. A failed export may report a diagnostic without a ZIP. |
 | `GET /ElectronicProducts/{datasetName}/artifacts/{artifactId}` | Existing authorized artifact download. Use the completion result's `ValidationArtifactId`. |

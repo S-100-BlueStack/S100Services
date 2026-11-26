@@ -1,24 +1,58 @@
+using ArcGIS.Core.Geometry;
+using ProductCatalogueAPI.Contracts;
+using ProductCatalogueAPI.Data.Models;
+using S100FC.ProductCatalogue;
+
 namespace ProductCatalogueAPI.Services.BathymetricSurfaces;
 
-/// <summary>Processes changes from the configured bathymetric surface source for one bounded scan.</summary>
+/// <summary>Processes bathymetric source changes through a fixed UTC cutoff.</summary>
 public interface IBathymetricSurfaceChangeDetector
 {
-    /// <summary>Completes only after the scan and any required processing through its upper bound are durable.</summary>
-    /// <param name="lastSuccessfulRunUtc">The previous UTC checkpoint, or null when the source's first-run policy applies.</param>
-    /// <param name="scanThroughUtc">The UTC upper bound to process and subsequently checkpoint.</param>
-    /// <param name="cancellationToken">Cancels source reads and processing where supported.</param>
-    /// <returns>A task representing the complete scan, including when the interval contains no changes.</returns>
+    /// <summary>Processes source changes in the supplied UTC scan window.</summary>
+    /// <param name="lastSuccessfulRunUtc">Cutoff saved by the previous successful scan. Use it as the exclusive lower bound for change timestamps. When null, there is no saved checkpoint and the source's initial baseline applies.</param>
+    /// <param name="scanThroughUtc">UTC cutoff captured before this scan starts. Include changes at this timestamp and leave newer changes for the next scan.</param>
+    /// <param name="cancellationToken">Cancels work for this scan.</param>
+    /// <returns>A task that completes when the window has been processed.</returns>
     Task DetectAsync(DateTime? lastSuccessfulRunUtc, DateTime scanThroughUtc, CancellationToken cancellationToken);
 }
 
-/// <summary>Marks the implementation point for bathymetric surface source access and change detection.</summary>
-internal sealed class BathymetricSurfaceChangeDetector : IBathymetricSurfaceChangeDetector
+/// <summary>Provides bathymetric source access and ProductCatalogue API access for a bounded scan.</summary>
+/// <param name="dataManager">Read-only access to constraints and deconflicted surveys.</param>
+/// <param name="productManager">Reads the stored S-128 bathymetric footprints.</param>
+/// <param name="bathymetricSurfaceClient">Client for export reservations and completions.</param>
+internal sealed class BathymetricSurfaceChangeDetector(IBathyDataManager dataManager, IProductManager productManager, BathymetricSurfaceClient bathymetricSurfaceClient) : IBathymetricSurfaceChangeDetector
 {
+    private readonly IBathyDataManager _dataManager = dataManager;
+    private readonly BathymetricSurfaceClient _bathymetricSurfaceClient = bathymetricSurfaceClient;
+
+    private readonly IElectronicProductManager _productManager = productManager.ElectronicProductManager;
+
     /// <inheritdoc/>
-    /// <exception cref="NotImplementedException">The source and its change tracking mechanism have yet to be integrated.</exception>
-    public Task DetectAsync(DateTime? lastSuccessfulRunUtc, DateTime scanThroughUtc, CancellationToken cancellationToken) {
+    /// <exception cref="NotImplementedException">The detector has no scan implementation.</exception>
+    public async Task DetectAsync(DateTime? lastSuccessfulRunUtc, DateTime scanThroughUtc, CancellationToken cancellationToken) {
+
+        // Get AOI
+        var aois = await _productManager.GetDatasetAoiGeometriesAsync(ProductSpecification.S102.ToString(), cancellationToken);
+
+
+        // Get FeatureServices as Geodatabase 
+        await _dataManager.RunOnStaAsync(() => {
+            using var constraintsGDB = _dataManager.OpenFeatureService(BathymetricSource.Constraints);
+            using var deconflictedGDB = _dataManager.OpenFeatureService(BathymetricSource.DeconflictedSurveys);
+
+            // Open feature classes and read rows here.
+        }, cancellationToken);
+
+        var exportId = Guid.NewGuid();
+        string[] datasetNames = [];
+
+
+        // Post results
+        var request = new BathymetricChangeReport(exportId, datasetNames);
+        var res = await _bathymetricSurfaceClient.ReserveAsync(request, cancellationToken);
+
+
         cancellationToken.ThrowIfCancellationRequested();
-        // Successful completion commits the upper bound, so the scaffold must fail until it can process that bound.
-        throw new NotImplementedException("Bathymetric surface source change detection is not implemented.");
+        throw new NotImplementedException("Bathymetric change detection is not implemented.");
     }
 }
