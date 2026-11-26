@@ -91,7 +91,10 @@ export function createWorkflowNavigation({
     navbar.element.querySelector("#last-updated").hidden = show;
     syncNavigation();
     if (show) page.activate();
-    else if (openJobs && isJobsStartupComplete()) onOpenJobs?.();
+    else {
+      page?.deactivate?.();
+      if (openJobs && isJobsStartupComplete()) onOpenJobs?.();
+    }
   }
 
   async function applyNavigation(intent, generation) {

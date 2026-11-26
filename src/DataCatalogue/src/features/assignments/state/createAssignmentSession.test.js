@@ -84,6 +84,7 @@ test("Failed Save preserves assignments and editable draft comments for retry", 
   assert.equal(await session.save(), true);
   assert.equal(session.snapshot().dirty, false);
   assert.equal(session.snapshot().record.relations.DK1.comments[0].text, "Corrected draft");
+  assert.equal(session.snapshot().saveConfirmed, false);
 });
 test("Repeated Save shares one logical request and locks selection until it settles", async () => {
   const service = services();

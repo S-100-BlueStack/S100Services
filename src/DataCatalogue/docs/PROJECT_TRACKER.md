@@ -17,19 +17,59 @@ integration details.
   need verification. Retention follows the event store.
 - DC-DOC-01 was accepted and committed at
   `fa944f3af61c4a98fac0a8cc790a9aa53afbff5b` as reported by the user.
-- COMMENT-01 is the current implementation candidate. Verify live comment Save,
-  readback and Package History locally before marking it accepted. Once accepted,
-  agree the Compilation/QC workflow and filter contract with the backend owner.
-  The accepted Main Map preview exposes mode selection only. Keep persistent
+- COMMENT-01 is accepted locally at `18c29ff4aa34dfcc72fbdb7924a20540ee178581`
+  as reported by the user.
+- DC-ASSIGN-SAVE-FEEDBACK-01 is the current frontend candidate. Verify the Save
+  indicator in the live Package Assignment browser workflow before accepting it.
+  Plan COMMENT-02 after acceptance. Functional Compilation/QC remains deferred.
+  The accepted Main Map preview exposes mode selection only. Persistent
   contextual status, archived Package discovery and prospective Workspace
-  matching as separate tasks.
+  matching remain separate tasks.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
 
+## DC-ASSIGN-SAVE-FEEDBACK-01 - Confirmed assignment Save (2026-11-25)
+
+**Baseline:** `18c29ff4aa34dfcc72fbdb7924a20540ee178581`.
+**Status:** frontend candidate awaiting local acceptance.
+
+- After explicit Save of a changed live Package draft, the existing disabled
+  Save control shows a green check and announces **Changes saved** when the
+  service confirms the bindings and any draft comments. The check survives
+  ordinary refreshes of that Package. A new edit, Package switch or leaving
+  Assignment clears it. A later undo does not restore old feedback.
+- Initial loads, clean Save calls, rejected or uncertain saves, and read-only
+  recovery never set the indicator. The existing draft, recovery and comment
+  history paths continue to handle the server outcomes.
+- Work checks passed for all 145 focused Node tests. The broad suite passed
+  636 tests and encountered the same three missing ArcGIS imports as baseline.
+  The npm gate stopped at missing Prettier. Local acceptance covers repeated
+  saves, comment-only and mixed edits, refresh and navigation, partial and
+  uncertain responses, and the light/dark and keyboard experience. Run
+  `npm run format`, `npm run check` and `git diff --check` locally.
+
+## Package comment and assignment status follow-ups (2026-11-25)
+
+- **COMMENT-02:** show a comment icon below Severity on the Main Map Package
+  row, blue for saved comments and gray for confirmed absence. The viewer
+  should load saved comments on demand. Confirm an efficient availability
+  contract that avoids per-Package reads and distinguishes unknown/error from
+  confirmed absence. Reuse verified comment, history and profile contracts
+  where they fit.
+- **Package comments and third assignment status:** support Package-level
+  comments independent of Workstream bindings. Add an assignment-level
+  decision beside **Assigned** and **Not assigned** for a Package that needs
+  no chart work before binding. Persist the decision and comment or reason
+  through the backend. A Package in this state remains editable. Existing
+  contextual **Done** and **No update** actions remain separate. The final
+  label, coexistence with active bindings, status precedence, allowed
+  transitions and filter behavior are pending agreement.
+
 ## COMMENT-01 - Workstream binding comments (2026-11-25)
 
-The candidate uses baseline `fa944f3af61c4a98fac0a8cc790a9aa53afbff5b`.
-Local Windows API and browser acceptance are pending.
+The original implementation uses baseline `fa944f3af61c4a98fac0a8cc790a9aa53afbff5b`.
+The user reports successful local tests and browser acceptance, followed by
+commit `18c29ff4aa34dfcc72fbdb7924a20540ee178581`.
 
 - The binding event stream records append-only comments with a stable operation
   UUID, authenticated Windows account and server UTC time. Comments survive

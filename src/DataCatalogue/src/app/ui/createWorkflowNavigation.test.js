@@ -177,12 +177,18 @@ for (const choice of ["clean state", "Discard changes", "successful Save and con
     const f = fixture();
     await f.navigation.openAssignment();
     let decisions = 0;
+    let deactivations = 0;
+    f.page.deactivate = () => {
+      assert.equal(f.page.element.hidden, true);
+      deactivations++;
+    };
     f.page.allowLeave = async () => {
       decisions++;
       return true;
     };
     assert.equal(await f.navigation.openJobs(), true);
     assert.equal(decisions, 1);
+    assert.equal(deactivations, 1);
     assert.equal(f.counts().jobsActions, 1);
     assert.equal(f.jobsWorkflowHost.hidden, false);
     assert.equal(f.page.element.hidden, true);
@@ -195,6 +201,7 @@ for (const choice of ["failed Save", "Cancel or closed confirmation"]) {
     const f = fixture();
     await f.navigation.openAssignment();
     f.page.allowLeave = async () => false;
+    f.page.deactivate = () => assert.fail("Assignment is still open");
     assert.equal(await f.navigation.openJobs(), false);
     assert.equal(f.counts().jobsActions, 0);
     assert.equal(f.jobsWorkflowHost.hidden, true);

@@ -669,6 +669,10 @@ html[data-theme="dark"] .dc-assignment-page button.dc-assignment-map-retry:hover
 .dc-assignment-page button.dc-binding-save.is-actionable:hover {
   color: var(--calcite-color-brand, #007ac2);
 }
+.dc-assignment-page--live button.dc-binding-save.is-saved:disabled {
+  color: var(--calcite-color-status-success);
+  opacity: 1;
+}
 .dc-assignment-page--live [data-draft-status] {
   color: var(--dc-text-muted);
   font-size: 0.74rem;

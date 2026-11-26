@@ -5,10 +5,10 @@ and [backend contracts](BACKEND_CONTRACTS.md) for source-verified resources.
 Current follow-ups include functional Compilation/QC, persistent contextual
 status and completion history, archived Package discovery, prospective
 Workspace matching, global Package search, broader binding concurrency and
-Workspace ownership. COMMENT-01 has a contract in the current candidate and
-awaits local acceptance. Earlier candidate notes preserve the gaps known at
-delivery. Later entries record the verified geometry and binding reads that
-superseded the original proposals.
+Workspace ownership. The tracker records local acceptance of COMMENT-01.
+Earlier candidate notes preserve the gaps known at delivery. Later entries
+record the verified geometry and binding reads that superseded the original
+proposals.
 
 > Terminology (2026-11-24): the live frontend calls Pipeline a Workstream.
 > Pipeline remains the technical backend entity and API terminology throughout
@@ -17,9 +17,10 @@ superseded the original proposals.
 
 ## COMMENT-01 - Binding comments
 
-The current candidate adds the [authorized read/append and history contract](BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments).
-Local Windows, API and browser acceptance remain pending. The current store
-retains comments across unbind/restore for the lifetime of its events.
+The [authorized read/append and history contract](BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments)
+was accepted locally at `18c29ff4aa34dfcc72fbdb7924a20540ee178581` as reported
+by the user. The current store retains comments across unbind/restore for the
+lifetime of its events.
 Future store migration must retain the binding history and the retry identity
 lookup. BIND-02 still covers stronger concurrency for multi-binding updates.
 

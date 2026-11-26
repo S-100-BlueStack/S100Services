@@ -62,7 +62,7 @@ export function createAssignmentPage({
           <button type="button" data-abandon hidden>Discard local draft</button>
           <span class="dc-assignment-toolbar-spacer"></span>
           <span data-draft-status role="status"></span>
-          <button class="dc-assignment-icon-action dc-binding-save" type="button" data-save disabled aria-label="Save bindings" title="Save bindings"><calcite-icon icon="save" scale="m" aria-hidden="true"></calcite-icon></button>
+          <button class="dc-assignment-icon-action dc-binding-save" type="button" data-save disabled aria-label="Save bindings" title="Save bindings"><calcite-icon data-save-icon icon="save" scale="m" aria-hidden="true"></calcite-icon></button>
         </div>
         <p data-save-error role="alert"></p>
         <p data-work-stream-status role="status">Select a Feature to edit assignments.</p>
@@ -558,14 +558,20 @@ export function createAssignmentPage({
   }
 
   const unsubscribe = session.subscribe((state) => {
-    get("save").disabled =
+    const save = get("save");
+    const saveIcon = get("save-icon");
+    const saved = live && state.saveConfirmed;
+    save.disabled =
       !state.dirty ||
       state.loading ||
       state.saving ||
       state.reconciliationRequired ||
       resetting ||
       Boolean(state.validationError);
-    get("save").classList.toggle("is-actionable", !get("save").disabled);
+    save.classList.toggle("is-actionable", !save.disabled);
+    save.classList.toggle("is-saved", saved);
+    const icon = saved ? "check" : "save";
+    if (saveIcon.getAttribute("icon") !== icon) saveIcon.setAttribute("icon", icon);
     get("reconcile").hidden = !state.reconciliationRequired;
     get("reconcile").disabled = state.saving || state.loading || resetting;
     get("abandon").hidden = !state.reconciliationRequired;
@@ -577,15 +583,21 @@ export function createAssignmentPage({
         : hasCommentDrafts
           ? "Check saved changes"
           : "Check saved bindings";
-    get("save").title = hasCommentDrafts
-      ? state.saving
-        ? "Saving assignment changes"
-        : "Save assignment changes"
-      : state.saving
-        ? "Saving bindings"
-        : "Save bindings";
-    get("save").setAttribute("aria-label", get("save").title);
-    get("draft-status").textContent = state.feature
+    const saveLabel = saved
+      ? "Changes saved"
+      : hasCommentDrafts
+        ? state.saving
+          ? "Saving assignment changes"
+          : "Save assignment changes"
+        : state.saving
+          ? "Saving bindings"
+          : "Save bindings";
+    if (save.title !== saveLabel) {
+      save.title = saveLabel;
+      save.setAttribute("aria-label", saveLabel);
+    }
+    const draftStatus = get("draft-status");
+    const statusText = state.feature
       ? state.reconciliationRequired
         ? hasCommentDrafts
           ? "Verify saved changes"
@@ -595,9 +607,13 @@ export function createAssignmentPage({
           : state.dirty
             ? "Unsaved changes"
             : live
-              ? ""
+              ? saved
+                ? saveLabel
+                : ""
               : "Saved state"
       : "";
+    draftStatus.classList.toggle("visually-hidden", saved);
+    if (draftStatus.textContent !== statusText) draftStatus.textContent = statusText;
     get("save-error").textContent =
       state.feature && !state.selectionError
         ? state.error || state.validationError || (live ? "" : state.record?.saveMessage) || ""
@@ -853,6 +869,9 @@ export function createAssignmentPage({
     element,
     activate() {
       if (!map) makeMap();
+    },
+    deactivate() {
+      session.clearSaveConfirmation();
     },
     selectPackage(id, { notify = true } = {}) {
       return live ? selectFeature(id, { notify }) : Promise.resolve(false);

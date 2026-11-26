@@ -13,6 +13,7 @@ export function createAssignmentSession({ services }) {
   let pendingSave = null;
   let pendingSelection = null;
   let commentRequest = null;
+  let savedPackageId = null;
   const supportsComments = typeof services.assignments?.loadComments === "function";
   let commentHistory = null;
   let state = {
@@ -30,11 +31,16 @@ export function createAssignmentSession({ services }) {
 
   function snapshot() {
     // Large retained histories are immutable and shared across draft keystrokes.
-    return { ...structuredClone(state), commentHistory };
+    return {
+      ...structuredClone(state),
+      commentHistory,
+      saveConfirmed: savedPackageId !== null && savedPackageId === state.feature?.id,
+    };
   }
 
   function emit() {
     state.dirty = isDirty(state.record, state.draft);
+    if (state.dirty) savedPackageId = null;
     state.validationError = assignmentDraftError(state.draft, {
       allowComments: services.source !== "live" || supportsComments,
       validateCommentText: supportsComments,
@@ -122,6 +128,7 @@ export function createAssignmentSession({ services }) {
 
     const current = ++generation;
     cancelCommentRead();
+    if (savedPackageId !== id) savedPackageId = null;
     // Keep the last committed Package visible until both its replacement and bindings are ready.
     // Clearing the selection here would temporarily publish an incorrect empty map and draft.
     state.loading = true;
@@ -181,6 +188,7 @@ export function createAssignmentSession({ services }) {
     const id = state.feature.id;
     const payload = structuredClone(state.draft);
     const baselineActiveIds = createDraft(state.record).activeIds;
+    let confirmed = false;
     state.saving = true;
     state.error = "";
     state.selectionError = "";
@@ -195,6 +203,8 @@ export function createAssignmentSession({ services }) {
         state.draft = createDraft(bindingState);
         state.reconciliationRequired = false;
         if (!comments && supportsComments) void refreshComments();
+        // The live Save service resolves only after authoritative readback confirms the draft.
+        confirmed = services.source === "live";
         return true;
       })
       .catch((error) => {
@@ -210,6 +220,7 @@ export function createAssignmentSession({ services }) {
         pendingSave = null;
         if (alive && generation === current) {
           state.saving = false;
+          if (confirmed) savedPackageId = id;
           emit();
         }
       });
@@ -276,6 +287,7 @@ export function createAssignmentSession({ services }) {
       generation++;
       cancelCommentRead();
       commentHistory = null;
+      savedPackageId = null;
       state = {
         feature: null,
         record: null,
@@ -339,6 +351,7 @@ export function createAssignmentSession({ services }) {
       pendingSelection = null;
       cancelCommentRead();
       commentHistory = null;
+      savedPackageId = null;
       state = {
         feature: null,
         record: null,
@@ -354,11 +367,17 @@ export function createAssignmentSession({ services }) {
       emit();
       return true;
     },
+    clearSaveConfirmation() {
+      if (savedPackageId === null) return;
+      savedPackageId = null;
+      emit();
+    },
     destroy() {
       alive = false;
       generation++;
       pendingSelection = null;
       cancelCommentRead();
+      savedPackageId = null;
       listeners.clear();
     },
   };

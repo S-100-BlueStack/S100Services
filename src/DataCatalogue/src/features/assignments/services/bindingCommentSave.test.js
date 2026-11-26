@@ -67,6 +67,7 @@ test("Save binds first and reads back independent Workstream comments", async ()
   assert.deepEqual(writes, []);
   const save = session.save();
   assert.equal(save, session.save());
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(await save, true);
   assert.deepEqual(writes, [
     ["bind", "paper"],
@@ -74,6 +75,7 @@ test("Save binds first and reads back independent Workstream comments", async ()
     ["comment", "paper", paper],
   ]);
   assert.equal(session.snapshot().dirty, false);
+  assert.equal(session.snapshot().saveConfirmed, true);
   assert.equal(session.snapshot().commentHistory.byPipeline.enc[0].text, "First\nline");
   assert.equal(session.snapshot().commentHistory.byPipeline.paper[0].actor, "PROD\\B123456");
 
@@ -84,13 +86,16 @@ test("Save binds first and reads back independent Workstream comments", async ()
   session.setAssigned("enc", true);
   assert.equal(await session.save(), true);
   const second = addDraft(session, "enc", "Second");
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(await session.save(), true);
+  assert.equal(session.snapshot().saveConfirmed, true);
   assert.deepEqual(
     session.snapshot().commentHistory.byPipeline.enc.map((item) => item.id),
     [second, enc]
   );
   await session.select("other");
   await nextTurn();
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.deepEqual(session.snapshot().commentHistory.byPipeline, {});
 });
 
@@ -111,10 +116,12 @@ test("partial Save removes confirmed drafts and keeps rejected bindings and comm
     [blocked]
   );
   assert.match(session.snapshot().error, /binding is not confirmed active/);
+  assert.equal(session.snapshot().saveConfirmed, false);
   session.setAssigned("blocked", false);
   assert.match(session.snapshot().validationError, /Assign blocked again/);
   session.discard();
   assert.equal(session.snapshot().dirty, false);
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(writes.length, 2);
 });
 
@@ -130,6 +137,7 @@ test("comment Save cannot recreate a remotely removed binding", async () => {
   assert.match(session.snapshot().validationError, /Assign enc again/);
   assert.equal(await session.save(), false);
   assert.deepEqual(writes, []);
+  assert.equal(session.snapshot().saveConfirmed, false);
 });
 
 test("a lost append response is reconciled read-only and removes the confirmed draft", async () => {
@@ -143,11 +151,13 @@ test("a lost append response is reconciled read-only and removes the confirmed d
   const id = addDraft(session, "enc", "Saved before disconnect");
   assert.equal(await session.save(), false);
   assert.equal(session.snapshot().reconciliationRequired, true);
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(session.snapshot().draft.comments[0].awaitingConfirmation, true);
   assert.equal(await session.save(), false);
   assert.equal(await session.reconcile(), true);
   assert.deepEqual(writes, [["comment", "enc", id]]);
   assert.equal(session.snapshot().dirty, false);
+  assert.equal(session.snapshot().saveConfirmed, false);
   assert.equal(session.snapshot().commentHistory.byPipeline.enc[0].id, id);
 });
 
@@ -163,11 +173,83 @@ test("an unresolved append retries with its original UUID and text", async () =>
   const id = addDraft(session, "enc", "Keep original");
   assert.equal(await session.save(), false);
   assert.equal(await session.reconcile(), true);
+  assert.equal(session.snapshot().saveConfirmed, false);
   session.editComment(id, "Changed text");
   assert.equal(session.snapshot().draft.comments[0].text, "Keep original");
   assert.equal(await session.save(), true);
+  assert.equal(session.snapshot().saveConfirmed, true);
   assert.deepEqual(writes, [["comment", "enc", id]]);
   assert.equal(session.snapshot().commentHistory.byPipeline.enc[0].id, id);
+});
+
+test("confirmation persists through reads and resets after a draft edit or clear", async () => {
+  const { catalogue, session, writes } = fixture();
+  assert.equal(session.snapshot().saveConfirmed, false);
+  await session.select("package");
+  assert.equal(await session.save(), true);
+  assert.equal(session.snapshot().saveConfirmed, false);
+  assert.deepEqual(writes, []);
+
+  addDraft(session, "enc", "Comment only");
+  assert.equal(await session.save(), true);
+  assert.equal(session.snapshot().saveConfirmed, true);
+  session.setAssigned("enc", true);
+  assert.equal(session.snapshot().saveConfirmed, true);
+
+  const read = catalogue.bindingComments;
+  catalogue.bindingComments = async () => {
+    throw new Error("History unavailable");
+  };
+  await session.refreshComments();
+  assert.equal(session.snapshot().commentHistory.error, "History unavailable");
+  assert.equal(session.snapshot().saveConfirmed, true);
+  catalogue.bindingComments = read;
+  await session.refreshComments();
+  assert.equal(session.snapshot().saveConfirmed, true);
+  await session.select("package");
+  assert.equal(session.snapshot().saveConfirmed, true);
+
+  const draftId = addDraft(session, "enc", "Discard this comment");
+  assert.equal(session.snapshot().saveConfirmed, false);
+  session.removeComment(draftId);
+  assert.equal(session.snapshot().dirty, false);
+  assert.equal(session.snapshot().saveConfirmed, false);
+  session.addComment("enc");
+  assert.match(session.snapshot().validationError, /Enter a comment/);
+  assert.equal(await session.save(), false);
+  assert.equal(session.snapshot().saveConfirmed, false);
+  session.discard();
+
+  addDraft(session, "enc", "Save before clearing");
+  assert.equal(await session.save(), true);
+  assert.equal(session.snapshot().saveConfirmed, true);
+  assert.equal(session.clear(), true);
+  assert.equal(session.snapshot().saveConfirmed, false);
+});
+
+test("late live Save confirmation cannot publish after the session is disposed", async () => {
+  const { catalogue, session } = fixture();
+  const append = catalogue.addBindingComment;
+  const { promise, resolve } = Promise.withResolvers();
+  catalogue.addBindingComment = async (...args) => {
+    await promise;
+    return append(...args);
+  };
+  await session.select("first");
+  addDraft(session, "enc", "Late confirmation");
+  const save = session.save();
+  assert.equal(await session.select("second"), false);
+  await nextTurn();
+  assert.equal(session.snapshot().saving, true);
+  assert.equal(session.snapshot().saveConfirmed, false);
+
+  const published = [];
+  session.subscribe(({ saveConfirmed }) => published.push(saveConfirmed));
+  session.destroy();
+  resolve();
+  assert.equal(await save, false);
+  assert.equal(session.snapshot().saveConfirmed, false);
+  assert.deepEqual(published, [false]);
 });
 
 test("a failed readback requires another read and does not lose the draft", async () => {

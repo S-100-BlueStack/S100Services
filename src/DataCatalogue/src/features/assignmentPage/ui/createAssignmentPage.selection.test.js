@@ -410,6 +410,8 @@ test("uncertain Save exposes read-only verification without repeating the mutati
     assert.equal(dom.get("reconcile").hidden, true);
     assert.equal(dom.get("abandon").hidden, true);
     assert.equal(dom.get("save").disabled, true);
+    assert.equal(dom.get("save-icon").getAttribute("icon"), "save");
+    assert.equal(dom.get("draft-status").textContent, "");
   } finally {
     page?.destroy();
     dom.restore();
@@ -908,16 +910,27 @@ test("An uncertain Save invalidates cached bindings until read-only reconciliati
   }
 });
 
-test("Save highlights only actionable binding drafts and keeps the status alongside the control", async () => {
+test("Save renders and resets accessible confirmation without changing draft gating", async () => {
   const dom = fakeDom();
+  const saveResponse = deferred();
+  const selection = deferred();
+  let listReads = 0;
+  let writes = 0;
   const services = {
     source: "live",
     categories: async () => [],
     features: {
-      search: async () => ({ items: [], total: 0, page: 0, pageSize: 25 }),
-      get: async (id) => packageData(id),
+      search: async () => {
+        listReads++;
+        return { items: [], total: 0, page: 0, pageSize: 25 };
+      },
+      get: async (id) => (id === "B" ? selection.promise : packageData(id)),
     },
-    assignments: { load: async () => record(false) },
+    assignments: {
+      load: async () => record(false),
+      save: async (_id, draft) =>
+        ++writes === 1 ? saveResponse.promise : record(draft.activeIds.includes("ENC")),
+    },
     workStreams: { list: async () => ({ items: [{ id: "ENC", name: "ENC" }], total: 1 }) },
   };
   let page;
@@ -926,18 +939,82 @@ test("Save highlights only actionable binding drafts and keeps the status alongs
     assert.equal(await page.selectPackage("A"), true);
     await flush();
     const save = dom.get("save");
-    assert.equal(save.disabled, true);
-    assert.equal(save.classList.contains("is-actionable"), false);
+    const icon = dom.get("save-icon");
+    const status = dom.get("draft-status");
+    const assertNeutral = () => {
+      assert.equal(save.disabled, true);
+      assert.equal(save.classList.contains("is-actionable"), false);
+      assert.equal(save.classList.contains("is-saved"), false);
+      assert.equal(save.title, "Save bindings");
+      assert.equal(icon.getAttribute("icon"), "save");
+      assert.equal(status.textContent, "");
+    };
+    assertNeutral();
+    assert.match(page.element.innerHTML, /data-draft-status role="status"/);
+    assert.match(page.element.innerHTML, /data-save-icon icon="save" scale="m" aria-hidden="true"/);
     const checkbox = dom.get("work-streams").children[0].children[0].children[0].children[0];
-    checkbox.checked = true;
-    checkbox.listeners.get("change")();
+    const setAssigned = (active) => {
+      checkbox.checked = active;
+      checkbox.listeners.get("change")();
+    };
+    setAssigned(true);
     assert.equal(save.disabled, false);
     assert.equal(save.classList.contains("is-actionable"), true);
-    assert.equal(dom.get("draft-status").textContent, "Unsaved changes");
-    checkbox.checked = false;
-    checkbox.listeners.get("change")();
+    assert.equal(status.textContent, "Unsaved changes");
+    setAssigned(false);
+    assertNeutral();
+
+    setAssigned(true);
+    save.click();
     assert.equal(save.disabled, true);
-    assert.equal(save.classList.contains("is-actionable"), false);
+    assert.equal(save.title, "Saving bindings");
+    assert.equal(icon.getAttribute("icon"), "save");
+    saveResponse.resolve(record(true));
+    await flush();
+    const assertSaved = () => {
+      assert.equal(save.disabled, true);
+      assert.equal(save.classList.contains("is-actionable"), false);
+      assert.equal(save.classList.contains("is-saved"), true);
+      assert.equal(icon.getAttribute("icon"), "check");
+      assert.equal(save.title, "Changes saved");
+      assert.equal(save.getAttribute("aria-label"), "Changes saved");
+      assert.equal(status.textContent, "Changes saved");
+      assert.equal(status.classList.contains("visually-hidden"), true);
+    };
+    assertSaved();
+    const readsAfterSave = listReads;
+    dom.get("feature-retry").click();
+    await flush();
+    assert.equal(listReads, readsAfterSave + 1);
+    assert.equal(await page.selectPackage("A"), true);
+    assertSaved();
+
+    setAssigned(false);
+    assert.equal(save.disabled, false);
+    assert.equal(icon.getAttribute("icon"), "save");
+    assert.equal(status.textContent, "Unsaved changes");
+    setAssigned(true);
+    assertNeutral();
+
+    setAssigned(false);
+    save.click();
+    await flush();
+    assertSaved();
+    page.deactivate();
+    assertNeutral();
+    assert.equal(page.getSelectedPackageShortId(), "A");
+
+    setAssigned(true);
+    save.click();
+    await flush();
+    assertSaved();
+    const switching = page.selectPackage("B");
+    await flush();
+    assertNeutral();
+    selection.reject(new Error("Package unavailable"));
+    assert.equal(await switching, false);
+    assertNeutral();
+    assert.equal(page.getSelectedPackageShortId(), "A");
   } finally {
     page?.destroy();
     dom.restore();

@@ -84,6 +84,12 @@ draft for read-only reconciliation via **Check saved bindings** or **Check saved
 changes**. **Discard local draft** clears the browser draft. A server write
 may still complete late.
 
+In live Package Assignment, an explicit Save of a changed draft shows a green
+check and reports **Changes saved** after the service confirms the intended
+bindings and comments. Ordinary refreshes retain the check. A new draft edit,
+a Package switch or leaving Assignment clears it. The clean Save control
+remains disabled. Read-only recovery leaves the normal Save icon.
+
 The speech bubble opens saved binding comments and the current row's draft.
 Type a draft for an active or newly checked Workstream, then use the toolbar
 Save. **OK**, Escape and clicking outside only close the editor. Use **Show all**

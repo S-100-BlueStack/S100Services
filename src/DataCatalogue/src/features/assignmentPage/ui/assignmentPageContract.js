@@ -24,6 +24,7 @@ export const REQUIRED_ASSIGNMENT_PAGE_TARGETS = Object.freeze([
   "reconcile",
   "abandon",
   "save",
+  "save-icon",
   "save-error",
   "work-stream-status",
   "work-streams",
