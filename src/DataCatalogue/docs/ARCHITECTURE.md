@@ -44,6 +44,29 @@ binding mutation may still land later. Use Assignment's saved-change recovery
 and the Main Map Refresh action to check again. Package History retains its
 separate Refresh action when the same Package's Details stay mounted.
 
+## COMMENT-02 - Main Map binding-comment reads
+
+Live Packages uses an independent availability owner keyed by exact
+`(packageId, pipelineId)`. An accepted Jobs publication supplies the loaded
+binding pairs before Work Scope and list filters. Workspace contexts of the same
+pair share availability. A visible list starts batches of up to 200 pairs with
+at most two in flight. Hidden workflows defer reads. Jobs publication sequence
+and binding revisions guard against stale batch and first-page responses.
+
+Assignment reports confirmed, possibly committed and newly recovered comments
+for the affected binding independently of membership and Save feedback.
+Comment-only return refreshes dirty pairs in the accepted snapshot. Mixed
+return follows the existing membership refresh and its new binding snapshot.
+A late append can be rechecked through Assignment recovery or Main Map Refresh.
+
+The read-only viewer uses one manual native popover positioned at the contextual
+row's comment button. The stable host sits outside list replacement. The native
+top layer lets the popover sit beyond panel overflow. Positioning follows the
+anchor across scroll, resize and list replacement, and closes when the anchor is
+no longer visible. The viewer loads one filtered page at a time. Scope and
+profile requests have their own cancellation. Only a verified first page for
+the selected binding can update its shared availability.
+
 ## COMMENT-01 - Binding comment ownership
 
 `BindingCommentsController` uses the existing catalogue policy and captures the

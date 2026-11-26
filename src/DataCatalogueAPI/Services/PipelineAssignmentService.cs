@@ -16,6 +16,40 @@ public sealed class PipelineAssignmentService(InMemoryEventStore store, StreamNa
     public const int DefaultCommentPageSize = 50;
     public const int MaximumCommentPageSize = 100;
 
+    public const int MaximumCommentAvailabilityBatchSize = 200;
+
+    public BindingCommentAvailabilityResponse GetCommentAvailability(
+        IReadOnlyList<BindingCommentScope?>? bindings, CancellationToken cancellationToken) {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (bindings is null || bindings.Count is < 1 or > MaximumCommentAvailabilityBatchSize) {
+            throw new InvalidDataException("Supply 1 to 200 distinct Package–Pipeline bindings.");
+        }
+        var unique = new HashSet<(string, string)>();
+        var scopes = new List<InMemoryEventStore.BindingCommentStream>(bindings.Count);
+        foreach (var binding in bindings) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var packageId = binding?.PackageId;
+            var pipelineId = binding?.PipelineId;
+            ValidateCommentScopeId(packageId);
+            ValidateCommentScopeId(pipelineId);
+            if (!unique.Add((packageId!, pipelineId!))) {
+                throw new InvalidDataException("Package–Pipeline bindings must be distinct.");
+            }
+            scopes.Add(this.CommentStream(packageId!, pipelineId!));
+        }
+
+        var availability = store.ReadBindingCommentAvailability(scopes, cancellationToken);
+        return new BindingCommentAvailabilityResponse(
+            scopes.Select((scope, index) => new BindingCommentAvailabilityItem(
+                scope.PackageId, scope.PipelineId, availability[index])).ToArray());
+    }
+
+    private InMemoryEventStore.BindingCommentStream CommentStream(string packageId, string pipelineId) {
+        var bindingId = $"{packageId}::{pipelineId}";
+        return new(packageId, pipelineId, bindingId, streams.GetStreamName(new PackageId(packageId)),
+            streams.GetStreamName(new BindingId(bindingId)));
+    }
+
     private static readonly SemaphoreSlim MutationGate = new(1, 1);
 
     /// <summary>Validates category defaults against saved pipeline streams and normalizes them to a distinct, sorted list.</summary>
@@ -120,29 +154,37 @@ public sealed class PipelineAssignmentService(InMemoryEventStore store, StreamNa
         finally { MutationGate.Release(); }
     }
 
-    public BindingCommentPageResponse ListComments(string packageId, Guid? before, int pageSize, CancellationToken cancellationToken) {
+    public BindingCommentPageResponse ListComments(string packageId, Guid? before, int pageSize, CancellationToken cancellationToken, string? pipelineId = null) {
         ValidateCommentScopeId(packageId);
+        if (pipelineId is not null) { ValidateCommentScopeId(pipelineId); }
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumCommentPageSize);
-        var events = store.ReadPackageEvents(packageId, streams.GetStreamName(new PackageId(packageId)), cancellationToken)
-            ?? throw new KeyNotFoundException("Package not found.");
-        var ordered = events.Select(item => item.Payload).OfType<DispatcherEvents.V1.BindingCommentAdded>()
-            .Where(comment => comment.PackageId == packageId)
-            .OrderByDescending(comment => comment.UTC).ThenByDescending(comment => comment.OperationId).ToArray();
+        var events = pipelineId is null
+            ? store.ReadPackageEvents(packageId, streams.GetStreamName(new PackageId(packageId)), cancellationToken)
+                ?? throw new KeyNotFoundException("Package not found.")
+            : store.ReadBindingCommentEvents(this.CommentStream(packageId, pipelineId), cancellationToken)
+                ?? throw new KeyNotFoundException("Binding not found.");
+        var ordered = events.Where(item => item.Payload is DispatcherEvents.V1.BindingCommentAdded comment && comment.PackageId == packageId)
+            .Select(item => (EventId: item.Id, Comment: (DispatcherEvents.V1.BindingCommentAdded)item.Payload))
+            .OrderByDescending(item => item.Comment.UTC).ThenByDescending(item => item.Comment.OperationId).ToArray();
         var offset = 0;
         if (before.HasValue) {
-            offset = Array.FindIndex(ordered, comment => comment.OperationId == before.Value) + 1;
-            if (offset == 0) { throw new InvalidDataException("Comment continuation does not belong to this Package. Reload comments."); }
+            offset = Array.FindIndex(ordered, item => item.Comment.OperationId == before.Value) + 1;
+            if (offset == 0) {
+                throw new InvalidDataException(pipelineId is null
+                    ? "Comment continuation does not belong to this Package. Reload comments."
+                    : "Comment continuation does not belong to this binding. Reload comments.");
+            }
         }
-        var page = ordered.Skip(offset).Take(pageSize).Select(MapComment).ToArray();
+        var page = ordered.Skip(offset).Take(pageSize).Select(item => MapComment(item.Comment) with { HistoryEventId = item.EventId }).ToArray();
         cancellationToken.ThrowIfCancellationRequested();
-        return new BindingCommentPageResponse(packageId, page, offset + page.Length < ordered.Length ? page[^1].Id : null);
+        return new BindingCommentPageResponse(packageId, page, offset + page.Length < ordered.Length ? page[^1].Id : null) { PipelineId = pipelineId };
     }
 
     private static BindingCommentResponse MapComment(DispatcherEvents.V1.BindingCommentAdded comment)
         => new(comment.OperationId, comment.PipelineId, comment.Text, comment.Actor, comment.UTC.ToUniversalTime());
 
-    private static void ValidateCommentScopeId(string id) {
+    private static void ValidateCommentScopeId(string? id) {
         if (string.IsNullOrWhiteSpace(id) || id.Length > 200 || id != id.Trim() || id.Contains("::") || id.Any(char.IsControl)) {
             throw new InvalidDataException("Supply valid package and pipeline identifiers.");
         }

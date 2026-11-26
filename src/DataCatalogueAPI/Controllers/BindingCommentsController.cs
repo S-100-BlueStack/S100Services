@@ -16,7 +16,7 @@ namespace DataCatalague.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BindingCommentsController(PipelineAssignmentService assignments) : ControllerBase
 {
-    /// <summary>Reads a newest-first page of committed comments for the selected Package.</summary>
+    /// <summary>Reads a newest-first page of committed comments, optionally scoped to one binding.</summary>
     [HttpGet]
     [ProducesResponseType<BindingCommentPageResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -25,8 +25,14 @@ public sealed class BindingCommentsController(PipelineAssignmentService assignme
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public ActionResult<BindingCommentPageResponse> Get(
         string id, CancellationToken cancellationToken, [FromQuery] Guid? before = null,
-        [FromQuery, Range(1, PipelineAssignmentService.MaximumCommentPageSize)] int pageSize = PipelineAssignmentService.DefaultCommentPageSize) {
-        try { return this.Ok(assignments.ListComments(id, before, pageSize, cancellationToken)); }
+        [FromQuery, Range(1, PipelineAssignmentService.MaximumCommentPageSize)] int pageSize = PipelineAssignmentService.DefaultCommentPageSize,
+        [FromQuery] string? pipelineId = null) {
+        var suppliedPipeline = this.Request.Query.TryGetValue("pipelineId", out var requestedPipeline);
+        if (suppliedPipeline && requestedPipeline.Count != 1) {
+            return this.Problem(title: "Supply exactly one pipeline identifier.", statusCode: StatusCodes.Status400BadRequest);
+        }
+        var scope = suppliedPipeline ? pipelineId ?? "" : null;
+        try { return this.Ok(assignments.ListComments(id, before, pageSize, cancellationToken, scope)); }
         catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
         catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
     }

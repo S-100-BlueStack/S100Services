@@ -63,7 +63,11 @@ function isDefiniteClientRejection(error) {
 
 export function createLiveAssignmentServices(
   catalogue,
-  { bindingRequestTimeoutMs = DEFAULT_BINDING_REQUEST_TIMEOUT_MS, onMembershipInvalidated } = {}
+  {
+    bindingRequestTimeoutMs = DEFAULT_BINDING_REQUEST_TIMEOUT_MS,
+    onMembershipInvalidated,
+    onCommentsInvalidated,
+  } = {}
 ) {
   const pending = new Map();
   const pendingCommentReads = new Map();
@@ -122,6 +126,20 @@ export function createLiveAssignmentServices(
     return reading;
   }
 
+  async function readCommentsWithConfirmation(id, awaiting) {
+    const commentHistory = await readComments(id);
+    const confirmedIds = confirmedBindingCommentIds(awaiting, commentHistory);
+    const confirmedPipelines = new Set(
+      awaiting
+        .filter(({ id: operationId }) => confirmedIds.includes(operationId))
+        .map(({ workStreamId }) => workStreamId)
+    );
+    for (const pipelineId of confirmedPipelines) {
+      onCommentsInvalidated?.({ packageId: id, pipelineId });
+    }
+    return { commentHistory, confirmedIds };
+  }
+
   const assignments = {
     ...(supportsComments
       ? { loadComments: (id, { signal } = {}) => readComments(id, signal) }
@@ -130,10 +148,16 @@ export function createLiveAssignmentServices(
       return bindingRecord(await readBindings(id, signal));
     },
     // Recovery is read-only. It must not repeat an unconfirmed POST or DELETE.
-    async reconcile(id, { includeComments = false, baselineActiveIds } = {}) {
+    async reconcile(
+      id,
+      { includeComments = false, baselineActiveIds, awaitingComments = [] } = {}
+    ) {
       const bindingsRead = readBindings(id, undefined, baselineActiveIds);
       if (!includeComments) return bindingRecord(await bindingsRead);
-      const [bindings, commentHistory] = await Promise.all([bindingsRead, readComments(id)]);
+      const [bindings, { commentHistory }] = await Promise.all([
+        bindingsRead,
+        readCommentsWithConfirmation(id, awaitingComments),
+      ]);
       return { ...bindingRecord(bindings), commentHistory };
     },
     save(id, draft, { baselineActiveIds } = {}) {
@@ -163,14 +187,16 @@ export function createLiveAssignmentServices(
     );
     if (validationError) throw new Error(validationError);
     // Preflight is always authoritative. A previous unsuccessful response may have committed.
-    const [existing, priorComments] = await Promise.all([
-      readBindings(id, undefined, baselineActiveIds),
-      comments.length ? readComments(id) : [],
-    ]);
-    const alreadyConfirmed = confirmedBindingCommentIds(
-      comments.filter((comment) => comment.awaitingConfirmation),
-      priorComments
-    );
+    const [existing, { commentHistory: priorComments, confirmedIds: alreadyConfirmed }] =
+      await Promise.all([
+        readBindings(id, undefined, baselineActiveIds),
+        comments.length
+          ? readCommentsWithConfirmation(
+              id,
+              comments.filter((comment) => comment.awaitingConfirmation)
+            )
+          : { commentHistory: [], confirmedIds: [] },
+      ]);
     const priorConfirmation = alreadyConfirmed.length
       ? { commentHistory: priorComments, confirmedCommentIds: alreadyConfirmed }
       : {};
@@ -251,12 +277,14 @@ export function createLiveAssignmentServices(
             catalogue.addBindingComment(id, comment, { signal })
           );
           successfulWrites++;
+          onCommentsInvalidated?.({ packageId: id, pipelineId: comment.workStreamId });
           accepted.push(comment);
           outcome.ok = true;
         } catch (error) {
           outcome.message = error.message;
           // An invalid or interrupted success response also leaves the append uncertain.
           if (hasUncertainOutcome(error) || !isDefiniteClientRejection(error)) {
+            onCommentsInvalidated?.({ packageId: id, pipelineId: comment.workStreamId });
             throw new BindingSaveError(
               `Comment ${comment.workStreamId}: ${error.message} Check saved changes before another Save. No remaining changes were sent.`,
               {

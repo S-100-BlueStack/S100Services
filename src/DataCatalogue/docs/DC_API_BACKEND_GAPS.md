@@ -15,6 +15,16 @@ proposals.
 > this gap register. Workspace remains a distinct entity. No backend gap is
 > resolved by the display terminology change.
 
+## COMMENT-02 - Binding-scoped Main Map read contracts
+
+Candidate v2 supplies binding-pair availability and filtered comment pages
+with the actual History event UUID. An older API without the pair contract or
+the scoped response cannot establish presence or absence for Main Map. A
+scoped comment page without the optional event UUID can still show text and
+the recorded account. Local Windows API, browser and directory acceptance are
+pending. COMMENT-03 still requires Package-level comments and editable
+Discarded contracts. Durable retention remains an event-store concern.
+
 ## COMMENT-01 - Binding comments
 
 The [authorized read/append and history contract](BACKEND_CONTRACTS.md#comment-01---workstream-binding-comments)

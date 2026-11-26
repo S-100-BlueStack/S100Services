@@ -3,7 +3,9 @@ import test from "node:test";
 import { createCatalogueClient } from "../../../shared/api/catalogueClient.js";
 import { createCatalogueService } from "../../../shared/api/catalogueService.js";
 import { loadWorkspaceOverview } from "../../../shared/api/loadWorkspaceOverview.js";
-import { createJobStore } from "../state/jobStore.js";
+import { setImmediate as nextTurn } from "node:timers/promises";
+import { createPackageCommentAvailability } from "./createPackageCommentAvailability.js";
+import { JOB_STORE_CHANGE_TYPE, createJobStore } from "../state/jobStore.js";
 import { createJobService } from "./jobService.js";
 import { createLiveJobServiceAdapter } from "./liveJobServiceAdapter.js";
 import { createLiveAssignmentServices } from "../../assignments/services/liveAssignmentServices.js";
@@ -44,7 +46,13 @@ function page(items, number, size, totalCount = items.length) {
 
 function fixture(pipelines, packages = ["shared"]) {
   const calls = [];
-  const state = { pipelines, packages, intercept: null, continuation: new Map() };
+  const state = {
+    pipelines,
+    packages,
+    intercept: null,
+    continuation: new Map(),
+    bindingComments: new Map(),
+  };
   const catalogue = createCatalogueService(
     createCatalogueClient({
       baseUrl: "/api",
@@ -53,6 +61,46 @@ function fixture(pipelines, packages = ["shared"]) {
         const number = Number(searchParams.get("page") ?? 1);
         const size = Number(searchParams.get("pageSize") ?? 200);
         const [, , , path, id, subresource, workspaceId, membership] = pathname.split("/");
+        if (path === "packages" && id === "binding-comments" && subresource === "availability") {
+          assert.equal(method, "POST");
+          const { bindings } = JSON.parse(body);
+          calls.push({ kind: "availability", bindings });
+          return Response.json({
+            items: bindings.map(({ packageId, pipelineId }) => ({
+              packageId,
+              pipelineId,
+              hasBindingComments: (state.bindingComments.get(packageId) ?? []).some(
+                (comment) => comment.pipelineId === pipelineId
+              ),
+            })),
+          });
+        }
+        if (path === "packages" && subresource === "binding-comments") {
+          calls.push({ kind: "comment", method });
+          const items = state.bindingComments.get(id) ?? [];
+          if (method === "GET") {
+            const pipelineId = searchParams.get("pipelineId");
+            if (pipelineId) {
+              return Response.json({
+                packageId: id,
+                pipelineId,
+                items: items.filter((item) => item.pipelineId === pipelineId),
+                nextBefore: null,
+              });
+            }
+            return Response.json({ packageId: id, items, nextBefore: null });
+          }
+          const { operationId, pipelineId, text } = JSON.parse(body);
+          const item = {
+            id: operationId,
+            pipelineId,
+            text,
+            actor: "PROD\\reader",
+            occurredAtUtc: "2026-11-26T08:00:00Z",
+          };
+          state.bindingComments.set(id, [item, ...items]);
+          return Response.json(item);
+        }
         if (path === "dispatcher") {
           assert.equal(id, "bindings");
           calls.push({ kind: "binding", method });
@@ -167,10 +215,11 @@ function fixture(pipelines, packages = ["shared"]) {
     calls,
     state,
     published,
-    newAssignmentSession() {
+    newAssignmentSession(onCommentsInvalidated) {
       return createAssignmentSession({
         services: createLiveAssignmentServices(catalogue, {
           onMembershipInvalidated: store.invalidateMembership,
+          onCommentsInvalidated,
         }),
       });
     },
@@ -534,4 +583,154 @@ test("An in-flight startup Overview cannot satisfy a post-mutation read", async 
   t.diagnostic(`Startup overlap, including preexisting startup calls: ${JSON.stringify(counts)}`);
   session.destroy();
   f.store.destroy();
+});
+
+test("COMMENT-02 transport counts preserve 29-Workspace startup, comment-only return and binding refresh", async (t) => {
+  const ids = Array.from({ length: 34 }, (_, index) => `package-${index}`);
+  const pipelines = Object.fromEntries(
+    [10, 10, 9].map((size, index) => [
+      `pipeline-${index}`,
+      Array.from({ length: size }, (_, row) => workspace(`workspace-${row}`, row ? [] : ids)),
+    ])
+  );
+  const f = fixture(pipelines, ids);
+  const availability = createPackageCommentAvailability({
+    read: f.catalogue.bindingCommentAvailability,
+    onChange() {},
+  });
+  let visible = true;
+  const update = (snapshot = f.store.getSnapshot()) => {
+    const context = { visible, busy: snapshot.isLoading };
+    if (!visible || snapshot.isLoading) availability.setContext(context);
+    if (!snapshot.isLoading && snapshot.lastChange.type === JOB_STORE_CHANGE_TYPE.JOBS_LOADED) {
+      availability.acceptJobs(snapshot.lastChange.sequence, snapshot.jobs);
+    }
+    if (visible && !snapshot.isLoading) availability.setContext(context);
+  };
+  const unsubscribe = f.store.subscribe(update);
+  const kinds = () => f.calls.map(({ kind }) => kind);
+  try {
+    const initial = await f.store.loadJobs();
+    await nextTurn();
+    assert.equal(initial.data.jobs.length, 102);
+    assert.equal(summarize(f.calls).overview, 3);
+    assert.equal(summarize(f.calls).membership, 0);
+    assert.deepEqual(
+      f.calls.filter(({ kind }) => kind === "availability"),
+      [
+        {
+          kind: "availability",
+          bindings: ids
+            .toSorted()
+            .flatMap((packageId) =>
+              Object.keys(pipelines).map((pipelineId) => ({ packageId, pipelineId }))
+            ),
+        },
+      ]
+    );
+    assert.equal(kinds().includes("comment"), false);
+    t.diagnostic(`Startup: 102 distinct bindings, ${JSON.stringify(kinds())}`);
+
+    visible = false;
+    update();
+    const session = f.newAssignmentSession(availability.invalidate);
+    await session.select(ids[0]);
+    assert.equal(session.addComment("pipeline-0"), true);
+    session.editComment(session.snapshot().draft.comments[0].id, "Saved on Main Map");
+    assert.equal(await session.save(), true);
+    assert.equal(session.snapshot().saveConfirmed, true);
+    assert.equal(f.store.hasPendingMembershipRefresh(), false);
+    f.calls.length = 0;
+    visible = true;
+    update();
+    await nextTurn();
+    assert.deepEqual(f.calls, [
+      {
+        kind: "availability",
+        bindings: [{ packageId: ids[0], pipelineId: "pipeline-0" }],
+      },
+    ]);
+    assert.equal(
+      availability.getStatus({ packageId: ids[0], pipelineId: "pipeline-0" }),
+      "present"
+    );
+    assert.equal(availability.getStatus({ packageId: ids[0], pipelineId: "pipeline-1" }), "absent");
+    assert.equal(session.snapshot().saveConfirmed, true);
+    t.diagnostic(`Comment-only return: ${JSON.stringify(kinds())}`);
+
+    visible = false;
+    update();
+    await session.select("new-package");
+    session.setAssigned("pipeline-0", true);
+    assert.equal(session.addComment("pipeline-0"), true);
+    session.editComment(session.snapshot().draft.comments[0].id, "First binding and comment");
+    assert.equal(await session.save(), true);
+    assert.equal(f.store.hasPendingMembershipRefresh(), true);
+    f.calls.length = 0;
+    const refresh = f.store.loadJobs({ cancelOnLeave: true });
+    visible = true;
+    update();
+    assert.equal(f.store.loadJobs({ cancelOnLeave: true }), refresh);
+    assert.equal((await refresh).ok, true);
+    await nextTurn();
+    assert.equal(summarize(f.calls).overview, 3);
+    assert.equal(summarize(f.calls).membership, 0);
+    assert.equal(f.calls.filter(({ kind }) => kind === "availability").length, 1);
+    assert.equal(f.calls.find(({ kind }) => kind === "availability").bindings.length, 103);
+    assert.equal(
+      availability.getStatus({ packageId: "new-package", pipelineId: "pipeline-0" }),
+      "present"
+    );
+    assert.equal(kinds().includes("comment"), false);
+    t.diagnostic(
+      `Mixed first bind and comment return: ${JSON.stringify(summarize(f.calls))}, 1 availability`
+    );
+
+    visible = false;
+    update();
+    session.setAssigned("pipeline-0", false);
+    assert.equal(await session.save(), true);
+    f.calls.length = 0;
+    const removal = f.store.loadJobs({ cancelOnLeave: true });
+    visible = true;
+    update();
+    assert.equal((await removal).ok, true);
+    await nextTurn();
+    assert.equal(summarize(f.calls).overview, 3);
+    assert.equal(summarize(f.calls).membership, 0);
+    const removalBatch = f.calls.filter(({ kind }) => kind === "availability");
+    assert.equal(removalBatch.length, 1);
+    assert.equal(
+      removalBatch[0].bindings.some(({ packageId }) => packageId === "new-package"),
+      false
+    );
+    assert.equal(
+      availability.getStatus({ packageId: "new-package", pipelineId: "pipeline-0" }),
+      "unknown"
+    );
+    t.diagnostic(`Last unbind return: ${JSON.stringify(summarize(f.calls))}, 1 availability`);
+
+    visible = false;
+    update();
+    session.setAssigned("pipeline-0", true);
+    assert.equal(await session.save(), true);
+    f.calls.length = 0;
+    const restore = f.store.loadJobs({ cancelOnLeave: true });
+    visible = true;
+    update();
+    assert.equal((await restore).ok, true);
+    await nextTurn();
+    assert.equal(summarize(f.calls).overview, 3);
+    assert.equal(summarize(f.calls).membership, 0);
+    assert.equal(f.calls.filter(({ kind }) => kind === "availability").length, 1);
+    assert.equal(
+      availability.getStatus({ packageId: "new-package", pipelineId: "pipeline-0" }),
+      "present"
+    );
+    assert.equal(kinds().includes("comment"), false);
+    t.diagnostic(`Rebind return: ${JSON.stringify(summarize(f.calls))}, 1 availability`);
+  } finally {
+    unsubscribe();
+    availability.destroy();
+  }
 });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { bindingCommentKey } from "../../../shared/api/bindingComments.js";
 import { createJobList } from "./jobList.js";
 import { createPackageHistoryList } from "./createPackageHistory.js";
 import { createJobsOverlay } from "../../../app/ui/createJobsOverlay.js";
@@ -18,6 +19,7 @@ class TestElement {
     this.dataset = {};
     this.listeners = new Map();
     this.attributes = new Map();
+    this.style = {};
     this.className = "";
     this.textContent = "";
     this.classes = new Set();
@@ -42,6 +44,30 @@ class TestElement {
     return child;
   }
 
+  get firstElementChild() {
+    return this.children[0] ?? null;
+  }
+
+  get lastElementChild() {
+    return this.children.at(-1) ?? null;
+  }
+
+  get nextElementSibling() {
+    return this.parent?.children[this.parent.children.indexOf(this) + 1] ?? null;
+  }
+
+  insertBefore(child, next) {
+    child.remove();
+    child.parent = this;
+    this.children.splice(next ? this.children.indexOf(next) : this.children.length, 0, child);
+  }
+
+  remove() {
+    if (!this.parent) return;
+    this.parent.children.splice(this.parent.children.indexOf(this), 1);
+    this.parent = null;
+  }
+
   replaceChildren(...children) {
     this.children = [];
     this.append(...children);
@@ -55,7 +81,13 @@ class TestElement {
     let node = this;
     while (node) {
       if (selector === "[data-job-focus]" && node.dataset.jobFocus) return node;
+      if (selector === '[data-job-focus="comments"]' && node.dataset.jobFocus === "comments") {
+        return node;
+      }
       if (selector === "[data-job-id]" && node.dataset.jobId) return node;
+      if (selector === "details:not([open])" && node.tagName === "details" && !node.open) {
+        return node;
+      }
       node = node.parent;
     }
     return null;
@@ -69,6 +101,10 @@ class TestElement {
     this.attributes.set(name, String(value));
   }
 
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
   removeAttribute(name) {
     this.attributes.delete(name);
   }
@@ -76,6 +112,10 @@ class TestElement {
   addEventListener(name, listener) {
     const existing = this.listeners.get(name) ?? [];
     this.listeners.set(name, [...existing, listener]);
+  }
+
+  removeEventListener(name, listener) {
+    this.listeners.set(name, this.listeners.get(name)?.filter((item) => item !== listener) ?? []);
   }
 
   dispatchEvent(event) {
@@ -88,6 +128,8 @@ class TestElement {
       return descendants(this).filter((element) => element.dataset.jobDetailsId);
     if (selector === "[data-job-id]")
       return descendants(this).filter((element) => element.dataset.jobId);
+    if (selector === '[data-job-focus="comments"]')
+      return descendants(this).filter((element) => element.dataset.jobFocus === "comments");
     if (selector === "[data-job-focus]")
       return descendants(this).filter((element) => element.dataset.jobFocus);
     return [];
@@ -96,6 +138,27 @@ class TestElement {
   focus() {
     this.focused = true;
     if (globalThis.document) globalThis.document.activeElement = this;
+  }
+
+  getBoundingClientRect() {
+    if (this.rect) return this.rect;
+    if (this.classList.contains("data-catalogue-jobs-overlay")) {
+      return { left: 0, right: 500, top: 0, bottom: 550 };
+    }
+    if (this.classList.contains("data-catalogue-overlay-panel__header")) {
+      return { bottom: 42 };
+    }
+    return { left: 336, right: 360, top: 140, bottom: 164 };
+  }
+
+  showPopover() {
+    this.topLayerOpen = true;
+    this.offsetWidth = 250;
+    this.offsetHeight = 140;
+  }
+
+  hidePopover() {
+    this.topLayerOpen = false;
   }
 
   scrollIntoView() {}
@@ -535,11 +598,15 @@ test("Job Details error also provides an in-panel Retry", () => {
 async function withAsyncDocument(run) {
   const oldDocument = globalThis.document;
   const oldWindow = globalThis.window;
-  globalThis.document = { createElement: (name) => new TestElement(name) };
-  globalThis.window = {
+  globalThis.document = Object.assign(new TestElement("document"), {
+    createElement: (name) => new TestElement(name),
+  });
+  globalThis.window = Object.assign(new TestElement("window"), {
+    innerWidth: 800,
+    innerHeight: 600,
     requestAnimationFrame: (callback) => callback(),
     setTimeout: () => 0,
-  };
+  });
   try {
     await run();
   } finally {
@@ -1476,6 +1543,7 @@ test("Accepted navigation refreshes only after binding changes and joins Package
     const job = { ...fixture("live").job, pipelineId: "enc", workspaceId: "east" };
     const bindings = new Map();
     const comments = [];
+    const availabilityCalls = [];
     const reads = [];
     let finishRead;
     let delayRead = false;
@@ -1511,10 +1579,21 @@ test("Accepted navigation refreshes only after binding changes and joins Package
             comments.push({ id: comment.id, pipelineId: comment.workStreamId, text: comment.text });
           },
         },
-        { onMembershipInvalidated: store.invalidateMembership }
+        {
+          onMembershipInvalidated: store.invalidateMembership,
+          onCommentsInvalidated: (binding) => overlay.invalidateComments(binding),
+        }
       ),
     });
-    const overlay = createJobsOverlay({ jobStore: store, sourceMode: "live" });
+    const overlay = createJobsOverlay({
+      jobStore: store,
+      sourceMode: "live",
+      async readCommentAvailability(bindings) {
+        availabilityCalls.push(bindings);
+        return new Map(bindings.map((pair) => [bindingCommentKey(pair), comments.length > 0]));
+      },
+      readBindingComments: async () => assert.fail("Navigation must not preload comment text"),
+    });
     const assignmentHost = new TestElement("assignment");
     const guard = createDraftNavigation({
       session,
@@ -1571,6 +1650,7 @@ test("Accepted navigation refreshes only after binding changes and joins Package
       },
       setOpen(open) {
         overlay.element.hidden = !open;
+        overlay.setPanelOpen(open);
       },
     });
     let returns = 0;
@@ -1595,12 +1675,16 @@ test("Accepted navigation refreshes only after binding changes and joins Package
         };
       },
       onOpenJobs: panelActions.open,
-      onLeaveMainMap: store.cancelNavigationLoad,
-      onReturnMainMap() {
+      onLeaveMainMap() {
+        overlay.setMainMapActive(false);
+        store.cancelNavigationLoad();
+      },
+      onReturnMainMap({ openJobs }) {
         returns++;
         if (store.hasPendingMembershipRefresh()) {
           completion = overlay.refreshJobs({ afterAssignment: true });
         }
+        overlay.setMainMapActive(true, { openJobs });
       },
     });
     const flush = () => new Promise(setImmediate);
@@ -1658,6 +1742,11 @@ test("Accepted navigation refreshes only after binding changes and joins Package
       await navigation.openJobs();
       assert.equal(overlay.element.hidden, false);
       assert.equal(reads.length, beforeCommentReturn);
+      assert.deepEqual(
+        availabilityCalls,
+        [[{ packageId: "package", pipelineId: "enc" }]],
+        "Hidden dirty return and open share a round"
+      );
       t.diagnostic(
         "Clean Save and comment-only return to a recent Packages panel: 0 membership loads"
       );
@@ -1681,6 +1770,10 @@ test("Accepted navigation refreshes only after binding changes and joins Package
       assert.equal(overlay.element.hidden, false);
       finishRead();
       assert.equal((await completion).ok, true);
+      assert.deepEqual(availabilityCalls, [
+        [{ packageId: "package", pipelineId: "enc" }],
+        [{ packageId: "package", pipelineId: "enc" }],
+      ]);
       t.diagnostic("Two Package saves + browser Back + Packages open + Refresh: 1 membership load");
 
       locationRef.pathname = assignmentPath;
@@ -1703,6 +1796,7 @@ test("Accepted navigation refreshes only after binding changes and joins Package
           workspaces: [{ pipelineId: "enc", workspaceId: "east", name: "East" }],
         },
       ]);
+      assert.equal(availabilityCalls.length, 2, "Unchanged history return reuses the summary");
       const scope = overlay.getWorkScope();
       await overlay.showJobDetails(job);
       assert.equal(findByClass(overlay.element, "job-details").length, 1);
@@ -1738,6 +1832,155 @@ test("Accepted navigation refreshes only after binding changes and joins Package
       session.destroy();
       overlay.destroy();
       store.destroy();
+    }
+  });
+});
+
+test("CARIS and ESRI are separate popups; ENC and a different Package have no comments", async () => {
+  await withAsyncDocument(async () => {
+    const { job } = fixture("live");
+    const makeJob = (id, pipelineId, pipelineName, workspaceId, packageId = "nm-1041-24") => ({
+      ...job,
+      id,
+      packageId,
+      pipelineId,
+      pipelineName,
+      workspaceId,
+    });
+    const jobs = [
+      makeJob("caris-east", "caris", "Paper Chart CARIS", "east"),
+      makeJob("caris-west", "caris", "Paper Chart CARIS", "west"),
+      makeJob("esri", "esri", "Paper Chart ESRI", "east"),
+      makeJob("enc", "enc", "ENC", "east"),
+      makeJob("other", "caris", "Paper Chart CARIS", "east", "different-package"),
+    ];
+    const store = createJobStore({
+      service: { loadJobs: async () => ({ ok: true, data: { jobs } }) },
+    });
+    const calls = [];
+    const pages = [];
+    const raw = "<img src=x onerror=alert(1)>\nPaper Chart CARIS";
+    const overlay = createJobsOverlay({
+      jobStore: store,
+      sourceMode: "live",
+      async readCommentAvailability(pairs) {
+        calls.push(pairs);
+        return new Map(
+          pairs.map((pair) => [
+            bindingCommentKey(pair),
+            pair.packageId === "nm-1041-24" && pair.pipelineId !== "enc",
+          ])
+        );
+      },
+      readBindingComments(packageId, { pipelineId, signal }) {
+        return new Promise((resolve) => {
+          pages.push({ packageId, pipelineId, signal, resolve });
+        });
+      },
+    });
+    const flush = () => new Promise(setImmediate);
+    const click = (button) => button.dispatchEvent({ type: "click" });
+    const comment = (pipelineId, text) => ({
+      id: pipelineId,
+      pipelineId,
+      occurredAtUtc: "2026-11-25T13:00:00Z",
+      text,
+      actor: "PROD\\reader",
+    });
+    try {
+      overlay.setPanelOpen(true);
+      await store.loadJobs();
+      await flush();
+      const find = (id) =>
+        findByClass(overlay.element, "job-card__comments").find(
+          (button) => button.dataset.commentJobId === id
+        );
+      const east = find("caris-east");
+      const west = find("caris-west");
+      const [viewer] = findByClass(overlay.element, "package-comment-viewer");
+      const list = findByClass(overlay.element, "job-list")[0];
+      assert.equal(viewer.parent, overlay.element);
+      assert.equal(list.contains(viewer), false);
+      assert.equal(viewer.getAttribute("popover"), "manual");
+      assert.equal(east.parent.className, "job-card__badge-column");
+      assert.equal(east.dataset.availability, "present");
+      assert.equal(west.dataset.availability, "present");
+      assert.equal(find("esri").dataset.availability, "present");
+      assert.equal(find("enc").dataset.availability, "absent");
+      assert.equal(find("other").dataset.availability, "absent");
+      assert.match(find("enc").getAttribute("aria-label"), /ENC/);
+      assert.deepEqual(
+        calls.map((batch) => batch.length),
+        [4]
+      );
+      assert.equal(pages.length, 0);
+      const pointerListeners = document.listeners.get("pointerdown").length;
+
+      click(east);
+      west.rect = { left: 300, right: 324, top: 260, bottom: 284 };
+      document.dispatchEvent({ type: "pointerdown", target: west });
+      click(west);
+      assert.equal(viewer.topLayerOpen, true);
+      assert.equal(viewer.style.top, "288px");
+      assert.equal(viewer.getAttribute("role"), "dialog");
+      assert.equal(findByClass(overlay.element, "job-details").length, 0);
+      assert.deepEqual(
+        pages.map(({ packageId, pipelineId }) => [packageId, pipelineId]),
+        [["nm-1041-24", "caris"]]
+      );
+
+      const focus = document.activeElement;
+      pages[0].resolve({ items: [comment("caris", raw)], nextBefore: null });
+      await flush();
+      assert.equal(document.activeElement, focus);
+      assert.equal(findByClass(viewer, "package-comment-viewer__text")[0].textContent, raw);
+      assert.equal(findByTag(viewer, "img").filter((image) => !image.hidden).length, 0);
+      assert.match(elementText(viewer), /Comments · Paper Chart CARIS/);
+      west.rect = { left: 300, right: 324, top: 492, bottom: 516 };
+      window.dispatchEvent({ type: "scroll", target: overlay.element });
+      assert.equal(viewer.style.top, "348px", "A low anchor opens above its trigger");
+      viewer.dispatchEvent({
+        type: "keydown",
+        key: "Escape",
+        preventDefault() {},
+        stopPropagation() {},
+      });
+      assert.equal(viewer.topLayerOpen, false);
+      assert.equal(document.activeElement, west);
+      assert.equal(pages[0].signal.aborted, true);
+
+      click(find("esri"));
+      pages[1].resolve({ items: [comment("esri", "ESRI only")], nextBefore: null });
+      await flush();
+      assert.match(elementText(viewer), /Comments · Paper Chart ESRI/);
+      assert.doesNotMatch(elementText(viewer), /Paper Chart CARIS/);
+      click(find("esri"));
+      assert.equal(viewer.topLayerOpen, false);
+
+      click(find("enc"));
+      pages[2].resolve({ items: [], nextBefore: null });
+      await flush();
+      assert.match(elementText(viewer), /No saved comments/);
+      assert.doesNotMatch(elementText(viewer), /ESRI only/);
+      document.dispatchEvent({ type: "pointerdown", target: overlay.refreshButton });
+      assert.equal(viewer.topLayerOpen, false);
+      assert.notEqual(
+        document.activeElement,
+        find("enc"),
+        "Outside pointer leaves focus to its target"
+      );
+
+      click(east);
+      const group = findByClass(overlay.element, "job-list__package-group")[0];
+      group.isConnected = true;
+      group.open = false;
+      group.dispatchEvent({ type: "toggle" });
+      assert.equal(viewer.topLayerOpen, false);
+      assert.equal(pages[3].signal.aborted, true);
+      assert.equal(calls.length, 1, "Popup gestures and collapsing do not reload the summary");
+      assert.equal(document.listeners.get("pointerdown").length, pointerListeners);
+    } finally {
+      overlay.destroy();
     }
   });
 });

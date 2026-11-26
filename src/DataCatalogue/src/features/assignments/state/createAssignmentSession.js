@@ -245,6 +245,7 @@ export function createAssignmentSession({ services }) {
       .then(() =>
         (services.assignments.reconcile ?? services.assignments.load)(id, {
           includeComments: awaiting.length > 0,
+          awaitingComments: awaiting,
           baselineActiveIds,
         })
       )

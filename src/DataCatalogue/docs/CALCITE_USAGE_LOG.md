@@ -289,6 +289,16 @@ private Calcite selectors or a copied ProductCatalogue stylesheet.
 
 ---
 
+## COMMENT-02 - Binding comment popup
+
+The live card uses a native button with the public Calcite `speech-bubble`
+icon for stable focus and compact availability cues. The read-only UI follows
+Assignment's toggle, pointer-outside and Escape patterns. Main Map uses a
+manual native popover and viewport positioning because its Package list lives
+inside a scrollable overlay. This provides an anchored named dialog with no
+list displacement. Native controls support close, paging and retry. The
+existing Assignment editor owns its own interaction.
+
 ## COMMENT-01 - Retained binding comments
 
 The existing native speech-bubble editor keeps its Calcite icon, textarea and

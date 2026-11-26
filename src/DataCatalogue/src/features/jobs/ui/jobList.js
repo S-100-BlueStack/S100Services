@@ -66,6 +66,7 @@ export function createJobList({
   const pendingMutationJobIds = new Set();
   const collapsedPackageIds = new Set();
   let historyView = null;
+  let commentViewer = null;
   let membershipRefresh = null;
   const history = createPackageHistoryLoader({
     read: readPackageHistory,
@@ -211,6 +212,7 @@ export function createJobList({
     historyView = renderJobList({
       rootElement,
       history,
+      commentViewer,
       state: currentState,
       store,
       sourceMode,
@@ -234,6 +236,7 @@ export function createJobList({
     });
 
     focusRecovery.restore(focusTarget);
+    commentViewer?.syncList();
     const openInformation = openInformationOnRender;
     openInformationOnRender = false;
     rootElement.dispatchEvent(
@@ -277,6 +280,10 @@ export function createJobList({
 
   return {
     element: rootElement,
+    setCommentViewer(viewer) {
+      commentViewer = viewer;
+      render();
+    },
     setPackageScope(nextScope) {
       if (sourceMode !== "live" || !alive) return;
       const next = nextScope ?? { pipelineIds: [], workspaceKeys: null };
@@ -395,6 +402,7 @@ async function loadJobs(
 function renderJobList({
   rootElement,
   history,
+  commentViewer,
   state,
   store,
   sourceMode,
@@ -517,6 +525,7 @@ function renderJobList({
           group,
           collapsedPackageIds,
           cardOptions: {
+            commentViewer,
             selectedJobId,
             store,
             expandedJobIds,
@@ -532,6 +541,7 @@ function renderJobList({
     listElement.appendChild(
       createJobCard({
         job: group.jobs[0],
+        commentViewer,
         selectedJobId,
         store,
         expandedJobIds,
@@ -1147,12 +1157,14 @@ function createPackageGroup({ group, collapsedPackageIds, cardOptions }) {
     if (!container.isConnected) return;
     if (container.open) collapsedPackageIds.delete(group.key);
     else collapsedPackageIds.add(group.key);
+    cardOptions.commentViewer?.syncList();
   });
   return container;
 }
 
 function createJobCard({
   job,
+  commentViewer,
   selectedJobId,
   store,
   expandedJobIds,
@@ -1180,6 +1192,7 @@ function createJobCard({
   cardElement.appendChild(
     createJobCardSummary({
       job,
+      commentViewer,
       isExpanded,
       expandedJobIds,
       visibleCompletedJobIds,
@@ -1200,6 +1213,7 @@ function createJobCard({
 
 function createJobCardSummary({
   job,
+  commentViewer,
   isExpanded,
   expandedJobIds,
   visibleCompletedJobIds,
@@ -1216,7 +1230,7 @@ function createJobCardSummary({
   topRowElement.className = "job-card__top-row";
   topRowElement.append(
     createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDetailsFromList, nested }),
-    createBadgeColumn(job)
+    createBadgeColumn(job, commentViewer)
   );
 
   const bottomRowElement = document.createElement("div");
@@ -1328,11 +1342,14 @@ function createJobTitleRow({
   return titleRowElement;
 }
 
-function createBadgeColumn(job) {
+function createBadgeColumn(job, commentViewer) {
   const badgeColumnElement = document.createElement("div");
   badgeColumnElement.className = "job-card__badge-column";
   badgeColumnElement.append(createPriorityBadge(job));
   if (job.source !== "live") badgeColumnElement.append(createAffectedAoiBadge(job));
+  else if (job.packageId && job.pipelineId && commentViewer) {
+    badgeColumnElement.append(commentViewer.createButton(job));
+  }
 
   return badgeColumnElement;
 }
