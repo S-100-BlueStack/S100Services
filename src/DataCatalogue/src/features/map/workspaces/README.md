@@ -155,11 +155,27 @@ for its native title and Close action is chosen from the background contrast,
 not the current theme. The color adapter follows ProductCatalogue, with a
 documented internal Calcite header dependency and reversible, header-only
 Calcite action tokens.
-Missing/invalid Package counts are not converted to zero, and lock state is not
-read from the backend or mocked. A displayed `unlock` and `None` are placeholders.
-Closing/hiding or removing Workspace geometry does not close unrelated popup
-types. Assignment Map popups remain disabled. The tracker records browser
-acceptance. Recheck the native header in both themes after SDK upgrades.
+Missing or invalid Package counts remain unknown. Closing, hiding or removing
+Workspace geometry does not close unrelated popup types. Assignment Map popups
+remain disabled. The tracker records browser acceptance of the native popup and
+header. Recheck the native header in both themes after SDK upgrades.
+
+## OWNER-01-DISPLAY - Accepted Overview ownership
+
+The live Main Map popup shows the returned account as text and the claim time
+in English browser-local time. The semantic time element, tooltip and
+screen-reader text preserve the exact server UTC value. Explicit null ownership
+is displayed as `Unassigned`. Missing or invalid ownership is `Unavailable`.
+A valid owner with an unavailable timestamp still shows the account.
+
+The overlay passes accepted Workspace summaries to the popup before testing
+geometry reuse. The popup indexes these summaries by Pipeline and Workspace IDs.
+The public ArcGIS `CustomContent` creator binds the app-owned nodes to the
+graphic's scoped key. Its destroyer retires that binding. A successful
+Refresh updates those nodes with the same popup selection and polygon
+instances when geometry is unchanged. Pending or failed catalogue reads leave
+the last accepted snapshot in place. Geometry fallback supplies coverage only.
+The disabled `Take workspace` action remains in the compact action row.
 
 ## DC-MAP-LABEL - Main Map labels (2026-11-24)
 

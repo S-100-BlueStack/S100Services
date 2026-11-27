@@ -90,8 +90,10 @@ additional component registration, or SDK dependency change is required.
 The rebuilt Workspace popup uses the native ArcGIS `PopupTemplate` title and
 close button plus application-owned native DOM for actions and read-only facts.
 `calcite-icon` provides the public `hammer-lock` and `unlock` icons. Native
-`Take workspace` remains disabled and `None` is a labeled placeholder until a
-verified ownership endpoint is introduced. No mock mutations are installed.
+`Take workspace` remains disabled. At this milestone, the ownership row used a
+placeholder. OWNER-01-DISPLAY supplies the accepted Overview owner and claim time
+through public ArcGIS `CustomContent` and app-owned native DOM. The native header
+adapter remains confined to the existing contrast and spacing behavior.
 
 ProductCatalogue's working-tree popup reference showed that native status-header
 backgrounds are assigned on Calcite's internal header element. The public

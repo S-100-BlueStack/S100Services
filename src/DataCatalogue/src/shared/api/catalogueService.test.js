@@ -56,6 +56,33 @@ test("Workspace ownership is preserved without becoming workflow status", () => 
   assert.equal(a.status, undefined);
 });
 
+test("Workspace summaries distinguish unassigned, unknown and an owned Workspace with no claim time", () => {
+  const normalize = (value) => normalizeWorkspace({ id: "w", ...value }, "p");
+  const lockedAtUtc = "2026-11-27T08:30:00.1234567+00:00";
+  assert.equal(normalize({ owner: null, lockedAtUtc }).owner, null);
+  assert.equal(normalize({ owner: null, lockedAtUtc }).lockedAtUtc, null);
+  for (const owner of [undefined, "", " ", 42, {}, "alice\n"]) {
+    assert.equal(normalize({ owner, lockedAtUtc }).owner, undefined);
+    assert.equal(normalize({ owner, lockedAtUtc }).lockedAtUtc, null);
+  }
+  const owner = "PROD\\Ægir";
+  assert.equal(normalize({ owner, lockedAtUtc }).owner, owner);
+  assert.equal(normalize({ owner, lockedAtUtc }).lockedAtUtc, lockedAtUtc);
+  for (const unavailable of [
+    undefined,
+    "2026-11-27",
+    "2026-11-27T08:30:00",
+    "2026-02-30T08:30:00Z",
+    "2026-11-27T24:00:00Z",
+    "2026-11-27T08:30:00+01:00",
+    {},
+  ]) {
+    const workspace = normalize({ owner, lockedAtUtc: unavailable });
+    assert.equal(workspace.owner, owner);
+    assert.equal(workspace.lockedAtUtc, null);
+  }
+});
+
 test("package paging converts zero-based UI pages and sends only supported server filters", async () => {
   let captured;
   const service = createCatalogueService({

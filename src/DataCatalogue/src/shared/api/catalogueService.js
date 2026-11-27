@@ -70,8 +70,21 @@ export function normalizePackage(value) {
   };
 }
 
+const UTC_WORKSPACE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?(?:Z|\+00:00)$/;
+
+function normalizeWorkspaceClaimTime(value) {
+  if (typeof value !== "string" || !UTC_WORKSPACE_TIMESTAMP.test(value)) return null;
+  const date = new Date(value);
+  // Date can silently roll invalid calendar dates into the following month.
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 19) === value.slice(0, 19)
+    ? value
+    : null;
+}
+
 export function normalizeWorkspace(value, pipelineId, pipelineName = pipelineId) {
   const id = requiredId(value?.id);
+  const { owner } = value;
+  const hasOwner = typeof owner === "string" && owner.trim() && /^[^\p{Cc}]+$/u.test(owner);
   return {
     id,
     workspaceId: id,
@@ -79,8 +92,9 @@ export function normalizeWorkspace(value, pipelineId, pipelineName = pipelineId)
     pipelineName,
     key: JSON.stringify([pipelineId, id]),
     name: value.displayName || id,
-    owner: value.owner ?? null,
-    lockedAtUtc: value.lockedAtUtc ?? null,
+    // An absent or malformed owner is unknown. Only explicit null means unassigned.
+    owner: owner === null || hasOwner ? owner : undefined,
+    lockedAtUtc: hasOwner ? normalizeWorkspaceClaimTime(value.lockedAtUtc) : null,
     geometryRef: value.geometryRef ?? null,
     displayScale: value.displayScale ?? null,
   };

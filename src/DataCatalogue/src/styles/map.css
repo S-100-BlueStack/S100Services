@@ -269,8 +269,7 @@ html[data-theme="dark"] .esri-popup {
   background: var(--dc-popup-surface);
 }
 
-.dc-workspace-popup__take,
-.dc-workspace-popup__lock-owner {
+.dc-workspace-popup__take {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -297,8 +296,12 @@ html[data-theme="dark"] .esri-popup {
 }
 
 .dc-workspace-popup__lock-owner {
+  min-width: 0;
   margin-left: auto;
+  overflow-wrap: anywhere;
   color: var(--dc-popup-text-muted);
+  line-height: 1.25;
+  text-align: right;
 }
 
 .dc-workspace-popup__information {
@@ -324,6 +327,10 @@ html[data-theme="dark"] .esri-popup {
   column-gap: 0.6rem;
   padding: 0.4rem 0;
   border-top: 1px solid var(--dc-popup-border);
+}
+
+.dc-workspace-popup__detail[hidden] {
+  display: none;
 }
 
 .dc-workspace-popup__detail dt,

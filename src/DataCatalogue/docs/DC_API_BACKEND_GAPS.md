@@ -5,7 +5,7 @@ and [backend contracts](BACKEND_CONTRACTS.md) for source-verified resources.
 Current follow-ups include functional Compilation/QC, persistent contextual
 status and completion history, archived Package discovery, prospective
 Workspace matching, global Package search, broader binding concurrency and
-Workspace ownership. The tracker records local acceptance of COMMENT-01.
+Workspace ownership actions. The tracker records local acceptance of COMMENT-01.
 Earlier candidate notes preserve the gaps known at delivery. Later entries
 record the verified geometry and binding reads that superseded the original
 proposals.
@@ -14,6 +14,16 @@ proposals.
 > Pipeline remains the technical backend entity and API terminology throughout
 > this gap register. Workspace remains a distinct entity. No backend gap is
 > resolved by the display terminology change.
+
+## OWNER-01 - Workspace responsibility actions
+
+The OWNER-01-DISPLAY candidate reads existing ownership fields from the accepted
+Main Map Overview. It leaves `Take workspace` disabled. Existing backend
+actions allow access-group takeover and clearing another user's ownership, and
+they lack a caller-supplied expected-owner/version precondition. Decide whether
+responsibility is advisory or exclusive, which actors may claim, take over or
+clear, and what stale-state protection is required before enabling writes.
+Workspace responsibility is separate from Package assignment, Job progress and QC.
 
 ## COMMENT-02 - Binding-scoped Main Map read contracts
 

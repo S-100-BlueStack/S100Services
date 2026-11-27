@@ -2,6 +2,7 @@ import Graphic from "@arcgis/core/Graphic.js";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
+import CustomContent from "@arcgis/core/popup/content/CustomContent.js";
 import Polygon from "@arcgis/core/geometry/Polygon.js";
 import * as simplifyOperator from "@arcgis/core/geometry/operators/simplifyOperator.js";
 import * as projectOperator from "@arcgis/core/geometry/operators/projectOperator.js";
@@ -9,7 +10,7 @@ import { normalizeWorkspacePolygon } from "../../../shared/api/workspaceGeometry
 import { workspaceSelectionKey } from "./pipelineVisibility.js";
 import { workspaceColorForOpenJobs } from "./workspaceJobColors.js";
 import { createAssignmentWorkspaceSymbol } from "./workspaceCoverageSymbol.js";
-import { createWorkspacePopupTemplate } from "../popups/workspacePopupContent.js";
+import { createWorkspacePopup } from "../popups/workspacePopupContent.js";
 import { createWorkspacePopupHeaderStyle } from "../popups/workspacePopupHeaderStyle.js";
 import { createMapLabelLayers } from "../labels/createMapLabelLayers.js";
 
@@ -30,7 +31,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
     title: "Workspace coverage",
     popupEnabled: colorByOpenJobs,
   });
-  const popupTemplate = colorByOpenJobs ? createWorkspacePopupTemplate() : null;
+  const workspacePopup = colorByOpenJobs ? createWorkspacePopup({ CustomContent }) : null;
   const headerStyle = colorByOpenJobs
     ? createWorkspacePopupHeaderStyle({ view, layerId: id, watch: reactiveUtils.watch })
     : null;
@@ -48,30 +49,27 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
   let visibleKeys = null;
   const graphics = new Map();
 
-  function colorFor(workspace) {
-    const count = counts?.get(workspaceSelectionKey(workspace));
-    return workspaceColorForOpenJobs(count ?? (counts ? 0 : null));
+  function openJobCount(workspace) {
+    return counts ? (counts.get(workspaceSelectionKey(workspace)) ?? 0) : null;
   }
 
   function applySymbol(graphic, workspace) {
     if (colorByOpenJobs) {
-      const color = colorFor(workspace);
+      const openJobs = openJobCount(workspace);
+      const color = workspaceColorForOpenJobs(openJobs);
       graphic.symbol = {
         type: "simple-fill",
         color: [...color, 0.12],
         outline: { color: [...color, 0.95], width: 2.3 },
       };
-    } else {
-      graphic.symbol = createAssignmentWorkspaceSymbol();
-    }
-    const count = counts?.get(workspaceSelectionKey(workspace));
-    if (colorByOpenJobs) {
       graphic.attributes = {
         ...graphic.attributes,
         workspaceName: workspace.name,
         pipelineName: workspace.pipelineName,
-        openJobs: counts ? (count ?? 0) : null,
+        openJobs,
       };
+    } else {
+      graphic.symbol = createAssignmentWorkspaceSymbol();
     }
   }
 
@@ -100,7 +98,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
         graphic = new Graphic({
           geometry,
           attributes: { pipelineId: workspace.pipelineId, workspaceId: workspace.workspaceId },
-          ...(popupTemplate ? { popupTemplate } : {}),
+          ...(workspacePopup ? { popupTemplate: workspacePopup.template } : {}),
         });
         graphics.set(key, graphic);
         layer.add(graphic);
@@ -173,6 +171,9 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       currentEntries = [...entries];
       publish();
     },
+    setWorkspaceSummaries(workspaces) {
+      workspacePopup?.setWorkspaces(workspaces);
+    },
     setVisibleWorkspaces(workspaces) {
       if (!alive) return;
       visibleKeys = new Set(workspaces.map(workspaceSelectionKey));
@@ -186,7 +187,10 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
       counts = nextCounts;
       for (const { workspace } of currentEntries) {
         const graphic = graphics.get(workspaceSelectionKey(workspace));
-        if (graphic) applySymbol(graphic, workspace);
+        // A refresh also republishes counts. Leave popup attributes alone
+        // when the effective count has not changed.
+        if (graphic && graphic.attributes.openJobs !== openJobCount(workspace))
+          applySymbol(graphic, workspace);
       }
       headerStyle?.refresh();
     },
@@ -207,6 +211,7 @@ export function createWorkspaceGraphics({ map, view, id, colorByOpenJobs = false
     destroy() {
       closeStaleWorkspacePopup(new Set());
       alive = false;
+      workspacePopup?.destroy();
       headerStyle?.destroy();
       labels?.destroy();
       map.remove(layer);

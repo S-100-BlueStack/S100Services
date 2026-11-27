@@ -54,6 +54,8 @@ export function createWorkspaceOverlay({ source, renderer, onStatus = () => {} }
       });
       return;
     }
+    // Accepted summaries can change while the same prepared polygons stay mounted.
+    renderer.setWorkspaceSummaries?.(workspaces);
     if (!reload && currentKey === key) return;
     const changed = currentKey !== key;
     currentKey = key;

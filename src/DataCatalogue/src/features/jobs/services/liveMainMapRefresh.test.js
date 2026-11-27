@@ -509,6 +509,48 @@ for (const action of ["supersede", "navigate", "dispose"]) {
   });
 }
 
+test("Ownership only follows the accepted current Overview generation", async () => {
+  const row = (owner) => {
+    const result = workspace("west", ["shared"]);
+    result.workspace.owner = owner;
+    return result;
+  };
+  const f = fixture({ enc: [row("alice")] });
+  assert.equal((await f.store.loadJobs()).ok, true);
+
+  f.state.intercept = (call) => {
+    if (call.kind === "overview") return Response.json({ title: "Unavailable" }, { status: 503 });
+  };
+  assert.equal((await f.store.loadJobs()).ok, false);
+  assert.deepEqual(f.published, []);
+
+  let release;
+  let started;
+  const ready = new Promise((resolve) => {
+    started = resolve;
+  });
+  f.state.intercept = (call) => {
+    if (call.kind !== "overview") return null;
+    started();
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  };
+
+  const stale = f.store.loadJobs({ cancelOnLeave: true });
+  await ready;
+  assert.deepEqual(f.published, []);
+  f.state.intercept = null;
+  f.state.pipelines = { enc: [row("bob")] };
+  assert.equal((await f.store.loadJobs()).ok, true);
+  release(Response.json(page([row("old-owner")], 1, 20)));
+  assert.equal((await stale).stale, true);
+  assert.deepEqual(
+    f.published.map(({ workspaces }) => workspaces[0].owner),
+    ["bob"]
+  );
+});
+
 test("A duplicate overflow member rejects the fresh catalogue", async () => {
   const f = fixture({ enc: [workspace("start")] });
   await f.store.loadJobs();

@@ -289,6 +289,25 @@ prototype is not the live Pipeline contract. Backend diagnostics remain verbatim
 
 ---
 
+## OWNER-01-DISPLAY - Workspace summary ownership
+
+The existing access-protected `GET /v1/pipelines/{pipelineId}/workspaces/overview`
+returns `workspace.owner` and `workspace.lockedAtUtc` through `WorkspaceResponse`.
+These are current Pipeline event-state fields for the corresponding
+`(pipelineId, workspaceId)`. Explicit `owner: null` means unassigned. A null
+geometry or membership component can coexist with valid ownership. The client
+uses the accepted Overview and treats missing or malformed owner data as
+unavailable. Claim time is a nullable UTC timestamp. The popup preserves the
+exact wire value and formats a valid claim time in browser-local time.
+
+The controller's claim and clear actions are governed by the existing catalogue
+access policy and the authenticated principal. Claim can replace another owner,
+and clear can remove another owner's assignment. The popup is read-only while
+the [write-policy decisions](DC_API_BACKEND_GAPS.md#owner-01---workspace-responsibility-actions)
+remain open.
+
+---
+
 ## DC-PERF-FE-01 — Frontend consumer of combined Workspace overview (2026-11-16)
 
 The live **Main Map** now uses the DC-PERF-BE-02 endpoint described below.

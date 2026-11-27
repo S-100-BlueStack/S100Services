@@ -34,19 +34,38 @@ integration details.
   `89e0ed65f5465c5a9cbabdd5f651d611562b87b2`, merged at
   `af4cb616846d4dfc12200e736a375e5aa8b27f35`, as reported by the user on
   2026-11-26. Exact final backend test counts were not supplied.
-- DC-DETAILED-POINT-LABELS-01 is a frontend candidate at that merge. Selected
-  detailed point geometry is numbered in the existing stored point order.
-  Native browser and original Notice coordinate-list acceptance remain pending.
-  Functional Compilation/QC is next after acceptance. The accepted Main Map
-  preview exposes mode selection only. Persistent contextual status, archived
-  Package discovery and prospective Workspace matching remain separate tasks.
+- DC-DETAILED-POINT-LABELS-01 was tested and committed at
+  `299b7241a8b009ce929d102025957b53d2ba24f2`, as reported by the user.
+  Both live maps number detailed points in stored point order. Local acceptance
+  is user-reported. No separate deployment evidence was supplied.
+- DC-QUICK-WINS-DISCOVERY-01 is complete. OWNER-01-DISPLAY is the selected
+  frontend-only follow-up and is a candidate pending local acceptance.
+- Package Creator/Editor discovery and design is next after OWNER-01-DISPLAY.
+  It is a separate workflow from Assignment. Functional Compilation/QC is
+  deferred. The accepted Main Map QC preview still exposes mode selection only.
+  Prospective Workspace matches and global Package search require separate
+  backend contracts. The Assignment selector still offers `Search this page`.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
+
+## OWNER-01-DISPLAY - Workspace responsibility in the native popup (2026-11-27)
+
+**Baseline:** `299b7241a8b009ce929d102025957b53d2ba24f2`.
+**Status:** frontend candidate pending local acceptance.
+
+- The Main Map popup shows the owner and browser-local claim time from the last
+  accepted Overview. A successful Refresh updates open content in place when
+  Workspace geometry is reused. The original UTC value remains available.
+- `Take workspace` stays disabled. The backend permits takeover and third-party
+  clearing. Advisory versus exclusive responsibility, actor eligibility and
+  expected-owner/version policy remain unresolved for claim and release.
+- No new reads or writes. See [Workspace map ownership and lifecycle](../src/features/map/workspaces/README.md).
 
 ## DC-DETAILED-POINT-LABELS-01 - Sequential detailed point labels (2026-11-26)
 
 **Baseline:** `af4cb616846d4dfc12200e736a375e5aa8b27f35`.
-**Status:** implementation candidate; local acceptance pending.
+**Status:** user-reported local acceptance and commit
+`299b7241a8b009ce929d102025957b53d2ba24f2`.
 
 - Both live selected-Package geometry overlays use the shared renderer. The
   backend returns point references in stored order; Notice import appends
@@ -58,8 +77,8 @@ integration details.
   Preserve the existing marker, geometry focus, detail count, selection lifetime,
   overview labels, mock maps and request path. Multipoint anchors are projected
   independently in their source array order. No new API request or contract.
-- Verify original Notice coordinate lists against the local importer/storage
-  round trip and the browser in both maps and themes. Source part boundaries
+- The original local acceptance checklist compared Notice coordinate lists
+  through the importer/storage round trip and both live maps. Source part boundaries
   are not present in the geometry response; per-part numbering or an external
   list order different from the imported array is not inferred. See the
   [Package map README](../src/features/map/packages/README.md).
@@ -389,9 +408,9 @@ see the later DC-PACKAGE-TIMELINE-01 design preview entry.
 **User-reported accepted baseline:** `a7bd819d46da1e22fcd5dd7036bfc80631a20a91`.
 **Meeting:** 2026-11-23. This section records requirements and priorities, not an implementation or new backend contract.
 
-### Accepted work and current priorities
+### Accepted work and meeting priorities (historical)
 
-- `DC-MAP-POPUP` / `DC-MAP-POPUP-05`: user accepted the rebuilt native Workspace popup and the v6 header contrast correction in both themes, then reported the commit above. The earlier candidate-only status and pending visual acceptance statements below are superseded. Local checks are accepted on the basis of the reported commit; no new test run is claimed here. The disabled `Take workspace` action and visual `unlock` / `None` placeholder remain non-authoritative. `OWNER-01` is still open.
+- `DC-MAP-POPUP` / `DC-MAP-POPUP-05`: user accepted the rebuilt native Workspace popup and the v6 header contrast correction in both themes, then reported the commit above. The earlier candidate-only status and pending visual acceptance statements below are superseded. Local checks are accepted on the basis of the reported commit; no new test run is claimed here. At that milestone, the disabled `Take workspace` action and visual `unlock` / `None` placeholder were non-authoritative. See the current OWNER-01-DISPLAY entry for the subsequent display candidate and deferred actions.
 - `DC-MAP-POLISH-01`: accepted in user-reported commit `ce9e71effe8b240625158853b9d4ed6adab98acf`. The Main Map legend is usable for now; its size/placement may be revisited later. The Package Assignment legend and solid orange saved auto-match geometry are accepted. The earlier source-coverage limitation for Package geometry symbols is not a claim of renderer-level verification. `DC-ASSIGN-MATCH-PREVIEW-01` remains open; gray dashed geometry is reserved for a read-only prospective match result from a verified backend contract.
 - `DC-ASSIGN-AUTOMATCH` and `DC-PERF-03` remain closed. Do not reopen them merely to introduce the new Package UI. Historical acceptance and candidate evidence below are retained for traceability.
 
@@ -403,7 +422,7 @@ see the later DC-PACKAGE-TIMELINE-01 design preview entry.
 | 4               | `DC-PACKAGE-TIMELINE-01` - history for an individual Package                                                    | Design, read, actor capture and profile enrichment accepted locally through `7408bd0b` |
 | Parallel        | `DC-ASSIGN-MATCH-PREVIEW-01`, `DC-PACKAGE-HISTORY-01`, `OWNER-01`, `JOB-01`, `PAGE-01`, `COMMENT-01`, `BIND-02` | Existing backend-dependent topics; prioritize with backend owner                       |
 
-This is a proposed next-work shortlist, not a complete audit of all historical tracker entries. The larger Creator/Editor and external integration phases remain separate. Revalidate existing requirements and priorities against the implementation baseline before selecting each task.
+This shortlist records the meeting sequence. The current status above supersedes that order and schedules Package Creator/Editor discovery before functional Compilation/QC.
 
 ### DC-PACKAGE-DETAILS-PANEL-01 - Main Map Package information panel
 
@@ -960,7 +979,7 @@ considered accepted behavior. See [DC_BE_FE_02_VALIDATION.md](DC_BE_FE_02_VALIDA
 | DC-WORKSPACE-FILTER | Hide Workspaces with no open Packages by default; expose an opt-in `Show empty Workspaces` filter in the shared Filters panel                                                                                    | Define the active/terminal Job state aggregation per Pipeline/Workspace; keep counts consistent with mock-only status and async catalogue state |
 | DC-PACKAGES-SCOPE   | Use Pipeline then optional Workspace filtering for Main Map Packages                                                                                                                                             | DC-BE-FE-02 candidate; validate contextual duplicates and Package statuses in browser                                                           |
 | DC-ASSIGN-AUTOMATCH | In Package Assignment Bindings, list only automatically matched Workspaces. Manual Workspace assignment must not appear possible; active Pipeline bindings remain distinct from automatic Workspace intersection | Plan a separate UI/domain change; remove obsolete draft-only Workspace include/exclude affordances without inventing a persistence endpoint     |
-| DC-CREATOR-EDITOR   | Add a Creator/Editor page for new Packages and editing existing Packages, including drawing/changing an AOI                                                                                                      | Future separate project phase; requires verified create/update API, geometry rules, concurrency, authorization and editable map contract        |
+| DC-CREATOR-EDITOR   | Add a Creator/Editor page for new Packages and editing existing Packages, including drawing/changing an AOI                                                                                                      | Next discovery phase after OWNER-01-DISPLAY; verify create/update API, geometry, concurrency, authorization and editable map scope              |
 | DC-INTEGRATIONS     | Add integrations into external systems, e.g. Notice to Mariners (NM) modal or WorkZone navigation                                                                                                                | Future separate design and backend integration; verify identifiers, access and destinations before linking                                      |
 
 **Existing separate work still open:** high request count from Workspace

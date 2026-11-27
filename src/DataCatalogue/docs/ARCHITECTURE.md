@@ -18,6 +18,16 @@
   Dated notes below describe changes in their delivery context. The preserved
   mock workflow retains its separate Feature/Work stream domain.
 
+## OWNER-01-DISPLAY - Read-only Workspace responsibility
+
+The Main Map publishes ownership with the existing accepted Workspace catalogue.
+The geometry overlay forwards scoped summaries before checking geometry reuse.
+The popup owns its app-created content through the public ArcGIS `CustomContent`
+creator and destroyer. Refresh can change ownership and claim time on those
+nodes while keeping the same Workspace graphic, labels and selection. Counts,
+geometry fallback and assignment membership do not publish ownership.
+The existing Jobs generation controls catalogue freshness.
+
 ## DC-MAIN-MAP-SYNC-01 - Binding invalidation and Main Map refresh
 
 The live Assignment service reports binding write outcomes and differences
@@ -335,7 +345,8 @@ selected from the actual Workspace background, independent of the theme. All
 changed inline values and priorities are restored when their owner changes.
 It does not insert controls into Calcite internals, alter backend state or own
 popup clicks. `CALCITE_USAGE_LOG.md` records the compatibility risk and
-required browser verification. `OWNER-01` lock state is not implemented.
+required browser verification. The OWNER-01-DISPLAY candidate adds read-only
+ownership from Overview. Claim and release remain deferred.
 
 ---
 
