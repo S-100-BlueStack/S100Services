@@ -11,6 +11,16 @@ additional detailed geometry, not missing Package identity or failed bindings.
 Manual Workspace overrides were considered in an earlier prototype but are not
 part of the current 2026-11-12 auto-match-only requirement.
 
+## Manual Creator AOIs
+
+The rectangular envelope convention applies to the existing grouped geometry
+and import paths. Manual AOI-only creation stores the drawn coverage as one
+polygon, which may be nonrectangular or multipart. The same backend rule uses
+the active Workstream binding and intersection with the current stored AOI.
+For a disjoint manual AOI, a Workspace wholly within the gap between parts
+must not match. Verify this with the native target feature class and indexes
+before local acceptance.
+
 ## Current terminology (2026-11-24)
 
 The live frontend uses **Workstream** / **Workstreams** for the existing backend

@@ -38,20 +38,47 @@ integration details.
   `299b7241a8b009ce929d102025957b53d2ba24f2`, as reported by the user.
   Both live maps number detailed points in stored point order. Local acceptance
   is user-reported. No separate deployment evidence was supplied.
-- DC-QUICK-WINS-DISCOVERY-01 is complete. OWNER-01-DISPLAY is the selected
-  frontend-only follow-up and is a candidate pending local acceptance.
-- Package Creator/Editor discovery and design is next after OWNER-01-DISPLAY.
-  It is a separate workflow from Assignment. Functional Compilation/QC is
-  deferred. The accepted Main Map QC preview still exposes mode selection only.
+- DC-QUICK-WINS-DISCOVERY-01 is complete. OWNER-01-DISPLAY was accepted locally
+  and committed at `bbf921204b690657949054eaeebd4a9c3b45f2e6`, as reported by the user.
+- DC-CREATOR-EDITOR-01 discovery is complete. The user superseded the proposal
+  to start with WorkZone ZIP import and approved manual Package creation
+  through the current API. The user tested DC-CREATOR-EDITOR-02 v2 and requested
+  UX refinements, then visually reviewed v3 and authorized extended AOI drawing.
+  v4 is pending local acceptance. Functional Compilation/QC remains deferred.
   Prospective Workspace matches and global Package search require separate
   backend contracts. The Assignment selector still offers `Search this page`.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
 
+## DC-CREATOR-EDITOR-02 - Standalone manual Package Creator
+
+**Baseline:** `bbf921204b690657949054eaeebd4a9c3b45f2e6`.
+**Status:** v4 frontend candidate pending local acceptance.
+
+A separate live page lets users enter a source URI, optional reference and
+metadata, exact Severity, and a drawn AOI. The existing API
+allocates the Package IDs, applies category routing, and returns confirmed
+metadata. The Creator reads stored geometry by canonical ID. Assignment list
+and Main Map membership refresh through their existing owners.
+
+v3 places the native rectangle sketch, Clear AOI and Fit AOI in the map.
+The grouped form exposes priority and description language selectors.
+In live Package chips exact Severity zero is shown as Highest priority with
+the numeric value available. v4 introduces independent rectangles, polygons
+and circles, the bottom-center Sketch toolbar and one dissolved manual AOI
+without changing the API payload. Native multipart persistence and gap
+Workspace membership are required local acceptance checks.
+
+Use the [Creator README](../src/features/packageCreator/README.md) and delivered
+Review for local steps. The Windows/native AOI target, actual category routing,
+IIS route and SSO require local acceptance. Detail drawing and existing-record
+editing are separate follow-ups. Archive import is outside this manual slice.
+
 ## OWNER-01-DISPLAY - Workspace responsibility in the native popup (2026-11-27)
 
 **Baseline:** `299b7241a8b009ce929d102025957b53d2ba24f2`.
-**Status:** frontend candidate pending local acceptance.
+**Status:** user-reported local acceptance and commit
+`bbf921204b690657949054eaeebd4a9c3b45f2e6`.
 
 - The Main Map popup shows the owner and browser-local claim time from the last
   accepted Overview. A successful Refresh updates open content in place when

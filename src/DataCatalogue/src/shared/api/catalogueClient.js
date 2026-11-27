@@ -1,3 +1,5 @@
+import { normalizeSeverity } from "../domain/severity.js";
+
 export class CatalogueApiError extends Error {
   constructor(message, { status = 0, errors = null, kind = "http" } = {}) {
     super(message);
@@ -50,67 +52,83 @@ export function createCatalogueClient({
     throw new Error("Invalid API base path.");
   }
 
-  return {
-    async request(path, { query = {}, method = "GET", body, signal } = {}) {
-      if (!path.startsWith("/v1/")) throw new Error("Only DataCatalogue v1 routes are supported.");
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(query)) {
-        if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
-      }
-      let response;
-      try {
-        response = await fetchImpl(`${base}${path}${params.size ? `?${params}` : ""}`, {
-          method,
-          credentials,
-          signal,
-          redirect: "error",
-          headers: {
-            Accept: "application/json",
-            ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-          },
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        });
-      } catch (error) {
-        if (signal?.aborted || error.name === "AbortError") throw error;
-        throw new CatalogueApiError(
-          "DataCatalogue API is unavailable. Check its origin, authentication and browser access.",
-          { kind: "network" }
-        );
-      }
-      if (response.status === 204) return null;
-      const text = await response.text();
-      const isJson = /(?:application\/json|\+json)(?:\s*;|$)/i.test(
-        response.headers.get("content-type") ?? ""
+  async function request(path, { query = {}, method = "GET", json, signal, onResponse } = {}) {
+    if (!path.startsWith("/v1/")) throw new Error("Only DataCatalogue v1 routes are supported.");
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+    }
+    const url = `${base}${path}${params.size ? `?${params}` : ""}`;
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method,
+        credentials,
+        signal,
+        redirect: "error",
+        headers: {
+          Accept: "application/json",
+          ...(json === undefined ? {} : { "Content-Type": "application/json" }),
+        },
+        ...(json === undefined ? {} : { body: json }),
+      });
+    } catch (error) {
+      if (signal?.aborted || error.name === "AbortError") throw error;
+      throw new CatalogueApiError(
+        "DataCatalogue API is unavailable. Check its origin, authentication and browser access.",
+        { kind: "network" }
       );
-      let data = null;
-      if (text && isJson) {
-        try {
-          data = parseExactJson(text);
-        } catch {
-          throw new CatalogueApiError("API returned invalid JSON.", {
-            status: response.status,
-            kind: "contract",
-          });
-        }
+    }
+    onResponse?.(response.status, response.headers.get("location"), response.url || url);
+    if (response.status === 204) return null;
+    const text = await response.text();
+    const isJson = /(?:application\/json|\+json)(?:\s*;|$)/i.test(
+      response.headers.get("content-type") ?? ""
+    );
+    let data = null;
+    if (text && isJson) {
+      try {
+        data = parseExactJson(text);
+      } catch {
+        throw new CatalogueApiError("API returned invalid JSON.", {
+          status: response.status,
+          kind: "contract",
+        });
       }
-      if (!response.ok) {
-        const fallback =
-          response.status === 401
-            ? "Authentication required."
-            : response.status === 403
-              ? "Access denied."
-              : `API request failed (HTTP ${response.status}).`;
-        const errors = data?.errors ?? null;
-        const validation =
-          errors && typeof errors === "object" ? Object.values(errors).flat().join(" ") : "";
-        throw new CatalogueApiError(
-          [data?.title || fallback, data?.detail, validation].filter(Boolean).join(" "),
-          { status: response.status, errors }
-        );
+    }
+    if (!response.ok) {
+      const fallback =
+        response.status === 401
+          ? "Authentication required."
+          : response.status === 403
+            ? "Access denied."
+            : `API request failed (HTTP ${response.status}).`;
+      const errors = data?.errors ?? null;
+      const validation =
+        errors && typeof errors === "object" ? Object.values(errors).flat().join(" ") : "";
+      throw new CatalogueApiError(
+        [data?.title || fallback, data?.detail, validation].filter(Boolean).join(" "),
+        { status: response.status, errors }
+      );
+    }
+    if (!text) return null;
+    if (!isJson) return text;
+    return data;
+  }
+
+  return {
+    async request(path, { query, method, body, signal } = {}) {
+      return request(path, { query, method, signal, json: JSON.stringify(body) });
+    },
+    postManualPackage({ severity, ...body }, { signal, onResponse } = {}) {
+      let json = JSON.stringify(body);
+      if (severity !== undefined) {
+        const exact = normalizeSeverity(severity);
+        if (exact === null) throw new Error("Create Severity cannot be null.");
+        // Append only the validated decimal token. User text is always JSON-escaped.
+        json = `${json.slice(0, -1)},"severity":${exact}}`;
       }
-      if (!text) return null;
-      if (!isJson) return text;
-      return data;
+      return request("/v1/packages", { method: "POST", json, signal, onResponse });
     },
   };
 }

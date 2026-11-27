@@ -43,7 +43,9 @@ export function createLiveJobServiceAdapter({
       setWorkspaces(value ? [value] : []);
     },
     async loadJobs({ signal, freshWorkspaceCatalogue = false } = {}) {
-      if (scopes === null) {
+      // A direct Creator route defers Main Map startup. A dirty first return can
+      // use its authoritative fresh Overview without issuing a prerequisite Overview.
+      if (scopes === null && !(freshWorkspaceCatalogue && readWorkspaceCatalogue)) {
         if (typeof ensureWorkspaces !== "function") {
           throw new Error(
             "Workspace catalogue has not loaded. Retry Packages when it is available."
@@ -132,8 +134,10 @@ export function createLiveJobServiceAdapter({
         };
       });
       loaded.sort((a, b) => compareSeverity(a.severity, b.severity) || a.id.localeCompare(b.id));
-      if (scopes === initialScopes && currentLoad === loadGeneration)
+      if (scopes === initialScopes && currentLoad === loadGeneration) {
+        if (scopes === null) scopes = selected;
         jobs = new Map(loaded.map((job) => [job.id, job]));
+      }
       return workspaceCatalogue ? { jobs: loaded, workspaceCatalogue } : { jobs: loaded };
     },
     async updateJobStatus(id, status) {

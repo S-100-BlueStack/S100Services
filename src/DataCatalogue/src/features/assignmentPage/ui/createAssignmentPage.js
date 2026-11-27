@@ -29,6 +29,7 @@ export function createAssignmentPage({
   createMap,
   runtimeConfig,
   onPackageSelected,
+  getPackageListRevision = () => 0,
   basemapSettings,
 }) {
   const live = services.source === "live";
@@ -138,6 +139,8 @@ export function createAssignmentPage({
   const categoryRequests = createQueryLifecycle();
   const featureRequests = createQueryLifecycle();
   let featureRequestController = null;
+  let requestedPackageListRevision = null;
+  let acceptedPackageListRevision = 0;
   const packageSummaries = new Map();
   const workStreamRequests = createQueryLifecycle();
   let featurePage = 0;
@@ -250,6 +253,8 @@ export function createAssignmentPage({
     const controller = new AbortController();
     featureRequestController = controller;
     const isCurrent = featureRequests.begin();
+    const revision = getPackageListRevision();
+    requestedPackageListRevision = revision;
     const query = { ...filterQuery(), signal: controller.signal };
     currentQuery = query;
     get("list-status").textContent = `Loading ${entityName}s…`;
@@ -278,6 +283,7 @@ export function createAssignmentPage({
       // List pagination must never fan out into one bindings request per Package.
       // Previously inspected Package summaries remain available across pages.
       renderFeatureRows(result);
+      acceptedPackageListRevision = revision;
       if (live && result.items.some((item) => item.pipelineIds?.length)) {
         void ensurePipelineNames();
       }
@@ -297,7 +303,10 @@ export function createAssignmentPage({
         get("features").replaceChildren();
       }
     } finally {
-      if (isCurrent()) get("features").setAttribute("aria-busy", "false");
+      if (isCurrent()) {
+        requestedPackageListRevision = null;
+        get("features").setAttribute("aria-busy", "false");
+      }
     }
   }
 
@@ -890,6 +899,10 @@ export function createAssignmentPage({
     element,
     activate() {
       if (!map) makeMap();
+      const revision = getPackageListRevision();
+      if (revision !== acceptedPackageListRevision && revision !== requestedPackageListRevision) {
+        void loadFeatures();
+      }
     },
     deactivate() {
       packageControls?.close();

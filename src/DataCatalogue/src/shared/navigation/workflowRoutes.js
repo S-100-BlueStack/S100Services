@@ -4,10 +4,17 @@ export function assignmentPath(packageId = null, basePath = "/") {
   return packageId == null ? path : `${path}/packages/${encodeURIComponent(packageId)}`;
 }
 
+export function creatorPath(basePath = "/") {
+  return `${normalizeBasePath(basePath)}packages/create`;
+}
+
 export function parseWorkflowPath(pathname, basePath = "/") {
   const base = normalizeBasePath(basePath);
   const path =
     base === "/" ? pathname : pathname?.startsWith(base) ? pathname.slice(base.length - 1) : null;
+  if (path === "/packages/create" || path === "/packages/create/") {
+    return { creator: true, assignment: false, packageId: null };
+  }
   if (path === "/assignments" || path === "/assignments/") {
     return { assignment: true, packageId: null };
   }
@@ -25,7 +32,7 @@ export function parseWorkflowPath(pathname, basePath = "/") {
 export function getApplicationBasePath(pathname = "/") {
   if (typeof pathname !== "string" || !pathname.startsWith("/")) return "/";
   // Deep links must resolve to the same application root as the main-map URL.
-  const routeSuffix = /\/assignments(?:\/packages\/[^/]+)?\/?$/.exec(pathname);
+  const routeSuffix = /\/(?:assignments(?:\/packages\/[^/]+)?|packages\/create)\/?$/.exec(pathname);
   if (routeSuffix) return normalizeBasePath(pathname.slice(0, routeSuffix.index));
   if (pathname.endsWith("/index.html")) {
     return normalizeBasePath(pathname.slice(0, -"index.html".length));

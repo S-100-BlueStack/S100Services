@@ -18,6 +18,25 @@
   Dated notes below describe changes in their delivery context. The preserved
   mock workflow retains its separate Feature/Work stream domain.
 
+## DC-CREATOR-EDITOR-02 - Manual Package Creator
+
+The shared navigation owner mounts Creator lazily and applies the existing
+Back/Forward and leave-decision generation to all three live workflows.
+Creator owns an in-memory draft and a single create/reconciliation session.
+The map feature attaches the ArcGIS Sketch web component to the existing
+Creator MapView and owns separate sketch, draft and committed graphics. The
+shared API client owns credentials, redirect handling and exact JSON parsing.
+Its dedicated create method emits only a validated unsigned integer as raw JSON.
+
+The app increments a Package list revision for confirmed or uncertain
+creation. Assignment consumes it only on a successful current list page, at
+the existing filter and page. Creation with returned Workstream bindings and
+unknown outcomes also invalidate the existing membership revision. Main Map
+reuses its accepted return refresh and bounded Overview. A direct Creator
+route defers Workspace startup until Main Map is opened. The first dirty return
+can start with the fresh Overview in one generation. A clean return uses
+normal startup. The Creator has no independent membership loader.
+
 ## OWNER-01-DISPLAY - Read-only Workspace responsibility
 
 The Main Map publishes ownership with the existing accepted Workspace catalogue.

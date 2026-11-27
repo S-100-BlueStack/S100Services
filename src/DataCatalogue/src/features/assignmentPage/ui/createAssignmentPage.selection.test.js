@@ -1205,3 +1205,52 @@ test("Mock Feature assignment retains historical Work stream terminology", async
     dom.restore();
   }
 });
+
+test("Creator invalidation refreshes a retained assignment page once and retries failures", async () => {
+  const dom = fakeDom();
+  const queries = [];
+  const firstRefresh = deferred();
+  let revision = 0;
+  let page;
+  try {
+    page = createAssignmentPage({
+      services: {
+        source: "live",
+        categories: async () => [],
+        features: {
+          async search(query) {
+            queries.push(query);
+            if (queries.length === 3) return firstRefresh.promise;
+            return { items: [], page: query.page, total: 50, pageSize: 25 };
+          },
+        },
+      },
+      createMap: () => ({ view: null, destroy() {} }),
+      getPackageListRevision: () => revision,
+    });
+    await flush();
+    page.activate();
+    dom.get("feature-next").click();
+    await flush();
+    assert.equal(queries.at(-1).page, 1);
+    page.deactivate();
+    revision++;
+    page.activate();
+    page.activate();
+    assert.equal(queries.length, 3);
+    assert.equal(queries[2].page, 1);
+    firstRefresh.reject(new Error("Catalogue temporarily unavailable"));
+    await flush();
+    page.deactivate();
+    page.activate();
+    await flush();
+    assert.equal(queries.length, 4);
+    assert.equal(queries[3].page, 1);
+    page.deactivate();
+    page.activate();
+    assert.equal(queries.length, 4);
+  } finally {
+    page?.destroy();
+    dom.restore();
+  }
+});

@@ -15,6 +15,34 @@ discovery and prospective Workspace intersection remain separate
 [backend gaps](DC_API_BACKEND_GAPS.md). Dated integration and demo notes retain
 the semantics and limitations known at delivery.
 
+## DC-CREATOR-EDITOR-02 - Manual Package creation
+
+- `GET /v1/dispatcher/categories` returns the complete catalogue page. The
+  manual form excludes exact IDs ENC, Landdata and CoastAndRock based on
+  `ChartSubmissionArchive.Supports`. No category capability flag exists.
+  Server validation owns category activity and identifier prefix eligibility.
+- `POST /v1/packages` uses `category`, absolute `absoluteUri`, and a polygon
+  JSON string in `esriJSON`. With `importFromArchive` omitted the API uses
+  explicit mode. Optional `metaData` includes `title`, `type`, `source`,
+  and `refId` when supplied. One optional `descriptions` entry carries
+  `description` and optional `language`. Blank Severity omits it for the
+  backend default `18446744073709551615`. Explicit Severity is a JSON integer.
+- For AOI-only manual creation, the repository stores the parsed polygon as one
+  `PackageCoverage` shape. Creator can send a nonrectangular or multipart
+  polygon with several rings in the same `esriJSON` string. No detailed geometry
+  is sent. The backend's existing `Intersects` query uses the saved coverage
+  shape and the active Workstream binding. Grouped geometry and import paths
+  keep their established rectangular envelope convention. Native deployment
+  acceptance must check multipart round-trip and an excluded gap Workspace.
+- HTTP 201 returns a server-assigned canonical ID and `metaData.shortId`,
+  exact Severity, category, assignment status and active `pipelineBindings`.
+  The response exposes a database URI as an authority and other URIs as the
+  absolute path. `metaData.refId` is optional source metadata and is not unique.
+- `GET /v1/packages/{id}/geometry` retrieves authoritative stored geometry.
+  `GET /v1/packages/{id}` supports read-only reconciliation when the create
+  response exposes a canonical ID. Creation records the authenticated actor.
+  There is no create operation receipt or replay key.
+
 ## COMMENT-03 - Package discard decisions and reasons
 
 | Route                             | Contract                                                                                                                                                                                                      |

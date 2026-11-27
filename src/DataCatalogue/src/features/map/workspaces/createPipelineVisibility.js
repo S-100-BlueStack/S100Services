@@ -16,6 +16,7 @@ export function createPipelineVisibility({
   onChange,
   onWorkspacesLoaded,
   readOnly = false,
+  autoLoad = true,
   loadCatalogue = null,
 }) {
   const list = document.createElement("div");
@@ -216,7 +217,7 @@ export function createPipelineVisibility({
     return pending ?? reload();
   }
 
-  void reload();
+  if (autoLoad) void reload();
   return {
     reload,
     ensureLoaded,

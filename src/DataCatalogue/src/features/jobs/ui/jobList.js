@@ -2,7 +2,7 @@ import {
   assignmentPath,
   getApplicationBasePath,
 } from "../../../shared/navigation/workflowRoutes.js";
-import { severityLabel } from "../../../shared/domain/severity.js";
+import { severityChipPresentation } from "../../../shared/domain/severity.js";
 import {
   filterJobs,
   getActiveJobFilterSummary,
@@ -1402,9 +1402,19 @@ function createDateChip({ icon, label, value }) {
 function createPriorityBadge(job) {
   const priorityElement = document.createElement("span");
   priorityElement.className = `job-card__priority job-card__priority--${job.source === "live" ? "severity" : job.priority}`;
-  priorityElement.textContent =
-    job.source === "live" ? severityLabel(job.severity) : getPriorityBadgeLabel(job.priority);
-
+  if (job.source !== "live") {
+    priorityElement.textContent = getPriorityBadgeLabel(job.priority);
+    return priorityElement;
+  }
+  const { label, exactLabel } = severityChipPresentation(job.severity);
+  priorityElement.textContent = label;
+  if (exactLabel) {
+    priorityElement.title = exactLabel;
+    const exact = document.createElement("span");
+    exact.className = "visually-hidden";
+    exact.textContent = ` (${exactLabel})`;
+    priorityElement.append(exact);
+  }
   return priorityElement;
 }
 

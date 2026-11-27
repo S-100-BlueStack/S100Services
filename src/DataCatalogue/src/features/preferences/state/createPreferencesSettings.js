@@ -116,7 +116,12 @@ export function createPreferencesSettings({ storage = getBrowserStorage() } = {}
       return validPosition(position) ? { center: [...position.center], zoom: position.zoom } : null;
     },
     saveMapPosition(slot, position) {
-      if (!alive || !state.rememberMapPosition || !["main", "assignment"].includes(slot)) return;
+      if (
+        !alive ||
+        !state.rememberMapPosition ||
+        !["main", "assignment", "packageCreator"].includes(slot)
+      )
+        return;
       if (!validPosition(position)) return;
       positions = { ...positions, [slot]: { center: [...position.center], zoom: position.zoom } };
       storeJSON(storage, MAP_POSITION_KEY, positions);

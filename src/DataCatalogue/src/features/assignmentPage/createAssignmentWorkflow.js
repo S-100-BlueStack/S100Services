@@ -8,7 +8,13 @@ import { createAssignmentMap } from "../map/assignment/createAssignmentMap.js";
 export function createAssignmentWorkflow(
   runtimeConfig,
   catalogue,
-  { onPackageSelected, basemapSettings, onMembershipInvalidated, onCommentsInvalidated } = {}
+  {
+    onPackageSelected,
+    basemapSettings,
+    onMembershipInvalidated,
+    onCommentsInvalidated,
+    getPackageListRevision,
+  } = {}
 ) {
   return createAssignmentPage({
     services:
@@ -27,5 +33,6 @@ export function createAssignmentWorkflow(
     runtimeConfig,
     basemapSettings,
     onPackageSelected,
+    getPackageListRevision,
   });
 }

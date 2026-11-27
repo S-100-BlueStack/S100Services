@@ -1,3 +1,4 @@
+import { createPackageCreationSession } from "../../packageCreator/createPackageCreationSession.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCatalogueClient } from "../../../shared/api/catalogueClient.js";
@@ -956,4 +957,57 @@ test("COMMENT-03 direct decisions are quiet and actual binding changes use the e
   // The fixture removes all members of the unbound pipeline.
   f.state.pipelines.enc = [workspace("east", ["shared"])];
   await checkBindingReturn("Binding unbind Save then direct Discard", 1);
+});
+
+test("bound creation on direct Creator entry yields one Overview generation on return", async (t) => {
+  const f = fixture({ S101: [workspace("DK", ["shared"])] });
+  const session = createPackageCreationSession({
+    service: {
+      async create() {
+        return { status: "confirmed", item: { pipelineIds: ["S101"] } };
+      },
+    },
+    onState() {},
+    onCatalogueChange({ membership }) {
+      if (membership) f.store.invalidateMembership();
+    },
+  });
+  await session.submit({});
+  assert.deepEqual(f.calls, []);
+  const returnLoad = f.store.loadJobs({ cancelOnLeave: true });
+  assert.equal(f.store.loadJobs(), returnLoad);
+  assert.equal((await returnLoad).ok, true);
+  const counts = summarize(f.calls);
+  assert.deepEqual(counts, {
+    pipeline: 1,
+    overview: 1,
+    membership: 0,
+    workspaceDetail: 0,
+    metadataList: 0,
+    metadataDetail: 1,
+    geometry: 0,
+  });
+  t.diagnostic(`Bound create return: ${JSON.stringify(counts)}`);
+  assert.equal(f.published.length, 1);
+  assert.equal(f.store.hasPendingMembershipRefresh(), false);
+});
+
+test("confirmed unbound creation leaves the established Main Map revision clean", async () => {
+  const f = fixture({ S101: [workspace("DK", ["shared"])] });
+  assert.equal((await f.store.loadJobs()).ok, true);
+  f.calls.length = 0;
+  const session = createPackageCreationSession({
+    service: {
+      async create() {
+        return { status: "confirmed", item: { pipelineIds: [] } };
+      },
+    },
+    onState() {},
+    onCatalogueChange({ membership }) {
+      if (membership) f.store.invalidateMembership();
+    },
+  });
+  await session.submit({});
+  assert.equal(f.store.hasPendingMembershipRefresh(), false);
+  assert.deepEqual(f.calls, []);
 });

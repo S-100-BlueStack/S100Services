@@ -5,6 +5,15 @@ owning feature's needs. The [Workspace popup header section](#dc-map-popup-05---
 documents the existing compatibility exception. Dated entries and the original
 Jobs/AOI inventory record decisions in their delivery context.
 
+## DC-CREATOR-EDITOR-02 - Native form and sketch controls
+
+The compact Creator uses labelled native form controls, buttons and status
+regions for keyboard semantics, request-state disabling and plain-text input.
+It reuses Calcite theme tokens and the public basemap selector. The native
+ArcGIS Sketch web component provides the Calcite-based rectangle tool. Clear
+AOI and Fit AOI use native text buttons alongside it. Native confirmation covers
+discarding draft inputs and explicit abandonment of an uncertain write.
+
 ## DC-PACKAGE-TIMELINE-04 - Native history avatars (2026-11-25)
 
 Keep the accepted native read-only timeline. A fixed-size native `img` with

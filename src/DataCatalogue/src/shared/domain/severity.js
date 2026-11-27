@@ -26,6 +26,12 @@ export function severityLabel(value) {
   return exact === UNPRIORITIZED_SEVERITY ? "Not prioritized" : `Severity ${exact}`;
 }
 
+export function severityChipPresentation(value) {
+  const label = severityLabel(value);
+  if (value === 0 || value === "0") return { label: "Highest priority", exactLabel: label };
+  return { label };
+}
+
 export function compareSeverity(left, right) {
   const a = normalizeSeverity(left);
   const b = normalizeSeverity(right);

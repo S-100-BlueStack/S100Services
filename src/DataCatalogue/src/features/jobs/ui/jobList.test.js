@@ -431,6 +431,32 @@ test("Live Job Details show unique context and editable status without duplicate
   });
 });
 
+test("severity zero uses Highest priority in live chips with the exact value available", () => {
+  withDocument(() => {
+    for (const [source, severity, label] of [
+      ["live", "0", "Highest priority"],
+      ["live", "18446744073709551615", "Not prioritized"],
+      ["live", null, "Unspecified"],
+      ["mock", "0", "HIGH"],
+    ]) {
+      const { store, job } = fixture(source);
+      job.severity = severity;
+      const view = createJobList({ store, sourceMode: source });
+      try {
+        const badge = findByClass(view.element, "job-card__priority")[0];
+        assert.equal(badge.textContent, label);
+        const exact = findByClass(badge, "visually-hidden");
+        if (label === "Highest priority") {
+          assert.equal(badge.title, "Severity 0");
+          assert.equal(exact[0].textContent.trim(), "(Severity 0)");
+        } else assert.equal(exact.length, 0);
+      } finally {
+        view.destroy();
+      }
+    }
+  });
+});
+
 test("Packages header Refresh is list-only and retains its identity after Back", () => {
   withDocument(() => {
     for (const source of ["live", "mock"]) {

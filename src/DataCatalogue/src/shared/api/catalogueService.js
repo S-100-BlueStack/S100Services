@@ -218,12 +218,13 @@ export function createCatalogueService(client) {
         normalizePackageAoiItem
       );
     },
-    async package(id, { signal } = {}) {
-      const item = normalizePackage(
-        await client.request(`/v1/packages/${segment(id)}`, { signal })
-      );
+    async package(id, { signal, includeSource = false } = {}) {
+      const raw = await client.request(`/v1/packages/${segment(id)}`, { signal });
+      const item = normalizePackage(raw);
       if (item.id !== id) throw new Error("API returned a different Package identity.");
-      return item;
+      return includeSource
+        ? { ...item, sourceReadback: raw.absoluteUri, title: raw.metaData?.title ?? null }
+        : item;
     },
     async packageComments(id, { pageSize = 50, before = null, signal } = {}) {
       validateHistoryRequest(pageSize, before);

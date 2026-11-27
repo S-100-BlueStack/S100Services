@@ -56,6 +56,10 @@
   white-space: nowrap;
 }
 
+.navbar-title-link[hidden] {
+  display: none;
+}
+
 .navbar-title-link:hover,
 .navbar-title-link:focus,
 .navbar-title-link:active {

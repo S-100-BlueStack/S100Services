@@ -32,7 +32,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function fixture({ initialPath = "/" } = {}) {
+function fixture({ initialPath = "/", creator } = {}) {
   const locationRef = { pathname: initialPath };
   const historyChanges = [];
   const historyRef = {
@@ -49,12 +49,15 @@ function fixture({ initialPath = "/" } = {}) {
   const documentRef = { title: "", activeElement: null };
   const button = new Element();
   const home = new Element();
+  const creatorButton = new Element();
+  creatorButton.hidden = true;
   const lastUpdated = new Element();
   const navbar = {
     element: {
       querySelector(selector) {
         return {
           "#feature-assignment-toggle": button,
+          "#package-creator-toggle": creatorButton,
           ".navbar-title-link": home,
           "#last-updated": lastUpdated,
         }[selector];
@@ -87,6 +90,7 @@ function fixture({ initialPath = "/" } = {}) {
     navbar,
     shellElement,
     jobsWorkflowHost,
+    createCreator: creator ? () => creator : undefined,
     createPage(options) {
       onPackageSelected = options.onPackageSelected;
       return page;
@@ -101,6 +105,7 @@ function fixture({ initialPath = "/" } = {}) {
     navbar,
     button,
     home,
+    creatorButton,
     jobsWorkflowHost,
     documentRef,
     locationRef,
@@ -332,5 +337,57 @@ test("IIS Package deep links open directly and preserve their mount path", async
   assert.equal(f.locationRef.pathname, "/catalogue/assignments/packages/pkg%2F100");
   assert.deepEqual(f.getSelectedPackageIds(), ["pkg/100"]);
   assert.equal(f.button.attributes.get("aria-current"), "page");
+  f.navigation.destroy();
+});
+
+test("Creator uses the shared IIS route and guards Back and cross-workflow navigation", async () => {
+  let active = false;
+  let leave = false;
+  let checks = 0;
+  const creator = {
+    element: new Element(),
+    activate() {
+      active = true;
+    },
+    deactivate() {
+      active = false;
+    },
+    allowLeave() {
+      checks++;
+      return leave;
+    },
+    destroy() {},
+  };
+  const f = fixture({ initialPath: "/catalogue/packages/create", creator });
+  assert.equal(active, true);
+  assert.equal(f.documentRef.title, "Package Creator");
+  assert.equal(f.creatorButton.hidden, false);
+  assert.equal(f.creatorButton.attributes.get("href"), "/catalogue/packages/create");
+
+  f.pop("/catalogue/");
+  await flush();
+  assert.equal(active, true);
+  assert.equal(f.locationRef.pathname, "/catalogue/packages/create");
+  assert.equal(await f.navigation.openAssignment(), false);
+  assert.equal(checks, 2);
+
+  leave = true;
+  f.documentRef.activeElement = creator.element;
+  assert.equal(await f.navigation.openAssignment(), true);
+  assert.equal(active, false);
+  assert.equal(f.button.focusCount, 1);
+  assert.equal(f.locationRef.pathname, "/catalogue/assignments");
+  f.pop("/catalogue/packages/create");
+  await flush();
+  assert.equal(active, true);
+  assert.equal(f.documentRef.title, "Package Creator");
+  f.navigation.destroy();
+});
+
+test("Creator stays unavailable in the legacy workflow", async () => {
+  const f = fixture({ initialPath: "/catalogue/packages/create" });
+  assert.equal(f.creatorButton.hidden, true);
+  assert.equal(f.jobsWorkflowHost.hidden, false);
+  assert.equal(await f.navigation.openCreator(), false);
   f.navigation.destroy();
 });

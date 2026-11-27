@@ -125,7 +125,7 @@ async function ensureNavbarComponentsDefined() {
 }
 
 async function loadNavbarTemplate() {
-  const response = await fetch("/components/navbar.html", {
+  const response = await fetch(`${import.meta.env.BASE_URL}components/navbar.html`, {
     cache: "no-cache",
   });
 

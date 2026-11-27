@@ -1,16 +1,22 @@
 import {
   assignmentPath,
+  creatorPath,
   getApplicationBasePath,
   parseWorkflowPath,
 } from "../../shared/navigation/workflowRoutes.js";
 
-export { assignmentPath, parseWorkflowPath } from "../../shared/navigation/workflowRoutes.js";
+export {
+  assignmentPath,
+  creatorPath,
+  parseWorkflowPath,
+} from "../../shared/navigation/workflowRoutes.js";
 
 export function createWorkflowNavigation({
   shellElement,
   jobsWorkflowHost,
   navbar,
   createPage,
+  createCreator,
   onOpenJobs,
   onLeaveMainMap,
   onReturnMainMap,
@@ -24,8 +30,10 @@ export function createWorkflowNavigation({
   const abort = new AbortController();
   const button = navbar.element.querySelector("#feature-assignment-toggle");
   const home = navbar.element.querySelector(".navbar-title-link");
+  const creatorButton = navbar.element.querySelector("#package-creator-toggle");
   let page = null;
-  let active = false;
+  let creator = null;
+  let active = "main";
   let transitioning = false;
   let alive = true;
   let navigationGeneration = 0;
@@ -34,8 +42,15 @@ export function createWorkflowNavigation({
   let acceptedPath = locationRef?.pathname ?? "/";
   const basePath = getApplicationBasePath(acceptedPath);
 
+  home.setAttribute("href", basePath);
+  button.setAttribute("href", assignmentPath(null, basePath));
+  if (creatorButton && createCreator) {
+    creatorButton.hidden = false;
+    creatorButton.setAttribute("href", creatorPath(basePath));
+  }
+
   function syncJobsButtonState() {
-    navbar.jobsButton.disabled = !active && !isJobsStartupComplete();
+    navbar.jobsButton.disabled = active === "main" && !isJobsStartupComplete();
   }
 
   function setRoute(path) {
@@ -47,8 +62,12 @@ export function createWorkflowNavigation({
 
   function syncDocumentTitle() {
     if (!documentRef) return;
-    if (!active) {
+    if (active === "main") {
       documentRef.title = "Data Catalogue";
+      return;
+    }
+    if (active === "creator") {
+      documentRef.title = "Package Creator";
       return;
     }
     const route = parseWorkflowPath(acceptedPath, basePath);
@@ -57,46 +76,53 @@ export function createWorkflowNavigation({
   }
 
   function syncNavigation() {
-    button.setAttribute("aria-current", active ? "page" : "false");
-    home.setAttribute("aria-current", active ? "false" : "page");
+    button.setAttribute("aria-current", active === "assignment" ? "page" : "false");
+    creatorButton?.setAttribute("aria-current", active === "creator" ? "page" : "false");
+    home.setAttribute("aria-current", active === "main" ? "page" : "false");
     syncDocumentTitle();
   }
 
   function sameIntent(a, b) {
     return (
-      a?.assignment === b.assignment &&
+      a?.workflow === b.workflow &&
       a?.path === b.path &&
       a?.fromHistory === b.fromHistory &&
       a?.openJobs === b.openJobs
     );
   }
 
-  function commitVisibility(show, openJobs) {
-    if (show === active) return;
+  function commitVisibility(next, openJobs) {
+    if (next === active) return;
 
-    // Only relocate focus when its current host is about to become hidden.
-    // Programmatic focus on a direct URL load creates an unwanted visible outline.
-    const hiddenHost = show ? jobsWorkflowHost : page?.element;
+    // Relocate focus only when its current host is about to become hidden.
+    const previous = active;
+    const leavingPage = previous === "assignment" ? page : creator;
+    const hiddenHost = previous === "main" ? jobsWorkflowHost : leavingPage?.element;
+    const targetButton = next === "assignment" ? button : next === "creator" ? creatorButton : home;
     if (hiddenHost?.contains?.(documentRef?.activeElement)) {
-      (show ? button : home).focus({ preventScroll: true });
+      (targetButton ?? home).focus({ preventScroll: true });
     }
-    active = show;
-    jobsWorkflowHost.hidden = show;
+
+    active = next;
+    const outsideMain = next !== "main";
+    jobsWorkflowHost.hidden = outsideMain;
     syncJobsButtonState();
-    if (page) page.element.hidden = !show;
+    if (page) page.element.hidden = next !== "assignment";
+    if (creator) creator.element.hidden = next !== "creator";
     navbar.filtersPopover.open = false;
     navbar.filtersPopover.removeAttribute("open");
     navbar.filtersButton.active = false;
     navbar.filtersButton.removeAttribute("active");
     navbar.filtersButton.setAttribute("aria-expanded", "false");
-    navbar.filtersButton.hidden = show;
-    navbar.element.querySelector("#last-updated").hidden = show;
+    navbar.filtersButton.hidden = outsideMain;
+    navbar.element.querySelector("#last-updated").hidden = outsideMain;
     syncNavigation();
-    if (show) {
-      onLeaveMainMap?.();
-      page.activate();
-    } else {
-      page?.deactivate?.();
+
+    if (previous === "main") onLeaveMainMap?.();
+    else leavingPage?.deactivate?.();
+    if (next === "assignment") page.activate();
+    else if (next === "creator") creator.activate();
+    else {
       // A return refresh can start before Packages considers its panel-open reuse policy.
       const willOpenJobs = openJobs && isJobsStartupComplete();
       onReturnMainMap?.({ openJobs: willOpenJobs });
@@ -109,14 +135,15 @@ export function createWorkflowNavigation({
     currentIntent = intent;
     const isCurrent = () => alive && generation === navigationGeneration;
     try {
-      if (!intent.assignment && active && page) {
+      const leavingPage = active === "assignment" ? page : active === "creator" ? creator : null;
+      if (active !== intent.workflow && leavingPage) {
         const allowed =
           typeof intent.leaveDecision === "boolean"
             ? intent.leaveDecision
-            : await page.allowLeave();
+            : await leavingPage.allowLeave();
         // Reuse one completed decision if repeated history events still request leaving
-        // the same unchanged assignment; do not show a second Save/Discard dialog.
-        if (!isCurrent() && queuedIntent && !queuedIntent.intent.assignment) {
+        // the same unchanged workflow; do not show a second Save/Discard dialog.
+        if (!isCurrent() && queuedIntent && queuedIntent.intent.workflow !== active) {
           queuedIntent.intent.leaveDecision = allowed;
         }
         if (!isCurrent()) return false;
@@ -127,10 +154,10 @@ export function createWorkflowNavigation({
       }
       if (!isCurrent()) return false;
 
-      if (intent.assignment && !page) {
+      if (intent.workflow === "assignment" && !page) {
         page = createPage({
           onPackageSelected(id) {
-            if (alive && active && !transitioning) {
+            if (alive && active === "assignment" && !transitioning) {
               setRoute(assignmentPath(id, basePath));
               syncDocumentTitle();
             }
@@ -138,21 +165,23 @@ export function createWorkflowNavigation({
         });
         shellElement.append(page.element);
       }
+      if (intent.workflow === "creator" && !creator) {
+        creator = createCreator();
+        shellElement.append(creator.element);
+      }
       if (!isCurrent()) return false;
 
       // An already-open workflow should not reset its selected Package on a navbar click.
-      if (!intent.fromHistory && intent.assignment === active) {
-        if (active && locationRef && locationRef.pathname !== acceptedPath) {
+      if (!intent.fromHistory && intent.workflow === active) {
+        if (active !== "main" && locationRef && locationRef.pathname !== acceptedPath) {
           // A pending popstate changed the address bar, not the accepted workflow.
           historyRef?.replaceState?.({}, "", acceptedPath);
         }
-        return intent.assignment;
+        return active !== "main";
       }
-      if (!intent.fromHistory && !intent.assignment && !active) return false;
+      commitVisibility(intent.workflow, intent.openJobs);
 
-      commitVisibility(intent.assignment, intent.openJobs);
-
-      if (intent.fromHistory && intent.assignment && intent.packageId) {
+      if (intent.fromHistory && intent.workflow === "assignment" && intent.packageId) {
         const selected = await page?.selectPackage?.(intent.packageId, { notify: false });
         if (!isCurrent()) return false;
         if (!selected && page?.hasUnsavedDraft?.()) {
@@ -163,7 +192,7 @@ export function createWorkflowNavigation({
       if (!isCurrent()) return false;
 
       if (intent.fromHistory) acceptedPath = intent.path;
-      else setRoute(intent.assignment ? assignmentPath(null, basePath) : basePath);
+      else setRoute(intent.path);
       syncDocumentTitle();
       return true;
     } catch (error) {
@@ -203,8 +232,11 @@ export function createWorkflowNavigation({
 
   function openFromLocation() {
     const path = locationRef?.pathname ?? "/";
+    const route = parseWorkflowPath(path, basePath);
     return navigate({
-      ...parseWorkflowPath(path, basePath),
+      workflow:
+        route.creator && createCreator ? "creator" : route.assignment ? "assignment" : "main",
+      packageId: route.packageId,
       path,
       fromHistory: true,
       openJobs: true,
@@ -213,7 +245,7 @@ export function createWorkflowNavigation({
 
   function showAssignment(show, openJobs = false) {
     return navigate({
-      assignment: show,
+      workflow: show ? "assignment" : "main",
       packageId: null,
       path: show ? assignmentPath(null, basePath) : basePath,
       fromHistory: false,
@@ -221,6 +253,27 @@ export function createWorkflowNavigation({
     });
   }
 
+  function showCreator() {
+    if (!createCreator) return Promise.resolve(false);
+    return navigate({
+      workflow: "creator",
+      packageId: null,
+      path: creatorPath(basePath),
+      fromHistory: false,
+      openJobs: false,
+    });
+  }
+
+  if (createCreator) {
+    creatorButton?.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        void showCreator();
+      },
+      { signal: abort.signal }
+    );
+  }
   button.addEventListener(
     "click",
     (event) => {
@@ -242,7 +295,7 @@ export function createWorkflowNavigation({
   navbar.jobsButton.addEventListener(
     "click",
     (event) => {
-      if (!active) return;
+      if (active === "main") return;
       event.stopImmediatePropagation();
       void showAssignment(false, true);
     },
@@ -253,9 +306,11 @@ export function createWorkflowNavigation({
     signal: abort.signal,
   });
   syncNavigation();
-  if (parseWorkflowPath(locationRef?.pathname ?? "/", basePath).assignment) void openFromLocation();
+  const initialRoute = parseWorkflowPath(acceptedPath, basePath);
+  if (initialRoute.assignment || (initialRoute.creator && createCreator)) void openFromLocation();
 
   return {
+    openCreator: showCreator,
     openAssignment: () => showAssignment(true),
     openJobs: () => showAssignment(false, true),
     syncJobsButtonState,
@@ -266,6 +321,7 @@ export function createWorkflowNavigation({
       queuedIntent = null;
       abort.abort();
       page?.destroy();
+      creator?.destroy();
     },
   };
 }

@@ -15,6 +15,25 @@ proposals.
 > this gap register. Workspace remains a distinct entity. No backend gap is
 > resolved by the display terminology change.
 
+## DC-CREATOR-EDITOR-02 - Create verification and reconciliation
+
+An absolute source reference remains required. A case-number-only workflow
+would require a different source contract. The current response may omit
+the original scheme and authority. No exact-source lookup, create receipt
+or idempotency key exists. A non-201 or incomplete outcome after dispatch
+may leave a recorded Package or persisted AOI. Without sufficient canonical
+ID evidence, retain uncertainty and review the operation with the backend
+operator. Absence from a projected list cannot prove a create failed.
+
+Confirm deployed category routing and SSO. AOI-only persistence inserts into
+the target directly, without grouped geometry projection or dimension matching.
+Verify the target's native AOI storage with the Creator's WGS 84 XY rectangle.
+If the target rejects a valid rectangle, capture the API error and target
+spatial reference and dimension settings for backend review. Projection lag
+may require normal list or Main Map Refresh, including when an ambiguous write
+completes after the first return read. Public existing-Package metadata/
+Severity editing and version-guarded AOI editing remain follow-up work.
+
 ## OWNER-01 - Workspace responsibility actions
 
 The OWNER-01-DISPLAY candidate reads existing ownership fields from the accepted

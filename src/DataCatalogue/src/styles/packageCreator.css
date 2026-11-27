@@ -1,0 +1,148 @@
+.dc-package-creator {
+  display: grid;
+  grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
+  gap: 5px;
+  min-height: 0;
+  padding: 5px;
+  background: var(--dc-surface-alt);
+  color: var(--dc-text);
+  font-size: 0.82rem;
+}
+.dc-package-creator [hidden],
+.dc-package-creator[hidden] {
+  display: none !important;
+}
+.dc-creator-details,
+.dc-creator-map {
+  min-height: 0;
+  min-width: 0;
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-border);
+}
+.dc-creator-details {
+  overflow: auto;
+  padding: 8px;
+  scrollbar-gutter: stable;
+}
+.dc-creator-details h1 {
+  margin: 0 0 7px;
+  font-size: 1rem;
+}
+.dc-creator-details fieldset,
+.dc-creator-details label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.dc-creator-group {
+  margin: 0 0 7px;
+  padding: 0 7px 6px;
+  border: 1px solid var(--dc-border);
+}
+.dc-creator-group legend {
+  float: none;
+  width: auto;
+  margin: 0;
+  padding-inline: 3px;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+.dc-creator-details p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dc-creator-help {
+  color: var(--dc-text-muted);
+}
+.dc-creator-details p:empty,
+.dc-creator-details [role="status"]:empty {
+  display: none;
+}
+.dc-creator-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 6px;
+}
+.dc-creator-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dc-creator-actions:not(:empty) {
+  margin-block: 5px;
+}
+.dc-creator-map {
+  position: relative;
+}
+.dc-creator-map-view {
+  position: absolute;
+  inset: 0;
+}
+.dc-creator-map-tools {
+  z-index: 1;
+  position: absolute;
+  /* Leave the bottom View UI row available for wrapped attribution. */
+  inset-block-end: 2.75rem;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  max-inline-size: calc(100% - 16px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dc-creator-map-tools arcgis-sketch {
+  display: block;
+}
+.dc-creator-map-actions {
+  display: flex;
+  flex: none;
+  gap: 1px;
+  white-space: nowrap;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow);
+}
+.dc-creator-details dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+}
+.dc-creator-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dc-creator-details .dc-package-description__body {
+  white-space: pre-wrap;
+}
+.dc-creator-details :is(button, input, select, textarea),
+.dc-creator-map-actions button {
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: 0;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+}
+.dc-package-creator [data-creator="submit"] {
+  background: var(--calcite-color-brand, #005e95);
+  color: var(--calcite-color-text-inverse, #fff);
+}
+.dc-package-creator button:disabled {
+  opacity: 0.55;
+}
+.dc-package-creator :focus-visible {
+  outline: 2px solid var(--dc-focus-ring);
+  outline-offset: 2px;
+}
+@media (max-width: 46rem) {
+  .dc-creator-map-tools {
+    inset-block-end: 3.5rem;
+  }
+  .dc-package-creator {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(14rem, 1fr) minmax(15rem, 1fr);
+    overflow: auto;
+  }
+}

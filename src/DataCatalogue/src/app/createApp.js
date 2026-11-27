@@ -1,4 +1,7 @@
 import { createCatalogueClient } from "../shared/api/catalogueClient.js";
+import { createManualPackageService } from "../shared/api/manualPackageCreation.js";
+import { createPackageCreatorPage } from "../features/packageCreator/createPackageCreatorPage.js";
+import { createPackageCreatorMap } from "../features/map/packageCreator/createPackageCreatorMap.js";
 import { createCatalogueService } from "../shared/api/catalogueService.js";
 import { loadWorkspaceOverview } from "../shared/api/loadWorkspaceOverview.js";
 import { createLiveJobServiceAdapter } from "../features/jobs/services/liveJobServiceAdapter.js";
@@ -41,6 +44,8 @@ import { applyAppBranding } from "./ui/appBranding.js";
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const live = runtimeConfig.sourceMode === "live";
+  const initialPath = globalThis.location?.pathname ?? "/";
+  const initialRoute = parseWorkflowPath(initialPath, getApplicationBasePath(initialPath));
   const preferences = createPreferencesSettings();
   const themeStore = createThemeStore({ storage: preferences.themeStorage });
   let packageAoiOverview = null;
@@ -58,14 +63,14 @@ export async function createApp(rootElement) {
   const unsubscribeThemeBasemap = themeStore.subscribe(({ themeMode }) => {
     basemapSettings.setThemeMode(themeMode);
   });
-  const catalogue = live
-    ? createCatalogueService(
-        createCatalogueClient({
-          baseUrl: runtimeConfig.catalogueApiBaseUrl,
-          credentials: runtimeConfig.catalogueApiCredentials,
-        })
-      )
+  const catalogueClient = live
+    ? createCatalogueClient({
+        baseUrl: runtimeConfig.catalogueApiBaseUrl,
+        credentials: runtimeConfig.catalogueApiCredentials,
+      })
     : null;
+  const catalogue = live ? createCatalogueService(catalogueClient) : null;
+  let packageListRevision = 0;
   let pipelineVisibility = null;
   let hasLoadedJobCatalogue = false;
   const liveJobs = live
@@ -313,10 +318,25 @@ export async function createApp(rootElement) {
         basemapSettings,
         onMembershipInvalidated: live ? jobStore.invalidateMembership : undefined,
         onCommentsInvalidated: live ? jobsPanel.invalidateComments : undefined,
+        getPackageListRevision: live ? () => packageListRevision : undefined,
       }),
+    createCreator: live
+      ? () =>
+          createPackageCreatorPage({
+            basemapSettings,
+            service: createManualPackageService({ client: catalogueClient, catalogue }),
+            readCategories: catalogue.categories,
+            createMap: (options) =>
+              createPackageCreatorMap({ ...options, runtimeConfig, catalogue, basemapSettings }),
+            onCatalogueChange({ membership }) {
+              packageListRevision++;
+              if (membership) jobStore.invalidateMembership();
+            },
+          })
+      : undefined,
     onNavigationError(error) {
       showErrorNotice({
-        title: "Package assignment could not be opened",
+        title: "Workflow could not be opened",
         message: error.message,
       });
     },
@@ -325,6 +345,8 @@ export async function createApp(rootElement) {
       ? ({ openJobs }) => {
           if (jobStore.hasPendingMembershipRefresh()) {
             void jobsPanel.refreshJobs({ afterAssignment: true });
+          } else if (initialRoute.creator && !hasLoadedJobCatalogue) {
+            void pipelineVisibility.ensureLoaded();
           }
           jobsPanel.setMainMapActive(true, { openJobs });
         }
@@ -344,6 +366,7 @@ export async function createApp(rootElement) {
         catalogue,
         container: workspace.pipelineContent,
         readOnly: true,
+        autoLoad: !initialRoute.creator,
         loadCatalogue: ({ signal }) => loadWorkspaceOverview(catalogue, { signal }),
         onChange() {
           // Work Scope owns visibility; this panel is a read-only catalogue overview.
@@ -411,6 +434,7 @@ export async function createApp(rootElement) {
   const unsubscribeJobStoreSync = jobStore.subscribe((snapshot, workspaceCatalogue) => {
     if (live) {
       if (workspaceCatalogue) {
+        hasLoadedJobCatalogue = true;
         // The store publishes the catalogue only with the successful, current Jobs
         // generation. Adopt it without invoking the startup callback or loading Jobs again.
         const groups = pipelineVisibility.replaceCatalogue(workspaceCatalogue);
@@ -570,9 +594,7 @@ export async function createApp(rootElement) {
     }
   );
 
-  const initialPath = globalThis.location?.pathname ?? "/";
-  const initialRoute = parseWorkflowPath(initialPath, getApplicationBasePath(initialPath));
-  if (live && !initialRoute.assignment) {
+  if (live && !initialRoute.assignment && !initialRoute.creator) {
     setJobsPanelOpen(true);
     // Initial list access joins the catalogue read; it does not wait for MapView startup.
     void jobsPanel.refreshJobs({ onPanelOpen: true });
