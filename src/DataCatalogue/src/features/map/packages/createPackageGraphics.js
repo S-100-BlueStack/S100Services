@@ -1,5 +1,6 @@
 import Graphic from "@arcgis/core/Graphic.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
+import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 import Point from "@arcgis/core/geometry/Point.js";
 import Multipoint from "@arcgis/core/geometry/Multipoint.js";
 import Polyline from "@arcgis/core/geometry/Polyline.js";
@@ -10,6 +11,8 @@ import {
   packageGeometryFocusTarget,
 } from "./packageGeometryDisplay.js";
 import * as projectOperator from "@arcgis/core/geometry/operators/projectOperator.js";
+import { createMapLabelLayers } from "../labels/createMapLabelLayers.js";
+import { prepareDetailedPointLabels } from "./prepareDetailedPointLabels.js";
 
 let projectionReady;
 function loadProjection() {
@@ -31,6 +34,7 @@ export function createPackageGraphics({ map, view, id }) {
     popupEnabled: false,
   });
   map.add(layer);
+  const pointLabels = createMapLabelLayers({ map, FeatureLayer, Graphic, kind: "detailedPoint" });
   const ready = view.when().then(
     () => true,
     () => false
@@ -63,6 +67,7 @@ export function createPackageGraphics({ map, view, id }) {
       };
       ensureCurrent();
       const graphics = [];
+      const pointGroups = [];
       let aoiGeometry = null;
       let detailCount = 0;
       if (aoi) {
@@ -127,19 +132,35 @@ export function createPackageGraphics({ map, view, id }) {
               },
             })
           );
+          pointGroups.push({ source: point, geometry });
           detailCount++;
         }
       }
+      let labels = [];
+      try {
+        labels = await prepareDetailedPointLabels(
+          pointGroups,
+          (json) => projected(json, Point),
+          ensureCurrent
+        );
+      } catch (error) {
+        ensureCurrent();
+        // A label-only projection failure must not suppress the authoritative geometry.
+        console.warn("Detailed point labels could not be prepared.", error);
+      }
       ensureCurrent();
-      return { graphics, aoiGeometry, detailCount };
+      return { graphics, aoiGeometry, detailCount, pointLabels: labels };
     },
     replace(prepared) {
       if (!alive) return;
       layer.removeAll();
       if (prepared.graphics.length) layer.addMany(prepared.graphics);
+      pointLabels.replace(prepared.pointLabels);
     },
     clear() {
-      if (alive) layer.removeAll();
+      if (!alive) return;
+      pointLabels.clear();
+      layer.removeAll();
     },
     async focus(prepared, { shouldApply = () => true } = {}) {
       if (!(await ready) || !alive || !shouldApply() || !prepared.graphics.length) return false;
@@ -163,6 +184,7 @@ export function createPackageGraphics({ map, view, id }) {
     },
     destroy() {
       alive = false;
+      pointLabels.destroy();
       map.remove(layer);
       layer.destroy();
     },

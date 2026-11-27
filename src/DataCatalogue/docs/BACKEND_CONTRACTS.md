@@ -498,6 +498,18 @@ as an Esri polygon JSON object (or `null`), not a Feature Service reference.
 spatial reference; curves may use Esri `curvePaths`/`curveRings`. The response
 does not include a Package ID, version, paging, or a geometry ETag.
 
+Rechecked at `af4cb616846d4dfc12200e736a375e5aa8b27f35` for
+DC-DETAILED-POINT-LABELS-01: `PackageDetailedGeometryResponse.Points` is in
+stored reference order. The Notice importer enumerates source parts and their
+features, appending Point and MultiPoint members to one ordered point list.
+Current Point-class storage inserts one row per member and retains the ordered
+`PointRefs` through events and replay; geometry reads resolve those references
+rather than sorting by ObjectID or position. A multipoint is returned as its
+Esri `points` array. The frontend preserves both array orders. This does not
+expose Notice part boundaries, external coordinate-list numbering or a guarantee
+for data imported outside this path. Native storage and real source-list
+comparison require local acceptance; no backend contract change is introduced.
+
 The route declares 200, 400, 401/403, 404 and 500. Missing referenced rows
 return a server error instead of fabricated partial coordinates. The
 frontend validates the envelope/groups and spatial references, bounds the

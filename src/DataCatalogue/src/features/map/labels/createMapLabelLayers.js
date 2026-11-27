@@ -3,6 +3,7 @@
 export const MAP_LABEL_STYLES = Object.freeze({
   workspace: Object.freeze({ title: "Workspace labels", minScale: 5_000_000, size: 10 }),
   package: Object.freeze({ title: "Package labels", minScale: 3_000_000, size: 8 }),
+  detailedPoint: Object.freeze({ title: "Detailed point labels", minScale: 0, size: 9 }),
 });
 
 function normalizeLabel(value) {
@@ -25,6 +26,7 @@ export function createMapLabelLayers({ map, FeatureLayer, Graphic, kind }) {
   const style = MAP_LABEL_STYLES[kind];
   if (!style) throw new Error("Unsupported map label kind.");
   const isWorkspace = kind === "workspace";
+  const isDetailedPoint = kind === "detailedPoint";
   let layers = [];
   let currentEntries = [];
   let alive = true;
@@ -54,10 +56,12 @@ export function createMapLabelLayers({ map, FeatureLayer, Graphic, kind }) {
     // A client-side FeatureLayer has one spatial reference. Keep the original
     // polygon reference for Workspaces, and use the rectangular AOI's center
     // for Packages so small AOIs can still receive a label outside their bounds.
+    // Detailed point labels already have their exact projected point anchor.
     const groups = new Map();
     for (const entry of next) {
       try {
-        const geometry = isWorkspace ? entry.geometry : entry.geometry.extent?.center;
+        const geometry =
+          isWorkspace || isDetailedPoint ? entry.geometry : entry.geometry.extent?.center;
         if (!geometry?.spatialReference) continue;
         if (!isWorkspace && ![geometry.x, geometry.y].every(Number.isFinite)) continue;
         const spatialReference = geometry.spatialReference;
@@ -98,7 +102,7 @@ export function createMapLabelLayers({ map, FeatureLayer, Graphic, kind }) {
             symbol: {
               ...(isWorkspace
                 ? { type: "simple-fill", style: "none" }
-                : { type: "simple-marker", style: "circle", size: 1 }),
+                : { type: "simple-marker", style: "circle", size: isDetailedPoint ? 8 : 1 }),
               color: [0, 0, 0, 0],
               outline: { color: [0, 0, 0, 0], width: 0 },
             },
@@ -107,11 +111,15 @@ export function createMapLabelLayers({ map, FeatureLayer, Graphic, kind }) {
           labelingInfo: [
             {
               labelExpressionInfo: { expression: "$feature.labelText" },
-              labelPlacement: isWorkspace ? "always-horizontal" : "above-center",
+              labelPlacement: isWorkspace
+                ? "always-horizontal"
+                : isDetailedPoint
+                  ? "below-center"
+                  : "above-center",
               deconflictionStrategy: "static",
               symbol: {
                 type: "text",
-                color: isWorkspace ? "#24303d" : "#174b75",
+                color: isWorkspace || isDetailedPoint ? "#24303d" : "#174b75",
                 haloColor: "#ffffff",
                 haloSize: 1.5,
                 font: { family: "Arial", size: style.size, weight: "bold" },

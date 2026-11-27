@@ -136,3 +136,47 @@ test("An unsupported label anchor does not prevent labels for other valid geomet
   );
   labels.destroy();
 });
+
+test("Detailed point labels use exact point anchors and their supplied numbers", () => {
+  const { map, labels } = fixture("detailedPoint");
+  const first = { ...polygon().extent.center, extent: null };
+  const second = { ...first, x: 0, y: 0 };
+  const entries = [
+    { id: "1", text: "1, 3", geometry: first },
+    { id: "2", text: "2", geometry: second },
+    { id: "4", text: "4", geometry: { ...first, x: 3 } },
+  ];
+  labels.replace(entries);
+  const [layer] = map.layers;
+  assert.equal(layer.source[0].geometry, first);
+  assert.equal(layer.source[1].geometry, second);
+  assert.deepEqual(
+    layer.source.map(({ attributes }) => attributes),
+    [
+      { ObjectID: 1, labelText: "1, 3" },
+      { ObjectID: 2, labelText: "2" },
+      { ObjectID: 3, labelText: "4" },
+    ]
+  );
+  assert.equal(layer.geometryType, "point");
+  assert.equal(layer.minScale, 0);
+  assert.equal(layer.labelsVisible, true);
+  assert.equal(layer.labelingInfo[0].labelPlacement, "below-center");
+  assert.equal(layer.labelingInfo[0].deconflictionStrategy, "static");
+  assert.equal(layer.labelingInfo[0].symbol.haloColor, "#ffffff");
+  assert.equal(layer.popupEnabled, false);
+  assert.equal(layer.legendEnabled, false);
+  assert.equal(layer.listMode, "hide");
+  assert.deepEqual(layer.renderer.symbol.color, [0, 0, 0, 0]);
+  labels.replace(entries);
+  assert.equal(map.layers[0], layer);
+  labels.replace([]);
+  assert.equal(layer.destroyed, true);
+  assert.equal(map.layers.length, 0);
+  labels.replace(entries);
+  const replacement = map.layers[0];
+  labels.destroy();
+  labels.replace(entries);
+  assert.equal(replacement.destroyed, true);
+  assert.equal(map.layers.length, 0);
+});

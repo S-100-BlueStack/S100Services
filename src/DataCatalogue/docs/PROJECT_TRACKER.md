@@ -29,18 +29,40 @@ integration details.
   `4b2e7b73f16140d25b99767032301d0e73bfcb5e`, as reported by the user.
 - COMMENT-02 v2 passed local testing and was committed at
   `7678ace5a49df95da19a37f7738ce85be53b4cdb`, as reported by the user.
-- COMMENT-03 v1 was rejected. The user reported functional browser acceptance
-  of v2 on 2026-11-26. V3 is a presentation candidate for the Discard reasons
-  viewer. V3 browser acceptance, the full post-format frontend gate, and the
-  Windows/ArcGIS backend gate are pending. No v2 commit was reported.
-- Next: DC-DETAILED-POINT-LABELS-01, sequential point labels 1..n in Detailed
-  View in authoritative source coordinate order. Verify series and reset
-  semantics before implementation. Functional Compilation/QC remains deferred.
-  The accepted Main Map preview exposes mode selection only. Persistent contextual
-  status, archived Package discovery and prospective Workspace matching remain
-  separate tasks.
+- COMMENT-03 v1 was rejected; v2 passed functional browser acceptance; v3
+  presentation was accepted and committed at
+  `89e0ed65f5465c5a9cbabdd5f651d611562b87b2`, merged at
+  `af4cb616846d4dfc12200e736a375e5aa8b27f35`, as reported by the user on
+  2026-11-26. Exact final backend test counts were not supplied.
+- DC-DETAILED-POINT-LABELS-01 is a frontend candidate at that merge. Selected
+  detailed point geometry is numbered in the existing stored point order.
+  Native browser and original Notice coordinate-list acceptance remain pending.
+  Functional Compilation/QC is next after acceptance. The accepted Main Map
+  preview exposes mode selection only. Persistent contextual status, archived
+  Package discovery and prospective Workspace matching remain separate tasks.
 - Dated candidate and demo entries retain the state at delivery. Read newer
   acceptance records above those entries for current status.
+
+## DC-DETAILED-POINT-LABELS-01 - Sequential detailed point labels (2026-11-26)
+
+**Baseline:** `af4cb616846d4dfc12200e736a375e5aa8b27f35`.
+**Status:** implementation candidate; local acceptance pending.
+
+- Both live selected-Package geometry overlays use the shared renderer. The
+  backend returns point references in stored order; Notice import appends
+  Point/MultiPoint coordinates in source part/feature/coordinate-array order.
+  The frontend uses that single point collection, resets numbering at one per
+  Package, and does not count AOI, curve or surface vertices. Exact coincident
+  display positions share a label listing all their sequence numbers.
+- Reuse native label placement/deconfliction on a local label-only FeatureLayer.
+  Preserve the existing marker, geometry focus, detail count, selection lifetime,
+  overview labels, mock maps and request path. Multipoint anchors are projected
+  independently in their source array order. No new API request or contract.
+- Verify original Notice coordinate lists against the local importer/storage
+  round trip and the browser in both maps and themes. Source part boundaries
+  are not present in the geometry response; per-part numbering or an external
+  list order different from the imported array is not inferred. See the
+  [Package map README](../src/features/map/packages/README.md).
 
 ## DC-MAIN-MAP-SYNC-01 - Main Map synchronization after assignment (2026-11-26)
 
@@ -112,6 +134,7 @@ The verification notes below describe the original candidate delivery.
   is direct or confirmed before a regular binding Save. V1's standalone
   writing and staged Discard were rejected. V3 keeps the read-only viewer
   compact and displays its timestamps in the browser's local time zone.
+  V3 was locally accepted and committed/merged as recorded in Current status.
 
 ## COMMENT-01 - Workstream binding comments (2026-11-25)
 

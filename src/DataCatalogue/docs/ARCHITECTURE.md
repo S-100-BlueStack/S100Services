@@ -656,6 +656,15 @@ map suppresses routine coverage summaries but retains actionable errors.
   No backend code or auth policy is changed. Real browser geometry rendering,
   projection and SSO require local acceptance.
 
+DC-DETAILED-POINT-LABELS-01 extends the shared selected-Package renderer only.
+The stored point collection determines one-based ordinals; multipoint label
+anchors are independently projected from the normalized source members. The
+local label-only FeatureLayer is owned by the same renderer and generation as
+the existing geometry. Labels are separate from focus graphics and detail
+counts. There is no new geometry read, map mode or backend contract. See the
+[Package map README](../src/features/map/packages/README.md) for ordering,
+coincident positions and local acceptance requirements.
+
 ---
 
 ## DC-MAP-01 — Shared MapView overview constraints
