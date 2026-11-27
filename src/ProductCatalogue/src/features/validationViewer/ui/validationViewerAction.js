@@ -31,9 +31,11 @@ export function createValidationViewerAction(
     view?.addEventListener("pagehide", retire, { once: true });
     try {
       const { openValidationViewer } = await loadViewer();
+      // An IC-ENC modal may have opened while this chunk was loading.
       if (
         generation !== launchGeneration ||
         !button.isConnected ||
+        ownerDocument.querySelector?.("dialog.pc-icenc-report-dialog[open]") ||
         view?.location.href !== location
       )
         return;

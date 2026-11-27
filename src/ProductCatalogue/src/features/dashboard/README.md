@@ -765,3 +765,10 @@ file retains its title, stored timestamp and original download; an eligible VLD
 has **View report** beside **Download** in a shared action row. The selected
 activity remains a full-width context card above the tiles. Tile width adapts
 to the report pane without stretching isolated buttons or clipping filenames.
+
+### Structured IC-ENC report preview
+
+The Product-scoped fallback can preview a verified `IcEncReport` via the
+[shared viewer](../icEncReportViewer/README.md). Direct Activity links without a verified typed
+artifact retain their original download. The fallback continues to describe Product files and
+carries no inferred Activity or revision association.

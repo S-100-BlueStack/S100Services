@@ -1,3 +1,4 @@
+import { appendIcEncReportViewerAction } from "../../icEncReportViewer/ui/icEncReportViewerAction.js";
 import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { getStatusIdByName, getStatusName } from "../../data/stores/statusStore.js";
 import { applyProductStatusTone } from "../../../shared/ui/productStatusTone.js";
@@ -356,6 +357,9 @@ function createValidationArtifactRow(artifact, datasetName, contentType) {
     /\.vld$/i.test(artifact.fileName ?? "")
   ) {
     appendValidationViewerAction(row, artifact, datasetName);
+  }
+  if (contentType === REVIEW_CONTENT_TYPES.IC_ENC_REPORTS && artifact.kind === "IcEncReport") {
+    appendIcEncReportViewerAction(row, artifact, datasetName, artifact.url);
   }
   if (artifact.kind === "IcEncReport" && artifact.revisionId) {
     const revision = document.createElement("span");

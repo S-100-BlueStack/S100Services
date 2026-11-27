@@ -191,3 +191,10 @@ separate provenance and content decisions.
 - The latest accepted UI-specific commits documented here are FI-027 `a0fde73c58a554c58028c2220399e3ae1691121b`, FI-029 `dbc1466400d18b92d5589d8d7392bd27ae6be86c`, and Locator correction `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`.
 - The AI contract/demo planning documentation was added at `0feba3a0a75d1617d6b7f778b0588088c17387a8`; historical implementation/correction reports were consolidated by `b52a4ac0833edac94b466176f3f7c6154090f502`.
 - See Git history for the full 2026-era FI/FH acceptance log; its omission from the active tracker is intentional to avoid competing status descriptions and unmaintainable duplication.
+
+### PC-ICENC-03 — structured IC-ENC report viewer
+
+Candidate for local acceptance on `6ed42b9a45eac73250827535fd66f3d8be48efa6`. The
+[shared viewer](../src/features/icEncReportViewer/README.md) covers verified reports in Product
+History, Dashboard's Product fallback, Analyze and Review. Local acceptance includes stored
+documents, the pinned ZIP dependency, fallback downloads, accessibility and SevenCs regression.

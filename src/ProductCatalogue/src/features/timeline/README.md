@@ -340,3 +340,11 @@ email” means that the original Live receipt and current match corroborate the
 recorded Email decision. Other exact links show “Stored for this delivery”. A
 changed inbox match does not move the report to a different attempt.
 See the [backend History contract](../../../BACKEND_CONTRACTS.md#ic-enc-delivery-history-be-109c).
+
+## IC-ENC report preview
+
+The floating Product History panel offers **View report** beside each verified stored report in
+the IC-ENC deliveries section, including eligible mapped Package members. It opens the exact
+artifact already associated with the selected delivery through the
+[shared viewer](../icEncReportViewer/README.md). The delivery decision, stored timestamp,
+relationship evidence and original link remain in History.

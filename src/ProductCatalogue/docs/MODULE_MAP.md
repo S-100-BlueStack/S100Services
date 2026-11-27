@@ -45,6 +45,13 @@ the modal request/session and focus lifecycle. These paths are relative to
 `src/features/validationViewer/`. The viewer does not own report storage, validation
 jobs, Product mutation, or the underlying workspace.
 
+## Shared IC-ENC viewer ownership
+
+Product History, Dashboard's Product fallback, Analyze and Review delegate typed and exactly
+owned reports to [icEncReportViewer](../src/features/icEncReportViewer/README.md).
+Its domain owns route verification, bounded ZIP/XML extraction and the read-only presentation
+model. Its API module owns the artifact byte read and its UI owns dialog and session teardown.
+
 ## How to locate a change
 
 1. Start from the requested user behavior and identify the owning feature, not a similarly named button in another workflow.

@@ -40,6 +40,7 @@ class Element extends EventTarget {
     super();
     this.tagName = tag;
     this.children = [];
+    this.dataset = {};
     this.attributes = new Map();
     this.hidden = false;
     this.textContent = "";
@@ -91,7 +92,7 @@ async function harness(t, options = {}) {
     oldFrame = globalThis.requestAnimationFrame;
   const doc = new EventTarget();
   doc.body = new Element("body");
-  doc.createElement = (tag) => new Element(tag);
+  doc.createElement = (tag) => Object.assign(new Element(tag), { ownerDocument: doc });
   doc.createDocumentFragment = () => new Element("fragment");
   globalThis.document = doc;
   const frames = [];
@@ -787,6 +788,9 @@ for (const [decisionSource, expectedSource] of [
     assert.match(text(sections[1]), /IC-ENC deliveries could not be loaded/);
     const link = sections[0].querySelector("a");
     assert.ok(link.getAttribute("href").endsWith(`/artifacts/${artifactId}`));
+    const viewer = walk(sections[0]).find((node) => node.textContent === "View report");
+    assert.equal(viewer.dataset.icEncReportKey, link.getAttribute("href"));
+    assert.ok(!walk(sections[1]).some((node) => node.textContent === "View report"));
     assert.ok(
       walk(sections[0]).some((e) => e.tagName === "time" && e.getAttribute("datetime") === time)
     );

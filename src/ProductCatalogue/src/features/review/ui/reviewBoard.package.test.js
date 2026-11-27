@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 import test from "node:test";
 import * as list from "../domain/reviewProductList.js";
 import * as presentation from "./reviewContentPresentation.js";
+import { appendIcEncReportViewerAction } from "../../icEncReportViewer/ui/icEncReportViewerAction.js";
 import {
   getEncPackageStatusLabel,
   normalizeEncPackageStatus,
@@ -45,7 +46,7 @@ class Element {
   }
 }
 const document = {
-  createElement: () => new Element(),
+  createElement: () => Object.assign(new Element(), { ownerDocument: document }),
   createDocumentFragment: () => new Element(),
 };
 const historySource = (
@@ -78,6 +79,7 @@ const boardExports = runInNewContext(
     ...presentation,
     ...historyRenderers,
     createPackageStatusIndicator,
+    appendIcEncReportViewerAction,
     getStatusName: (status) => ({ 5: "Hold", 11: "Ready For Distribution", 15: "Error" })[status],
     getStatusIdByName: (name) =>
       ({
@@ -349,6 +351,8 @@ test("Review status history icons use actual ProductState results when known", (
 test("Review renders IC-ENC report downloads with exact member and revision metadata", async () => {
   const h = createReviewPackageFixture();
   h.records[0].Kind = "IcEncReport";
+  h.records[0].Id = "10000000-0000-4000-8000-000000000001";
+  h.records[0].Url = `/electronicproducts/${encodeURIComponent(packageNames[0])}/artifacts/${h.records[0].Id}`;
   const products = await loadReviewHistories(packageNames, h.options);
   const items = list.createReviewProductItems([packageNames[0]]);
   const board = createBoard({
@@ -368,6 +372,10 @@ test("Review renders IC-ENC report downloads with exact member and revision meta
   const links = nodes(icEncCards[0]).filter((node) => node.href);
   assert.equal(links.length, 1);
   assert.match(links[0].href, /artifacts/);
+  const actions = byClass(icEncCards[0], "pc-validation-viewer-action");
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].dataset.icEncReportKey, links[0].href);
+  assert.equal(byClass(icEncCards[1], "pc-validation-viewer-action").length, 0);
   assert.equal(
     byClass(icEncCards[0], "pc-review-content-card__artifact-revision")[0].textContent,
     "Revision ID: current"

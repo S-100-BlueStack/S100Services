@@ -384,3 +384,61 @@
 .pc-validation-report-actions .pc-validation-viewer-action {
   margin-inline-start: 0;
 }
+
+.pc-icenc-report-dialog {
+  width: min(92vw, 940px);
+}
+
+.pc-icenc-report-dialog .pc-icenc-report-body {
+  display: block;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.pc-vld-dialog .pc-icenc-report-body > * + *,
+.pc-vld-dialog .pc-icenc-report-table td > * + * {
+  margin-block-start: 0.4rem;
+}
+
+.pc-icenc-report-body .pc-icenc-report-heading {
+  margin-block: 1rem 0.4rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.pc-icenc-report-text {
+  white-space: pre-wrap;
+  tab-size: 4;
+}
+
+.pc-icenc-report-metadata {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid var(--pc-border);
+  background: var(--pc-surface-alt);
+}
+
+.pc-icenc-report-metadata dt {
+  font-weight: 600;
+}
+
+.pc-icenc-report-metadata dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.pc-icenc-report-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.pc-icenc-report-table td {
+  vertical-align: top;
+  border: 1px solid var(--pc-border);
+  padding: 0.25rem 0.5rem;
+}

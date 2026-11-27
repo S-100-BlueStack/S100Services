@@ -22,8 +22,10 @@
 > complete within their verified scope. BE-109A addresses missing historical
 > visibility after candidate clearance by separating related ENC track discovery
 > from the current export projection. The user reports acceptance at
-> `ae905bdfd173f50e95369e2069b37a5b7f820a13`. BE-109C is delivered as a
-> read-side candidate pending local acceptance. See the [History contract](../BACKEND_CONTRACTS.md#ic-enc-delivery-history-be-109c).
+> `ae905bdfd173f50e95369e2069b37a5b7f820a13`. The user reports BE-109C
+> with CORRECTION-01 accepted at `fdefd744abc5401504b9c84a9bdb7f3c0f700680`
+> and merged at `af4cb616846d4dfc12200e736a375e5aa8b27f35`. See the
+> [History contract](../BACKEND_CONTRACTS.md#ic-enc-delivery-history-be-109c).
 > Exact ordinary operation attribution (BE-109B) remains deferred.
 
 Historical reviewed backend runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
@@ -72,21 +74,21 @@ These decisions apply to every work package:
 
 ## Work package status
 
-| ID      | Area                                        | Status                                              | Database/geodatabase change | Primary dependency                                              |
-| ------- | ------------------------------------------- | --------------------------------------------------- | --------------------------- | --------------------------------------------------------------- |
-| BE-101  | Full backend context review                 | Complete                                            | No                          | Current backend source and tests                                |
-| BE-102  | Readable ExportTarget contract              | Complete                                            | No                          | Verified export controller/service contract                     |
-| FE-101  | Usage band label                            | Complete                                            | No                          | Existing Usage band ID + description payload                    |
-| BE-103  | AOI profiling and optimization              | Complete                                            | No                          | Measured request path                                           |
-| BE-104  | Async Export/Rollback jobs                  | Complete                                            | No                          | Existing Hangfire SQL storage and Product operation code        |
-| BE-105  | Backend-authoritative active job visibility | Complete                                            | No                          | Product Catalogue Hangfire metadata and monitoring API          |
-| BE-106  | External shared worker readiness review     | Complete                                            | No                          | Product Catalogue baseline and JobPlatform target direction     |
-| BE-107  | Dashboard filtering and pagination          | Complete                                            | No                          | Product state-history data and stable activity ID               |
-| BE-108A | Product History audit event hardening       | Batch 1 port verified; manual smoke pending         | Yes, additive audit table   | Product workflow redesign and database-owner deployment process |
-| BE-108B | Additional Product History producers        | Deferred                                            | Unknown                     | Internal validation, IC-ENC and Send producer contracts         |
-| BE-109  | Report storage/content                      | BE-109A accepted (user-reported); BE-109C candidate | No (A/C)                    | Local acceptance for IC-ENC delivery History; BE-109B deferred  |
-| BE-110  | Permanent Product ID                        | Blocked                                             | Yes                         | Database owners                                                 |
-| BE-111  | Historical global map timeline              | Deferred                                            | Likely                      | Architecture and retention decision                             |
+| ID      | Area                                        | Status                                                             | Database/geodatabase change | Primary dependency                                              |
+| ------- | ------------------------------------------- | ------------------------------------------------------------------ | --------------------------- | --------------------------------------------------------------- |
+| BE-101  | Full backend context review                 | Complete                                                           | No                          | Current backend source and tests                                |
+| BE-102  | Readable ExportTarget contract              | Complete                                                           | No                          | Verified export controller/service contract                     |
+| FE-101  | Usage band label                            | Complete                                                           | No                          | Existing Usage band ID + description payload                    |
+| BE-103  | AOI profiling and optimization              | Complete                                                           | No                          | Measured request path                                           |
+| BE-104  | Async Export/Rollback jobs                  | Complete                                                           | No                          | Existing Hangfire SQL storage and Product operation code        |
+| BE-105  | Backend-authoritative active job visibility | Complete                                                           | No                          | Product Catalogue Hangfire metadata and monitoring API          |
+| BE-106  | External shared worker readiness review     | Complete                                                           | No                          | Product Catalogue baseline and JobPlatform target direction     |
+| BE-107  | Dashboard filtering and pagination          | Complete                                                           | No                          | Product state-history data and stable activity ID               |
+| BE-108A | Product History audit event hardening       | Batch 1 port verified; manual smoke pending                        | Yes, additive audit table   | Product workflow redesign and database-owner deployment process |
+| BE-108B | Additional Product History producers        | Deferred                                                           | Unknown                     | Internal validation, IC-ENC and Send producer contracts         |
+| BE-109  | Report storage/content                      | BE-109A accepted (user-reported); BE-109C accepted (user-reported) | No (A/C)                    | BE-109B deferred                                                |
+| BE-110  | Permanent Product ID                        | Blocked                                                            | Yes                         | Database owners                                                 |
+| BE-111  | Historical global map timeline              | Deferred                                                           | Likely                      | Architecture and retention decision                             |
 
 ## Implementation order
 
@@ -959,8 +961,8 @@ verification gates.
 - **BE-109B (D02):** Deferred pending an operator use case for exact ordinary
   export-to-revision/report attribution. Do not derive this from timestamps or
   version numbers. Historical Package attribution remains with the workflow owner.
-- **BE-109C (D03):** Candidate delivered for the ordinary Product access audience,
-  pending local acceptance. The floating History panel opts in to the exact
+- **BE-109C (D03):** The user reports acceptance with CORRECTION-01 at
+  `fdefd744abc5401504b9c84a9bdb7f3c0f700680`. The floating History panel opts in to the exact
   delivery, decision and report projection for the configured workflow. The
   two persisted modes stay isolated and use the same concise business labels. The conservative read keeps
   stored ownership through D04 reassociation and withholds an uncorroborated origin

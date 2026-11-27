@@ -25,6 +25,7 @@ export function normalizeArtifactHistory(payload) {
       const artifact = normalizeProductArtifact(value);
       if (!artifact) return null;
       const specification = value.ProductSpecification ?? value.productSpecification;
+      const kind = value.Kind ?? value.kind;
       return {
         ...artifact,
         trackId: value.TrackId ?? value.trackId,
@@ -32,7 +33,9 @@ export function normalizeArtifactHistory(payload) {
         datasetName: value.DatasetName ?? value.datasetName,
         productSpecification: specification,
         productSpecificationLabel: { S57: "S-57", S101: "S-101" }[specification] ?? specification,
-        kind: value.Kind ?? value.kind,
+        kind,
+        // Keep the server route for preview verification without changing existing downloads.
+        ...(kind === "IcEncReport" ? { originalReportUrl: value.url ?? value.Url } : {}),
       };
     })
     .filter(Boolean);

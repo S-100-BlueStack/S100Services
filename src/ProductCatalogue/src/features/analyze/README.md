@@ -415,3 +415,9 @@ Verified VLD artifacts expose a **View report** action beside their existing dow
 text, filtering, and modal lifecycle. The current Product/member and artifact identities,
 report availability, download behavior and the underlying view's lifecycle are preserved.
 ZIP files and other report formats remain download-only.
+
+### Structured IC-ENC report preview
+
+The IC-ENC section shows **View report** for an exactly owned, typed artifact in the configured
+electronic report loader. The existing download and artifact metadata remain available. See the
+[viewer contract](../icEncReportViewer/README.md).

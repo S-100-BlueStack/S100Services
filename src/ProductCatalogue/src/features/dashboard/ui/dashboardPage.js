@@ -1,3 +1,4 @@
+import { appendIcEncReportViewerAction } from "../../icEncReportViewer/ui/icEncReportViewerAction.js";
 import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { fetchDashboardValidationReports } from "../services/dashboardValidationReports.js";
@@ -2244,6 +2245,17 @@ function createDashboardReportItem(report) {
         createdAtUtc: report.generatedAt,
       },
       dashboardReportPanelState.datasetName
+    );
+  }
+  if (
+    dashboardReportPanelState.reportType === "ic-enc" &&
+    report.artifact?.kind === "IcEncReport"
+  ) {
+    appendIcEncReportViewerAction(
+      actions,
+      report.artifact,
+      dashboardReportPanelState.datasetName,
+      report.url
     );
   }
   item.appendChild(actions);

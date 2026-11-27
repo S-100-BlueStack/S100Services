@@ -1,3 +1,4 @@
+import { appendIcEncReportViewerAction } from "../../icEncReportViewer/ui/icEncReportViewerAction.js";
 import { appendValidationViewerAction } from "../../validationViewer/ui/validationViewerAction.js";
 import { getStatusName } from "../../data/stores/statusStore.js";
 import { createPackageStatusIndicator } from "../../../shared/ui/packageStatusIndicator.js";
@@ -403,7 +404,8 @@ function createProductCard(product) {
       product.xml,
       product.contentAvailability?.icEncReports,
       product.icEncReports,
-      product.icEncError
+      product.icEncError,
+      product.datasetName
     )
   );
   content.appendChild(
@@ -437,7 +439,7 @@ function createInfoRow(label, value) {
 
   return row;
 }
-function createXmlBlock(xml, availability = null, reports = [], error = null) {
+function createXmlBlock(xml, availability = null, reports = [], error = null, datasetName = null) {
   const details = document.createElement("details");
   details.className = "analyze-xml";
   const validReports = Array.isArray(reports) ? reports : [];
@@ -459,7 +461,15 @@ function createXmlBlock(xml, availability = null, reports = [], error = null) {
     }
     for (const [index, report] of validReports.entries()) {
       content.appendChild(
-        createInternalValidationReport(report, index, "Download IC-ENC report", true)
+        createInternalValidationReport(
+          report,
+          index,
+          "Download IC-ENC report",
+          true,
+          availability?.implemented && availability.loaderId === "electronic-artifacts"
+            ? datasetName
+            : null
+        )
       );
     }
     details.appendChild(content);
@@ -582,7 +592,13 @@ function createInternalValidationReport(
     link.href = report.url;
     link.textContent = downloadLabel;
     link.download = report.title || "";
-    if (!isIcEnc && datasetName && /\.vld$/i.test(report.raw?.fileName ?? "")) {
+    if (isIcEnc && datasetName && report.raw?.kind === "IcEncReport") {
+      const actions = document.createElement("div");
+      actions.className = "pc-validation-report-actions";
+      actions.appendChild(link);
+      appendIcEncReportViewerAction(actions, report.raw, datasetName, report.url);
+      content.appendChild(actions);
+    } else if (!isIcEnc && datasetName && /\.vld$/i.test(report.raw?.fileName ?? "")) {
       const actions = document.createElement("div");
       actions.className = "pc-validation-report-actions";
       actions.appendChild(link);

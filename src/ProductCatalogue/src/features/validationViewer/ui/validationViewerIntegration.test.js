@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
+import { appendIcEncReportViewerAction } from "../../icEncReportViewer/ui/icEncReportViewerAction.js";
 import { createValidationViewerAction } from "./validationViewerAction.js";
 
 // Exercise each actual route renderer, using the shared action's real identity
@@ -28,7 +29,7 @@ class Element {
   addEventListener() {}
 }
 const document = {
-  createElement: (tag) => new Element(tag),
+  createElement: (tag) => Object.assign(new Element(tag), { ownerDocument: document }),
   createDocumentFragment: () => new Element("fragment"),
 };
 const createAction = (artifact, name) =>
@@ -67,6 +68,7 @@ async function loadRenderer(path, expression, context = {}) {
     document,
     createValidationViewerAction: createAction,
     appendValidationViewerAction,
+    appendIcEncReportViewerAction,
     ...context,
   });
 }
@@ -176,3 +178,58 @@ test("Dashboard places exact report actions in compact tiles and retains downloa
   const icEnc = render({ reports, type: "ic-enc", name: "Harbour" });
   assert.equal(icEnc.children[0].children[0].children.at(-1).children.length, 1);
 });
+
+test("Analyze previews only the selected typed artifact from the electronic report loader", async () => {
+  const render = await loadRenderer("../../analyze/ui/analyzeSidebar.js", "createXmlBlock");
+  const raw = {
+    ...artifact,
+    kind: "IcEncReport",
+    fileName: "Report.DOC",
+    originalReportUrl: artifact.url,
+  };
+  const report = { title: raw.fileName, url: raw.url, raw };
+  const availability = { implemented: true, loaderId: "electronic-artifacts" };
+  checkIcEnc(render(null, availability, [report], null, "Harbour"), true);
+  checkIcEnc(render(null, availability, [report], null, "Other"), false);
+  checkIcEnc(render(null, { implemented: false }, [report], null, "Harbour"), false);
+  checkIcEnc(render(null, availability, [{ ...report, raw: artifact }], null, "Harbour"), false);
+  checkIcEnc(
+    render(
+      null,
+      availability,
+      [{ ...report, raw: { ...raw, originalReportUrl: "/wrong" } }],
+      null,
+      "Harbour"
+    ),
+    false
+  );
+});
+
+test("Dashboard exposes preview only for a Product-scoped typed fallback download", async () => {
+  const render = await loadRenderer(
+    "../../dashboard/ui/dashboardPage.js",
+    `({ report, name }) => { dashboardReportPanelState = { reportType: "ic-enc", datasetName: name }; return createDashboardReportItem(report); }`,
+    { createDefaultDashboardFilters: () => ({}) }
+  );
+  const report = { id, title: "Report.DOC", url: artifact.url };
+  const fallback = {
+    ...report,
+    artifact: {
+      ...artifact,
+      kind: "IcEncReport",
+      fileName: report.title,
+      originalReportUrl: report.url,
+    },
+  };
+  checkIcEnc(render({ report, name: "Harbour" }), false);
+  checkIcEnc(render({ report: fallback, name: "Harbour" }), true);
+  checkIcEnc(render({ report: fallback, name: "Other" }), false);
+});
+
+function checkIcEnc(root, hasView) {
+  const nodes = descendants(root);
+  assert.ok(nodes.some((node) => node.href === artifact.url));
+  const actions = nodes.filter((node) => node.dataset.icEncReportKey);
+  assert.equal(actions.length, Number(hasView));
+  if (hasView) assert.equal(actions[0].dataset.icEncReportKey, artifact.url);
+}

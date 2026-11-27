@@ -374,7 +374,9 @@ function renderHistory(panel, history) {
   }
 
   if (history.icEncDeliveries) {
-    fragment.appendChild(createIcEncDeliveryHistorySection(history.icEncDeliveries));
+    fragment.appendChild(
+      createIcEncDeliveryHistorySection(history.icEncDeliveries, history.datasetName)
+    );
   }
   panel.content.replaceChildren(fragment);
 }

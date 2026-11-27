@@ -1,3 +1,5 @@
+import { appendIcEncReportViewerAction } from "../../icEncReportViewer/ui/icEncReportViewerAction.js";
+
 const sourceLabels = { Email: "Decision by email", Manual: "Manual decision" };
 
 const transportLabels = {
@@ -13,7 +15,7 @@ const utcFormatter = new Intl.DateTimeFormat(undefined, {
   timeZone: "UTC",
 });
 
-export function createIcEncDeliveryHistorySection(history) {
+export function createIcEncDeliveryHistorySection(history, datasetName) {
   const section = document.createElement("details");
   section.className = "pc-icenc-history";
   section.append(textElement("summary", "IC-ENC deliveries"));
@@ -33,12 +35,12 @@ export function createIcEncDeliveryHistorySection(history) {
   }
 
   for (const item of history.items) {
-    section.append(renderAttempt(item));
+    section.append(renderAttempt(item, datasetName));
   }
   return section;
 }
 
-function renderAttempt(item) {
+function renderAttempt(item, datasetName) {
   const attempt = document.createElement("details");
   attempt.className = "pc-icenc-history__attempt";
   const summary = document.createElement("summary");
@@ -103,7 +105,15 @@ function renderAttempt(item) {
       );
       const evidence = timeLine("Stored", report.storedAt, "Storage time unknown");
       evidence.append(textElement("span", ` · ${relation}`));
-      row.append(link, evidence);
+      row.append(link);
+      // Only the normalized delivery report DTO establishes this typed owner relation.
+      appendIcEncReportViewerAction(
+        row,
+        { ...report, kind: "IcEncReport", datasetName, originalReportUrl: report.url },
+        datasetName,
+        report.url
+      );
+      row.append(evidence);
       list.append(row);
     }
     attempt.append(list);
